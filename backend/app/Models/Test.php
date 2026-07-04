@@ -12,6 +12,8 @@ class Test extends Model
 
     protected $fillable = [
         'lab_id',
+        'test_code',
+        'is_json_override',
         'parent_id',
         'name',
         'category',

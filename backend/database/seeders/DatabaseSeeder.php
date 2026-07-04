@@ -36,84 +36,27 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 3. Create some Tests
-        $cbc = \App\Models\Test::firstOrCreate([
-            'lab_id' => $lab->id,
-            'name' => 'Complete Blood Count (CBC)',
-            'category' => 'Hematology',
-            'type' => 'Pathology',
-            'field_type' => 'Multiple Field',
-            'price' => 500,
-        ]);
-
-        $hb = \App\Models\Test::firstOrCreate([
-            'lab_id' => $lab->id,
-            'parent_id' => $cbc->id,
-            'name' => 'Hemoglobin (Hb)',
-            'category' => 'Hematology',
-            'type' => 'Pathology',
-            'field_type' => 'Single Field',
-            'unit' => 'g/dL',
-            'gender_ref_type' => 'GENDER_SPECIFIC',
-            'ref_range_min_male' => 13.8,
-            'ref_range_max_male' => 17.2,
-            'ref_range_min_female' => 12.1,
-            'ref_range_max_female' => 15.1,
-            'ref_range_min_child' => 11.0,
-            'ref_range_max_child' => 16.0,
-            'ref_range_min_newborn' => 14.0,
-            'ref_range_max_newborn' => 24.0,
-        ]);
-
-        $wbc = \App\Models\Test::firstOrCreate([
-            'lab_id' => $lab->id,
-            'parent_id' => $cbc->id,
-            'name' => 'Total WBC Count',
-            'category' => 'Hematology',
-            'type' => 'Pathology',
-            'field_type' => 'Single Field',
-            'unit' => 'cells/cumm',
-            'gender_ref_type' => 'BOTH',
-            'ref_range_min' => 4500,
-            'ref_range_max' => 11000,
-        ]);
-
-        $lft = \App\Models\Test::firstOrCreate([
-            'lab_id' => $lab->id,
-            'name' => 'Liver Function Test (LFT)',
-            'category' => 'Biochemistry',
-            'field_type' => 'Multiple Field',
-            'type' => 'Pathology',
-            'price' => 800,
-        ]);
-
-        $bili = \App\Models\Test::firstOrCreate([
-            'lab_id' => $lab->id,
-            'parent_id' => $lft->id,
-            'name' => 'Bilirubin Total',
-            'category' => 'Biochemistry',
-            'type' => 'Pathology',
-            'field_type' => 'Single Field',
-            'unit' => 'mg/dL',
-            'gender_ref_type' => 'BOTH',
-            'ref_range_min' => 0.1,
-            'ref_range_max' => 1.2,
-        ]);
-
-        $sgpt = \App\Models\Test::firstOrCreate([
-            'lab_id' => $lab->id,
-            'parent_id' => $lft->id,
-            'name' => 'SGPT / ALT',
-            'category' => 'Biochemistry',
-            'type' => 'Pathology',
-            'field_type' => 'Single Field',
-            'unit' => 'U/L',
-            'gender_ref_type' => 'GENDER_SPECIFIC',
-            'ref_range_min_male' => 7,
-            'ref_range_max_male' => 55,
-            'ref_range_min_female' => 7,
-            'ref_range_max_female' => 45,
-        ]);
+        // 3. Tests are now loaded dynamically from JSON
+        // For the dummy reports, we will copy a few JSON tests into the DB for this lab
+        $jsonTests = json_decode(file_get_contents(database_path('data/default_tests.json')), true);
+        $cbcData = $jsonTests[0]; // CBC
+        $cbcData['lab_id'] = $lab->id;
+        $cbcData['test_code'] = $cbcData['testCode'];
+        $cbcData['is_json_override'] = true;
+        $subTests = $cbcData['subTests'];
+        unset($cbcData['subTests'], $cbcData['testCode']);
+        $cbc = \App\Models\Test::create($cbcData);
+        
+        $hb = null; $wbc = null;
+        foreach ($subTests as $sub) {
+            $sub['lab_id'] = $lab->id;
+            $sub['parent_id'] = $cbc->id;
+            $sub['test_code'] = $sub['testCode'];
+            unset($sub['subTests'], $sub['testCode']);
+            $createdSub = \App\Models\Test::create($sub);
+            if ($createdSub->test_code === 'SYS_CBC_01_HB') $hb = $createdSub;
+            if ($createdSub->test_code === 'SYS_CBC_01_WBC') $wbc = $createdSub;
+        }
 
         // 4. Create Patients and Reports
         for ($i = 1; $i <= 5; $i++) {
@@ -156,20 +99,6 @@ class DatabaseSeeder extends Seeder
             \App\Models\ReportTest::create([
                 'report_id' => $report->id,
                 'test_id' => $wbc->id,
-                'result_value' => null,
-                'is_abnormal' => false,
-            ]);
-
-            \App\Models\ReportTest::create([
-                'report_id' => $report->id,
-                'test_id' => $bili->id,
-                'result_value' => null,
-                'is_abnormal' => false,
-            ]);
-            
-            \App\Models\ReportTest::create([
-                'report_id' => $report->id,
-                'test_id' => $sgpt->id,
                 'result_value' => null,
                 'is_abnormal' => false,
             ]);

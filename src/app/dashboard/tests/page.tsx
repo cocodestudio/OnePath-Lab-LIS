@@ -37,6 +37,7 @@ interface Test {
 
 interface SubTestState {
   id?: string;
+  testCode?: string;
   name: string;
   unit: string;
   genderRefType: string;
@@ -70,6 +71,7 @@ export default function TestMasterPage() {
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
   const [name, setName] = useState("");
+  const [testCode, setTestCode] = useState("");
   const [category, setCategory] = useState("CBC");
   const [customCategory, setCustomCategory] = useState("");
   const [interpretation, setInterpretation] = useState("");
@@ -148,7 +150,7 @@ export default function TestMasterPage() {
 
   const handleOpenAddDialog = () => {
     setEditingTest(null);
-    setName(""); setCategory(standardCategories[0]); setCustomCategory(""); setType("Pathology"); 
+    setName(""); setTestCode(""); setCategory(standardCategories[0]); setCustomCategory(""); setType("Pathology"); 
     setPrice("");
     setInterpretation(""); 
     setSubTests([{
@@ -164,6 +166,7 @@ export default function TestMasterPage() {
   const handleOpenEditDialog = (test: Test) => {
     setEditingTest(test);
     setName(test.name);
+    setTestCode(test.testCode || "");
     setCategory(standardCategories.includes(test.category) ? test.category : "Other");
     setCustomCategory(standardCategories.includes(test.category) ? "" : test.category);
     setType(test.type || "Pathology");
@@ -173,6 +176,7 @@ export default function TestMasterPage() {
     if (test.subTests && test.subTests.length > 0) {
       setSubTests(test.subTests.map(sub => ({
         id: sub.id,
+        testCode: sub.testCode || "",
         name: sub.name,
         unit: sub.unit || "",
         genderRefType: sub.genderRefType || "BOTH",
@@ -192,6 +196,7 @@ export default function TestMasterPage() {
         customOptions: sub.customOptions ? JSON.parse(sub.customOptions) : [],
         subTests: sub.subTests ? sub.subTests.map(subsub => ({
           id: subsub.id,
+          testCode: subsub.testCode || "",
           name: subsub.name,
           unit: subsub.unit || "",
           genderRefType: subsub.genderRefType || "BOTH",
@@ -211,7 +216,7 @@ export default function TestMasterPage() {
       })));
     } else {
       setSubTests([{
-        // Do NOT use test.id here, because this is a new subtest, not the parent itself.
+        testCode: "",
         name: test.name,
         unit: test.unit || "",
         genderRefType: test.genderRefType || "BOTH",
@@ -319,9 +324,11 @@ export default function TestMasterPage() {
       const res = await fetch(url, {
         method, headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
+          testCode: testCode.trim() || undefined,
           name: name.trim(), category: finalCategory, fieldType: "Group", type, price: parseFloat(price), interpretation,
           subTests: subTests.map(sub => ({
             id: sub.id,
+            testCode: sub.testCode || undefined,
             name: sub.name.trim(),
             unit: sub.unit.trim(),
             genderRefType: sub.genderRefType,
@@ -341,6 +348,7 @@ export default function TestMasterPage() {
             interpretation: sub.interpretation || null,
             subTests: sub.fieldType === "Multiple Field" && sub.subTests ? sub.subTests.map(ss => ({
               id: ss.id,
+              testCode: ss.testCode || undefined,
               name: ss.name.trim(),
               unit: ss.unit.trim(),
               genderRefType: ss.genderRefType,
@@ -478,9 +486,11 @@ export default function TestMasterPage() {
               <thead>
                 <tr className="bg-muted/30 border-b border-border/60">
                   <th className="px-6 py-3.5 w-10"></th>
-                  {["Main Test / Package", "Category", "Sub Tests", "Price", ""].map((h, i) => (
-                    <th key={h + i} className={`px-4 py-3.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground ${i === 3 ? "text-right" : ""} ${i === 4 ? "text-right" : ""}`}>{h}</th>
-                  ))}
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Test Name</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Test Code</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Price</th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -492,17 +502,19 @@ export default function TestMasterPage() {
                           expandedRows[test.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
                         )}
                       </td>
-                      <td className="px-4 py-3.5">
-                        <p className="font-semibold text-foreground text-sm">{test.name}</p>
-                        <p className="font-mono text-[10px] text-muted-foreground mt-0.5">{test.id.slice(0, 8).toUpperCase()}</p>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="font-medium text-foreground">{test.name}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{test.subTests?.length || 0} parameters</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-xs font-mono px-2 py-1 bg-muted rounded-md inline-flex text-muted-foreground">
+                          {test.testCode || "-"}
+                        </div>
                       </td>
                       <td className="px-4 py-3.5">
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${getCategoryColor(test.category)}`}>{test.category}</span>
                       </td>
-                      <td className="px-4 py-3.5 text-sm text-muted-foreground font-medium">
-                        {test.subTests ? test.subTests.length : 0} Parameters
-                      </td>
-                      <td className="px-4 py-3.5 text-right font-mono text-sm font-semibold text-foreground">₹{test.price.toFixed(0)}</td>
+                      <td className="px-4 py-3.5 font-mono text-sm font-semibold text-foreground">₹{test.price.toFixed(0)}</td>
                       <td className="px-4 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                           <button onClick={(e) => { e.stopPropagation(); handleOpenEditDialog(test); }} className="p-2 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-all" title="Edit"><Edit2 className="h-3.5 w-3.5" /></button>
@@ -519,6 +531,7 @@ export default function TestMasterPage() {
                               <thead>
                                 <tr className="border-b border-border/40 text-muted-foreground">
                                   <th className="pb-2 font-medium">Parameter Name</th>
+                                  <th className="pb-2 font-medium">Code</th>
                                   <th className="pb-2 font-medium text-center">Unit</th>
                                   <th className="pb-2 font-medium text-right">Details / Range</th>
                                 </tr>
@@ -527,11 +540,8 @@ export default function TestMasterPage() {
                                 {test.subTests.map(sub => (
                                   <React.Fragment key={sub.id}>
                                     <tr className="border-b border-border/20 last:border-0">
-                                      <td className="py-2.5 font-medium text-foreground">
-                                        <div className="flex flex-col">
-                                          <span>{sub.name}</span>
-                                        </div>
-                                      </td>
+                                      <td className="py-2.5 font-medium text-foreground">{sub.name}</td>
+                                      <td className="py-2.5 font-mono text-muted-foreground">{sub.testCode || "-"}</td>
                                       <td className="py-2.5 text-center text-muted-foreground">
                                         {sub.fieldType !== "Multiple Field" && sub.fieldType !== "Custom Editor" && sub.valueType !== "Custom" ? sub.unit || "-" : "-"}
                                       </td>
@@ -554,31 +564,6 @@ export default function TestMasterPage() {
                                         )}
                                       </td>
                                     </tr>
-                                    {sub.fieldType === "Multiple Field" && sub.subTests && sub.subTests.map(ss => (
-                                      <tr key={ss.id} className="border-b border-border/10 last:border-0 bg-muted/5">
-                                        <td className="py-2 pl-6 font-medium text-muted-foreground flex items-center">
-                                          <span className="w-3 h-[1px] bg-border mr-2 inline-block"></span>
-                                          {ss.name}
-                                        </td>
-                                        <td className="py-2 text-center text-muted-foreground">
-                                          {ss.valueType !== "Custom" ? ss.unit || "-" : "-"}
-                                        </td>
-                                        <td className="py-2 text-right font-mono text-muted-foreground">
-                                          {ss.valueType === "Custom" ? (
-                                            <span className="text-[10px] text-muted-foreground font-sans truncate max-w-[150px] inline-block">
-                                              {(() => {
-                                                try {
-                                                  const arr = JSON.parse(ss.customOptions || "[]");
-                                                  return arr.length > 0 ? "Options: " + arr.join(", ") : "Custom Text (No Suggestions)";
-                                                } catch { return "Custom Text"; }
-                                              })()}
-                                            </span>
-                                          ) : (
-                                            ss.genderRefType === "GENDER_SPECIFIC" ? "Gender Specific" : `${ss.refRangeMin ?? 0} – ${ss.refRangeMax ?? 0}`
-                                          )}
-                                        </td>
-                                      </tr>
-                                    ))}
                                   </React.Fragment>
                                 ))}
                               </tbody>
@@ -614,7 +599,16 @@ export default function TestMasterPage() {
               {error && <div className="flex items-center gap-2 rounded-lg bg-destructive/8 border border-destructive/20 p-3 text-xs text-destructive font-medium"><AlertTriangle className="h-4 w-4 shrink-0" /><p>{error}</p></div>}
               {success && <div className="flex items-center gap-2 rounded-lg bg-accent border border-primary/20 p-3 text-xs text-primary font-medium"><CheckCircle2 className="h-4 w-4 shrink-0" /><p>{success}</p></div>}
 
-              <div className="space-y-1.5"><Label className="text-sm">Main Test Name</Label><Input placeholder="e.g. Complete Blood Count (CBC)" value={name} onChange={(e) => setName(e.target.value)} required /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Test Name</Label>
+                  <Input placeholder="e.g. Complete Blood Count" value={name} onChange={(e) => setName(e.target.value)} required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Test Code</Label>
+                  <Input placeholder="Leave blank to auto-generate" value={testCode} onChange={(e) => setTestCode(e.target.value)} className="font-mono text-sm" />
+                </div>
+              </div>
               <div className="space-y-1.5"><Label className="text-sm">Package Price (₹)</Label><Input type="number" step="0.01" placeholder="e.g. 500" value={price} onChange={(e) => setPrice(e.target.value)} className="font-mono" required /></div>
               
               <div className="space-y-1.5">
@@ -660,20 +654,22 @@ export default function TestMasterPage() {
                         </button>
                       )}
                       
-                    <div className="grid grid-cols-12 gap-4 mb-4 pr-8">
-                      {sub.fieldType !== "Custom Editor" && (
-                        <div className={sub.fieldType === "Multiple Field" ? "col-span-8 space-y-1.5" : (sub.valueType === "Custom" ? "col-span-8 space-y-1.5" : "col-span-5 space-y-1.5")}>
-                          <Label className="text-xs">Parameter Name</Label>
-                          <Input placeholder="e.g. Hemoglobin" value={sub.name} onChange={(e) => updateSubTest(index, "name", e.target.value)} className="h-8 text-sm bg-background" required />
-                        </div>
-                      )}
+                    <div className="grid grid-cols-12 gap-3 mb-4 pr-8">
+                      <div className="col-span-5 space-y-1.5">
+                        <Label className="text-xs">Parameter Name</Label>
+                        <Input placeholder="e.g. Hemoglobin" value={sub.name} onChange={(e) => updateSubTest(index, "name", e.target.value)} className="h-8 text-sm bg-background font-medium" />
+                      </div>
+                      <div className="col-span-4 space-y-1.5">
+                        <Label className="text-xs">Parameter Code</Label>
+                        <Input placeholder="Auto-generate" value={sub.testCode || ""} onChange={(e) => updateSubTest(index, "testCode", e.target.value)} className="h-8 text-sm font-mono bg-background" />
+                      </div>
                       {sub.fieldType !== "Multiple Field" && sub.fieldType !== "Custom Editor" && sub.valueType !== "Custom" && (
                         <div className="col-span-3 space-y-1.5">
                           <Label className="text-xs">Unit</Label>
                           <Input list="units-list" placeholder="e.g. g/dL" value={sub.unit} onChange={(e) => updateSubTest(index, "unit", e.target.value)} className="h-8 text-sm bg-background" />
                         </div>
                       )}
-                      <div className={sub.fieldType === "Custom Editor" ? "col-span-12 space-y-1.5" : "col-span-4 space-y-1.5"}>
+                      <div className={sub.fieldType === "Custom Editor" ? "col-span-12 space-y-1.5" : "col-span-12 space-y-1.5"}>
                         <Label className="text-xs">Field Type</Label>
                         <Select value={sub.fieldType || "Single Field"} onValueChange={(val) => updateSubTest(index, "fieldType", val)}>
                           <SelectTrigger className="h-8 text-sm bg-background"><SelectValue /></SelectTrigger>
@@ -798,10 +794,17 @@ export default function TestMasterPage() {
                             {sub.subTests && sub.subTests.map((subsub, sIdx) => (
                               <div key={sIdx} className="bg-background rounded-lg border border-border/50 p-3 relative group/sub">
                                 <button type="button" onClick={() => handleRemoveSubSubTest(index, sIdx)} className="absolute right-2 top-2 p-1 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover/sub:opacity-100 transition-all"><Trash2 className="h-3 w-3" /></button>
-                                <div className={`grid ${subsub.valueType === "Custom" ? "grid-cols-1" : "grid-cols-2"} gap-3 mb-2 pr-6`}>
-                                  <div className="space-y-1"><Label className="text-[10px]">Name</Label><Input placeholder="Sub Name" value={subsub.name} onChange={(e) => updateSubSubTest(index, sIdx, "name", e.target.value)} className="h-7 text-xs" required /></div>
+                                <div className="grid grid-cols-12 gap-3 items-end">
+                                  <div className="col-span-4 space-y-1.5">
+                                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Name</Label>
+                                    <Input placeholder="e.g. Neutrophils" value={subsub.name} onChange={(e) => updateSubSubTest(index, sIdx, "name", e.target.value)} className="h-7 text-xs font-medium" />
+                                  </div>
+                                  <div className="col-span-3 space-y-1.5">
+                                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Code</Label>
+                                    <Input placeholder="Auto-gen" value={subsub.testCode || ""} onChange={(e) => updateSubSubTest(index, sIdx, "testCode", e.target.value)} className="h-7 text-xs font-mono" />
+                                  </div>
                                   {subsub.valueType !== "Custom" && (
-                                    <div className="space-y-1"><Label className="text-[10px]">Unit</Label><Input list="units-list" placeholder="Unit" value={subsub.unit} onChange={(e) => updateSubSubTest(index, sIdx, "unit", e.target.value)} className="h-7 text-xs" /></div>
+                                    <div className="col-span-4 space-y-1.5"><Label className="text-[10px]">Unit</Label><Input list="units-list" placeholder="Unit" value={subsub.unit} onChange={(e) => updateSubSubTest(index, sIdx, "unit", e.target.value)} className="h-7 text-xs" /></div>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-4 mb-2 mt-2 border-t border-border/30 pt-2">
