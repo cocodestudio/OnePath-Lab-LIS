@@ -54,7 +54,7 @@ class DatabaseSeeder extends Seeder
             'type' => 'Pathology',
             'field_type' => 'Single Field',
             'unit' => 'g/dL',
-            'gender_ref_type' => 'AGE_AND_GENDER_SPECIFIC',
+            'gender_ref_type' => 'GENDER_SPECIFIC',
             'ref_range_min_male' => 13.8,
             'ref_range_max_male' => 17.2,
             'ref_range_min_female' => 12.1,

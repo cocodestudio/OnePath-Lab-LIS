@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('type')->default('Pathology');
             $table->decimal('price', 10, 2)->default(0);
             $table->string('unit')->nullable();
-            $table->string('gender_ref_type')->default('BOTH'); // BOTH, GENDER_SPECIFIC
+            $table->string('gender_ref_type')->default('BOTH'); // BOTH, GENDER_SPECIFIC, CHILDREN, NEWBORN
             
             $table->float('ref_range_min')->nullable();
             $table->float('ref_range_max')->nullable();
