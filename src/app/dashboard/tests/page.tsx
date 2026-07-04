@@ -29,6 +29,8 @@ interface Test {
   unit: string | null; genderRefType: string; refRangeMin: number | null; refRangeMax: number | null;
   refRangeMinMale: number | null; refRangeMaxMale: number | null;
   refRangeMinFemale: number | null; refRangeMaxFemale: number | null;
+  refRangeMinChild?: number | null; refRangeMaxChild?: number | null;
+  refRangeMinNewborn?: number | null; refRangeMaxNewborn?: number | null;
   valueType?: string; customOptions?: string;
   subTests?: Test[];
 }
