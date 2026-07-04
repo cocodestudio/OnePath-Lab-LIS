@@ -72,18 +72,11 @@ export function buildReportBlocks(
   });
 
   const getRefRangeStr = (test: Test, patientGender: string, patientAge: number) => {
-    if (test.genderRefType === "AGE_AND_GENDER_SPECIFIC") {
-      if (patientAge < 1 && (test.refRangeMinNewborn !== null || test.refRangeMaxNewborn !== null)) {
-        return `${test.refRangeMinNewborn ?? test.refRangeMin} - ${test.refRangeMaxNewborn ?? test.refRangeMax}`;
-      }
-      if (patientAge < 18 && (test.refRangeMinChild !== null || test.refRangeMaxChild !== null)) {
-        return `${test.refRangeMinChild ?? test.refRangeMin} - ${test.refRangeMaxChild ?? test.refRangeMax}`;
-      }
-      if (patientGender.toLowerCase() === "female") {
-        return `${test.refRangeMinFemale ?? test.refRangeMin} - ${test.refRangeMaxFemale ?? test.refRangeMax}`;
-      } else {
-        return `${test.refRangeMinMale ?? test.refRangeMin} - ${test.refRangeMaxMale ?? test.refRangeMax}`;
-      }
+    if (test.genderRefType === "NEWBORN") {
+      return `${test.refRangeMinNewborn ?? test.refRangeMin} - ${test.refRangeMaxNewborn ?? test.refRangeMax}`;
+    }
+    if (test.genderRefType === "CHILDREN") {
+      return `${test.refRangeMinChild ?? test.refRangeMin} - ${test.refRangeMaxChild ?? test.refRangeMax}`;
     }
     if (test.genderRefType === "GENDER_SPECIFIC") {
       if (patientGender.toLowerCase() === "female") {
@@ -103,20 +96,12 @@ export function buildReportBlocks(
     let minRange = item.test.refRangeMin;
     let maxRange = item.test.refRangeMax;
 
-    if (item.test.genderRefType === "AGE_AND_GENDER_SPECIFIC") {
-      if (patientAge < 1 && (item.test.refRangeMinNewborn !== null || item.test.refRangeMaxNewborn !== null)) {
-        minRange = item.test.refRangeMinNewborn ?? minRange;
-        maxRange = item.test.refRangeMaxNewborn ?? maxRange;
-      } else if (patientAge < 18 && (item.test.refRangeMinChild !== null || item.test.refRangeMaxChild !== null)) {
-        minRange = item.test.refRangeMinChild ?? minRange;
-        maxRange = item.test.refRangeMaxChild ?? maxRange;
-      } else if (patientGender.toLowerCase() === "female") {
-        minRange = item.test.refRangeMinFemale ?? minRange;
-        maxRange = item.test.refRangeMaxFemale ?? maxRange;
-      } else {
-        minRange = item.test.refRangeMinMale ?? minRange;
-        maxRange = item.test.refRangeMaxMale ?? maxRange;
-      }
+    if (item.test.genderRefType === "NEWBORN") {
+      minRange = item.test.refRangeMinNewborn ?? minRange;
+      maxRange = item.test.refRangeMaxNewborn ?? maxRange;
+    } else if (item.test.genderRefType === "CHILDREN") {
+      minRange = item.test.refRangeMinChild ?? minRange;
+      maxRange = item.test.refRangeMaxChild ?? maxRange;
     } else if (item.test.genderRefType === "GENDER_SPECIFIC") {
       const gender = patientGender.toLowerCase();
       if (gender === "female") {

@@ -550,7 +550,7 @@ export default function TestMasterPage() {
                                             })()}
                                           </span>
                                         ) : (
-                                          sub.genderRefType === "GENDER_SPECIFIC" ? "Gender Specific" : sub.genderRefType === "AGE_AND_GENDER_SPECIFIC" ? "Age/Gender Specific" : `${sub.refRangeMin ?? 0} – ${sub.refRangeMax ?? 0}`
+                                          sub.genderRefType === "GENDER_SPECIFIC" ? "Gender Specific" : sub.genderRefType === "CHILDREN" ? "Children" : sub.genderRefType === "NEWBORN" ? "Newborn" : `${sub.refRangeMin ?? 0} – ${sub.refRangeMax ?? 0}`
                                         )}
                                       </td>
                                     </tr>
@@ -707,7 +707,8 @@ export default function TestMasterPage() {
                                 <SelectContent>
                                   <SelectItem value="BOTH">Universal</SelectItem>
                                   <SelectItem value="GENDER_SPECIFIC">Gender Specific</SelectItem>
-                                  <SelectItem value="AGE_AND_GENDER_SPECIFIC">Age/Gender Specific</SelectItem>
+                                  <SelectItem value="CHILDREN">Children</SelectItem>
+                                  <SelectItem value="NEWBORN">Newborn</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -720,7 +721,7 @@ export default function TestMasterPage() {
                               <div className="space-y-1"><Label className="text-[10px]">Min</Label><Input type="number" step="0.0001" placeholder="12.0" value={sub.refRangeMin} onChange={(e) => updateSubTest(index, "refRangeMin", e.target.value)} className="h-7 text-xs font-mono" /></div>
                               <div className="space-y-1"><Label className="text-[10px]">Max</Label><Input type="number" step="0.0001" placeholder="16.0" value={sub.refRangeMax} onChange={(e) => updateSubTest(index, "refRangeMax", e.target.value)} className="h-7 text-xs font-mono" /></div>
                             </div>
-                          ) : (
+                          ) : sub.genderRefType === "GENDER_SPECIFIC" ? (
                             <div className="space-y-2">
                               <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1"><Label className="text-[10px] text-blue-500">Male Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinMale} onChange={(e) => updateSubTest(index, "refRangeMinMale", e.target.value)} className="h-7 text-xs font-mono" /></div>
@@ -730,20 +731,18 @@ export default function TestMasterPage() {
                                 <div className="space-y-1"><Label className="text-[10px] text-pink-500">Female Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinFemale} onChange={(e) => updateSubTest(index, "refRangeMinFemale", e.target.value)} className="h-7 text-xs font-mono" /></div>
                                 <div className="space-y-1"><Label className="text-[10px] text-pink-500">Female Max</Label><Input type="number" step="0.0001" value={sub.refRangeMaxFemale} onChange={(e) => updateSubTest(index, "refRangeMaxFemale", e.target.value)} className="h-7 text-xs font-mono" /></div>
                               </div>
-                              {sub.genderRefType === "AGE_AND_GENDER_SPECIFIC" && (
-                                <>
-                                  <div className="grid grid-cols-2 gap-3 mt-2">
-                                    <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinChild} onChange={(e) => updateSubTest(index, "refRangeMinChild", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                                    <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Max</Label><Input type="number" step="0.0001" value={sub.refRangeMaxChild} onChange={(e) => updateSubTest(index, "refRangeMaxChild", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-3 mt-2">
-                                    <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinNewborn} onChange={(e) => updateSubTest(index, "refRangeMinNewborn", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                                    <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Max</Label><Input type="number" step="0.0001" value={sub.refRangeMaxNewborn} onChange={(e) => updateSubTest(index, "refRangeMaxNewborn", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                                  </div>
-                                </>
-                              )}
                             </div>
-                          )
+                          ) : sub.genderRefType === "CHILDREN" ? (
+                            <div className="grid grid-cols-2 gap-3 mt-2">
+                              <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinChild} onChange={(e) => updateSubTest(index, "refRangeMinChild", e.target.value)} className="h-7 text-xs font-mono" /></div>
+                              <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Max</Label><Input type="number" step="0.0001" value={sub.refRangeMaxChild} onChange={(e) => updateSubTest(index, "refRangeMaxChild", e.target.value)} className="h-7 text-xs font-mono" /></div>
+                            </div>
+                          ) : sub.genderRefType === "NEWBORN" ? (
+                            <div className="grid grid-cols-2 gap-3 mt-2">
+                              <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinNewborn} onChange={(e) => updateSubTest(index, "refRangeMinNewborn", e.target.value)} className="h-7 text-xs font-mono" /></div>
+                              <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Max</Label><Input type="number" step="0.0001" value={sub.refRangeMaxNewborn} onChange={(e) => updateSubTest(index, "refRangeMaxNewborn", e.target.value)} className="h-7 text-xs font-mono" /></div>
+                            </div>
+                          ) : null
                         ) : (
                           <div className="space-y-2 pt-2 border-t border-border/40">
                             <Label className="text-xs font-medium text-foreground">Custom Options / Suggestions</Label>
@@ -824,7 +823,8 @@ export default function TestMasterPage() {
                                         <SelectContent>
                                           <SelectItem value="BOTH">Universal</SelectItem>
                                           <SelectItem value="GENDER_SPECIFIC">Gender</SelectItem>
-                                          <SelectItem value="AGE_AND_GENDER_SPECIFIC">Age/Gender</SelectItem>
+                                          <SelectItem value="CHILDREN">Children</SelectItem>
+                                          <SelectItem value="NEWBORN">Newborn</SelectItem>
                                         </SelectContent>
                                       </Select>
                                     </div>
@@ -836,7 +836,7 @@ export default function TestMasterPage() {
                                       <div className="space-y-1"><Label className="text-[10px]">Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMin} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMin", e.target.value)} className="h-6 text-xs font-mono" /></div>
                                       <div className="space-y-1"><Label className="text-[10px]">Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMax} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMax", e.target.value)} className="h-6 text-xs font-mono" /></div>
                                     </div>
-                                  ) : (
+                                  ) : subsub.genderRefType === "GENDER_SPECIFIC" ? (
                                     <div className="space-y-2">
                                       <div className="grid grid-cols-2 gap-3">
                                         <div className="space-y-1"><Label className="text-[10px] text-blue-500">Male Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinMale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinMale", e.target.value)} className="h-6 text-xs font-mono" /></div>
@@ -846,20 +846,18 @@ export default function TestMasterPage() {
                                         <div className="space-y-1"><Label className="text-[10px] text-pink-500">Fem Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinFemale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinFemale", e.target.value)} className="h-6 text-xs font-mono" /></div>
                                         <div className="space-y-1"><Label className="text-[10px] text-pink-500">Fem Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxFemale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxFemale", e.target.value)} className="h-6 text-xs font-mono" /></div>
                                       </div>
-                                      {subsub.genderRefType === "AGE_AND_GENDER_SPECIFIC" && (
-                                        <>
-                                          <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinChild} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinChild", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                            <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxChild} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxChild", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                          </div>
-                                          <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinNewborn} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinNewborn", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                            <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxNewborn} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxNewborn", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                          </div>
-                                        </>
-                                      )}
                                     </div>
-                                  )
+                                  ) : subsub.genderRefType === "CHILDREN" ? (
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinChild} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinChild", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                      <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxChild} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxChild", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                    </div>
+                                  ) : subsub.genderRefType === "NEWBORN" ? (
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinNewborn} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinNewborn", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                      <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxNewborn} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxNewborn", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                    </div>
+                                  ) : null
                                 ) : (
                                   <div className="space-y-2 pt-2 border-t border-border/40">
                                     <Label className="text-[10px] font-medium text-foreground">Custom Options</Label>
