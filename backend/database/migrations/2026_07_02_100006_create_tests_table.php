@@ -28,6 +28,10 @@ return new class extends Migration
             $table->float('ref_range_max_male')->nullable();
             $table->float('ref_range_min_female')->nullable();
             $table->float('ref_range_max_female')->nullable();
+            $table->float('ref_range_min_child')->nullable();
+            $table->float('ref_range_max_child')->nullable();
+            $table->float('ref_range_min_newborn')->nullable();
+            $table->float('ref_range_max_newborn')->nullable();
             
             $table->string('value_type')->default('Numeric'); // "Numeric", "Custom"
             $table->json('custom_options')->nullable(); // JSON array of strings

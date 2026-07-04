@@ -24,8 +24,6 @@ class TestController extends Controller
         $validated = $request->validate([
             'name' => 'required|string',
             'category' => 'required|string',
-            'price' => 'numeric',
-            'type' => 'nullable|string',
             'subTests' => 'array',
         ]);
 
@@ -33,20 +31,16 @@ class TestController extends Controller
 
         DB::beginTransaction();
         try {
-            $test = Test::create([
-                'lab_id' => $labId,
-                'name' => $validated['name'],
-                'category' => $validated['category'],
-                'price' => $validated['price'] ?? 0,
-                'type' => $validated['type'] ?? 'Pathology',
-            ]);
+            $data = $request->except(['subTests']);
+            $data['lab_id'] = $labId;
+            
+            $test = Test::create($data);
 
-            if (!empty($validated['subTests'])) {
-                foreach ($validated['subTests'] as $sub) {
-                    Test::create(array_merge($sub, [
-                        'lab_id' => $labId,
-                        'parent_id' => $test->id,
-                    ]));
+            if (!empty($request->subTests)) {
+                foreach ($request->subTests as $sub) {
+                    $sub['lab_id'] = $labId;
+                    $sub['parent_id'] = $test->id;
+                    Test::create($sub);
                 }
             }
 
@@ -70,14 +64,7 @@ class TestController extends Controller
     public function update(Request $request, string $id)
     {
         $test = Test::where('lab_id', $request->user()->lab_id)->findOrFail($id);
-        
-        $validated = $request->validate([
-            'name' => 'sometimes|string',
-            'price' => 'sometimes|numeric',
-            'category' => 'sometimes|string',
-        ]);
-
-        $test->update($validated);
+        $test->update($request->all());
         return response()->json($test);
     }
 

@@ -44,6 +44,10 @@ interface SubTestState {
   refRangeMaxMale: string;
   refRangeMinFemale: string;
   refRangeMaxFemale: string;
+  refRangeMinChild: string;
+  refRangeMaxChild: string;
+  refRangeMinNewborn: string;
+  refRangeMaxNewborn: string;
   subTests?: SubTestState[];
   fieldType?: string;
   interpretation?: string;
@@ -147,7 +151,9 @@ export default function TestMasterPage() {
     setInterpretation(""); 
     setSubTests([{
       name: "", unit: "", genderRefType: "BOTH", refRangeMin: "", refRangeMax: "",
-      refRangeMinMale: "", refRangeMaxMale: "", refRangeMinFemale: "", refRangeMaxFemale: "", fieldType: "Single Field",
+      refRangeMinMale: "", refRangeMaxMale: "", refRangeMinFemale: "", refRangeMaxFemale: "", 
+      refRangeMinChild: "", refRangeMaxChild: "", refRangeMinNewborn: "", refRangeMaxNewborn: "", 
+      fieldType: "Single Field",
       valueType: "Numeric", customOptions: []
     }]);
     setError(null); setSuccess(null); setDialogOpen(true);
@@ -174,6 +180,10 @@ export default function TestMasterPage() {
         refRangeMaxMale: sub.refRangeMaxMale?.toString() || "",
         refRangeMinFemale: sub.refRangeMinFemale?.toString() || "",
         refRangeMaxFemale: sub.refRangeMaxFemale?.toString() || "",
+        refRangeMinChild: sub.refRangeMinChild?.toString() || "",
+        refRangeMaxChild: sub.refRangeMaxChild?.toString() || "",
+        refRangeMinNewborn: sub.refRangeMinNewborn?.toString() || "",
+        refRangeMaxNewborn: sub.refRangeMaxNewborn?.toString() || "",
         fieldType: sub.fieldType || "Single Field",
         interpretation: sub.interpretation || "",
         valueType: sub.valueType || "Numeric",
@@ -189,6 +199,10 @@ export default function TestMasterPage() {
           refRangeMaxMale: subsub.refRangeMaxMale?.toString() || "",
           refRangeMinFemale: subsub.refRangeMinFemale?.toString() || "",
           refRangeMaxFemale: subsub.refRangeMaxFemale?.toString() || "",
+          refRangeMinChild: subsub.refRangeMinChild?.toString() || "",
+          refRangeMaxChild: subsub.refRangeMaxChild?.toString() || "",
+          refRangeMinNewborn: subsub.refRangeMinNewborn?.toString() || "",
+          refRangeMaxNewborn: subsub.refRangeMaxNewborn?.toString() || "",
           valueType: subsub.valueType || "Numeric",
           customOptions: subsub.customOptions ? JSON.parse(subsub.customOptions) : [],
         })) : []
@@ -205,6 +219,10 @@ export default function TestMasterPage() {
         refRangeMaxMale: test.refRangeMaxMale?.toString() || "",
         refRangeMinFemale: test.refRangeMinFemale?.toString() || "",
         refRangeMaxFemale: test.refRangeMaxFemale?.toString() || "",
+        refRangeMinChild: test.refRangeMinChild?.toString() || "",
+        refRangeMaxChild: test.refRangeMaxChild?.toString() || "",
+        refRangeMinNewborn: test.refRangeMinNewborn?.toString() || "",
+        refRangeMaxNewborn: test.refRangeMaxNewborn?.toString() || "",
         valueType: test.valueType || "Numeric",
         customOptions: test.customOptions ? JSON.parse(test.customOptions) : [],
       }]);
@@ -217,6 +235,7 @@ export default function TestMasterPage() {
     setSubTests([...subTests, {
       name: "", unit: "", genderRefType: "BOTH", refRangeMin: "", refRangeMax: "",
       refRangeMinMale: "", refRangeMaxMale: "", refRangeMinFemale: "", refRangeMaxFemale: "",
+      refRangeMinChild: "", refRangeMaxChild: "", refRangeMinNewborn: "", refRangeMaxNewborn: "",
       valueType: "Numeric", customOptions: []
     }]);
     setTimeout(() => {
@@ -246,6 +265,7 @@ export default function TestMasterPage() {
     updated[index].subTests!.push({
       name: "", unit: "", genderRefType: "BOTH", refRangeMin: "", refRangeMax: "",
       refRangeMinMale: "", refRangeMaxMale: "", refRangeMinFemale: "", refRangeMaxFemale: "",
+      refRangeMinChild: "", refRangeMaxChild: "", refRangeMinNewborn: "", refRangeMaxNewborn: "",
       valueType: "Numeric", customOptions: []
     });
     setSubTests(updated);
@@ -309,6 +329,10 @@ export default function TestMasterPage() {
             refRangeMaxMale: sub.refRangeMaxMale,
             refRangeMinFemale: sub.refRangeMinFemale,
             refRangeMaxFemale: sub.refRangeMaxFemale,
+            refRangeMinChild: sub.refRangeMinChild,
+            refRangeMaxChild: sub.refRangeMaxChild,
+            refRangeMinNewborn: sub.refRangeMinNewborn,
+            refRangeMaxNewborn: sub.refRangeMaxNewborn,
             valueType: sub.valueType || "Numeric",
             customOptions: sub.customOptions || [],
             fieldType: sub.fieldType || "Single Field",
@@ -324,6 +348,10 @@ export default function TestMasterPage() {
               refRangeMaxMale: ss.refRangeMaxMale,
               refRangeMinFemale: ss.refRangeMinFemale,
               refRangeMaxFemale: ss.refRangeMaxFemale,
+              refRangeMinChild: ss.refRangeMinChild,
+              refRangeMaxChild: ss.refRangeMaxChild,
+              refRangeMinNewborn: ss.refRangeMinNewborn,
+              refRangeMaxNewborn: ss.refRangeMaxNewborn,
               valueType: ss.valueType || "Numeric",
               customOptions: ss.customOptions || [],
             })) : undefined
@@ -520,7 +548,7 @@ export default function TestMasterPage() {
                                             })()}
                                           </span>
                                         ) : (
-                                          sub.genderRefType === "GENDER_SPECIFIC" ? "Gender Specific" : `${sub.refRangeMin ?? 0} – ${sub.refRangeMax ?? 0}`
+                                          sub.genderRefType === "GENDER_SPECIFIC" ? "Gender Specific" : sub.genderRefType === "AGE_AND_GENDER_SPECIFIC" ? "Age/Gender Specific" : `${sub.refRangeMin ?? 0} – ${sub.refRangeMax ?? 0}`
                                         )}
                                       </td>
                                     </tr>
@@ -677,6 +705,7 @@ export default function TestMasterPage() {
                                 <SelectContent>
                                   <SelectItem value="BOTH">Universal</SelectItem>
                                   <SelectItem value="GENDER_SPECIFIC">Gender Specific</SelectItem>
+                                  <SelectItem value="AGE_AND_GENDER_SPECIFIC">Age/Gender Specific</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -699,6 +728,18 @@ export default function TestMasterPage() {
                                 <div className="space-y-1"><Label className="text-[10px] text-pink-500">Female Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinFemale} onChange={(e) => updateSubTest(index, "refRangeMinFemale", e.target.value)} className="h-7 text-xs font-mono" /></div>
                                 <div className="space-y-1"><Label className="text-[10px] text-pink-500">Female Max</Label><Input type="number" step="0.0001" value={sub.refRangeMaxFemale} onChange={(e) => updateSubTest(index, "refRangeMaxFemale", e.target.value)} className="h-7 text-xs font-mono" /></div>
                               </div>
+                              {sub.genderRefType === "AGE_AND_GENDER_SPECIFIC" && (
+                                <>
+                                  <div className="grid grid-cols-2 gap-3 mt-2">
+                                    <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinChild} onChange={(e) => updateSubTest(index, "refRangeMinChild", e.target.value)} className="h-7 text-xs font-mono" /></div>
+                                    <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Max</Label><Input type="number" step="0.0001" value={sub.refRangeMaxChild} onChange={(e) => updateSubTest(index, "refRangeMaxChild", e.target.value)} className="h-7 text-xs font-mono" /></div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-3 mt-2">
+                                    <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinNewborn} onChange={(e) => updateSubTest(index, "refRangeMinNewborn", e.target.value)} className="h-7 text-xs font-mono" /></div>
+                                    <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Max</Label><Input type="number" step="0.0001" value={sub.refRangeMaxNewborn} onChange={(e) => updateSubTest(index, "refRangeMaxNewborn", e.target.value)} className="h-7 text-xs font-mono" /></div>
+                                  </div>
+                                </>
+                              )}
                             </div>
                           )
                         ) : (
@@ -781,6 +822,7 @@ export default function TestMasterPage() {
                                         <SelectContent>
                                           <SelectItem value="BOTH">Universal</SelectItem>
                                           <SelectItem value="GENDER_SPECIFIC">Gender</SelectItem>
+                                          <SelectItem value="AGE_AND_GENDER_SPECIFIC">Age/Gender</SelectItem>
                                         </SelectContent>
                                       </Select>
                                     </div>
@@ -802,6 +844,18 @@ export default function TestMasterPage() {
                                         <div className="space-y-1"><Label className="text-[10px] text-pink-500">Fem Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinFemale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinFemale", e.target.value)} className="h-6 text-xs font-mono" /></div>
                                         <div className="space-y-1"><Label className="text-[10px] text-pink-500">Fem Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxFemale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxFemale", e.target.value)} className="h-6 text-xs font-mono" /></div>
                                       </div>
+                                      {subsub.genderRefType === "AGE_AND_GENDER_SPECIFIC" && (
+                                        <>
+                                          <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinChild} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinChild", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                            <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxChild} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxChild", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                          </div>
+                                          <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinNewborn} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinNewborn", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                            <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxNewborn} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxNewborn", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                          </div>
+                                        </>
+                                      )}
                                     </div>
                                   )
                                 ) : (

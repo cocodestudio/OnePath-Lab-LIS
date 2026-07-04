@@ -7,6 +7,8 @@ interface Test {
   genderRefType?: string; refRangeMin: number; refRangeMax: number; 
   refRangeMinMale?: number | null; refRangeMaxMale?: number | null; 
   refRangeMinFemale?: number | null; refRangeMaxFemale?: number | null;
+  refRangeMinChild?: number | null; refRangeMaxChild?: number | null;
+  refRangeMinNewborn?: number | null; refRangeMaxNewborn?: number | null;
   valueType?: string; customOptions?: string | null;
   parent?: { id: string; name: string; interpretation?: string; parent?: { id: string; name: string; interpretation?: string } };
 }
@@ -69,7 +71,20 @@ export function buildReportBlocks(
     groupedTests[cat][mainTestName][paramName].push(item);
   });
 
-  const getRefRangeStr = (test: Test, patientGender: string) => {
+  const getRefRangeStr = (test: Test, patientGender: string, patientAge: number) => {
+    if (test.genderRefType === "AGE_AND_GENDER_SPECIFIC") {
+      if (patientAge < 1 && (test.refRangeMinNewborn !== null || test.refRangeMaxNewborn !== null)) {
+        return `${test.refRangeMinNewborn ?? test.refRangeMin} - ${test.refRangeMaxNewborn ?? test.refRangeMax}`;
+      }
+      if (patientAge < 18 && (test.refRangeMinChild !== null || test.refRangeMaxChild !== null)) {
+        return `${test.refRangeMinChild ?? test.refRangeMin} - ${test.refRangeMaxChild ?? test.refRangeMax}`;
+      }
+      if (patientGender.toLowerCase() === "female") {
+        return `${test.refRangeMinFemale ?? test.refRangeMin} - ${test.refRangeMaxFemale ?? test.refRangeMax}`;
+      } else {
+        return `${test.refRangeMinMale ?? test.refRangeMin} - ${test.refRangeMaxMale ?? test.refRangeMax}`;
+      }
+    }
     if (test.genderRefType === "GENDER_SPECIFIC") {
       if (patientGender.toLowerCase() === "female") {
         return `${test.refRangeMinFemale ?? test.refRangeMin} - ${test.refRangeMaxFemale ?? test.refRangeMax}`;
@@ -80,7 +95,7 @@ export function buildReportBlocks(
     return `${test.refRangeMin} - ${test.refRangeMax}`;
   };
 
-  const getFlag = (item: ReportTest, patientGender: string) => {
+  const getFlag = (item: ReportTest, patientGender: string, patientAge: number) => {
     if (!item.resultValue) return null;
     const val = parseFloat(item.resultValue);
     if (isNaN(val)) return item.isAbnormal ? "H" : "N";
@@ -88,7 +103,21 @@ export function buildReportBlocks(
     let minRange = item.test.refRangeMin;
     let maxRange = item.test.refRangeMax;
 
-    if (item.test.genderRefType === "GENDER_SPECIFIC") {
+    if (item.test.genderRefType === "AGE_AND_GENDER_SPECIFIC") {
+      if (patientAge < 1 && (item.test.refRangeMinNewborn !== null || item.test.refRangeMaxNewborn !== null)) {
+        minRange = item.test.refRangeMinNewborn ?? minRange;
+        maxRange = item.test.refRangeMaxNewborn ?? maxRange;
+      } else if (patientAge < 18 && (item.test.refRangeMinChild !== null || item.test.refRangeMaxChild !== null)) {
+        minRange = item.test.refRangeMinChild ?? minRange;
+        maxRange = item.test.refRangeMaxChild ?? maxRange;
+      } else if (patientGender.toLowerCase() === "female") {
+        minRange = item.test.refRangeMinFemale ?? minRange;
+        maxRange = item.test.refRangeMaxFemale ?? maxRange;
+      } else {
+        minRange = item.test.refRangeMinMale ?? minRange;
+        maxRange = item.test.refRangeMaxMale ?? maxRange;
+      }
+    } else if (item.test.genderRefType === "GENDER_SPECIFIC") {
       const gender = patientGender.toLowerCase();
       if (gender === "female") {
         minRange = item.test.refRangeMinFemale ?? minRange;
@@ -208,7 +237,7 @@ export function buildReportBlocks(
                       }
                       
                       const isCustom = item.test.valueType === "Custom";
-                      const flag = isCustom ? null : getFlag(item, report.patient.gender);
+                      const flag = isCustom ? null : getFlag(item, report.patient.gender, report.patient.age);
                       
                       if (isCustom) {
                         return (
@@ -228,7 +257,7 @@ export function buildReportBlocks(
                             {flag === "L" && <span className="inline-flex items-center gap-0.5 text-red-600"><ArrowDown className="h-3 w-3 stroke-[3]" /> L</span>}
                             {flag === "N" && <span className="inline-flex items-center gap-0.5" style={{ color: EMERALD_MID }}><Check className="h-3 w-3 stroke-[3]" /> N</span>}
                           </td>
-                          <td className="p-2.5 text-zinc-500 font-semibold">{getRefRangeStr(item.test, report.patient.gender)}</td>
+                          <td className="p-2.5 text-zinc-500 font-semibold">{getRefRangeStr(item.test, report.patient.gender, report.patient.age)}</td>
                           <td className="p-2.5 text-zinc-500 font-semibold">{item.test.unit}</td>
                         </tr>
                       );

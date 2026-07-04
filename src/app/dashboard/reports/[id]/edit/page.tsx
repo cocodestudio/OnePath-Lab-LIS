@@ -24,6 +24,8 @@ interface Test {
   genderRefType?: string; refRangeMin: number; refRangeMax: number; 
   refRangeMinMale?: number | null; refRangeMaxMale?: number | null; 
   refRangeMinFemale?: number | null; refRangeMaxFemale?: number | null;
+  refRangeMinChild?: number | null; refRangeMaxChild?: number | null;
+  refRangeMinNewborn?: number | null; refRangeMaxNewborn?: number | null;
   valueType?: string; customOptions?: string | null;
   subTests?: Test[];
   parent?: { id: string; name: string; interpretation?: string; parent?: { id: string; name: string; interpretation?: string } }; 
@@ -126,7 +128,32 @@ export default function ResultEntryPage() {
 
   const handleValueChange = (id: string, val: string) => setValues((prev) => ({ ...prev, [id]: val }));
 
-  const getRefRange = (test: Test, patientGender: string) => {
+  const getRefRange = (test: Test, patientGender: string, patientAge: number) => {
+    if (test.genderRefType === "AGE_AND_GENDER_SPECIFIC") {
+      if (patientAge < 1 && (test.refRangeMinNewborn !== null || test.refRangeMaxNewborn !== null)) {
+        return {
+          min: test.refRangeMinNewborn ?? test.refRangeMin,
+          max: test.refRangeMaxNewborn ?? test.refRangeMax
+        };
+      }
+      if (patientAge < 18 && (test.refRangeMinChild !== null || test.refRangeMaxChild !== null)) {
+        return {
+          min: test.refRangeMinChild ?? test.refRangeMin,
+          max: test.refRangeMaxChild ?? test.refRangeMax
+        };
+      }
+      if (patientGender.toLowerCase() === "female") {
+        return {
+          min: test.refRangeMinFemale ?? test.refRangeMin,
+          max: test.refRangeMaxFemale ?? test.refRangeMax
+        };
+      } else {
+        return {
+          min: test.refRangeMinMale ?? test.refRangeMin,
+          max: test.refRangeMaxMale ?? test.refRangeMax
+        };
+      }
+    }
     if (test.genderRefType === "GENDER_SPECIFIC") {
       if (patientGender.toLowerCase() === "female") {
         return {
@@ -148,7 +175,7 @@ export default function ResultEntryPage() {
     if (!currentVal || currentVal.trim() === "") return { abnormal: false, flag: "NORMAL" };
     const num = parseFloat(currentVal);
     if (isNaN(num)) return { abnormal: false, flag: "NORMAL" };
-    const range = getRefRange(test, report?.patient.gender || "Male");
+    const range = getRefRange(test, report?.patient.gender || "Male", report?.patient.age || 30);
     if (num < range.min) return { abnormal: true, flag: "LOW" };
     if (num > range.max) return { abnormal: true, flag: "HIGH" };
     return { abnormal: false, flag: "NORMAL" };
@@ -480,7 +507,11 @@ export default function ResultEntryPage() {
                                     </td>
                                     <td className="px-6 py-3.5 text-xs font-mono text-muted-foreground">{item.test.unit}</td>
                                     <td className="px-6 py-3.5 text-xs font-mono text-muted-foreground">
-                                      {item.test.genderRefType === "GENDER_SPECIFIC" ? 
+                                      {item.test.genderRefType === "AGE_AND_GENDER_SPECIFIC" ? 
+                                        ((report?.patient.age || 30) < 1 && (item.test.refRangeMinNewborn !== null || item.test.refRangeMaxNewborn !== null) ? `${item.test.refRangeMinNewborn ?? item.test.refRangeMin} – ${item.test.refRangeMaxNewborn ?? item.test.refRangeMax}` :
+                                        (report?.patient.age || 30) < 18 && (item.test.refRangeMinChild !== null || item.test.refRangeMaxChild !== null) ? `${item.test.refRangeMinChild ?? item.test.refRangeMin} – ${item.test.refRangeMaxChild ?? item.test.refRangeMax}` :
+                                        report?.patient.gender.toLowerCase() === "female" ? `${item.test.refRangeMinFemale ?? item.test.refRangeMin} – ${item.test.refRangeMaxFemale ?? item.test.refRangeMax}` : `${item.test.refRangeMinMale ?? item.test.refRangeMin} – ${item.test.refRangeMaxMale ?? item.test.refRangeMax}`)
+                                        : item.test.genderRefType === "GENDER_SPECIFIC" ? 
                                         (report?.patient.gender.toLowerCase() === "female" ? `${item.test.refRangeMinFemale ?? item.test.refRangeMin} – ${item.test.refRangeMaxFemale ?? item.test.refRangeMax}` : `${item.test.refRangeMinMale ?? item.test.refRangeMin} – ${item.test.refRangeMaxMale ?? item.test.refRangeMax}`)
                                         : `${item.test.refRangeMin} – ${item.test.refRangeMax}`}
                                     </td>
