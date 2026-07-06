@@ -15,7 +15,9 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          const res = await fetch("http://localhost:8000/api/auth/login", {
+          const apiURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/lis";
+          const loginURL = apiURL.replace(/\/api\/lis\/?$/, '/api/auth/login');
+          const res = await fetch(loginURL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: credentials.email, password: credentials.password })

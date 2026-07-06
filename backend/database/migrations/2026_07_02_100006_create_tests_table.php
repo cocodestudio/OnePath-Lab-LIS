@@ -12,7 +12,6 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('lab_id')->constrained('labs')->cascadeOnDelete();
             $table->uuid('parent_id')->nullable();
-            $table->foreign('parent_id')->references('id')->on('tests')->cascadeOnDelete();
             
             $table->string('name');
             $table->string('category'); // CBC, LFT, KFT, Thyroid, etc.
@@ -38,6 +37,10 @@ return new class extends Migration
             $table->longText('interpretation')->nullable(); // Rich text HTML
             
             $table->timestamps();
+        });
+
+        Schema::table('tests', function (Blueprint $table) {
+            $table->foreign('parent_id')->references('id')->on('tests')->cascadeOnDelete();
         });
     }
 

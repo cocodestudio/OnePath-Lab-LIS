@@ -36,24 +36,46 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 3. Tests are now loaded dynamically from JSON
-        // For the dummy reports, we will copy a few JSON tests into the DB for this lab
         $jsonTests = json_decode(file_get_contents(database_path('data/default_tests.json')), true);
         $cbcData = $jsonTests[0]; // CBC
-        $cbcData['lab_id'] = $lab->id;
-        $cbcData['test_code'] = $cbcData['testCode'];
-        $cbcData['is_json_override'] = true;
-        $subTests = $cbcData['subTests'];
-        unset($cbcData['subTests'], $cbcData['testCode']);
-        $cbc = \App\Models\Test::create($cbcData);
+        
+        $cbc = \App\Models\Test::create([
+            'lab_id' => $lab->id,
+            'test_code' => $cbcData['testCode'],
+            'is_json_override' => true,
+            'name' => $cbcData['name'],
+            'category' => $cbcData['category'],
+            'field_type' => $cbcData['fieldType'] ?? 'Single Field',
+            'type' => $cbcData['type'] ?? 'Pathology',
+            'price' => $cbcData['price'] ?? 0,
+            'gender_ref_type' => $cbcData['genderRefType'] ?? 'BOTH',
+            'value_type' => $cbcData['valueType'] ?? 'Numeric'
+        ]);
         
         $hb = null; $wbc = null;
-        foreach ($subTests as $sub) {
-            $sub['lab_id'] = $lab->id;
-            $sub['parent_id'] = $cbc->id;
-            $sub['test_code'] = $sub['testCode'];
-            unset($sub['subTests'], $sub['testCode']);
-            $createdSub = \App\Models\Test::create($sub);
+        foreach ($cbcData['subTests'] as $sub) {
+            $createdSub = \App\Models\Test::create([
+                'lab_id' => $lab->id,
+                'parent_id' => $cbc->id,
+                'test_code' => $sub['testCode'],
+                'name' => $sub['name'],
+                'category' => $sub['category'],
+                'field_type' => $sub['fieldType'] ?? 'Single Field',
+                'type' => $sub['type'] ?? 'Pathology',
+                'gender_ref_type' => $sub['genderRefType'] ?? 'BOTH',
+                'value_type' => $sub['valueType'] ?? 'Numeric',
+                'unit' => $sub['unit'] ?? null,
+                'ref_range_min' => $sub['refRangeMin'] ?? null,
+                'ref_range_max' => $sub['refRangeMax'] ?? null,
+                'ref_range_min_male' => $sub['refRangeMinMale'] ?? null,
+                'ref_range_max_male' => $sub['refRangeMaxMale'] ?? null,
+                'ref_range_min_female' => $sub['refRangeMinFemale'] ?? null,
+                'ref_range_max_female' => $sub['refRangeMaxFemale'] ?? null,
+                'ref_range_min_child' => $sub['refRangeMinChild'] ?? null,
+                'ref_range_max_child' => $sub['refRangeMaxChild'] ?? null,
+                'ref_range_min_newborn' => $sub['refRangeMinNewborn'] ?? null,
+                'ref_range_max_newborn' => $sub['refRangeMaxNewborn'] ?? null,
+            ]);
             if ($createdSub->test_code === 'SYS_CBC_01_HB') $hb = $createdSub;
             if ($createdSub->test_code === 'SYS_CBC_01_WBC') $wbc = $createdSub;
         }
