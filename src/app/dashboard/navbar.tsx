@@ -1,15 +1,15 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 import { useTheme } from "@/components/theme-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Sun, Moon, LogOut, UserCircle, ChevronDown } from "lucide-react";
+import { Sun, Moon, LogOut, ChevronDown } from "lucide-react";
+import { getStoredUser, logout } from "@/lib/api-client";
 
 function titleForPath(pathname: string): { eyebrow: string; title: string } {
   if (pathname === "/dashboard") return { eyebrow: "Dashboard", title: "Overview" };
@@ -23,13 +23,18 @@ function titleForPath(pathname: string): { eyebrow: string; title: string } {
   return { eyebrow: "OnePath", title: "Lab" };
 }
 
-export default function Navbar({ session }: { session: any }) {
+export default function Navbar() {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const { eyebrow, title } = titleForPath(pathname);
+  const [user, setUser] = useState<any>(null);
 
-  const name = session?.user?.name || "User";
-  const role = session?.user?.role || "Staff";
+  useEffect(() => {
+    setUser(getStoredUser());
+  }, []);
+
+  const name = user?.name || "User";
+  const role = user?.role || "Staff";
   const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
 
   return (
@@ -77,10 +82,10 @@ export default function Navbar({ session }: { session: any }) {
             <DropdownMenuLabel>Signed in as</DropdownMenuLabel>
             <div className="px-2.5 pb-2 pt-0.5">
               <p className="text-sm font-semibold text-foreground truncate">{name}</p>
-              <p className="text-xs text-muted-foreground truncate">{session?.user?.email || role}</p>
+              <p className="text-xs text-muted-foreground truncate">{user?.email || role}</p>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive [&>svg]:text-destructive" onSelect={() => signOut({ callbackUrl: "/login" })}>
+            <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive [&>svg]:text-destructive" onSelect={logout}>
               <LogOut /> Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>

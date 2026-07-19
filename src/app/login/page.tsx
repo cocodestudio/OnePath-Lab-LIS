@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle, Lock, Mail, Loader2, FlaskConical, ShieldCheck,
@@ -21,10 +20,34 @@ export default function LoginPage() {
     if (!email || !password) { setError("Please fill in all fields."); return; }
     setError(null);
     setLoading(true);
+
     try {
-      const result = await signIn("credentials", { redirect: false, email, password });
-      if (result?.error) { setError(result.error); setLoading(false); }
-      else { router.push("/dashboard"); router.refresh(); }
+      const apiURL = process.env.NEXT_PUBLIC_API_URL || "https://api.onepathlab.com/api/lis";
+      const loginURL = apiURL.replace(/\/api\/lis\/?$/, "/api/auth/login");
+
+      const res = await fetch(loginURL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Invalid credentials.");
+        setLoading(false);
+        return;
+      }
+
+      const token = data.access_token || data.token;
+      const user = data.user;
+
+      localStorage.setItem("lis_token", token);
+      localStorage.setItem("lis_user", JSON.stringify(user));
+      document.cookie = `lis_token=${token}; path=/; max-age=86400; SameSite=Lax; Secure`;
+
+      router.push("/dashboard");
+      router.refresh();
     } catch {
       setError("An unexpected error occurred. Please try again.");
       setLoading(false);
@@ -35,13 +58,11 @@ export default function LoginPage() {
     <div className="min-h-screen flex overflow-x-hidden w-full">
       {/* ── Left: editorial brand panel ───────────────────── */}
       <div className="hidden lg:flex lg:w-[48%] relative overflow-hidden flex-col justify-between p-14 gradient-primary">
-        {/* texture */}
         <div className="absolute inset-0 opacity-[0.07] pointer-events-none"
           style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "28px 28px" }} />
         <div className="absolute -top-28 -right-24 w-[420px] h-[420px] rounded-full bg-[hsl(40_78%_60%/0.18)] blur-3xl pointer-events-none" />
         <div className="absolute -bottom-32 -left-20 w-[380px] h-[380px] rounded-full bg-black/10 blur-3xl pointer-events-none" />
 
-        {/* brand */}
         <div className="relative z-10 flex items-center gap-3">
           <div className="flex items-center justify-center w-11 h-11 rounded-xl bg-white/12 border border-white/20 backdrop-blur-sm">
             <FlaskConical className="h-5 w-5 text-white" />
@@ -52,7 +73,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* headline */}
         <div className="relative z-10 space-y-7">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/15 text-white/80 text-[11px] font-medium tracking-wide">
             <span className="w-1.5 h-1.5 rounded-full bg-[hsl(40_80%_62%)]" />
@@ -78,18 +98,15 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* footer */}
         <div className="relative z-10 flex items-center gap-2 text-white/40 text-xs">
           <ShieldCheck className="h-3.5 w-3.5" />
           HIPAA compliant · Multi-tenant · End-to-end encrypted
         </div>
       </div>
 
-      {/* ── Right: form ───────────────────────────────────── */}
       <div className="flex-1 flex flex-col bg-apothecary">
         <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
           <div className="w-full max-w-[400px] animate-fade-in">
-            {/* mobile brand */}
             <div className="flex lg:hidden items-center gap-3 mb-10">
               <div className="flex items-center justify-center w-10 h-10 rounded-xl gradient-primary">
                 <FlaskConical className="h-5 w-5 text-white" />

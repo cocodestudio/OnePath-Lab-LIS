@@ -1,16 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 import {
   LayoutDashboard, Users, FileText, Receipt, LogOut, Menu, X, FlaskConical, Settings
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-
-interface SidebarProps { session: any; }
+import { getStoredUser, logout } from "@/lib/api-client";
 
 const navigation = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
@@ -21,9 +19,14 @@ const navigation = [
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
-export default function Sidebar({ session }: SidebarProps) {
+export default function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    setUser(getStoredUser());
+  }, []);
 
   const getInitials = (name: string) =>
     name ? name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) : "US";
@@ -56,11 +59,10 @@ export default function Sidebar({ session }: SidebarProps) {
               key={item.name}
               href={item.href}
               onClick={() => setIsOpen(false)}
-              className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-200 ${
-                active
+              className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-200 ${active
                   ? "bg-accent text-accent-foreground"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              }`}
+                }`}
             >
               {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full gradient-primary" />}
               <item.icon className={`h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110 ${active ? "text-primary" : ""}`} />
@@ -75,15 +77,15 @@ export default function Sidebar({ session }: SidebarProps) {
         <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/40 border border-border/50">
           <Avatar className="h-9 w-9 shrink-0">
             <AvatarFallback className="gradient-primary text-primary-foreground text-[11px] font-bold">
-              {getInitials(session.user?.name || "")}
+              {getInitials(user?.name || "")}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-foreground truncate">{session.user?.name}</p>
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground truncate">{session.user?.role || "Staff"}</p>
+            <p className="text-[13px] font-semibold text-foreground truncate">{user?.name}</p>
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground truncate">{user?.role || "Staff"}</p>
           </div>
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={logout}
             title="Sign out"
             className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0"
           >

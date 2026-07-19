@@ -1,19 +1,32 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.onepathlab.com/api/lis";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/lis";
+export function getStoredUser() {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem("lis_user");
+  return raw ? JSON.parse(raw) : null;
+}
+
+export function getStoredToken() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("lis_token");
+}
+
+export function logout() {
+  localStorage.removeItem("lis_token");
+  localStorage.removeItem("lis_user");
+  document.cookie = "lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax; Secure;";
+  window.location.href = "/login";
+}
 
 export async function fetchFromLaravel(endpoint: string, options: RequestInit = {}) {
-  const session = await getServerSession(authOptions);
-  
-  if (!session || !(session.user as any).accessToken) {
-    throw new Error("Unauthorized");
-  }
+  const token = getStoredToken();
+
+  if (!token) throw new Error("Unauthorized");
 
   const headers = {
     "Content-Type": "application/json",
     "Accept": "application/json",
-    "Authorization": `Bearer ${(session.user as any).accessToken}`,
+    "Authorization": `Bearer ${token}`,
     ...options.headers,
   };
 
@@ -22,7 +35,11 @@ export async function fetchFromLaravel(endpoint: string, options: RequestInit = 
     headers,
   });
 
-  // Handle empty responses
+  if (response.status === 401) {
+    logout();
+    throw new Error("Session expired. Please log in again.");
+  }
+
   const text = await response.text();
   const data = text ? JSON.parse(text) : {};
 
