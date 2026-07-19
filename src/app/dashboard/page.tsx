@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
 import {
   Users, Clock, CheckCircle2, IndianRupee, RefreshCw, Download,
   UserPlus, FileSpreadsheet, Printer, ArrowUpRight, TrendingUp,
@@ -11,6 +10,8 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie,
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
+import { fetchFromLaravel } from "@/lib/api-client";
+import { getStoredUser } from "@/lib/api-client";
 
 interface Stats { patientsToday: number; totalReports: number; pendingReports: number; revenue: number; }
 interface ChartItem { date: string; reports: number; revenue: number; }
@@ -51,26 +52,35 @@ function StatCard({
 }
 
 export default function DashboardOverviewPage() {
-  const { data: session } = useSession();
+  const [user, setUser] = useState<any>(null);
   const [stats, setStats] = useState<Stats>({ patientsToday: 0, totalReports: 0, pendingReports: 0, revenue: 0 });
   const [chartData, setChartData] = useState<ChartItem[]>([]);
   const [recentReports, setRecentReports] = useState<RecentReport[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { loadDashboardData(); }, []);
+  useEffect(() => {
+    setUser(getStoredUser());
+    loadDashboardData();
+  }, []);
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const [analyticsRes, reportsRes] = await Promise.all([fetch("/api/analytics"), fetch("/api/reports")]);
-      if (analyticsRes.ok) {
-        const d = await analyticsRes.json();
-        setStats(d.stats); setChartData(d.chartData);
-      }
-      if (reportsRes.ok) {
-        const r = await reportsRes.json();
-        setRecentReports(r.slice(0, 5));
-      }
+      const [analytics, reports] = await Promise.all([
+        fetchFromLaravel("/analytics"),
+        fetchFromLaravel("/reports"),
+      ]);
+
+      setStats({
+        patientsToday: analytics.todayPatients ?? 0,
+        totalReports: analytics.totalReports ?? 0,
+        pendingReports: (analytics.totalReports ?? 0) - (analytics.completedReports ?? 0),
+        revenue: analytics.todayRevenue ?? analytics.totalRevenue ?? 0,
+      });
+      setChartData(analytics.reportsOverTime ?? []);
+
+      const reportsList = Array.isArray(reports) ? reports : reports.data ?? [];
+      setRecentReports(reportsList.slice(0, 5));
     } catch (err) {
       console.error("Dashboard load error:", err);
     } finally {
@@ -111,7 +121,7 @@ export default function DashboardOverviewPage() {
         <div>
           <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.2em] mb-1.5">Overview</p>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
-            Welcome back, {session?.user?.name?.split(" ")[0] || "Doctor"}
+            Welcome back, {user?.name?.split(" ")[0] || "Doctor"}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Here's what's happening today.</p>
         </div>
