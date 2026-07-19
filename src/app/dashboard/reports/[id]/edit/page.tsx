@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/toast";
+import { fetchFromLaravel } from "@/lib/api-client";
 import {
   FlaskConical, ArrowLeft, Loader2, CheckCircle2, AlertTriangle,
   User, AlertCircle, TrendingUp, History, ExternalLink, ClipboardList, Plus, Trash2,
@@ -68,57 +69,47 @@ export default function ResultEntryPage() {
     }
   }, [reportId]);
 
-  const fetchAvailableTests = async () => {
+const fetchAvailableTests = async () => {
     try {
-      const res = await fetch("/api/tests");
-      if (res.ok) {
-        const data = await res.json();
-        // Only keep group/main tests
-        setAvailableTests(data.filter((t: any) => t.fieldType === "Group" || !t.parent));
-      }
+      const data = await fetchFromLaravel("/tests")
+      setAvailableTests(data.filter((t: any) => t.fieldType === "Group" || !t.parent));
     } catch {}
   };
 
   const fetchReport = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/reports/${reportId}`);
-      if (res.ok) {
-        const data: Report = await res.json();
-        setReport(data);
-        const initial: Record<string, string> = {};
-        data.results.forEach((r) => { 
-          if (!r.resultValue && r.test.fieldType === "Custom Editor" && r.test.interpretation) {
-            initial[r.id] = r.test.interpretation;
-          } else {
-            initial[r.id] = r.resultValue || ""; 
-          }
-        });
-        setValues(initial);
-        if (data.patientId) fetchHistory(data.patientId);
-        
-        if ((data as any).printedInterpretations) {
-          try {
-            const parsed = JSON.parse((data as any).printedInterpretations);
-            setPrintedInterpretations(Array.isArray(parsed) ? parsed : []);
-          } catch(e) {}
+      const data: Report = await fetchFromLaravel(`/reports/${reportId}`);
+      setReport(data);
+      const initial: Record<string, string> = {};
+      data.results.forEach((r) => { 
+        if (!r.resultValue && r.test.fieldType === "Custom Editor" && r.test.interpretation) {
+          initial[r.id] = r.test.interpretation;
+        } else {
+          initial[r.id] = r.resultValue || ""; 
         }
-      } else setError("Failed to retrieve report data.");
+      });
+      setValues(initial);
+      if (data.patientId) fetchHistory(data.patientId);
+
+      if ((data as any).printedInterpretations) {
+        try {
+          const parsed = JSON.parse((data as any).printedInterpretations);
+          setPrintedInterpretations(Array.isArray(parsed) ? parsed : []);
+        } catch(e) {}
+      }
     } catch {
-      setError("A network error occurred while loading the report.");
+      setError("Failed to retrieve report data.");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchHistory = async (patientId: string) => {
+const fetchHistory = async (patientId: string) => {
     try {
       setLoadingHistory(true);
-      const res = await fetch("/api/reports");
-      if (res.ok) {
-        const data: Report[] = await res.json();
-        setHistory(data.filter((r) => r.patientId === patientId && r.id !== reportId));
-      }
+      const data: Report[] = await fetchFromLaravel("/reports");
+      setHistory(data.filter((r) => r.patientId === patientId && r.id !== reportId));
     } catch (err) {
       console.error("Error fetching patient history:", err);
     } finally {
@@ -172,9 +163,7 @@ export default function ResultEntryPage() {
     setPrintedInterpretations(prev => prev.includes(testId) ? prev.filter(id => id !== testId) : [...prev, testId]);
   };
 
-  const handleAddTest = async (testId: string) => {
-    // legacy support if needed
-  };
+  const handleAddTest = async (testId: string) => {};
 
   const handleAddSelectedTests = async () => {
     if (selectedTests.length === 0) return;
@@ -183,12 +172,11 @@ export default function ResultEntryPage() {
     
     for (const testId of selectedTests) {
       try {
-        const res = await fetch(`/api/reports/${reportId}/tests`, {
+        await fetchFromLaravel(`/reports/${reportId}/tests`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ testId })
         });
-        if (res.ok) successCount++;
+        successCount++;
       } catch {}
     }
     
@@ -235,18 +223,13 @@ export default function ResultEntryPage() {
     if (!confirm("Are you sure you want to remove this test from the report?")) return;
     setModifyingTest(true);
     try {
-      const res = await fetch(`/api/reports/${reportId}/tests?mainTestId=${mainTestId}`, {
+      await fetchFromLaravel(`/reports/${reportId}/tests?mainTestId=${mainTestId}`, {
         method: "DELETE"
       });
-      if (res.ok) {
-        toast.success("Test removed successfully.");
-        await fetchReport();
-      } else {
-        const data = await res.json();
-        toast.error("Error", data.error || "Failed to remove test");
-      }
-    } catch {
-      toast.error("Error", "Network error occurred.");
+      toast.success("Test removed successfully.");
+      await fetchReport();
+    } catch (err: any) {
+      toast.error("Error", err.message || "Failed to remove test");
     } finally {
       setModifyingTest(false);
     }
@@ -259,18 +242,14 @@ export default function ResultEntryPage() {
     setSuccess(null);
     const payload = Object.entries(values).map(([id, resultValue]) => ({ id, resultValue: resultValue.trim() }));
     try {
-      const res = await fetch(`/api/reports/${reportId}`, {
+      await fetchFromLaravel(`/reports/${reportId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ results: payload, printedInterpretations }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setSuccess("Diagnostic results saved successfully.");
-        setTimeout(() => { router.push(`/dashboard/reports`); router.refresh(); }, 900);
-      } else { setError(data.error || "Failed to update results."); setSaving(false); }
-    } catch {
-      setError("A network error occurred while updating.");
+      setSuccess("Diagnostic results saved successfully.");
+      setTimeout(() => { router.push(`/dashboard/reports`); router.refresh(); }, 900);
+    } catch (err: any) {
+      setError(err.message || "Failed to update results.");
       setSaving(false);
     }
   };

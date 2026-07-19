@@ -20,7 +20,6 @@ export function logout() {
 
 export async function fetchFromLaravel(endpoint: string, options: RequestInit = {}) {
   const token = getStoredToken();
-
   if (!token) throw new Error("Unauthorized");
 
   const headers = {
@@ -30,14 +29,16 @@ export async function fetchFromLaravel(endpoint: string, options: RequestInit = 
     ...options.headers,
   };
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
 
   if (response.status === 401) {
     logout();
     throw new Error("Session expired. Please log in again.");
+  }
+
+  if (response.status === 402) {
+    window.dispatchEvent(new CustomEvent("subscription-expired"));
+    throw new Error("Subscription expired.");
   }
 
   const text = await response.text();

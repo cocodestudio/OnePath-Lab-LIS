@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Skeleton } from "@/components/ui/skeleton";
 import { TipTapEditor } from "@/components/tiptap-editor";
 import { useToast } from "@/components/ui/toast";
+import { fetchFromLaravel } from "@/lib/api-client";
 
 const PREDEFINED_UNITS = [
   "g/dL", "mg/dL", "µg/dL", "U/L", "IU/L", "mEq/L", "mmol/L", "µmol/L", "pmol/L",
@@ -77,7 +78,7 @@ export default function TestMasterPage() {
   const [interpretation, setInterpretation] = useState("");
   const [interpretationModalOpen, setInterpretationModalOpen] = useState(false);
   const [customEditorActiveSubIndex, setCustomEditorActiveSubIndex] = useState<number | null>(null);
-  
+
   // Custom Options Modal State
   const [customOptionsModalOpen, setCustomOptionsModalOpen] = useState(false);
   const [activeCustomOptionsSubIndex, setActiveCustomOptionsSubIndex] = useState<number | null>(null);
@@ -87,7 +88,7 @@ export default function TestMasterPage() {
 
   const [type, setType] = useState("Pathology");
   const [price, setPrice] = useState("");
-  
+
   const [subTests, setSubTests] = useState<SubTestState[]>([]);
 
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +98,7 @@ export default function TestMasterPage() {
 
   const dynamicCategories = Array.from(new Set(tests.map(t => t.category).filter(Boolean)));
   const standardCategories = Array.from(new Set([
-    ...dynamicCategories, 
+    ...dynamicCategories,
     "Haematology",
     "Biochemistry",
     "Clinical Chemistry",
@@ -139,8 +140,8 @@ export default function TestMasterPage() {
   const fetchTests = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/tests");
-      if (res.ok) setTests(await res.json());
+      const data = await fetchFromLaravel("/tests");
+      setTests(data);
     } catch (err) {
       console.error("Failed to fetch tests:", err);
     } finally {
@@ -150,13 +151,13 @@ export default function TestMasterPage() {
 
   const handleOpenAddDialog = () => {
     setEditingTest(null);
-    setName(""); setTestCode(""); setCategory(standardCategories[0]); setCustomCategory(""); setType("Pathology"); 
+    setName(""); setTestCode(""); setCategory(standardCategories[0]); setCustomCategory(""); setType("Pathology");
     setPrice("");
-    setInterpretation(""); 
+    setInterpretation("");
     setSubTests([{
       name: "", unit: "", genderRefType: "BOTH", refRangeMin: "", refRangeMax: "",
-      refRangeMinMale: "", refRangeMaxMale: "", refRangeMinFemale: "", refRangeMaxFemale: "", 
-      refRangeMinChild: "", refRangeMaxChild: "", refRangeMinNewborn: "", refRangeMaxNewborn: "", 
+      refRangeMinMale: "", refRangeMaxMale: "", refRangeMinFemale: "", refRangeMaxFemale: "",
+      refRangeMinChild: "", refRangeMaxChild: "", refRangeMinNewborn: "", refRangeMaxNewborn: "",
       fieldType: "Single Field",
       valueType: "Numeric", customOptions: []
     }]);
@@ -171,8 +172,8 @@ export default function TestMasterPage() {
     setCustomCategory(standardCategories.includes(test.category) ? "" : test.category);
     setType(test.type || "Pathology");
     setPrice(test.price.toString());
-    setInterpretation(test.interpretation || ""); 
-    
+    setInterpretation(test.interpretation || "");
+
     if (test.subTests && test.subTests.length > 0) {
       setSubTests(test.subTests.map(sub => ({
         id: sub.id,
@@ -234,7 +235,7 @@ export default function TestMasterPage() {
         customOptions: test.customOptions ? JSON.parse(test.customOptions) : [],
       }]);
     }
-    
+
     setError(null); setSuccess(null); setDialogOpen(true);
   };
 
@@ -257,11 +258,11 @@ export default function TestMasterPage() {
   const updateSubTest = (index: number, field: keyof SubTestState, value: any) => {
     const updated = [...subTests];
     updated[index] = { ...updated[index], [field]: value };
-    
+
     if (field === "fieldType" && value === "Custom Editor" && !updated[index].name) {
       updated[index].name = "Report Template";
     }
-    
+
     setSubTests(updated);
   };
 
@@ -303,15 +304,13 @@ export default function TestMasterPage() {
     e.preventDefault();
     setError(null); setSuccess(null); setSaving(true);
     const finalCategory = category === "Other" ? customCategory.trim() : category;
-    
+
     if (!name || !finalCategory || price === "") {
       setError("Please fill in main test details."); setSaving(false); return;
     }
-
     if (subTests.length === 0) {
       setError("Please add at least one parameter/sub-test."); setSaving(false); return;
     }
-
     for (const sub of subTests) {
       if (!sub.name) {
         setError("Please fill in the name for all parameters."); setSaving(false); return;
@@ -319,11 +318,11 @@ export default function TestMasterPage() {
     }
 
     try {
-      const url = editingTest ? `/api/tests/${editingTest.id}` : "/api/tests";
+      const url = editingTest ? `/tests/${editingTest.id}` : "/tests";
       const method = editingTest ? "PUT" : "POST";
-      const res = await fetch(url, {
-        method, headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+      await fetchFromLaravel(url, {
+        method,
+        body: JSON.stringify({
           testCode: testCode.trim() || undefined,
           name: name.trim(), category: finalCategory, fieldType: "Group", type, price: parseFloat(price), interpretation,
           subTests: subTests.map(sub => ({
@@ -368,11 +367,11 @@ export default function TestMasterPage() {
           }))
         }),
       });
-      const result = await res.json();
-      if (res.ok) { setSuccess("Test saved successfully."); fetchTests(); setTimeout(() => setDialogOpen(false), 800); }
-      else setError(result.error || "Failed to save test.");
-    } catch {
-      setError("Network error.");
+      setSuccess("Test saved successfully.");
+      fetchTests();
+      setTimeout(() => setDialogOpen(false), 800);
+    } catch (err: any) {
+      setError(err.message || "Failed to save test.");
     } finally {
       setSaving(false);
     }
@@ -382,16 +381,12 @@ export default function TestMasterPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/tests/${deleteTarget.id}`, { method: "DELETE" });
-      if (res.ok) {
-        toast.success("Test deleted", `"${deleteTarget.name}" was removed from the catalog.`);
-        setDeleteTarget(null);
-        fetchTests();
-      } else {
-        toast.error("Delete failed", "The test could not be deleted. It may be in use by a report.");
-      }
+      await fetchFromLaravel(`/tests/${deleteTarget.id}`, { method: "DELETE" });
+      toast.success("Test deleted", `"${deleteTarget.name}" was removed from the catalog.`);
+      setDeleteTarget(null);
+      fetchTests();
     } catch {
-      toast.error("Network error", "Unable to reach the server. Please try again.");
+      toast.error("Delete failed", "The test could not be deleted. It may be in use by a report.");
     } finally {
       setDeleting(false);
     }
@@ -610,7 +605,7 @@ export default function TestMasterPage() {
                 </div>
               </div>
               <div className="space-y-1.5"><Label className="text-sm">Package Price (₹)</Label><Input type="number" step="0.01" placeholder="e.g. 500" value={price} onChange={(e) => setPrice(e.target.value)} className="font-mono" required /></div>
-              
+
               <div className="space-y-1.5">
                 <Label className="text-sm">Category</Label>
                 <Select value={category} onValueChange={setCategory}>
@@ -620,11 +615,11 @@ export default function TestMasterPage() {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               {category === "Other" && (
                 <div className="space-y-1.5"><Label className="text-sm">Custom Category</Label><Input placeholder="e.g. Serology" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} required /></div>
               )}
-              
+
               <div className="pt-2">
                 <Button type="button" variant="outline" onClick={() => setInterpretationModalOpen(true)} className="gap-2 w-full justify-start text-muted-foreground hover:text-foreground">
                   <FileText className="h-4 w-4" />
@@ -648,12 +643,12 @@ export default function TestMasterPage() {
               <div className="space-y-5">
                 {subTests.map((sub, index) => (
                   <div key={index} className="bg-card border border-border/70 shadow-sm rounded-xl p-5 relative group">
-                      {subTests.length > 1 && (
-                        <button type="button" onClick={() => handleRemoveSubTest(index)} className="absolute right-3 top-3 p-1.5 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                      
+                    {subTests.length > 1 && (
+                      <button type="button" onClick={() => handleRemoveSubTest(index)} className="absolute right-3 top-3 p-1.5 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+
                     <div className="grid grid-cols-12 gap-3 mb-4 pr-8">
                       <div className="col-span-5 space-y-1.5">
                         <Label className="text-xs">Parameter Name</Label>
@@ -682,7 +677,7 @@ export default function TestMasterPage() {
                       </div>
                     </div>
 
-                      {(!sub.fieldType || sub.fieldType === "Single Field") ? (
+                    {(!sub.fieldType || sub.fieldType === "Single Field") ? (
                       <div className="bg-background rounded-lg border border-border/50 p-3">
                         <div className="flex items-center gap-4 mb-3">
                           <div className="space-y-1">
@@ -755,137 +750,137 @@ export default function TestMasterPage() {
                           </div>
                         )}
                       </div>
-                      ) : sub.fieldType === "Custom Editor" ? (
-                        <div className="bg-background rounded-lg border border-border/50 p-3 mt-4">
-                          <div className="flex justify-between items-center mb-2">
-                            <Label className="text-xs text-muted-foreground font-semibold">Custom Editor Template</Label>
-                            <Button 
-                              type="button" 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => setCustomEditorActiveSubIndex(index)}
-                              className="h-7 text-[10px] px-3 font-semibold border-primary/20 text-primary hover:bg-primary/5"
-                            >
-                              <FileText className="h-3 w-3 mr-1.5" />
-                              Open Editor
-                            </Button>
-                          </div>
-                          <div 
-                            className="min-h-[100px] max-h-[150px] overflow-hidden border border-border/60 rounded-md bg-card/50 p-3 text-xs text-muted-foreground relative"
+                    ) : sub.fieldType === "Custom Editor" ? (
+                      <div className="bg-background rounded-lg border border-border/50 p-3 mt-4">
+                        <div className="flex justify-between items-center mb-2">
+                          <Label className="text-xs text-muted-foreground font-semibold">Custom Editor Template</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCustomEditorActiveSubIndex(index)}
+                            className="h-7 text-[10px] px-3 font-semibold border-primary/20 text-primary hover:bg-primary/5"
                           >
-                            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-card/90 pointer-events-none" />
-                            {sub.interpretation ? (
-                              <div dangerouslySetInnerHTML={{ __html: sub.interpretation }} className="opacity-70 scale-90 origin-top-left" />
-                            ) : (
-                              <div className="flex items-center justify-center h-full text-muted-foreground/50 italic pt-6">No template designed yet</div>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-muted-foreground mt-2">
-                            Design the layout exactly how you want it to appear in the report. This template will be loaded automatically when entering results.
-                          </p>
+                            <FileText className="h-3 w-3 mr-1.5" />
+                            Open Editor
+                          </Button>
                         </div>
-                      ) : (
-                        <div className="mt-4 border-t border-border/50 pt-4">
-                          <div className="flex justify-between items-center mb-3">
-                            <Label className="text-xs font-semibold text-muted-foreground">Sub-Parameters</Label>
-                            <Button type="button" variant="outline" size="sm" onClick={() => handleAddSubSubTest(index)} className="h-6 text-[10px] px-2"><Plus className="h-3 w-3 mr-1"/> Add Sub-Parameter</Button>
-                          </div>
-                          <div className="space-y-3">
-                            {sub.subTests && sub.subTests.map((subsub, sIdx) => (
-                              <div key={sIdx} className="bg-background rounded-lg border border-border/50 p-3 relative group/sub">
-                                <button type="button" onClick={() => handleRemoveSubSubTest(index, sIdx)} className="absolute right-2 top-2 p-1 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover/sub:opacity-100 transition-all"><Trash2 className="h-3 w-3" /></button>
-                                <div className="grid grid-cols-12 gap-3 items-end">
-                                  <div className="col-span-4 space-y-1.5">
-                                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Name</Label>
-                                    <Input placeholder="e.g. Neutrophils" value={subsub.name} onChange={(e) => updateSubSubTest(index, sIdx, "name", e.target.value)} className="h-7 text-xs font-medium" />
-                                  </div>
-                                  <div className="col-span-3 space-y-1.5">
-                                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Code</Label>
-                                    <Input placeholder="Auto-gen" value={subsub.testCode || ""} onChange={(e) => updateSubSubTest(index, sIdx, "testCode", e.target.value)} className="h-7 text-xs font-mono" />
-                                  </div>
-                                  {subsub.valueType !== "Custom" && (
-                                    <div className="col-span-4 space-y-1.5"><Label className="text-[10px]">Unit</Label><Input list="units-list" placeholder="Unit" value={subsub.unit} onChange={(e) => updateSubSubTest(index, sIdx, "unit", e.target.value)} className="h-7 text-xs" /></div>
-                                  )}
+                        <div
+                          className="min-h-[100px] max-h-[150px] overflow-hidden border border-border/60 rounded-md bg-card/50 p-3 text-xs text-muted-foreground relative"
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-card/90 pointer-events-none" />
+                          {sub.interpretation ? (
+                            <div dangerouslySetInnerHTML={{ __html: sub.interpretation }} className="opacity-70 scale-90 origin-top-left" />
+                          ) : (
+                            <div className="flex items-center justify-center h-full text-muted-foreground/50 italic pt-6">No template designed yet</div>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-2">
+                          Design the layout exactly how you want it to appear in the report. This template will be loaded automatically when entering results.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mt-4 border-t border-border/50 pt-4">
+                        <div className="flex justify-between items-center mb-3">
+                          <Label className="text-xs font-semibold text-muted-foreground">Sub-Parameters</Label>
+                          <Button type="button" variant="outline" size="sm" onClick={() => handleAddSubSubTest(index)} className="h-6 text-[10px] px-2"><Plus className="h-3 w-3 mr-1" /> Add Sub-Parameter</Button>
+                        </div>
+                        <div className="space-y-3">
+                          {sub.subTests && sub.subTests.map((subsub, sIdx) => (
+                            <div key={sIdx} className="bg-background rounded-lg border border-border/50 p-3 relative group/sub">
+                              <button type="button" onClick={() => handleRemoveSubSubTest(index, sIdx)} className="absolute right-2 top-2 p-1 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover/sub:opacity-100 transition-all"><Trash2 className="h-3 w-3" /></button>
+                              <div className="grid grid-cols-12 gap-3 items-end">
+                                <div className="col-span-4 space-y-1.5">
+                                  <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Name</Label>
+                                  <Input placeholder="e.g. Neutrophils" value={subsub.name} onChange={(e) => updateSubSubTest(index, sIdx, "name", e.target.value)} className="h-7 text-xs font-medium" />
                                 </div>
-                                <div className="flex items-center gap-4 mb-2 mt-2 border-t border-border/30 pt-2">
+                                <div className="col-span-3 space-y-1.5">
+                                  <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Code</Label>
+                                  <Input placeholder="Auto-gen" value={subsub.testCode || ""} onChange={(e) => updateSubSubTest(index, sIdx, "testCode", e.target.value)} className="h-7 text-xs font-mono" />
+                                </div>
+                                {subsub.valueType !== "Custom" && (
+                                  <div className="col-span-4 space-y-1.5"><Label className="text-[10px]">Unit</Label><Input list="units-list" placeholder="Unit" value={subsub.unit} onChange={(e) => updateSubSubTest(index, sIdx, "unit", e.target.value)} className="h-7 text-xs" /></div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-4 mb-2 mt-2 border-t border-border/30 pt-2">
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] text-muted-foreground">Value Type</Label>
+                                  <Select value={subsub.valueType || "Numeric"} onValueChange={(val) => updateSubSubTest(index, sIdx, "valueType", val)}>
+                                    <SelectTrigger className="h-6 text-[10px] w-[90px] border-border"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="Numeric">Numeric</SelectItem>
+                                      <SelectItem value="Custom">Custom</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                {(!subsub.valueType || subsub.valueType === "Numeric") && (
                                   <div className="space-y-1">
-                                    <Label className="text-[10px] text-muted-foreground">Value Type</Label>
-                                    <Select value={subsub.valueType || "Numeric"} onValueChange={(val) => updateSubSubTest(index, sIdx, "valueType", val)}>
+                                    <Label className="text-[10px] text-muted-foreground">Ref Range</Label>
+                                    <Select value={subsub.genderRefType} onValueChange={(val) => updateSubSubTest(index, sIdx, "genderRefType", val)}>
                                       <SelectTrigger className="h-6 text-[10px] w-[90px] border-border"><SelectValue /></SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="Numeric">Numeric</SelectItem>
-                                        <SelectItem value="Custom">Custom</SelectItem>
+                                        <SelectItem value="BOTH">Universal</SelectItem>
+                                        <SelectItem value="GENDER_SPECIFIC">Gender</SelectItem>
+                                        <SelectItem value="CHILDREN">Children</SelectItem>
+                                        <SelectItem value="NEWBORN">Newborn</SelectItem>
                                       </SelectContent>
                                     </Select>
                                   </div>
-                                  {(!subsub.valueType || subsub.valueType === "Numeric") && (
-                                    <div className="space-y-1">
-                                      <Label className="text-[10px] text-muted-foreground">Ref Range</Label>
-                                      <Select value={subsub.genderRefType} onValueChange={(val) => updateSubSubTest(index, sIdx, "genderRefType", val)}>
-                                        <SelectTrigger className="h-6 text-[10px] w-[90px] border-border"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="BOTH">Universal</SelectItem>
-                                          <SelectItem value="GENDER_SPECIFIC">Gender</SelectItem>
-                                          <SelectItem value="CHILDREN">Children</SelectItem>
-                                          <SelectItem value="NEWBORN">Newborn</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  )}
-                                </div>
-                                {(!subsub.valueType || subsub.valueType === "Numeric") ? (
-                                  subsub.genderRefType === "BOTH" ? (
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="space-y-1"><Label className="text-[10px]">Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMin} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMin", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                      <div className="space-y-1"><Label className="text-[10px]">Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMax} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMax", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                    </div>
-                                  ) : subsub.genderRefType === "GENDER_SPECIFIC" ? (
-                                    <div className="space-y-2">
-                                      <div className="grid grid-cols-2 gap-3">
-                                        <div className="space-y-1"><Label className="text-[10px] text-blue-500">Male Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinMale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinMale", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                        <div className="space-y-1"><Label className="text-[10px] text-blue-500">Male Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxMale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxMale", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-3">
-                                        <div className="space-y-1"><Label className="text-[10px] text-pink-500">Fem Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinFemale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinFemale", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                        <div className="space-y-1"><Label className="text-[10px] text-pink-500">Fem Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxFemale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxFemale", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                      </div>
-                                    </div>
-                                  ) : subsub.genderRefType === "CHILDREN" ? (
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinChild} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinChild", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                      <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxChild} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxChild", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                    </div>
-                                  ) : subsub.genderRefType === "NEWBORN" ? (
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinNewborn} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinNewborn", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                      <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxNewborn} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxNewborn", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                    </div>
-                                  ) : null
-                                ) : (
-                                  <div className="space-y-2 pt-2 border-t border-border/40">
-                                    <Label className="text-[10px] font-medium text-foreground">Custom Options</Label>
-                                    <div className="flex flex-wrap gap-1.5 items-center">
-                                      {(subsub.customOptions || []).map((opt, i) => (
-                                        <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground text-[10px] font-medium">
-                                          {opt}
-                                        </span>
-                                      ))}
-                                      <Button type="button" variant="outline" size="sm" onClick={() => openCustomOptionsModal(index, sIdx)} className="h-5 px-1.5 py-0 text-[10px] border-primary/20 hover:bg-primary/5 text-primary">
-                                        <Plus className="h-2.5 w-2.5 mr-0.5" /> Add
-                                      </Button>
-                                    </div>
-                                  </div>
                                 )}
                               </div>
-                            ))}
-                          </div>
+                              {(!subsub.valueType || subsub.valueType === "Numeric") ? (
+                                subsub.genderRefType === "BOTH" ? (
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1"><Label className="text-[10px]">Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMin} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMin", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                    <div className="space-y-1"><Label className="text-[10px]">Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMax} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMax", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                  </div>
+                                ) : subsub.genderRefType === "GENDER_SPECIFIC" ? (
+                                  <div className="space-y-2">
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="space-y-1"><Label className="text-[10px] text-blue-500">Male Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinMale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinMale", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                      <div className="space-y-1"><Label className="text-[10px] text-blue-500">Male Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxMale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxMale", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="space-y-1"><Label className="text-[10px] text-pink-500">Fem Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinFemale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinFemale", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                      <div className="space-y-1"><Label className="text-[10px] text-pink-500">Fem Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxFemale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxFemale", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                    </div>
+                                  </div>
+                                ) : subsub.genderRefType === "CHILDREN" ? (
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinChild} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinChild", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                    <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxChild} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxChild", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                  </div>
+                                ) : subsub.genderRefType === "NEWBORN" ? (
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinNewborn} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinNewborn", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                    <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxNewborn} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxNewborn", e.target.value)} className="h-6 text-xs font-mono" /></div>
+                                  </div>
+                                ) : null
+                              ) : (
+                                <div className="space-y-2 pt-2 border-t border-border/40">
+                                  <Label className="text-[10px] font-medium text-foreground">Custom Options</Label>
+                                  <div className="flex flex-wrap gap-1.5 items-center">
+                                    {(subsub.customOptions || []).map((opt, i) => (
+                                      <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground text-[10px] font-medium">
+                                        {opt}
+                                      </span>
+                                    ))}
+                                    <Button type="button" variant="outline" size="sm" onClick={() => openCustomOptionsModal(index, sIdx)} className="h-5 px-1.5 py-0 text-[10px] border-primary/20 hover:bg-primary/5 text-primary">
+                                      <Plus className="h-2.5 w-2.5 mr-0.5" /> Add
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      )}
-                    </div>
-                  ))}
-                  <div ref={subtestsEndRef} />
-                </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div ref={subtestsEndRef} />
               </div>
+            </div>
           </form>
           <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20 shrink-0 mt-auto">
             <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
@@ -913,9 +908,9 @@ export default function TestMasterPage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="flex gap-2">
-              <Input 
-                placeholder="e.g. Reactive, Positive, Detected..." 
-                value={newOptionInput} 
+              <Input
+                placeholder="e.g. Reactive, Positive, Detected..."
+                value={newOptionInput}
                 onChange={(e) => setNewOptionInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -927,8 +922,8 @@ export default function TestMasterPage() {
                   }
                 }}
               />
-              <Button 
-                type="button" 
+              <Button
+                type="button"
                 onClick={() => {
                   if (newOptionInput.trim() && !tempCustomOptions.includes(newOptionInput.trim())) {
                     setTempCustomOptions([...tempCustomOptions, newOptionInput.trim()]);
@@ -939,7 +934,7 @@ export default function TestMasterPage() {
                 Add
               </Button>
             </div>
-            
+
             <div className="bg-muted/30 border border-border/60 rounded-lg p-3 min-h-[100px] flex flex-wrap gap-2 items-start content-start">
               {tempCustomOptions.length === 0 ? (
                 <span className="text-xs text-muted-foreground w-full text-center py-4">No options added yet.</span>
@@ -947,8 +942,8 @@ export default function TestMasterPage() {
                 tempCustomOptions.map((opt, i) => (
                   <span key={i} className="inline-flex items-center pl-2 pr-1 py-1 rounded bg-secondary text-secondary-foreground text-xs font-medium border border-border/40">
                     {opt}
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       onClick={() => setTempCustomOptions(tempCustomOptions.filter((_, idx) => idx !== i))}
                       className="ml-1 p-0.5 rounded-sm hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
                     >
@@ -996,9 +991,9 @@ export default function TestMasterPage() {
       <Dialog open={interpretationModalOpen} onOpenChange={setInterpretationModalOpen}>
         <DialogContent hideClose className="max-w-4xl p-0 overflow-hidden bg-transparent border-none shadow-none">
           <DialogTitle className="sr-only">Interpretation Editor</DialogTitle>
-          <TipTapEditor 
-            value={interpretation} 
-            onChange={newContent => setInterpretation(newContent)} 
+          <TipTapEditor
+            value={interpretation}
+            onChange={newContent => setInterpretation(newContent)}
             onSave={() => setInterpretationModalOpen(false)}
             onClose={() => setInterpretationModalOpen(false)}
           />
@@ -1010,10 +1005,10 @@ export default function TestMasterPage() {
         <DialogContent hideClose className="max-w-4xl p-0 overflow-hidden bg-transparent border-none shadow-none">
           <DialogTitle className="sr-only">Custom Editor</DialogTitle>
           {customEditorActiveSubIndex !== null && (
-            <TipTapEditor 
+            <TipTapEditor
               title="Custom Editor"
-              value={subTests[customEditorActiveSubIndex].interpretation || ""} 
-              onChange={(html) => updateSubTest(customEditorActiveSubIndex, "interpretation", html)} 
+              value={subTests[customEditorActiveSubIndex].interpretation || ""}
+              onChange={(html) => updateSubTest(customEditorActiveSubIndex, "interpretation", html)}
               onSave={() => setCustomEditorActiveSubIndex(null)}
               onClose={() => setCustomEditorActiveSubIndex(null)}
             />

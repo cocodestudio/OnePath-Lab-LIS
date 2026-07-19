@@ -13,6 +13,7 @@ import {
 import {
   Dialog, DialogContent, DialogTitle
 } from "@/components/ui/dialog";
+import { fetchFromLaravel } from "@/lib/api-client";
 
 interface Test {
   id: string; name: string; category: string; price: number;
@@ -67,18 +68,18 @@ export default function RegisterPatientPage() {
   useEffect(() => {
     const saved = localStorage.getItem("patientFormRequiredFields");
     if (saved) {
-      try { setRequiredFields(JSON.parse(saved)); } catch (e) {}
+      try { setRequiredFields(JSON.parse(saved)); } catch (e) { }
     }
 
     (async () => {
       try {
-        const res = await fetch("/api/tests");
-        if (res.ok) setAvailableTests(await res.json());
+        const tests = await fetchFromLaravel("/tests");
+        setAvailableTests(tests);
       } catch (err) { console.error("Error fetching tests:", err); }
 
       try {
-        const res = await fetch("/api/patients");
-        if (res.ok) setPatientsList(await res.json());
+        const patients = await fetchFromLaravel("/patients");
+        setPatientsList(patients);
       } catch (err) { console.error("Error fetching patients:", err); }
     })();
   }, []);
@@ -110,16 +111,15 @@ export default function RegisterPatientPage() {
       const finalRefDoctor = refDoctorSelect === "ADD_NEW" ? customRefDoctor : refDoctorSelect;
       const finalCollectedAt = collectedAtSelect === "ADD_NEW" ? customCollectedAt : collectedAtSelect;
 
-      const res = await fetch("/api/patients", {
+      const data = await fetchFromLaravel("/patients", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ designation, name: patientName, age: parseInt(age), gender, phone, refDoctor: finalRefDoctor || "Self", address, collectedAt: finalCollectedAt || "Lab" }),
       });
-      const data = await res.json();
-      if (res.ok) { setNewPatient(data); setRegistering(false); setIsModalOpen(true); }
-      else { setRegisterError(data.error || "Failed to register patient."); setRegistering(false); }
-    } catch {
-      setRegisterError("A network error occurred. Please try again.");
+      setNewPatient(data);
+      setRegistering(false);
+      setIsModalOpen(true);
+    } catch (err: any) {
+      setRegisterError(err.message || "Failed to register patient.");
       setRegistering(false);
     }
   };
@@ -136,14 +136,14 @@ export default function RegisterPatientPage() {
         shouldChargeParent = true;
       }
     }
-    
+
     const list = [];
     if (shouldChargeParent) {
       list.push(t);
     }
     return list;
   });
-  
+
   const subtotal = selectedTestObjects.reduce((sum, t) => sum + t.price, 0);
   const parsedDiscount = parseFloat(discount) || 0;
   const grandTotal = Math.max(0, subtotal - parsedDiscount);
@@ -153,26 +153,22 @@ export default function RegisterPatientPage() {
     setBookingError(null);
     setBooking(true);
     try {
-      const res = await fetch("/api/reports", {
+      const data = await fetchFromLaravel("/reports", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patientId: newPatient.id, testIds: selectedTests, discount: parsedDiscount, paymentStatus }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setBookingSuccess(true);
-        setSuccessDetails({ patientCustomId: newPatient.customId, billCustomId: data.bill.customId, reportId: data.report.id, billId: data.bill.id });
-      } else setBookingError(data.error || "Failed to complete booking.");
-    } catch {
-      setBookingError("Network error. Please try again.");
+      setBookingSuccess(true);
+      setSuccessDetails({ patientCustomId: newPatient.customId, billCustomId: data.bill.customId, reportId: data.report.id, billId: data.bill.id });
+    } catch (err: any) {
+      setBookingError(err.message || "Failed to complete booking.");
     } finally {
       setBooking(false);
     }
   };
 
   const handleResetFlow = () => {
-    setDesignation("Mr."); setPatientName(""); setAge(""); setGender("Male"); setPhone(""); 
-    setRefDoctorSelect("Self"); setCustomRefDoctor(""); setAddress(""); 
+    setDesignation("Mr."); setPatientName(""); setAge(""); setGender("Male"); setPhone("");
+    setRefDoctorSelect("Self"); setCustomRefDoctor(""); setAddress("");
     setCollectedAtSelect("Lab"); setCustomCollectedAt("");
     setRegistering(false); setRegisterError(null); setNewPatient(null); setSelectedTests([]);
     setDiscount("0"); setPaymentStatus("UNPAID"); setBookingSuccess(false); setSuccessDetails(null);
@@ -215,9 +211,8 @@ export default function RegisterPatientPage() {
             {steps.map((s, i) => (
               <React.Fragment key={s.n}>
                 <div className="flex flex-col items-center gap-2">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all ${
-                    s.done ? "gradient-primary text-primary-foreground shadow-[0_4px_12px_-2px_hsl(var(--primary)/0.4)]" : "bg-muted text-muted-foreground border border-border"
-                  }`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm transition-all ${s.done ? "gradient-primary text-primary-foreground shadow-[0_4px_12px_-2px_hsl(var(--primary)/0.4)]" : "bg-muted text-muted-foreground border border-border"
+                    }`}>
                     {s.done && s.n !== (newPatient && !bookingSuccess ? 2 : s.n) ? <CheckCircle2 className="h-5 w-5" /> : s.n}
                   </div>
                   <span className={`text-[11px] font-semibold ${s.done ? "text-primary" : "text-muted-foreground"}`}>{s.label}</span>
@@ -276,8 +271,8 @@ export default function RegisterPatientPage() {
                     <div className="space-y-1.5">
                       <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Gender {requiredFields.gender && <span className="text-primary">*</span>}</label>
                       <Select value={gender} onValueChange={setGender} disabled={registering || !!newPatient}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="Male">Male</SelectItem><SelectItem value="Female">Female</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent>
                       </Select>
                     </div>
                   </div>
@@ -350,9 +345,8 @@ export default function RegisterPatientPage() {
               {/* Test trigger */}
               <div
                 onClick={() => newPatient && setIsModalOpen(true)}
-                className={`p-8 rounded-xl border-2 border-dashed flex flex-col items-center justify-center text-center transition-all ${
-                  newPatient ? "bg-card border-primary/40 hover:bg-accent/40 cursor-pointer group" : "bg-muted/20 border-border opacity-60 cursor-not-allowed"
-                }`}
+                className={`p-8 rounded-xl border-2 border-dashed flex flex-col items-center justify-center text-center transition-all ${newPatient ? "bg-card border-primary/40 hover:bg-accent/40 cursor-pointer group" : "bg-muted/20 border-border opacity-60 cursor-not-allowed"
+                  }`}
               >
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 transition-transform ${newPatient ? "bg-accent text-primary group-hover:scale-110" : "bg-muted text-muted-foreground"}`}>
                   <BookOpen className="h-6 w-6" />
@@ -506,9 +500,8 @@ export default function RegisterPatientPage() {
                       return (
                         <div key={test.id} className="flex flex-col gap-1">
                           <div onClick={() => handleToggleTest(test.id)}
-                            className={`flex items-center justify-between p-3.5 rounded-lg border cursor-pointer select-none transition-all ${
-                              selected ? "bg-accent border-primary/50" : "bg-card border-border hover:border-primary/30"
-                            }`}>
+                            className={`flex items-center justify-between p-3.5 rounded-lg border cursor-pointer select-none transition-all ${selected ? "bg-accent border-primary/50" : "bg-card border-border hover:border-primary/30"
+                              }`}>
                             <div className="flex items-center gap-3 min-w-0">
                               <Checkbox checked={selected} onCheckedChange={() => handleToggleTest(test.id)} onClick={(e) => e.stopPropagation()} />
                               <div className="min-w-0">
@@ -519,7 +512,7 @@ export default function RegisterPatientPage() {
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-xs font-semibold text-foreground shrink-0">₹{test.price.toFixed(0)}</span>
                               {test.subTests && test.subTests.length > 0 && (
-                                <button type="button" onClick={(e) => { e.stopPropagation(); setExpandedTests(prev => ({...prev, [test.id]: !prev[test.id]})) }} className="p-1 rounded hover:bg-muted text-muted-foreground">
+                                <button type="button" onClick={(e) => { e.stopPropagation(); setExpandedTests(prev => ({ ...prev, [test.id]: !prev[test.id] })) }} className="p-1 rounded hover:bg-muted text-muted-foreground">
                                   {expandedTests[test.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                                 </button>
                               )}
@@ -530,10 +523,9 @@ export default function RegisterPatientPage() {
                               {test.subTests.map(sub => {
                                 const subSelected = selectedTests.includes(sub.id) || selected;
                                 return (
-                                  <div key={sub.id} onClick={() => { if (!selected) handleToggleTest(sub.id) }} 
-                                    className={`flex items-center justify-between p-2 rounded-md border text-xs cursor-pointer ${
-                                      subSelected ? "bg-accent/50 border-primary/30" : "bg-card border-transparent hover:border-border"
-                                    } ${selected ? "opacity-60 cursor-not-allowed" : ""}`}>
+                                  <div key={sub.id} onClick={() => { if (!selected) handleToggleTest(sub.id) }}
+                                    className={`flex items-center justify-between p-2 rounded-md border text-xs cursor-pointer ${subSelected ? "bg-accent/50 border-primary/30" : "bg-card border-transparent hover:border-border"
+                                      } ${selected ? "opacity-60 cursor-not-allowed" : ""}`}>
                                     <div className="flex items-center gap-2">
                                       <Checkbox checked={subSelected} disabled={selected} onCheckedChange={() => { if (!selected) handleToggleTest(sub.id) }} onClick={(e) => e.stopPropagation()} />
                                       <span>{sub.name}</span>
@@ -561,8 +553,8 @@ export default function RegisterPatientPage() {
               <div className="space-y-1">
                 <label className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Payment</label>
                 <Select value={paymentStatus} onValueChange={setPaymentStatus} disabled={booking}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="UNPAID">Unpaid</SelectItem><SelectItem value="PAID">Paid</SelectItem><SelectItem value="PARTIAL">Partial</SelectItem></SelectContent>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="UNPAID">Unpaid</SelectItem><SelectItem value="PAID">Paid</SelectItem><SelectItem value="PARTIAL">Partial</SelectItem></SelectContent>
                 </Select>
               </div>
             </div>
@@ -589,7 +581,7 @@ export default function RegisterPatientPage() {
               </h2>
               <p className="text-xs text-muted-foreground mt-1">Select which fields should be mandatory when registering a patient.</p>
             </div>
-            
+
             <div className="space-y-3 py-2">
               {[
                 { id: 'patientName', label: 'Full Name' },
@@ -602,9 +594,9 @@ export default function RegisterPatientPage() {
               ].map(field => (
                 <div key={field.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
                   <span className="text-sm font-medium">{field.label}</span>
-                  <Checkbox 
-                    checked={tempRequiredFields[field.id]} 
-                    onCheckedChange={(checked) => setTempRequiredFields(prev => ({ ...prev, [field.id]: checked === true }))} 
+                  <Checkbox
+                    checked={tempRequiredFields[field.id]}
+                    onCheckedChange={(checked) => setTempRequiredFields(prev => ({ ...prev, [field.id]: checked === true }))}
                   />
                 </div>
               ))}
@@ -612,7 +604,7 @@ export default function RegisterPatientPage() {
 
             <div className="flex justify-end gap-3 pt-4 border-t border-border/60">
               <button onClick={() => setIsSettingsOpen(false)} className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-              <button 
+              <button
                 onClick={() => {
                   setRequiredFields(tempRequiredFields);
                   localStorage.setItem("patientFormRequiredFields", JSON.stringify(tempRequiredFields));

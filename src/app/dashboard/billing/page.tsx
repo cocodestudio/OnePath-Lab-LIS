@@ -12,12 +12,13 @@ import {
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import { InvoiceSheet } from "@/components/invoice-sheet";
+import { fetchFromLaravel } from "@/lib/api-client";
 
 interface Patient { name: string; customId: string; phone: string; age: number; gender: string; refDoctor: string; address?: string; }
 interface Test { id: string; name: string; price: number; }
 interface Result { test: Test; }
 interface Report { customId: string; results: Result[]; }
-interface Lab { 
+interface Lab {
   name: string; email: string; address: string; logoUrl: string | null;
   printBgImage: string | null; printHeaderHeight: number; printFooterHeight: number;
   printMarginLeft: number; printMarginRight: number;
@@ -40,7 +41,7 @@ export default function BillingPage() {
   const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
   const [viewingInvoice, setViewingInvoice] = useState<any>(null);
   const printRef = React.useRef<HTMLDivElement>(null);
-  
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: viewingInvoice ? `Invoice_${viewingInvoice.customId}` : "Invoice",
@@ -58,8 +59,8 @@ export default function BillingPage() {
   const fetchBills = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/billing");
-      if (res.ok) setBills(await res.json());
+      const data = await fetchFromLaravel("/bills");
+      setBills(data);
     } catch (err) {
       console.error("Error fetching bills:", err);
     } finally {
@@ -90,16 +91,15 @@ export default function BillingPage() {
     setError(null);
     setSuccess(null);
     try {
-      const res = await fetch(`/api/billing/${editingBill.id}`, {
+      await fetchFromLaravel(`/bills/${editingBill.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ discount: parseFloat(discountVal) || 0, status: paymentStatus, paidAmount: parseFloat(paidAmountVal) || 0 }),
       });
-      const data = await res.json();
-      if (res.ok) { setSuccess("Invoice updated successfully."); fetchBills(); setTimeout(() => setIsEditDialogOpen(false), 900); }
-      else setError(data.error || "Failed to update.");
-    } catch {
-      setError("Network error occurred.");
+      setSuccess("Invoice updated successfully.");
+      fetchBills();
+      setTimeout(() => setIsEditDialogOpen(false), 900);
+    } catch (err: any) {
+      setError(err.message || "Failed to update.");
     } finally {
       setSaving(false);
     }
@@ -110,10 +110,10 @@ export default function BillingPage() {
       b.patient.name.toLowerCase().includes(search.toLowerCase()) ||
       b.patient.customId.toLowerCase().includes(search.toLowerCase()) ||
       b.customId.toLowerCase().includes(search.toLowerCase());
-    
+
     // YYYY-MM-DD match
     const matchesDate = filterDate ? b.createdAt.startsWith(filterDate) : true;
-    
+
     return matchesSearch && (statusFilter === "ALL" || b.status === statusFilter) && matchesDate;
   });
 
@@ -132,8 +132,8 @@ export default function BillingPage() {
 
   const statusPill = (status: string) =>
     status === "PAID" ? "bg-primary/10 text-primary"
-    : status === "PARTIAL" ? "bg-gold/15 text-gold"
-    : "bg-destructive/10 text-destructive";
+      : status === "PARTIAL" ? "bg-gold/15 text-gold"
+        : "bg-destructive/10 text-destructive";
   const statusDot = (status: string) =>
     status === "PAID" ? "bg-primary" : status === "PARTIAL" ? "bg-gold" : "bg-destructive";
 
@@ -186,19 +186,19 @@ export default function BillingPage() {
               <Input placeholder="Patient name, ID, or bill number…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
-          
+
           <div className="space-y-1.5 w-full sm:w-auto">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Date</label>
             <div className="flex items-center gap-2">
-              <Input 
-                type="date" 
+              <Input
+                type="date"
                 className="w-full sm:w-[150px]"
-                value={filterDate} 
-                onChange={(e) => setFilterDate(e.target.value)} 
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
               />
               {filterDate && (
-                <Button 
-                  onClick={() => setFilterDate("")} 
+                <Button
+                  onClick={() => setFilterDate("")}
                   variant="outline"
                   size="icon"
                   className="h-10 w-10 shrink-0"
@@ -255,11 +255,11 @@ export default function BillingPage() {
                       <td className="px-6 py-4 text-right font-mono text-xs text-primary hidden md:table-cell">₹{bill.paidAmount.toFixed(2)}</td>
                       <td className="px-6 py-4 text-right font-mono text-sm font-bold">
                         {balance > 0 ? (
-                           <span className="text-destructive">₹{balance.toFixed(2)}</span>
+                          <span className="text-destructive">₹{balance.toFixed(2)}</span>
                         ) : balance < 0 ? (
-                           <span className="text-green-600 dark:text-green-500">₹{Math.abs(balance).toFixed(2)} Extra</span>
+                          <span className="text-green-600 dark:text-green-500">₹{Math.abs(balance).toFixed(2)} Extra</span>
                         ) : (
-                           <span className="text-muted-foreground">₹0.00</span>
+                          <span className="text-muted-foreground">₹0.00</span>
                         )}
                       </td>
                       <td className="px-6 py-4">
@@ -334,26 +334,26 @@ export default function BillingPage() {
 
             <div className="bg-muted/40 border border-border/60 rounded-lg p-4 space-y-2 text-xs">
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="font-semibold text-foreground tnum">₹{editingBill && (editingBill.total + editingBill.discount).toFixed(2)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Current Total</span><span className="font-bold text-foreground tnum">₹{editingBill && Math.max(0, editingBill.total + editingBill.discount - (parseFloat(discountVal)||0)).toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Current Total</span><span className="font-bold text-foreground tnum">₹{editingBill && Math.max(0, editingBill.total + editingBill.discount - (parseFloat(discountVal) || 0)).toFixed(2)}</span></div>
             </div>
 
             <div className="space-y-1.5"><Label>Apply Discount (₹)</Label><Input type="number" value={discountVal} onChange={(e) => setDiscountVal(e.target.value)} disabled={saving} required /></div>
-            
+
             <div className="space-y-1.5">
               <Label>Total Paid Amount (₹)</Label>
               <Input type="number" value={paidAmountVal} onChange={(e) => setPaidAmountVal(e.target.value)} disabled={saving} required />
               <div className="flex justify-between text-xs mt-2 text-muted-foreground bg-muted/40 p-2.5 rounded-lg border border-border/60 shadow-sm">
                 <span>Remaining Balance:</span>
                 {(() => {
-                  const finalTotal = editingBill ? Math.max(0, editingBill.total + editingBill.discount - (parseFloat(discountVal)||0)) : 0;
-                  const finalPaid = parseFloat(paidAmountVal)||0;
+                  const finalTotal = editingBill ? Math.max(0, editingBill.total + editingBill.discount - (parseFloat(discountVal) || 0)) : 0;
+                  const finalPaid = parseFloat(paidAmountVal) || 0;
                   const balance = finalTotal - finalPaid;
                   if (balance > 0) {
-                     return <span className="font-semibold text-destructive tnum">₹{balance.toFixed(2)}</span>;
+                    return <span className="font-semibold text-destructive tnum">₹{balance.toFixed(2)}</span>;
                   } else if (balance < 0) {
-                     return <span className="font-semibold text-green-600 dark:text-green-500 tnum">₹{Math.abs(balance).toFixed(2)} Extra</span>;
+                    return <span className="font-semibold text-green-600 dark:text-green-500 tnum">₹{Math.abs(balance).toFixed(2)} Extra</span>;
                   } else {
-                     return <span className="font-semibold text-muted-foreground tnum">₹0.00</span>;
+                    return <span className="font-semibold text-muted-foreground tnum">₹0.00</span>;
                   }
                 })()}
               </div>
@@ -372,9 +372,9 @@ export default function BillingPage() {
       {/* Hidden Invoice for Printing */}
       <div className="hidden">
         {viewingInvoice && (
-          <InvoiceSheet 
-            invoice={viewingInvoice} 
-            ref={printRef} 
+          <InvoiceSheet
+            invoice={viewingInvoice}
+            ref={printRef}
             settings={{
               bgImage: null, // Do not use custom background for invoice
               headerHeight: viewingInvoice.lab.printHeaderHeight,

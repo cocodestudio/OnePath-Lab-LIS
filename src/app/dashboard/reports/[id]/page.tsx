@@ -10,6 +10,7 @@ import { ReportSheet, type ReportSheetData, type PrintSettings } from "@/compone
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Edit, AlertCircle, Printer } from "lucide-react";
 import { PrintPreviewDialog } from "@/components/print-preview-dialog";
+import { fetchFromLaravel } from "@/lib/api-client";
 
 const defaultPrintSettings: PrintSettings = {
   bgImage: null, headerHeight: 40, footerHeight: 40, marginLeft: 40, marginRight: 40
@@ -28,8 +29,6 @@ export default function ReportDetailPage() {
 
   useEffect(() => { 
     if (reportId) fetchReport(); 
-    
-    // Also fetch on window focus to ensure fresh data after editing
     const handleFocus = () => {
       if (reportId) fetchReport();
     };
@@ -44,26 +43,22 @@ export default function ReportDetailPage() {
   const fetchReport = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/reports/${reportId}?t=${Date.now()}`, { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        setReport({
-          ...data,
-          lab: data.lab || { name: "OnePath Lab Main", email: "info@onepathlab.com", address: "123 Healthcare Blvd, Medical District, Delhi", logoUrl: "/onepath-logo.png" },
+      const data = await fetchFromLaravel(`/reports/${reportId}`);
+      setReport({
+        ...data,
+        lab: data.lab || { name: "OnePath Lab Main", email: "info@onepathlab.com", address: "123 Healthcare Blvd, Medical District, Delhi", logoUrl: "/onepath-logo.png" },
+      });
+      if (data.lab) {
+        setPrintSettings({
+          bgImage: data.lab.printBgImage || null,
+          headerHeight: data.lab.printHeaderHeight ?? 40,
+          footerHeight: data.lab.printFooterHeight ?? 40,
+          marginLeft: data.lab.printMarginLeft ?? 40,
+          marginRight: data.lab.printMarginRight ?? 40,
         });
-        if (data.lab) {
-          const loadedSettings = {
-            bgImage: data.lab.printBgImage || null,
-            headerHeight: data.lab.printHeaderHeight ?? 40,
-            footerHeight: data.lab.printFooterHeight ?? 40,
-            marginLeft: data.lab.printMarginLeft ?? 40,
-            marginRight: data.lab.printMarginRight ?? 40,
-          };
-          setPrintSettings(loadedSettings);
-        }
-      } else setError("Failed to retrieve report data.");
+      }
     } catch {
-      setError("A network error occurred while fetching the report.");
+      setError("Failed to retrieve report data.");
     } finally {
       setLoading(false);
     }

@@ -5,6 +5,7 @@ import { Settings, Upload, X, Loader2, Save, Printer, Eye } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReportSheet, type PrintSettings, type ReportSheetData } from "@/components/report-sheet";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { fetchFromLaravel } from "@/lib/api-client";
 
 const defaultPrintSettings: PrintSettings = {
   bgImage: null, headerHeight: 40, footerHeight: 40, marginLeft: 40, marginRight: 40
@@ -32,17 +33,14 @@ export default function SettingsPage() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch('/api/lab/settings');
-      if (res.ok) {
-        const data = await res.json();
-        setSettings({
-          bgImage: data.printBgImage || null,
-          headerHeight: data.printHeaderHeight ?? 40,
-          footerHeight: data.printFooterHeight ?? 40,
-          marginLeft: data.printMarginLeft ?? 40,
-          marginRight: data.printMarginRight ?? 40,
-        });
-      }
+      const data = await fetchFromLaravel("/lab");
+      setSettings({
+        bgImage: data.printBgImage || null,
+        headerHeight: data.printHeaderHeight ?? 40,
+        footerHeight: data.printFooterHeight ?? 40,
+        marginLeft: data.printMarginLeft ?? 40,
+        marginRight: data.printMarginRight ?? 40,
+      });
     } catch (error) {
       console.error("Failed to load settings:", error);
     } finally {
@@ -65,16 +63,17 @@ export default function SettingsPage() {
     setIsSaving(true);
     setMessage(null);
     try {
-      const res = await fetch('/api/lab/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
+      await fetchFromLaravel("/lab", {
+        method: "PUT",
+        body: JSON.stringify({
+          printBgImage: settings.bgImage,
+          printHeaderHeight: settings.headerHeight,
+          printFooterHeight: settings.footerHeight,
+          printMarginLeft: settings.marginLeft,
+          printMarginRight: settings.marginRight,
+        }),
       });
-      if (res.ok) {
-        setMessage({ text: "Lab settings saved successfully.", type: "success" });
-      } else {
-        setMessage({ text: "Failed to save settings.", type: "error" });
-      }
+      setMessage({ text: "Lab settings saved successfully.", type: "success" });
     } catch (e) {
       setMessage({ text: "A network error occurred.", type: "error" });
     } finally {
@@ -116,7 +115,7 @@ export default function SettingsPage() {
           <div className="space-y-3">
             <label className="text-xs font-bold text-foreground uppercase tracking-wider">Background Letterhead</label>
             <p className="text-sm text-muted-foreground mb-4">Upload a full-page image (like a scanned letterhead) to be printed behind the report results. JPG or PNG format.</p>
-            
+
             {settings.bgImage ? (
               <div className="relative w-full max-w-lg h-64 bg-muted rounded-xl border border-border overflow-hidden group shadow-inner">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

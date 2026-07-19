@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
+import { fetchFromLaravel } from "@/lib/api-client";
 
 interface Patient {
   id: string; customId: string; name: string; age: number; gender: string;
@@ -47,8 +48,8 @@ export default function PatientsPage() {
   const fetchPatients = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/patients");
-      if (res.ok) setPatients(await res.json());
+      const data = await fetchFromLaravel("/patients");
+      setPatients(data);
     } catch (err) {
       console.error("Failed to fetch patients:", err);
     } finally {
@@ -61,10 +62,10 @@ export default function PatientsPage() {
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.phone.includes(search) ||
       p.customId.toLowerCase().includes(search.toLowerCase());
-    
+
     // Using string matching for YYYY-MM-DD
     const matchesDate = filterDate ? p.createdAt.startsWith(filterDate) : true;
-    
+
     return matchesSearch && matchesDate;
   });
 
@@ -85,15 +86,14 @@ export default function PatientsPage() {
     setSaving(true);
     setEditError(null);
     try {
-      const res = await fetch(`/api/patients`, {
+      await fetchFromLaravel(`/patients/${editPatient.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editPatient.id, name: editName, age: parseInt(editAge), gender: editGender, phone: editPhone, refDoctor: editRefDoctor, address: editAddress }),
+        body: JSON.stringify({ name: editName, age: parseInt(editAge), gender: editGender, phone: editPhone, refDoctor: editRefDoctor, address: editAddress }),
       });
-      if (res.ok) { setEditPatient(null); fetchPatients(); }
-      else { const data = await res.json(); setEditError(data.error || "Failed to update patient."); }
-    } catch {
-      setEditError("Network error. Please try again.");
+      setEditPatient(null);
+      fetchPatients();
+    } catch (err: any) {
+      setEditError(err.message || "Failed to update patient.");
     } finally {
       setSaving(false);
     }
@@ -103,15 +103,12 @@ export default function PatientsPage() {
     if (!deletePatient) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/patients`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: deletePatient.id }),
-      });
-      if (res.ok) { setDeletePatient(null); fetchPatients(); toast.success("Patient deleted", `${deletePatient.name}'s record was removed.`); }
-      else toast.error("Delete failed", "The patient could not be deleted.");
+      await fetchFromLaravel(`/patients/${deletePatient.id}`, { method: "DELETE" });
+      setDeletePatient(null);
+      fetchPatients();
+      toast.success("Patient deleted", `${deletePatient.name}'s record was removed.`);
     } catch {
-      toast.error("Network error", "Unable to reach the server. Please try again.");
+      toast.error("Delete failed", "The patient could not be deleted.");
     } finally {
       setDeleting(false);
     }
@@ -140,15 +137,15 @@ export default function PatientsPage() {
           <Input placeholder="Search by name, phone, or ID…" className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Input 
-            type="date" 
+          <Input
+            type="date"
             className="w-full sm:w-[150px]"
-            value={filterDate} 
-            onChange={(e) => setFilterDate(e.target.value)} 
+            value={filterDate}
+            onChange={(e) => setFilterDate(e.target.value)}
           />
           {filterDate && (
-            <Button 
-              onClick={() => setFilterDate("")} 
+            <Button
+              onClick={() => setFilterDate("")}
               variant="outline"
               size="icon"
               className="h-10 w-10 shrink-0"
@@ -185,35 +182,35 @@ export default function PatientsPage() {
                   ))}
                 </tr>
               </thead>
-            <tbody>
-              {filteredPatients.map((p) => (
-                <tr key={p.id} className="border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors group">
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center justify-center h-9 w-9 rounded-full bg-accent text-primary text-[11px] font-bold shrink-0">{initials(p.name)}</span>
-                      <p className="font-semibold text-foreground text-sm">{p.name}</p>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span className="font-mono text-[11px] text-muted-foreground bg-muted/60 px-2 py-0.5 rounded">{p.customId}</span>
-                  </td>
-                  <td className="px-5 py-3.5 text-sm text-muted-foreground hidden md:table-cell">{p.age}Y · {p.gender}</td>
-                  <td className="px-5 py-3.5 text-sm text-muted-foreground hidden lg:table-cell font-mono">{p.phone}</td>
-                  <td className="px-5 py-3.5 text-sm text-muted-foreground hidden lg:table-cell">{p.refDoctor}</td>
-                  <td className="px-5 py-3.5 text-sm text-muted-foreground hidden xl:table-cell">
-                    {new Date(p.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => setViewPatient(p)} title="View" className="p-2 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-all"><Eye className="h-3.5 w-3.5" /></button>
-                      <button onClick={() => handleOpenEdit(p)} title="Edit" className="p-2 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-all"><Edit2 className="h-3.5 w-3.5" /></button>
-                      <button onClick={() => setDeletePatient(p)} title="Delete" className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"><Trash2 className="h-3.5 w-3.5" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              <tbody>
+                {filteredPatients.map((p) => (
+                  <tr key={p.id} className="border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors group">
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center justify-center h-9 w-9 rounded-full bg-accent text-primary text-[11px] font-bold shrink-0">{initials(p.name)}</span>
+                        <p className="font-semibold text-foreground text-sm">{p.name}</p>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="font-mono text-[11px] text-muted-foreground bg-muted/60 px-2 py-0.5 rounded">{p.customId}</span>
+                    </td>
+                    <td className="px-5 py-3.5 text-sm text-muted-foreground hidden md:table-cell">{p.age}Y · {p.gender}</td>
+                    <td className="px-5 py-3.5 text-sm text-muted-foreground hidden lg:table-cell font-mono">{p.phone}</td>
+                    <td className="px-5 py-3.5 text-sm text-muted-foreground hidden lg:table-cell">{p.refDoctor}</td>
+                    <td className="px-5 py-3.5 text-sm text-muted-foreground hidden xl:table-cell">
+                      {new Date(p.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                    </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => setViewPatient(p)} title="View" className="p-2 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-all"><Eye className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => handleOpenEdit(p)} title="Edit" className="p-2 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-all"><Edit2 className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => setDeletePatient(p)} title="Delete" className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"><Trash2 className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </div>

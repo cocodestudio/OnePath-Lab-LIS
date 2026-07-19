@@ -17,6 +17,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { PrintPreviewDialog } from "@/components/print-preview-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { fetchFromLaravel } from "@/lib/api-client";
 
 interface Test { 
   name: string; 
@@ -54,11 +55,11 @@ export default function ReportsListPage() {
 
   useEffect(() => { fetchReports(); }, []);
 
-  const fetchReports = async () => {
+    const fetchReports = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/reports");
-      if (res.ok) setReports(await res.json());
+      const data = await fetchFromLaravel("/reports");
+      setReports(data);
     } catch (err) {
       console.error("Error fetching reports:", err);
     } finally {
@@ -69,16 +70,11 @@ export default function ReportsListPage() {
   const triggerPrint = async (id: string) => {
     try {
       setPrintingId(id);
-      const res = await fetch(`/api/reports/${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setPrintReport({ ...data, lab: data.lab || DEFAULT_LAB });
-        setShowPrintOptions(true);
-      } else {
-        toastError("Could not load report", "Failed to fetch report data for printing.");
-      }
+      const data = await fetchFromLaravel(`/reports/${id}`);
+      setPrintReport({ ...data, lab: data.lab || DEFAULT_LAB });
+      setShowPrintOptions(true);
     } catch {
-      toastError("Network error", "Unable to reach the server. Please try again.");
+      toastError("Could not load report", "Failed to fetch report data for printing.");
     } finally {
       setPrintingId(null);
     }
