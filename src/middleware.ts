@@ -5,7 +5,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const token = request.cookies.get('lis_token')?.value
 
-  if (pathname.startsWith('/dashboard') && !token) {
+  if ((pathname.startsWith('/dashboard') || pathname.startsWith('/onboarding')) && !token) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -17,5 +17,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/login'],
+  matcher: ['/dashboard/:path*', '/login', '/onboarding'],
 }

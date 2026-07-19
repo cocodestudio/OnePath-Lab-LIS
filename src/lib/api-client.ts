@@ -11,6 +11,13 @@ export function getStoredToken() {
   return localStorage.getItem("lis_token");
 }
 
+export function updateStoredUser(updates: Partial<any>) {
+  const current = getStoredUser();
+  if (!current) return;
+  const updated = { ...current, ...updates };
+  localStorage.setItem("lis_user", JSON.stringify(updated));
+}
+
 export function logout() {
   localStorage.removeItem("lis_token");
   localStorage.removeItem("lis_user");
