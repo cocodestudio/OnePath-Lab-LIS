@@ -24,7 +24,7 @@ const PREDEFINED_UNITS = [
 ];
 
 interface Test {
-  id: string; name: string; category: string; fieldType: string; type: string; price: number;
+  id: string; name: string; testCode?: string; category: string; fieldType: string; type: string; price: number;
   interpretation?: string;
   unit: string | null; genderRefType: string; refRangeMin: number | null; refRangeMax: number | null;
   refRangeMinMale: number | null; refRangeMaxMale: number | null;

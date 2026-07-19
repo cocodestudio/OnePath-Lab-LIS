@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Fraunces } from "next/font/google";
 import localFont from "next/font/local";
+// Ignore missing type declarations for side-effect CSS import
+// @ts-ignore
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { SessionProvider } from "@/components/session-provider";
