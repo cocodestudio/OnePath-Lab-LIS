@@ -111,7 +111,7 @@ export default function BillingPage() {
       b.patient.custom_id.toLowerCase().includes(search.toLowerCase()) ||
       b.custom_id.toLowerCase().includes(search.toLowerCase());
 
-    const matchesDate = filterDate ? b.created_at.startsWith(filterDate) : true;
+    const matchesDate = filterDate && b.created_at ? b.created_at.startsWith(filterDate) : true;
 
     return matchesSearch && (statusFilter === "ALL" || b.status === statusFilter) && matchesDate;
   });
