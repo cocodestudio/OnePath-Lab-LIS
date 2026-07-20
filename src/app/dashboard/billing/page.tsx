@@ -14,18 +14,18 @@ import { useReactToPrint } from "react-to-print";
 import { InvoiceSheet } from "@/components/invoice-sheet";
 import { fetchFromLaravel } from "@/lib/api-client";
 
-interface Patient { name: string; customId: string; phone: string; age: number; gender: string; refDoctor: string; address?: string; }
+interface Patient { name: string; custom_id: string; phone: string; age: number; gender: string; ref_doctor: string; address?: string; }
 interface Test { id: string; name: string; price: number; }
 interface Result { test: Test; }
-interface Report { customId: string; results: Result[]; }
+interface Report { custom_id: string; results: Result[]; }
 interface Lab {
-  name: string; email: string; address: string; logoUrl: string | null;
-  printBgImage: string | null; printHeaderHeight: number; printFooterHeight: number;
-  printMarginLeft: number; printMarginRight: number;
+  name: string; email: string; address: string; logo_url: string | null;
+  print_bg_image: string | null; print_header_height: number; print_footer_height: number;
+  print_margin_left: number; print_margin_right: number;
 }
 interface Bill {
-  id: string; customId: string; total: number; discount: number; paidAmount: number;
-  status: string; createdAt: string; patient: Patient; reports: Report[]; lab: Lab;
+  id: string; custom_id: string; total: number; discount: number; paid_amount: number;
+  status: string; created_at: string; patient: Patient; reports?: Report[]; lab?: Lab;
 }
 
 export default function BillingPage() {
@@ -44,7 +44,7 @@ export default function BillingPage() {
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: viewingInvoice ? `Invoice_${viewingInvoice.customId}` : "Invoice",
+    documentTitle: viewingInvoice ? `Invoice_${viewingInvoice.custom_id}` : "Invoice",
   });
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [discountVal, setDiscountVal] = useState("");
@@ -71,7 +71,7 @@ export default function BillingPage() {
   const handleOpenEditDialog = (bill: Bill) => {
     setEditingBill(bill);
     setDiscountVal(bill.discount.toString());
-    setPaidAmountVal(bill.paidAmount ? bill.paidAmount.toString() : "0");
+    setPaidAmountVal(bill.paid_amount ? bill.paid_amount.toString() : "0");
     setPaymentStatus(bill.status);
     setError(null);
     setSuccess(null);
@@ -79,7 +79,7 @@ export default function BillingPage() {
   };
 
   const handleViewInvoice = (bill: Bill) => {
-    const tests = bill.reports.flatMap(r => r.results.map(res => res.test));
+    const tests = (bill.reports || []).flatMap(r => r.results.map(res => res.test));
     setViewingInvoice({ ...bill, tests });
     setTimeout(() => handlePrint(), 150);
   };
@@ -93,7 +93,7 @@ export default function BillingPage() {
     try {
       await fetchFromLaravel(`/bills/${editingBill.id}`, {
         method: "PUT",
-        body: JSON.stringify({ discount: parseFloat(discountVal) || 0, status: paymentStatus, paidAmount: parseFloat(paidAmountVal) || 0 }),
+        body: JSON.stringify({ discount: parseFloat(discountVal) || 0, status: paymentStatus, paid_amount: parseFloat(paidAmountVal) || 0 }),
       });
       setSuccess("Invoice updated successfully.");
       fetchBills();
@@ -108,11 +108,10 @@ export default function BillingPage() {
   const filteredBills = bills.filter((b) => {
     const matchesSearch =
       b.patient.name.toLowerCase().includes(search.toLowerCase()) ||
-      b.patient.customId.toLowerCase().includes(search.toLowerCase()) ||
-      b.customId.toLowerCase().includes(search.toLowerCase());
+      b.patient.custom_id.toLowerCase().includes(search.toLowerCase()) ||
+      b.custom_id.toLowerCase().includes(search.toLowerCase());
 
-    // YYYY-MM-DD match
-    const matchesDate = filterDate ? b.createdAt.startsWith(filterDate) : true;
+    const matchesDate = filterDate ? b.created_at.startsWith(filterDate) : true;
 
     return matchesSearch && (statusFilter === "ALL" || b.status === statusFilter) && matchesDate;
   });
@@ -125,8 +124,8 @@ export default function BillingPage() {
 
   useEffect(() => { setCurrentPage(1); }, [search, statusFilter, filterDate]);
 
-  const totalPaidRevenue = bills.filter((b) => b.status === "PAID").reduce((s, b) => s + b.total, 0);
-  const totalOutstanding = bills.filter((b) => b.status === "UNPAID" || b.status === "PARTIAL").reduce((s, b) => s + b.total, 0);
+  const totalPaidRevenue = bills.filter((b) => b.status === "PAID").reduce((s, b) => s + Number(b.total), 0);
+  const totalOutstanding = bills.filter((b) => b.status === "UNPAID" || b.status === "PARTIAL").reduce((s, b) => s + Number(b.total), 0);
   const pendingCount = bills.filter((b) => b.status === "UNPAID" || b.status === "PARTIAL").length;
   const paidCount = bills.filter((b) => b.status === "PAID").length;
 
@@ -242,17 +241,17 @@ export default function BillingPage() {
               </thead>
               <tbody>
                 {currentRows.map((bill) => {
-                  const balance = bill.total - bill.paidAmount;
+                  const balance = Number(bill.total) - Number(bill.paid_amount);
                   return (
                     <tr key={bill.id} className="border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors">
-                      <td className="px-6 py-4 font-mono text-xs font-semibold text-primary">{bill.customId}</td>
+                      <td className="px-6 py-4 font-mono text-xs font-semibold text-primary">{bill.custom_id}</td>
                       <td className="px-6 py-4">
                         <p className="font-semibold text-foreground text-sm">{bill.patient.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{bill.patient.customId}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{bill.patient.custom_id}</p>
                       </td>
-                      <td className="px-6 py-4 text-muted-foreground text-xs hidden lg:table-cell whitespace-nowrap">{new Date(bill.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td>
-                      <td className="px-6 py-4 text-right font-mono text-xs text-foreground hidden md:table-cell">₹{bill.total.toFixed(2)}</td>
-                      <td className="px-6 py-4 text-right font-mono text-xs text-primary hidden md:table-cell">₹{bill.paidAmount.toFixed(2)}</td>
+                      <td className="px-6 py-4 text-muted-foreground text-xs hidden lg:table-cell whitespace-nowrap">{new Date(bill.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td>
+                      <td className="px-6 py-4 text-right font-mono text-xs text-foreground hidden md:table-cell">₹{Number(bill.total).toFixed(2)}</td>
+                      <td className="px-6 py-4 text-right font-mono text-xs text-primary hidden md:table-cell">₹{Number(bill.paid_amount).toFixed(2)}</td>
                       <td className="px-6 py-4 text-right font-mono text-sm font-bold">
                         {balance > 0 ? (
                           <span className="text-destructive">₹{balance.toFixed(2)}</span>
@@ -323,7 +322,7 @@ export default function BillingPage() {
               <div className="h-10 w-10 rounded-lg bg-accent flex items-center justify-center text-primary"><Receipt className="h-5 w-5" /></div>
               <div>
                 <DialogTitle className="text-lg">Update Invoice</DialogTitle>
-                <DialogDescription className="font-mono">{editingBill?.customId} · {editingBill?.patient.name}</DialogDescription>
+                <DialogDescription className="font-mono">{editingBill?.custom_id} · {editingBill?.patient.name}</DialogDescription>
               </div>
             </div>
           </DialogHeader>
@@ -333,8 +332,8 @@ export default function BillingPage() {
             {success && <div className="flex items-center gap-2.5 rounded-lg bg-accent border border-primary/20 p-3 text-xs text-primary font-semibold"><CheckCircle2 className="h-4 w-4 shrink-0" /><p>{success}</p></div>}
 
             <div className="bg-muted/40 border border-border/60 rounded-lg p-4 space-y-2 text-xs">
-              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="font-semibold text-foreground tnum">₹{editingBill && (editingBill.total + editingBill.discount).toFixed(2)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Current Total</span><span className="font-bold text-foreground tnum">₹{editingBill && Math.max(0, editingBill.total + editingBill.discount - (parseFloat(discountVal) || 0)).toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="font-semibold text-foreground tnum">₹{editingBill && (Number(editingBill.total) + Number(editingBill.discount)).toFixed(2)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Current Total</span><span className="font-bold text-foreground tnum">₹{editingBill && Math.max(0, Number(editingBill.total) + Number(editingBill.discount) - (parseFloat(discountVal) || 0)).toFixed(2)}</span></div>
             </div>
 
             <div className="space-y-1.5"><Label>Apply Discount (₹)</Label><Input type="number" value={discountVal} onChange={(e) => setDiscountVal(e.target.value)} disabled={saving} required /></div>
@@ -345,7 +344,7 @@ export default function BillingPage() {
               <div className="flex justify-between text-xs mt-2 text-muted-foreground bg-muted/40 p-2.5 rounded-lg border border-border/60 shadow-sm">
                 <span>Remaining Balance:</span>
                 {(() => {
-                  const finalTotal = editingBill ? Math.max(0, editingBill.total + editingBill.discount - (parseFloat(discountVal) || 0)) : 0;
+                  const finalTotal = editingBill ? Math.max(0, Number(editingBill.total) + Number(editingBill.discount) - (parseFloat(discountVal) || 0)) : 0;
                   const finalPaid = parseFloat(paidAmountVal) || 0;
                   const balance = finalTotal - finalPaid;
                   if (balance > 0) {
@@ -376,11 +375,11 @@ export default function BillingPage() {
             invoice={viewingInvoice}
             ref={printRef}
             settings={{
-              bgImage: null, // Do not use custom background for invoice
-              headerHeight: viewingInvoice.lab.printHeaderHeight,
-              footerHeight: viewingInvoice.lab.printFooterHeight,
-              marginLeft: viewingInvoice.lab.printMarginLeft,
-              marginRight: viewingInvoice.lab.printMarginRight,
+              bgImage: null,
+              headerHeight: viewingInvoice.lab?.print_header_height ?? 40,
+              footerHeight: viewingInvoice.lab?.print_footer_height ?? 40,
+              marginLeft: viewingInvoice.lab?.print_margin_left ?? 40,
+              marginRight: viewingInvoice.lab?.print_margin_right ?? 40,
             }}
           />
         )}

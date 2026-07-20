@@ -153,7 +153,7 @@ export default function RegisterPatientPage() {
     setBookingError(null);
     setBooking(true);
     try {
-      const data = await fetchFromLaravel("/reports", {
+      const report = await fetchFromLaravel("/reports", {
         method: "POST",
         body: JSON.stringify({
           patientId: newPatient.id,
@@ -164,7 +164,12 @@ export default function RegisterPatientPage() {
         }),
       });
       setBookingSuccess(true);
-      setSuccessDetails({ patientCustomId: newPatient.customId, billCustomId: data.bill.customId, reportId: data.report.id, billId: data.bill.id });
+      setSuccessDetails({
+        patientCustomId: newPatient.customId,
+        billCustomId: report.bill.custom_id,
+        reportId: report.id,
+        billId: report.bill.id
+      });
     } catch (err: any) {
       setBookingError(err.message || "Failed to complete booking.");
     } finally {
