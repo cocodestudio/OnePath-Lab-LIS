@@ -155,7 +155,13 @@ export default function RegisterPatientPage() {
     try {
       const data = await fetchFromLaravel("/reports", {
         method: "POST",
-        body: JSON.stringify({ patientId: newPatient.id, testIds: selectedTests, discount: parsedDiscount, paymentStatus }),
+        body: JSON.stringify({
+          patientId: newPatient.id,
+          testIds: selectedTests,
+          total: grandTotal,
+          discount: parsedDiscount,
+          paymentStatus
+        }),
       });
       setBookingSuccess(true);
       setSuccessDetails({ patientCustomId: newPatient.customId, billCustomId: data.bill.customId, reportId: data.report.id, billId: data.bill.id });
