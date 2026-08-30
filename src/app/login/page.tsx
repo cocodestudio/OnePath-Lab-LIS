@@ -43,17 +43,10 @@ export default function LoginPage() {
       const user = data.user;
 
       localStorage.setItem("lis_token", token);
-      localStorage.setItem("lis_user", JSON.stringify(user));
+      localStorage.setItem("lis_user", JSON.stringify(user || {}));
       document.cookie = `lis_token=${token}; path=/; max-age=86400; SameSite=Lax; Secure`;
 
       router.push("/dashboard");
-      router.refresh();
-
-      if (!user.lab_id) {
-        router.push("/onboarding");
-      } else {
-        router.push("/dashboard");
-      }
       router.refresh();
     } catch {
       setError("An unexpected error occurred. Please try again.");
