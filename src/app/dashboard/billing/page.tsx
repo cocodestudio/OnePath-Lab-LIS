@@ -1,88 +1,246 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import Link from "next/link";
 import {
   Search, Receipt, Edit2, Calendar, User, CheckCircle2, AlertTriangle,
-  Loader2, ArrowRight, ChevronLeft, ChevronRight, FileDown, TrendingUp, Wallet, X, FileText, Printer
+  Loader2, ArrowRight, ChevronLeft, ChevronRight, FileDown, TrendingUp,
+  Wallet, X, FileText, Printer, CheckCircle, Clock, AlertCircle, RefreshCw,
+  Phone, Eye, Download, Sparkles, Plus, Trash2, PlusCircle, Check, Stethoscope,
+  Building2, BadgeCheck
 } from "lucide-react";
-import { useReactToPrint } from "react-to-print";
-import { InvoiceSheet } from "@/components/invoice-sheet";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "@/components/ui/select";
 import { fetchFromLaravel } from "@/lib/api-client";
+import { InvoiceSheet } from "@/components/invoice-sheet";
+import { printInvoiceElement } from "@/lib/print-invoice";
 
-interface Patient { name: string; custom_id: string; phone: string; age: number; gender: string; ref_doctor: string; address?: string; }
-interface Test { id: string; name: string; price: number; }
-interface Result { test: Test; }
-interface Report { custom_id: string; results: Result[]; }
+interface Patient {
+  name: string;
+  custom_id: string;
+  phone: string;
+  age: number;
+  gender: string;
+  ref_doctor: string;
+  address?: string;
+}
+interface Test {
+  id: string;
+  name: string;
+  price: number;
+  category?: string;
+  parent_id?: string | null;
+  parentId?: string | null;
+  parent?: any;
+}
+interface Result {
+  id?: string;
+  test: Test;
+}
+interface Report {
+  id: string;
+  custom_id: string;
+  results: Result[];
+}
 interface Lab {
-  name: string; email: string; address: string; logo_url: string | null;
-  print_bg_image: string | null; print_header_height: number; print_footer_height: number;
-  print_margin_left: number; print_margin_right: number;
+  name: string;
+  email: string;
+  address: string;
+  logo_url: string | null;
 }
 interface Bill {
-  id: string; custom_id: string; total: number; discount: number; paid_amount: number;
-  status: string; created_at: string; patient: Patient; reports?: Report[]; lab?: Lab;
+  id: string;
+  custom_id: string;
+  customId?: string;
+  total: number;
+  discount: number;
+  paid_amount: number;
+  status: string;
+  created_at: string;
+  createdAt?: string;
+  patient: Patient;
+  reports?: Report[];
+  lab?: Lab;
+}
+
+// Helper: Extract only distinct Main Diagnostic Panels from a Bill (resolving sub-parameters to top parent)
+function getMainBillItems(
+  bill: Bill | null,
+  allTestsMap?: Map<string, any>
+): { id?: string; name: string; code?: string; category?: string; price: number }[] {
+  if (!bill || !bill.reports || bill.reports.length === 0) {
+    return [{ name: "Diagnostic Investigation Panel", code: "T-PANEL", price: Number(bill?.total || 0), category: "Pathology" }];
+  }
+
+  const itemsMap = new Map<string, { id?: string; name: string; code?: string; category?: string; price: number }>();
+
+  bill.reports.forEach((r) => {
+    if (r.results && r.results.length > 0) {
+      r.results.forEach((res) => {
+        if (res.test) {
+          // Resolve top-level parent test
+          let testObj = (res.test.id && allTestsMap?.get(res.test.id)) || res.test;
+
+          // Climb up parent hierarchy until top-level main panel is reached
+          while (testObj) {
+            const parentId = testObj.parentId || testObj.parent_id || testObj.parent?.id;
+            if (!parentId) break;
+            const parentObj = allTestsMap?.get(parentId) || testObj.parent;
+            if (!parentObj) break;
+            testObj = parentObj;
+          }
+
+          const panelKey = testObj.id || testObj.name;
+          if (testObj && !itemsMap.has(panelKey)) {
+            itemsMap.set(panelKey, {
+              id: testObj.id,
+              name: testObj.name,
+              code: testObj.code || (testObj as any).testCode || (testObj as any).test_code || `T-${(testObj.name || "").substring(0, 3).toUpperCase()}`,
+              category: testObj.category || "General Pathology",
+              price: Number(testObj.price || 0),
+            });
+          }
+        }
+      });
+    }
+  });
+
+  const list = Array.from(itemsMap.values());
+  if (list.length === 0) {
+    return [{ id: "T-DEF", code: "T-PANEL", name: "Diagnostic Investigation Panel", price: Number(bill.total || 0), category: "Pathology" }];
+  }
+  return list;
 }
 
 export default function BillingPage() {
   const [bills, setBills] = useState<Bill[]>([]);
+  const [labData, setLabData] = useState<any>(null);
+  const [allRawTests, setAllRawTests] = useState<Test[]>([]);
+  const [availableMainTests, setAvailableMainTests] = useState<Test[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [filterDate, setFilterDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const rowsPerPage = 10;
 
+  const shiftDate = (days: number) => {
+    const base = filterDate ? new Date(filterDate) : new Date();
+    base.setDate(base.getDate() + days);
+    setFilterDate(base.toISOString().split("T")[0]);
+  };
+
+  // Invoice Preview Modal State (Wide Landscape Layout)
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [selectedBillForInvoice, setSelectedBillForInvoice] = useState<Bill | null>(null);
+
+  // Edit Bill & Tests Modal State (Spacious Landscape)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isInvoiceDialogOpen, setIsInvoiceDialogOpen] = useState(false);
-  const [viewingInvoice, setViewingInvoice] = useState<any>(null);
-  const printRef = React.useRef<HTMLDivElement>(null);
-
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: viewingInvoice ? `Invoice_${viewingInvoice.custom_id}` : "Invoice",
-  });
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
-  const [discountVal, setDiscountVal] = useState("");
-  const [paidAmountVal, setPaidAmountVal] = useState("");
+  const [billTests, setBillTests] = useState<Test[]>([]);
+  const [testSearchInput, setTestSearchInput] = useState("");
+  const [isAddingTest, setIsAddingTest] = useState(false);
+  const [discountVal, setDiscountVal] = useState("0");
+  const [paidAmountVal, setPaidAmountVal] = useState("0");
   const [paymentStatus, setPaymentStatus] = useState("UNPAID");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  useEffect(() => { fetchBills(); }, []);
+  useEffect(() => {
+    fetchBills();
+    fetchAvailableTests();
+  }, []);
 
   const fetchBills = async () => {
     try {
       setLoading(true);
-      const data = await fetchFromLaravel("/bills");
-      setBills(data);
+      const [data, labRes] = await Promise.all([
+        fetchFromLaravel("/bills"),
+        fetchFromLaravel("/lab").catch(() => null),
+      ]);
+      const billsList = Array.isArray(data) ? data : (data?.data || []);
+      setBills(billsList);
+      if (labRes) setLabData(labRes);
     } catch (err) {
       console.error("Error fetching bills:", err);
+      setBills([]);
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchAvailableTests = async () => {
+    try {
+      const data = await fetchFromLaravel("/tests");
+      const list = Array.isArray(data) ? data : (data?.data || []);
+      setAllRawTests(list);
+      // Filter ONLY Main / Top-Level tests (no sub-parameters)
+      const mainTestsOnly = list.filter((t: any) => !t.parentId && !t.parent_id);
+      setAvailableMainTests(mainTestsOnly);
+    } catch (err) {
+      console.error("Error fetching tests:", err);
+    }
+  };
+
+  // Map of all tests for rapid hierarchy resolution
+  const allTestsMap = useMemo(() => {
+    const map = new Map<string, Test>();
+    allRawTests.forEach((t) => {
+      map.set(t.id, t);
+    });
+    return map;
+  }, [allRawTests]);
+
   const handleOpenEditDialog = (bill: Bill) => {
     setEditingBill(bill);
-    setDiscountVal(bill.discount.toString());
+    
+    // Extract currently attached MAIN tests only (no single sub-parameters)
+    const currentTests: Test[] = [];
+    const mainItems = getMainBillItems(bill, allTestsMap);
+    mainItems.forEach((item) => {
+      if (item.id) {
+        currentTests.push({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          category: item.category || "Pathology",
+        });
+      }
+    });
+
+    setBillTests(currentTests);
+    setDiscountVal(bill.discount?.toString() || "0");
     setPaidAmountVal(bill.paid_amount ? bill.paid_amount.toString() : "0");
-    setPaymentStatus(bill.status);
+    setPaymentStatus(bill.status || "UNPAID");
     setError(null);
     setSuccess(null);
+    setIsAddingTest(false);
+    setTestSearchInput("");
     setIsEditDialogOpen(true);
   };
 
-  const handleViewInvoice = (bill: Bill) => {
-    const tests = (bill.reports || []).flatMap(r => r.results.map(res => res.test));
-    setViewingInvoice({ ...bill, tests });
-    setTimeout(() => handlePrint(), 150);
+  const handleRemoveTest = (testId: string) => {
+    setBillTests(prev => prev.filter(t => t.id !== testId));
   };
+
+  const handleAddTestToBill = (test: Test) => {
+    if (!billTests.some(t => t.id === test.id)) {
+      setBillTests(prev => [...prev, test]);
+    }
+    setIsAddingTest(false);
+    setTestSearchInput("");
+  };
+
+  // Recalculate totals dynamically inside edit dialog
+  const editSubtotal = billTests.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
+  const editDiscount = Math.min(editSubtotal, Math.max(0, parseFloat(discountVal) || 0));
+  const editNetTotal = Math.max(0, editSubtotal - editDiscount);
+  const editPaid = Math.max(0, parseFloat(paidAmountVal) || 0);
 
   const handleSaveBill = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,31 +248,77 @@ export default function BillingPage() {
     setSaving(true);
     setError(null);
     setSuccess(null);
+
     try {
+      const payload: any = {
+        discount: editDiscount,
+        total: editNetTotal,
+        paid_amount: editPaid,
+        status: editPaid >= editNetTotal ? "PAID" : (editPaid > 0 ? "PARTIAL" : "UNPAID"),
+      };
+
+      if (billTests.length > 0) {
+        payload.test_ids = billTests.map(t => t.id);
+      }
+
       await fetchFromLaravel(`/bills/${editingBill.id}`, {
         method: "PUT",
-        body: JSON.stringify({ discount: parseFloat(discountVal) || 0, status: paymentStatus, paid_amount: parseFloat(paidAmountVal) || 0 }),
+        body: JSON.stringify(payload),
       });
-      setSuccess("Invoice updated successfully.");
-      fetchBills();
-      setTimeout(() => setIsEditDialogOpen(false), 900);
+
+      setSuccess("Invoice & investigations updated successfully.");
+      await fetchBills();
+      setTimeout(() => setIsEditDialogOpen(false), 700);
     } catch (err: any) {
-      setError(err.message || "Failed to update.");
+      setError(err.message || "Failed to update invoice.");
     } finally {
       setSaving(false);
     }
   };
 
-  const filteredBills = bills.filter((b) => {
+  const invoicePrintRef = useRef<HTMLDivElement>(null);
+
+  const handleOpenInvoiceModal = (bill: Bill) => {
+    setSelectedBillForInvoice(bill);
+    setIsInvoiceModalOpen(true);
+  };
+
+  const handlePrintWindow = () => {
+    if (invoicePrintRef.current) {
+      printInvoiceElement(invoicePrintRef.current, `Invoice_${selectedBillForInvoice?.custom_id || "Receipt"}`);
+    } else {
+      window.print();
+    }
+  };
+
+  // Calculations & Filters
+  const safeBills = Array.isArray(bills) ? bills : [];
+
+  const filteredBills = safeBills.filter((b) => {
+    if (!b || !b.patient) return false;
+    const patName = b.patient.name || "";
+    const patId = b.patient.custom_id || "";
+    const billId = b.custom_id || "";
+    const phone = b.patient.phone || "";
+    const billDate = (b.createdAt || b.created_at || "").slice(0, 10);
+
     const matchesSearch =
-      b.patient.name.toLowerCase().includes(search.toLowerCase()) ||
-      b.patient.custom_id.toLowerCase().includes(search.toLowerCase()) ||
-      b.custom_id.toLowerCase().includes(search.toLowerCase());
+      patName.toLowerCase().includes(search.toLowerCase()) ||
+      patId.toLowerCase().includes(search.toLowerCase()) ||
+      billId.toLowerCase().includes(search.toLowerCase()) ||
+      phone.includes(search);
 
-    const matchesDate = filterDate && b.created_at ? b.created_at.startsWith(filterDate) : true;
+    const matchesStatus = statusFilter === "ALL" || b.status === statusFilter;
+    const matchesDate = filterDate ? billDate.startsWith(filterDate) : true;
 
-    return matchesSearch && (statusFilter === "ALL" || b.status === statusFilter) && matchesDate;
+    return matchesSearch && matchesStatus && matchesDate;
   });
+
+  const totalInvoiced = filteredBills.reduce((acc, b) => acc + (Number(b.total) || 0), 0);
+  const totalCollected = filteredBills.reduce((acc, b) => acc + (Number(b.paid_amount) || 0), 0);
+  const totalDue = Math.max(0, totalInvoiced - totalCollected);
+  const paidCount = filteredBills.filter((b) => b.status === "PAID").length;
+  const unpaidCount = filteredBills.filter((b) => b.status !== "PAID").length;
 
   const totalRows = filteredBills.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
@@ -122,268 +326,667 @@ export default function BillingPage() {
   const indexOfFirstRow = indexOfLastRow - rowsPerPage;
   const currentRows = filteredBills.slice(indexOfFirstRow, indexOfLastRow);
 
-  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, filterDate]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, filterDate]);
 
-  const totalPaidRevenue = bills.filter((b) => b.status === "PAID").reduce((s, b) => s + Number(b.total), 0);
-  const totalOutstanding = bills.filter((b) => b.status === "UNPAID" || b.status === "PARTIAL").reduce((s, b) => s + Number(b.total), 0);
-  const pendingCount = bills.filter((b) => b.status === "UNPAID" || b.status === "PARTIAL").length;
-  const paidCount = bills.filter((b) => b.status === "PAID").length;
+  const filteredAvailableTests = availableMainTests.filter(t =>
+    t.name.toLowerCase().includes(testSearchInput.toLowerCase()) ||
+    (t.category && t.category.toLowerCase().includes(testSearchInput.toLowerCase()))
+  );
 
-  const statusPill = (status: string) =>
-    status === "PAID" ? "bg-primary/10 text-primary"
-      : status === "PARTIAL" ? "bg-gold/15 text-gold"
-        : "bg-destructive/10 text-destructive";
-  const statusDot = (status: string) =>
-    status === "PAID" ? "bg-primary" : status === "PARTIAL" ? "bg-gold" : "bg-destructive";
+  const invoiceMainItems = useMemo(() => {
+    return getMainBillItems(selectedBillForInvoice, allTestsMap);
+  }, [selectedBillForInvoice, allTestsMap]);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="w-full space-y-7 pb-12 animate-fade-in text-foreground">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-5">
         <div>
-          <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.2em] mb-1.5">Finance</p>
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">Billing & Invoices</h1>
-          <p className="text-sm text-muted-foreground mt-1">Track invoices, record payments, and manage billing.</p>
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+            <p className="text-[11px] font-bold text-primary uppercase tracking-[0.2em]">Financial Operations</p>
+          </div>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-1">
+            Billing & Invoices
+          </h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+            Manage patient invoices, update diagnostic panels, track payments, and issue medical receipts.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={fetchBills}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border/90 bg-card hover:bg-accent text-xs font-semibold text-foreground transition-all shadow-sm cursor-pointer"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-primary" : "text-muted-foreground"}`} />
+            <span>Refresh</span>
+          </button>
         </div>
       </div>
 
-      {/* Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card">
+      {/* KPI Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Billed */}
+        <div className="p-5 rounded-xl border border-border/90 bg-card/80 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Collected Revenue</p>
-            <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-accent text-primary"><Wallet className="h-[18px] w-[18px]" /></span>
-          </div>
-          <h2 className="font-display text-3xl font-semibold text-foreground mt-3 tnum">₹{totalPaidRevenue.toLocaleString("en-IN", { minimumFractionDigits: 0 })}</h2>
-          <p className="flex items-center gap-1.5 mt-2 text-primary font-medium text-xs"><CheckCircle2 className="h-3.5 w-3.5" /> {paidCount} transactions finalized</p>
-        </div>
-        <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Outstanding</p>
-            <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-gold/12 text-gold"><AlertTriangle className="h-[18px] w-[18px]" /></span>
-          </div>
-          <h2 className="font-display text-3xl font-semibold text-gold mt-3 tnum">₹{totalOutstanding.toLocaleString("en-IN", { minimumFractionDigits: 0 })}</h2>
-          <p className="flex items-center gap-1.5 mt-2 text-muted-foreground font-medium text-xs">{pendingCount} pending / partial invoices</p>
-        </div>
-        <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Total Invoices</p>
-            <span className="flex items-center justify-center w-9 h-9 rounded-lg bg-muted text-muted-foreground"><Receipt className="h-[18px] w-[18px]" /></span>
-          </div>
-          <h2 className="font-display text-3xl font-semibold text-foreground mt-3 tnum">{bills.length}</h2>
-          <p className="flex items-center gap-1.5 mt-2 text-primary font-medium text-xs"><TrendingUp className="h-3.5 w-3.5" /> All generated bills</p>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card">
-        <div className="flex flex-col sm:flex-row flex-wrap items-end gap-4">
-          <div className="space-y-1.5 flex-1 min-w-[200px]">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Search</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-              <Input placeholder="Patient name, ID, or bill number…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Total Billed</span>
+            <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+              <Receipt className="h-5 w-5" />
             </div>
           </div>
+          <div className="mt-4">
+            <p className="font-display text-2xl font-bold text-foreground font-mono">₹{totalInvoiced.toFixed(2)}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">{filteredBills.length} invoices on selected date</p>
+          </div>
+        </div>
 
-          <div className="space-y-1.5 w-full sm:w-auto">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Date</label>
-            <div className="flex items-center gap-2">
-              <Input
+        {/* Total Collected */}
+        <div className="p-5 rounded-xl border border-border/90 bg-card/80 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Total Collected</span>
+            <div className="h-9 w-9 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <Wallet className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="font-display text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{totalCollected.toFixed(2)}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">{paidCount} fully paid accounts</p>
+          </div>
+        </div>
+
+        {/* Outstanding Due */}
+        <div className="p-5 rounded-xl border border-border/90 bg-card/80 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Outstanding Balance</span>
+            <div className="h-9 w-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+              <Clock className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="font-display text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono">₹{totalDue.toFixed(2)}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">{unpaidCount} invoices with balance</p>
+          </div>
+        </div>
+
+        {/* Collection Efficiency */}
+        <div className="p-5 rounded-xl border border-border/90 bg-card/80 shadow-sm flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Collection Rate</span>
+            <div className="h-9 w-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <TrendingUp className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="font-display text-2xl font-bold text-foreground font-mono">
+              {totalInvoiced > 0 ? ((totalCollected / totalInvoiced) * 100).toFixed(1) : "100"}%
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1">Settlement efficiency</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Filter & Search Bar */}
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card/70 p-4 rounded-xl border border-border/80 shadow-sm">
+        <div className="relative w-full sm:max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search patient, phone, PID, or invoice ID…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 bg-background border border-border/90 rounded-lg text-xs outline-none focus:border-primary transition-all text-foreground"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          {/* Date Filter with < > Arrow Buttons */}
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center bg-background border border-border/90 rounded-xl p-0.5 shadow-xs">
+              <button
+                type="button"
+                onClick={() => shiftDate(-1)}
+                className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                title="Previous Day"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              <input
                 type="date"
-                className="w-full sm:w-[150px]"
                 value={filterDate}
                 onChange={(e) => setFilterDate(e.target.value)}
+                className="h-8 px-2 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer"
               />
-              {filterDate && (
-                <Button
-                  onClick={() => setFilterDate("")}
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 shrink-0"
-                  title="Clear date"
-                >
-                  <X className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              )}
+
+              <button
+                type="button"
+                onClick={() => shiftDate(1)}
+                className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                title="Next Day"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setFilterDate(new Date().toISOString().split("T")[0])}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                filterDate === new Date().toISOString().split("T")[0]
+                  ? "bg-primary/10 text-primary border-primary/30"
+                  : "bg-background text-muted-foreground hover:text-foreground border-border/90"
+              }`}
+            >
+              Today
+            </button>
+
+            {filterDate && (
+              <button
+                type="button"
+                onClick={() => setFilterDate("")}
+                className="px-3 py-2 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground bg-background border border-border/90 hover:bg-muted transition-all cursor-pointer"
+              >
+                All Dates
+              </button>
+            )}
           </div>
 
-          <div className="space-y-1.5 w-full sm:w-[180px]">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Payment Status</label>
+          {/* Status Filter */}
+          <div className="w-36">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
               <SelectContent>
-                {["ALL", "PAID", "PARTIAL", "UNPAID"].map((s) => (
-                  <SelectItem key={s} value={s}>{s === "ALL" ? "All invoices" : s.charAt(0) + s.slice(1).toLowerCase()}</SelectItem>
-                ))}
+                <SelectItem value="ALL">All Statuses</SelectItem>
+                <SelectItem value="PAID">Paid</SelectItem>
+                <SelectItem value="PARTIAL">Partial</SelectItem>
+                <SelectItem value="UNPAID">Unpaid</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-card border border-border/70 rounded-xl shadow-card overflow-hidden">
+      {/* Invoices List Table */}
+      <div className="bg-card border border-border/80 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3"><div className="w-7 h-7 rounded-full border-2 border-primary/20 border-t-primary animate-spin" /><p className="text-sm font-medium">Loading invoices…</p></div>
-          ) : filteredBills.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-2"><Receipt className="h-10 w-10 opacity-25" /><p className="text-sm font-medium">No invoices found.</p></div>
-          ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-muted/30 border-b border-border/60">
-                  {["Bill ID", "Patient", "Date", "Total", "Paid", "Balance", "Status", ""].map((h, i) => (
-                    <th key={h + i} className={`px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${i === 2 ? "hidden lg:table-cell" : ""} ${i === 3 || i === 4 ? "hidden md:table-cell text-right" : ""} ${i === 5 ? "text-right" : ""} ${i === 7 ? "text-right" : ""}`}>{h}</th>
-                  ))}
+          <table className="w-full text-xs text-left border-collapse">
+            <thead>
+              <tr className="border-b border-border/80 bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
+                <th className="py-3 px-4">Invoice / Date</th>
+                <th className="py-3 px-4">Patient Information</th>
+                <th className="py-3 px-4">Diagnostic Panels</th>
+                <th className="py-3 px-4 text-right">Total (₹)</th>
+                <th className="py-3 px-4 text-right">Paid (₹)</th>
+                <th className="py-3 px-4 text-right">Due (₹)</th>
+                <th className="py-3 px-4 text-center">Status</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary mb-2" />
+                    <span>Loading billing records…</span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {currentRows.map((bill) => {
-                  const balance = Number(bill.total) - Number(bill.paid_amount);
+              ) : currentRows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-16 text-center text-muted-foreground">
+                    <Receipt className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
+                    <p className="font-bold text-foreground">
+                      {filterDate ? `No invoices found for ${filterDate}` : "No invoices found"}
+                    </p>
+                    <p className="text-[11px] mt-0.5">Use the &lt; and &gt; date arrows or click &quot;All Dates&quot; above.</p>
+                  </td>
+                </tr>
+              ) : (
+                currentRows.map((bill) => {
+                  const billDate = new Date((bill.createdAt || bill.created_at) as string || Date.now()).toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric"
+                  });
+                  const due = Math.max(0, (Number(bill.total) || 0) - (Number(bill.paid_amount) || 0));
+                  const mainItems = getMainBillItems(bill, allTestsMap);
+
                   return (
-                    <tr key={bill.id} className="border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors">
-                      <td className="px-6 py-4 font-mono text-xs font-semibold text-primary">{bill.custom_id}</td>
-                      <td className="px-6 py-4">
-                        <p className="font-semibold text-foreground text-sm">{bill.patient.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{bill.patient.custom_id}</p>
+                    <tr key={bill.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono font-bold text-foreground block">{bill.custom_id}</span>
+                        <span className="text-[10px] text-muted-foreground">{billDate}</span>
                       </td>
-                      <td className="px-6 py-4 text-muted-foreground text-xs hidden lg:table-cell whitespace-nowrap">{new Date(bill.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</td>
-                      <td className="px-6 py-4 text-right font-mono text-xs text-foreground hidden md:table-cell">₹{Number(bill.total).toFixed(2)}</td>
-                      <td className="px-6 py-4 text-right font-mono text-xs text-primary hidden md:table-cell">₹{Number(bill.paid_amount).toFixed(2)}</td>
-                      <td className="px-6 py-4 text-right font-mono text-sm font-bold">
-                        {balance > 0 ? (
-                          <span className="text-destructive">₹{balance.toFixed(2)}</span>
-                        ) : balance < 0 ? (
-                          <span className="text-green-600 dark:text-green-500">₹{Math.abs(balance).toFixed(2)} Extra</span>
-                        ) : (
-                          <span className="text-muted-foreground">₹0.00</span>
-                        )}
+
+                      <td className="py-3.5 px-4">
+                        <div className="font-semibold text-foreground">{bill.patient?.name}</div>
+                        <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                          <span className="font-mono">{bill.patient?.custom_id}</span>
+                          <span>·</span>
+                          <span>{bill.patient?.gender?.charAt(0)}/{bill.patient?.age}y</span>
+                        </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusPill(bill.status)}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${statusDot(bill.status)}`} />{bill.status}
+
+                      <td className="py-3.5 px-4">
+                        <div className="max-w-[240px] truncate font-medium text-foreground">
+                          {mainItems.map(item => item.name).slice(0, 2).join(", ")}
+                          {mainItems.length > 2 ? ` +${mainItems.length - 2} more` : ""}
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-foreground">
+                        ₹{(Number(bill.total) || 0).toFixed(2)}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                        ₹{(Number(bill.paid_amount) || 0).toFixed(2)}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-amber-600 dark:text-amber-400">
+                        ₹{due.toFixed(2)}
+                      </td>
+
+                      <td className="py-3.5 px-4 text-center">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          bill.status === "PAID"
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                            : bill.status === "PARTIAL"
+                            ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                            : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                        }`}>
+                          {bill.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleViewInvoice(bill)} title="View invoice"><FileText className="h-3.5 w-3.5" /></Button>
-                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEditDialog(bill)} title="Edit invoice"><Edit2 className="h-3.5 w-3.5" /></Button>
+
+                      <td className="py-3.5 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenInvoiceModal(bill)}
+                            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                            title="Preview / Print Invoice"
+                          >
+                            <Printer className="h-4 w-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditDialog(bill)}
+                            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-primary cursor-pointer transition-colors"
+                            title="Edit Invoice & Panels"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          )}
+                })
+              )}
+            </tbody>
+          </table>
         </div>
 
-        {totalRows > 0 && (
-          <div className="bg-muted/20 px-6 py-3.5 border-t border-border/60 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-xs text-muted-foreground">
-              Showing <span className="font-semibold text-foreground">{indexOfFirstRow + 1}</span>–<span className="font-semibold text-foreground">{Math.min(indexOfLastRow, totalRows)}</span> of <span className="font-semibold text-foreground">{totalRows}</span> invoices
-            </div>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Rows:</span>
-                <Select value={rowsPerPage.toString()} onValueChange={(val) => { setRowsPerPage(Number(val)); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-8 text-xs font-semibold w-[70px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="25">25</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} variant="outline" size="icon" className="h-8 w-8"><ChevronLeft className="h-4 w-4" /></Button>
-                <span className="text-xs font-semibold text-foreground px-2">{currentPage} / {totalPages}</span>
-                <Button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} variant="outline" size="icon" className="h-8 w-8"><ChevronRight className="h-4 w-4" /></Button>
-              </div>
+        {/* Pagination Footer */}
+        {totalRows > rowsPerPage && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border/80 text-xs text-muted-foreground">
+            <span>
+              Showing <strong>{indexOfFirstRow + 1}</strong> to <strong>{Math.min(indexOfLastRow, totalRows)}</strong> of <strong>{totalRows}</strong> invoices
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-md border border-border/90 bg-card hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="font-bold text-foreground px-2">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-md border border-border/90 bg-card hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Concise compliance note */}
-      <p className="text-xs text-muted-foreground/70 flex items-center gap-2 px-1">
-        <Receipt className="h-3.5 w-3.5 shrink-0" /> Totals are inclusive of GST. Refunds and adjustments require administrator authorization. Reports are withheld while payment is unpaid.
-      </p>
+      {/* ================= MODALS ================= */}
 
-      {/* Edit modal */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+      {/* 1. High-End Horizontal Landscape Printable Medical Invoice Modal */}
+      <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
+        <DialogContent className="max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl print:max-h-none print:max-w-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0">
+          <DialogTitle className="sr-only">Medical Invoice Preview</DialogTitle>
+
+          {/* Modal Top Header */}
+          <div className="flex items-center justify-between px-7 py-4 border-b border-border/80 bg-card shrink-0 print:hidden">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-accent flex items-center justify-center text-primary"><Receipt className="h-5 w-5" /></div>
+              <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shadow-xs">
+                <Receipt className="h-5 w-5" />
+              </div>
               <div>
-                <DialogTitle className="text-lg">Update Invoice</DialogTitle>
-                <DialogDescription className="font-mono">{editingBill?.custom_id} · {editingBill?.patient.name}</DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-
-          <form onSubmit={handleSaveBill} className="space-y-4">
-            {error && <div className="flex items-center gap-2.5 rounded-lg bg-destructive/8 border border-destructive/20 p-3 text-xs text-destructive font-semibold"><AlertTriangle className="h-4 w-4 shrink-0" /><p>{error}</p></div>}
-            {success && <div className="flex items-center gap-2.5 rounded-lg bg-accent border border-primary/20 p-3 text-xs text-primary font-semibold"><CheckCircle2 className="h-4 w-4 shrink-0" /><p>{success}</p></div>}
-
-            <div className="bg-muted/40 border border-border/60 rounded-lg p-4 space-y-2 text-xs">
-              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span className="font-semibold text-foreground tnum">₹{editingBill && (Number(editingBill.total) + Number(editingBill.discount)).toFixed(2)}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Current Total</span><span className="font-bold text-foreground tnum">₹{editingBill && Math.max(0, Number(editingBill.total) + Number(editingBill.discount) - (parseFloat(discountVal) || 0)).toFixed(2)}</span></div>
-            </div>
-
-            <div className="space-y-1.5"><Label>Apply Discount (₹)</Label><Input type="number" value={discountVal} onChange={(e) => setDiscountVal(e.target.value)} disabled={saving} required /></div>
-
-            <div className="space-y-1.5">
-              <Label>Total Paid Amount (₹)</Label>
-              <Input type="number" value={paidAmountVal} onChange={(e) => setPaidAmountVal(e.target.value)} disabled={saving} required />
-              <div className="flex justify-between text-xs mt-2 text-muted-foreground bg-muted/40 p-2.5 rounded-lg border border-border/60 shadow-sm">
-                <span>Remaining Balance:</span>
-                {(() => {
-                  const finalTotal = editingBill ? Math.max(0, Number(editingBill.total) + Number(editingBill.discount) - (parseFloat(discountVal) || 0)) : 0;
-                  const finalPaid = parseFloat(paidAmountVal) || 0;
-                  const balance = finalTotal - finalPaid;
-                  if (balance > 0) {
-                    return <span className="font-semibold text-destructive tnum">₹{balance.toFixed(2)}</span>;
-                  } else if (balance < 0) {
-                    return <span className="font-semibold text-green-600 dark:text-green-500 tnum">₹{Math.abs(balance).toFixed(2)} Extra</span>;
-                  } else {
-                    return <span className="font-semibold text-muted-foreground tnum">₹0.00</span>;
-                  }
-                })()}
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display text-base font-bold text-foreground">
+                    Tax Invoice Preview
+                  </h3>
+                  <span className="font-mono bg-primary/15 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                    {selectedBillForInvoice?.custom_id}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Patient: <strong className="text-foreground">{selectedBillForInvoice?.patient?.name}</strong> · PID: <span className="font-mono">{selectedBillForInvoice?.patient?.custom_id}</span>
+                </p>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2.5 pt-2">
-              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={saving}>Cancel</Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? (<><Loader2 className="h-4 w-4 animate-spin" /> Updating…</>) : (<>Save Invoice <ArrowRight className="h-4 w-4" /></>)}
-              </Button>
+            <div className="flex items-center gap-2.5">
+              <button
+                onClick={handlePrintWindow}
+                className="gradient-primary text-primary-foreground font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm hover:-translate-y-px transition-all cursor-pointer mr-6"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                <span>Print / Download PDF</span>
+              </button>
             </div>
-          </form>
+          </div>
+
+          {/* Printable Invoice Sheet Body (Rendered via Unified InvoiceSheet Engine) */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-zinc-100 dark:bg-zinc-900/60 flex justify-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">
+            {selectedBillForInvoice && (
+              <div ref={invoicePrintRef} className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 bg-white max-w-full print:shadow-none print:ring-0 print:border-none print:p-0 print:m-0 print:w-full">
+                <InvoiceSheet
+                  invoice={{
+                    id: selectedBillForInvoice.id,
+                    customId: selectedBillForInvoice.custom_id,
+                    createdAt: (selectedBillForInvoice.createdAt || selectedBillForInvoice.created_at) as string || new Date().toISOString(),
+                    total: Number(selectedBillForInvoice.total || 0),
+                    discount: Number(selectedBillForInvoice.discount || 0),
+                    paidAmount: Number(selectedBillForInvoice.paid_amount ?? (selectedBillForInvoice as any).paidAmount ?? 0),
+                    status: selectedBillForInvoice.status || "UNPAID",
+                    paymentMode: "CASH / UPI",
+                    billedBy: "Accounts / Billing Desk",
+                    patient: {
+                      customId: selectedBillForInvoice.patient?.custom_id || (selectedBillForInvoice.patient as any)?.customId || "",
+                      name: selectedBillForInvoice.patient?.name || "",
+                      phone: selectedBillForInvoice.patient?.phone || "",
+                      age: selectedBillForInvoice.patient?.age || 0,
+                      gender: selectedBillForInvoice.patient?.gender || "",
+                      refDoctor: selectedBillForInvoice.patient?.ref_doctor || (selectedBillForInvoice.patient as any)?.refDoctor || "",
+                      address: selectedBillForInvoice.patient?.address || "",
+                    },
+                    lab: {
+                      name: labData?.name || labData?.centre_name || selectedBillForInvoice.lab?.name || "OnePath Pathology Laboratory",
+                      email: labData?.email || selectedBillForInvoice.lab?.email || "support@onepathlab.com",
+                      address: labData?.address || selectedBillForInvoice.lab?.address || "Medical Diagnostic Center",
+                      phone: labData?.phone || (selectedBillForInvoice.lab as any)?.phone || "",
+                      logoUrl: labData?.logo_url || (selectedBillForInvoice.lab as any)?.logo_url || (selectedBillForInvoice.lab as any)?.logoUrl || "/onepath-logo.png",
+                      pincode: labData?.pincode || (selectedBillForInvoice.lab as any)?.pincode || "",
+                      city: labData?.city || (selectedBillForInvoice.lab as any)?.city || "",
+                      district: labData?.district || labData?.city || "",
+                      state: labData?.state || (selectedBillForInvoice.lab as any)?.state || "",
+                      gstin: labData?.gstin || (selectedBillForInvoice.lab as any)?.gstin || "",
+                      bill_settings: labData?.bill_settings || (selectedBillForInvoice.lab as any)?.bill_settings || (selectedBillForInvoice.lab as any)?.billSettings,
+                    },
+                    tests: invoiceMainItems.map(item => ({
+                      id: item.id || item.name,
+                      name: item.name,
+                      code: (item as any).code || (item as any).testCode || (item as any).test_code || `T-${(item.name || "").substring(0, 3).toUpperCase()}`,
+                      price: Number(item.price || 0),
+                      category: item.category,
+                    })),
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
-      {/* Hidden Invoice for Printing */}
-      <div className="hidden">
-        {viewingInvoice && (
-          <InvoiceSheet
-            invoice={viewingInvoice}
-            ref={printRef}
-            settings={{
-              bgImage: null,
-              headerHeight: viewingInvoice.lab?.print_header_height ?? 40,
-              footerHeight: viewingInvoice.lab?.print_footer_height ?? 40,
-              marginLeft: viewingInvoice.lab?.print_margin_left ?? 40,
-              marginRight: viewingInvoice.lab?.print_margin_right ?? 40,
-            }}
-          />
-        )}
-      </div>
+      {/* 2. Spacious Horizontal Edit Bill & Tests Modal */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl">
+          <DialogTitle className="sr-only">Edit Invoice & Manage Tests</DialogTitle>
+          
+          {/* Header */}
+          <div className="flex items-center justify-between px-7 py-4 border-b border-border/80 bg-card shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shadow-xs">
+                <Receipt className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display text-base font-bold text-foreground">
+                    Edit Invoice & Diagnostic Panels
+                  </h3>
+                  <span className="font-mono bg-primary/15 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                    {editingBill?.custom_id}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Patient: <strong className="text-foreground">{editingBill?.patient?.name}</strong> · PID: <span className="font-mono">{editingBill?.patient?.custom_id}</span> · Ref: Dr. {editingBill?.patient?.ref_doctor || "Self"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-7 space-y-6 bg-background custom-scrollbar">
+            {error && (
+              <div className="flex items-center gap-2 p-3.5 rounded-xl bg-destructive/10 text-destructive text-xs font-semibold">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {success && (
+              <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-500/10 text-emerald-600 text-xs font-semibold">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>{success}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveBill} className="grid grid-cols-1 lg:grid-cols-12 gap-7 text-xs">
+              
+              {/* Left Column: Main Diagnostic Panels Selection & Attached List */}
+              <div className="lg:col-span-7 space-y-4">
+                <div className="flex items-center justify-between border-b border-border/80 pb-2.5">
+                  <span className="font-bold text-foreground uppercase tracking-wider flex items-center gap-2 text-xs">
+                    <FileText className="h-4 w-4 text-primary" />
+                    Attached Diagnostic Panels ({billTests.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingTest(!isAddingTest)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-xs font-bold text-primary transition-colors cursor-pointer"
+                  >
+                    <PlusCircle className="h-3.5 w-3.5" />
+                    <span>{isAddingTest ? "Close Directory" : "+ Add Panel / Test"}</span>
+                  </button>
+                </div>
+
+                {/* Add Test Search Bar */}
+                {isAddingTest && (
+                  <div className="p-4 rounded-xl border border-primary/40 bg-accent/30 space-y-3 animate-fade-in shadow-sm">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="Search main test name (e.g. CBC, Lipid Profile, LFT, Thyroid)…"
+                        value={testSearchInput}
+                        onChange={(e) => setTestSearchInput(e.target.value)}
+                        className="w-full pl-9 pr-3 h-9 bg-background border border-border rounded-lg text-xs outline-none focus:border-primary font-medium"
+                      />
+                    </div>
+                    <div className="max-h-48 overflow-y-auto space-y-1 divide-y divide-border/40 custom-scrollbar pr-1">
+                      {filteredAvailableTests.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">No matching diagnostic tests available.</p>
+                      ) : (
+                        filteredAvailableTests.map(t => {
+                          const isAlreadyAdded = billTests.some(bt => bt.id === t.id);
+                          return (
+                            <div key={t.id} className="pt-2 first:pt-0 flex items-center justify-between text-xs py-1.5 px-2 hover:bg-card rounded-lg transition-colors">
+                              <div>
+                                <span className="font-bold text-foreground">{t.name}</span>
+                                <span className="text-[10px] text-muted-foreground ml-2">({t.category || "General"})</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono font-bold text-foreground">₹{Number(t.price || 0).toFixed(0)}</span>
+                                <button
+                                  type="button"
+                                  disabled={isAlreadyAdded}
+                                  onClick={() => handleAddTestToBill(t)}
+                                  className={`px-2.5 py-1 rounded-md font-bold text-[10px] transition-colors cursor-pointer ${
+                                    isAlreadyAdded
+                                      ? "bg-muted text-muted-foreground cursor-not-allowed"
+                                      : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs"
+                                  }`}
+                                >
+                                  {isAlreadyAdded ? "Added" : "+ Add Panel"}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Current Bill Tests List */}
+                <div className="rounded-xl border border-border/80 bg-card overflow-hidden max-h-[300px] overflow-y-auto custom-scrollbar shadow-xs">
+                  {billTests.length === 0 ? (
+                    <div className="py-12 text-center text-muted-foreground">
+                      <Stethoscope className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
+                      <p className="font-bold text-foreground">No test panels attached to this bill</p>
+                      <p className="text-[11px] mt-0.5">Click "+ Add Panel / Test" above to attach investigations.</p>
+                    </div>
+                  ) : (
+                    <ul className="divide-y divide-border/60">
+                      {billTests.map((test, tIdx) => (
+                        <li key={test.id || tIdx} className="p-3.5 flex items-center justify-between text-xs hover:bg-muted/20 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <span className="h-6 w-6 rounded-md bg-primary/10 text-primary font-bold flex items-center justify-center text-[10px] shrink-0 font-mono">
+                              #{tIdx + 1}
+                            </span>
+                            <div>
+                              <p className="font-bold text-foreground text-[12.5px]">{test.name}</p>
+                              <p className="text-[10px] text-muted-foreground font-medium">{test.category || "Pathology"}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="font-mono font-bold text-foreground text-xs">₹{Number(test.price || 0).toFixed(2)}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveTest(test.id)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
+                              title="Remove Panel"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Financial Breakdown & Payment Adjustments */}
+              <div className="lg:col-span-5 space-y-5 bg-card/90 p-5 rounded-2xl border border-border/90 flex flex-col justify-between shadow-sm">
+                <div className="space-y-4">
+                  <div className="border-b border-border/80 pb-2.5">
+                    <span className="font-bold text-foreground uppercase tracking-wider text-xs flex items-center gap-2">
+                      <Wallet className="h-4 w-4 text-primary" />
+                      Invoice Payment Calculation
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Gross Subtotal */}
+                    <div className="flex justify-between items-center text-xs p-2.5 rounded-xl bg-muted/40">
+                      <span className="text-muted-foreground font-semibold">Gross Subtotal ({billTests.length} panels)</span>
+                      <span className="font-mono font-bold text-foreground text-sm">₹{editSubtotal.toFixed(2)}</span>
+                    </div>
+
+                    {/* Discount Concession */}
+                    <div className="flex justify-between items-center text-xs p-2.5 rounded-xl bg-muted/40">
+                      <span className="text-destructive font-semibold">Discount Concession (₹)</span>
+                      <div className="w-28">
+                        <input
+                          type="number"
+                          min="0"
+                          max={editSubtotal}
+                          value={discountVal}
+                          onChange={(e) => setDiscountVal(e.target.value)}
+                          className="w-full font-mono font-bold text-xs text-right text-destructive bg-background px-2.5 py-1.5 rounded-lg border border-border outline-none focus:border-destructive"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Net Total Payable */}
+                    <div className="flex justify-between items-center text-xs p-3 rounded-xl bg-primary/10 border border-primary/20">
+                      <span className="text-primary font-bold text-xs uppercase tracking-wide">Net Total Payable</span>
+                      <span className="font-mono font-extrabold text-primary text-base">₹{editNetTotal.toFixed(2)}</span>
+                    </div>
+
+                    {/* Paid Amount */}
+                    <div className="flex justify-between items-center text-xs p-2.5 rounded-xl bg-muted/40">
+                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Amount Paid (₹)</span>
+                      <div className="w-28">
+                        <input
+                          type="number"
+                          min="0"
+                          value={paidAmountVal}
+                          onChange={(e) => setPaidAmountVal(e.target.value)}
+                          className="w-full font-mono font-bold text-xs text-right text-emerald-600 dark:text-emerald-400 bg-background px-2.5 py-1.5 rounded-lg border border-border outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Balance Due */}
+                    <div className="flex justify-between items-center text-xs p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                      <span className="text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wide">Balance Due</span>
+                      <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-sm">
+                        ₹{Math.max(0, editNetTotal - editPaid).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-border/80">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditDialogOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="gradient-primary text-primary-foreground font-bold text-xs px-6 py-2.5 rounded-xl shadow-md hover:-translate-y-px transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                    <span>{saving ? "Updating..." : "Save Changes"}</span>
+                  </button>
+                </div>
+              </div>
+
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

@@ -15,7 +15,7 @@ import {
   Filter, X, Eye, Plus, Loader2,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PrintPreviewDialog } from "@/components/print-preview-dialog";
+import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
 import { Checkbox } from "@/components/ui/checkbox";
 import { fetchFromLaravel } from "@/lib/api-client";
 
@@ -42,8 +42,13 @@ export default function ReportsListPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
-  const [abnormalOnly, setAbnormalOnly] = useState(false);
   const [filterDate, setFilterDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const shiftDate = (days: number) => {
+    const base = filterDate ? new Date(filterDate) : new Date();
+    base.setDate(base.getDate() + days);
+    setFilterDate(base.toISOString().split("T")[0]);
+  };
 
   const [printReport, setPrintReport] = useState<any | null>(null);
   const [showPrintOptions, setShowPrintOptions] = useState(false);
@@ -55,13 +60,15 @@ export default function ReportsListPage() {
 
   useEffect(() => { fetchReports(); }, []);
 
-    const fetchReports = async () => {
+  const fetchReports = async () => {
     try {
       setLoading(true);
       const data = await fetchFromLaravel("/reports");
-      setReports(data);
+      const list = Array.isArray(data) ? data : (data?.data || []);
+      setReports(list);
     } catch (err) {
       console.error("Error fetching reports:", err);
+      setReports([]);
     } finally {
       setLoading(false);
     }
@@ -80,18 +87,41 @@ export default function ReportsListPage() {
     }
   };
 
-  const categories = Array.from(new Set(reports.flatMap((r) => r.results.map((res) => res.test.category)))).filter(Boolean);
+  const safeReports = Array.isArray(reports) ? reports : [];
 
-  const filteredReports = reports.filter((r) => {
+  const categories = Array.from(
+    new Set(
+      safeReports.flatMap((r: any) =>
+        Array.isArray(r.results)
+          ? r.results.map((res: any) => res.test?.category).filter(Boolean)
+          : []
+      )
+    )
+  );
+
+  const filteredReports = safeReports.filter((r: any) => {
+    if (!r) return false;
+    const patName = r.patient?.name || "";
+    const patId = r.patient?.custom_id || r.patient?.customId || "";
+    const repId = r.custom_id || r.customId || "";
+    const repDate = r.created_at || r.createdAt || "";
+
     const matchesSearch =
-      r.patient.name.toLowerCase().includes(search.toLowerCase()) ||
-      r.patient.customId.toLowerCase().includes(search.toLowerCase()) ||
-      r.customId.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "ALL" || r.status === statusFilter;
-    const matchesCategory = categoryFilter === "ALL" || r.results.some((res) => res.test.category === categoryFilter);
-    const matchesAbnormal = !abnormalOnly || r.results.some((res) => res.isAbnormal);
-    const matchesDate = filterDate ? r.createdAt.startsWith(filterDate) : true;
-    return matchesSearch && matchesStatus && matchesCategory && matchesAbnormal && matchesDate;
+      patName.toLowerCase().includes(search.toLowerCase()) ||
+      patId.toLowerCase().includes(search.toLowerCase()) ||
+      repId.toLowerCase().includes(search.toLowerCase());
+
+    const matchesStatus =
+      statusFilter === "ALL" ||
+      r.status === statusFilter ||
+      (statusFilter === "APPROVED" && (r.status === "COMPLETED" || r.status === "APPROVED"));
+    const resultsList = Array.isArray(r.results) ? r.results : [];
+    const matchesCategory =
+      categoryFilter === "ALL" ||
+      resultsList.some((res: any) => res.test?.category === categoryFilter);
+    const matchesDate = filterDate && repDate ? repDate.startsWith(filterDate) : true;
+
+    return matchesSearch && matchesStatus && matchesCategory && matchesDate;
   });
 
   const totalRows = filteredReports.length;
@@ -100,10 +130,10 @@ export default function ReportsListPage() {
   const indexOfFirstRow = indexOfLastRow - rowsPerPage;
   const currentRows = filteredReports.slice(indexOfFirstRow, indexOfLastRow);
 
-  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, categoryFilter, abnormalOnly, filterDate]);
+  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, categoryFilter, filterDate]);
 
-  const clearFilters = () => { setSearch(""); setStatusFilter("ALL"); setCategoryFilter("ALL"); setAbnormalOnly(false); setFilterDate(""); };
-  const hasFilters = search || statusFilter !== "ALL" || categoryFilter !== "ALL" || abnormalOnly || filterDate;
+  const clearFilters = () => { setSearch(""); setStatusFilter("ALL"); setCategoryFilter("ALL"); setFilterDate(""); };
+  const hasFilters = search || statusFilter !== "ALL" || categoryFilter !== "ALL" || filterDate;
 
   const selectClass = "w-full h-10 bg-background border border-border rounded-lg px-3 text-sm focus:border-primary/60 focus:ring-2 focus:ring-primary/20 outline-none transition-all";
 
@@ -114,11 +144,8 @@ export default function ReportsListPage() {
         <div>
           <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.2em] mb-1.5">Diagnostics</p>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">Reports</h1>
-          <p className="text-sm text-muted-foreground mt-1">Enter test results and generate patient reports.</p>
+          <p className="text-sm text-muted-foreground mt-1">Enter test results, review findings, and issue diagnostic patient reports.</p>
         </div>
-        <Link href="/dashboard/patients/register">
-          <Button size="sm" className="h-10"><Plus className="h-4 w-4" /> New Patient</Button>
-        </Link>
       </div>
 
       {/* Filters */}
@@ -133,27 +160,88 @@ export default function ReportsListPage() {
           </div>
           
           <div className="space-y-1.5 w-full sm:w-auto">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Date</label>
-            <div className="flex items-center gap-2">
-              <Input 
-                type="date" 
-                className="w-full sm:w-[150px]"
-                value={filterDate} 
-                onChange={(e) => setFilterDate(e.target.value)} 
-              />
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Filter Date</label>
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center bg-background border border-border/90 rounded-xl p-0.5 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => shiftDate(-1)}
+                  className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                  title="Previous Day"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
 
+                <input 
+                  type="date" 
+                  className="h-8 px-2 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer"
+                  value={filterDate} 
+                  onChange={(e) => setFilterDate(e.target.value)} 
+                />
+
+                <button
+                  type="button"
+                  onClick={() => shiftDate(1)}
+                  className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                  title="Next Day"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setFilterDate(new Date().toISOString().split("T")[0])}
+                className={`h-10 px-3 text-xs font-bold ${
+                  filterDate === new Date().toISOString().split("T")[0]
+                    ? "bg-primary/10 text-primary border-primary/30"
+                    : "text-muted-foreground"
+                }`}
+              >
+                Today
+              </Button>
+
+              {filterDate && (
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setFilterDate("")} 
+                  className="h-10 text-xs px-2.5 text-muted-foreground hover:text-foreground"
+                >
+                  All Dates
+                </Button>
+              )}
             </div>
           </div>
 
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Button onClick={() => setAbnormalOnly(!abnormalOnly)} variant={abnormalOnly ? "destructive" : "outline"} className="h-10 flex-1 sm:flex-none">
-              <AlertTriangle className="h-4 w-4" /> Abnormal
-            </Button>
-            {hasFilters && (
-              <Button onClick={clearFilters} variant="ghost" size="icon" className="h-10 w-10 shrink-0" title="Clear filters"><X className="h-4 w-4" /></Button>
-            )}
+          <div className="space-y-1.5 w-full sm:w-[160px]">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</label>
+            <select className={selectClass} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="ALL">All Statuses</option>
+              <option value="PENDING">Pending</option>
+              <option value="FINAL">Final</option>
+              <option value="APPROVED">Approved</option>
+            </select>
           </div>
+
+          <div className="space-y-1.5 w-full sm:w-[160px]">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Department</label>
+            <select className={selectClass} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+              <option value="ALL">All Departments</option>
+              {categories.map((c) => (<option key={c} value={c}>{c}</option>))}
+            </select>
+          </div>
+
+          {hasFilters && (
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button onClick={clearFilters} variant="outline" className="h-10 text-xs gap-1.5">
+                <X className="h-4 w-4" /> Reset Filters
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -184,55 +272,83 @@ export default function ReportsListPage() {
                 </tr>
               </thead>
               <tbody>
-                {currentRows.map((rep) => {
-                  const abnormalCount = rep.results.filter((r) => r.isAbnormal).length;
+                {currentRows.map((rep: any) => {
+                  const resultsList = Array.isArray(rep.results) ? rep.results : [];
+                  const abnormalCount = resultsList.filter((r: any) => r.isAbnormal || r.is_abnormal).length;
+                  const patName = rep.patient?.name || "Patient";
+                  const patId = rep.patient?.custom_id || rep.patient?.customId || "N/A";
+                  const patAge = rep.patient?.age || "N/A";
+                  const patGender = rep.patient?.gender || "N/A";
+                  const repId = rep.custom_id || rep.customId || "REP";
+                  const repDate = rep.created_at || rep.createdAt;
+
                   return (
                     <tr key={rep.id} className="border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors">
-                      <td className="px-6 py-4 font-mono text-xs font-semibold text-primary">{rep.customId}</td>
+                      <td className="px-6 py-4 font-mono text-xs font-semibold text-primary">{repId}</td>
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-foreground text-sm">{rep.patient.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{rep.patient.customId} · {rep.patient.age}y/{rep.patient.gender}</p>
+                        <p className="font-semibold text-foreground text-sm">{patName}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{patId} · {patAge}y/{patGender}</p>
                       </td>
                       <td className="px-6 py-4 text-muted-foreground text-xs hidden lg:table-cell whitespace-nowrap">
-                        {new Date(rep.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {repDate ? new Date(repDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "N/A"}
                       </td>
                       <td className="px-6 py-4 hidden lg:table-cell">
                         <div className="flex flex-wrap gap-1.5 max-w-[260px]">
-                          {rep.results.slice(0, 4).map((r) => {
-                            const name = r.test.fieldType === "Custom Editor" && r.test.name === "Report Template" && r.test.parent ? r.test.parent.name : r.test.name;
+                          {resultsList.slice(0, 4).map((r: any) => {
+                            const testObj = r.test || {};
+                            const name = testObj.fieldType === "Custom Editor" && testObj.name === "Report Template" && testObj.parent ? testObj.parent.name : (testObj.name || "Test");
+                            const isAbn = r.isAbnormal || r.is_abnormal;
                             return (
-                              <span key={r.id} className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-semibold border ${r.isAbnormal ? "bg-destructive/8 text-destructive border-destructive/20" : "bg-accent text-accent-foreground border-transparent"}`}>{name}</span>
+                              <span key={r.id} className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-semibold border ${isAbn ? "bg-destructive/8 text-destructive border-destructive/20" : "bg-accent text-accent-foreground border-transparent"}`}>{name}</span>
                             );
                           })}
-                          {rep.results.length > 4 && <span className="text-[10px] text-muted-foreground font-medium px-1 py-0.5">+{rep.results.length - 4}</span>}
+                          {resultsList.length > 4 && <span className="text-[10px] text-muted-foreground font-medium px-1 py-0.5">+{resultsList.length - 4}</span>}
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 items-start">
-                          <span className={`inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${rep.status === "COMPLETED" ? "bg-primary/10 text-primary" : "bg-gold/15 text-gold"}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${rep.status === "COMPLETED" ? "bg-primary" : "bg-gold"}`} />{rep.status}
-                          </span>
-                          {rep.status === "COMPLETED" && abnormalCount > 0 && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-[9px] font-bold text-destructive uppercase tracking-wide whitespace-nowrap"><AlertTriangle className="h-3 w-3" /> {abnormalCount} abnormal</span>
+                          {rep.status === "APPROVED" || rep.status === "COMPLETED" ? (
+                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              APPROVED
+                            </span>
+                          ) : rep.status === "FINAL" ? (
+                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              FINAL
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-600 border border-amber-500/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                              PENDING
+                            </span>
+                          )}
+                          {(rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && abnormalCount > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-[9px] font-bold text-destructive uppercase tracking-wide whitespace-nowrap">
+                              <AlertTriangle className="h-3 w-3" /> {abnormalCount} abnormal
+                            </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end items-center gap-1.5">
-                          {rep.status === "PENDING" ? (
-                            <Link href={`/dashboard/reports/${rep.id}/edit`}>
-                              <Button size="sm" className="h-8"><Edit3 className="h-3.5 w-3.5" /> Enter Results</Button>
-                            </Link>
-                          ) : (
-                            <>
-                              <Link href={`/dashboard/reports/${rep.id}/edit`}>
-                                <Button variant="outline" size="sm" className="h-8 w-8 p-0" title="Edit report"><Edit3 className="h-3.5 w-3.5" /></Button>
-                              </Link>
-                              <Button variant="outline" size="sm" className="h-8" onClick={() => triggerPrint(rep.id)} disabled={printingId === rep.id} title="Print report">
-                                {printingId === rep.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />} Print
-                              </Button>
-                            </>
-                          )}
+                      <td className="px-6 py-3.5 text-right">
+                        <div className="flex flex-col items-end gap-1.5 min-w-[125px]">
+                          <Link href={`/dashboard/reports/${rep.id}/edit`} className="w-full">
+                            <Button size="sm" className="h-8 gap-1.5 w-full font-bold text-xs">
+                              <Edit3 className="h-3.5 w-3.5" /> Enter Results
+                            </Button>
+                          </Link>
+                          <Button 
+                            type="button"
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => triggerPrint(rep.id)} 
+                            disabled={printingId === rep.id}
+                            className="h-8 gap-1.5 w-full font-bold text-xs rounded-xl border border-border/80 hover:bg-muted text-foreground cursor-pointer"
+                            title="Print report"
+                          >
+                            {printingId === rep.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5 text-primary" />}
+                            <span>Print Report</span>
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -272,9 +388,12 @@ export default function ReportsListPage() {
         )}
       </div>
 
-      <PrintPreviewDialog 
+      <FullscreenPrintReportModal 
         open={showPrintOptions} 
-        onOpenChange={setShowPrintOptions} 
+        onOpenChange={(open) => {
+          setShowPrintOptions(open);
+          if (!open) fetchReports();
+        }} 
         report={printReport} 
       />
     </div>

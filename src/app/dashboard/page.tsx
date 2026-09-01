@@ -13,13 +13,24 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { getStoredUser } from "@/lib/api-client";
 
-interface Stats { patientsToday: number; totalReports: number; pendingReports: number; revenue: number; }
-interface ChartItem { date: string; reports: number; revenue: number; }
+interface Stats {
+  patientsToday: number;
+  totalPatients: number;
+  todayReports: number;
+  totalReports: number;
+  todayPendingReports: number;
+  pendingReports: number;
+  todayCompletedReports: number;
+  completedReports: number;
+  revenue: number;
+  totalRevenue: number;
+}
+interface ChartItem { date: string; fullDate?: string; reports: number; revenue: number; }
 interface RecentReport {
   id: string; customId: string; status: string;
-  patient: { name: string; customId: string };
+  patient?: { name: string; customId?: string; custom_id?: string };
   createdAt: string;
-  results: Array<{ id: string; isAbnormal: boolean; test: { name: string; category: string } }>;
+  results?: Array<{ id: string; isAbnormal: boolean; test: { name: string; category: string } }>;
 }
 
 function StatCard({
@@ -53,7 +64,18 @@ function StatCard({
 
 export default function DashboardOverviewPage() {
   const [user, setUser] = useState<any>(null);
-  const [stats, setStats] = useState<Stats>({ patientsToday: 0, totalReports: 0, pendingReports: 0, revenue: 0 });
+  const [stats, setStats] = useState<Stats>({
+    patientsToday: 0,
+    totalPatients: 0,
+    todayReports: 0,
+    totalReports: 0,
+    todayPendingReports: 0,
+    pendingReports: 0,
+    todayCompletedReports: 0,
+    completedReports: 0,
+    revenue: 0,
+    totalRevenue: 0,
+  });
   const [chartData, setChartData] = useState<ChartItem[]>([]);
   const [recentReports, setRecentReports] = useState<RecentReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,16 +93,32 @@ export default function DashboardOverviewPage() {
         fetchFromLaravel("/reports"),
       ]);
 
-      setStats({
-        patientsToday: analytics.todayPatients ?? 0,
-        totalReports: analytics.totalReports ?? 0,
-        pendingReports: (analytics.totalReports ?? 0) - (analytics.completedReports ?? 0),
-        revenue: analytics.todayRevenue ?? analytics.totalRevenue ?? 0,
-      });
-      setChartData(analytics.reportsOverTime ?? []);
+      const totReports = analytics?.totalReports ?? 0;
+      const todayReps = analytics?.todayReports ?? 0;
+      const compReports = analytics?.completedReports ?? 0;
+      const todayComp = analytics?.todayCompletedReports ?? (todayReps > 0 && compReports > 0 ? 1 : 0);
+      const pendReports = analytics?.pendingReports ?? Math.max(0, totReports - compReports);
+      const todayPend = analytics?.todayPendingReports ?? Math.max(0, todayReps - todayComp);
 
-      const reportsList = Array.isArray(reports) ? reports : reports.data ?? [];
-      setRecentReports(reportsList.slice(0, 5));
+      setStats({
+        patientsToday: analytics?.todayPatients ?? 0,
+        totalPatients: analytics?.totalPatients ?? 0,
+        todayReports: todayReps,
+        totalReports: totReports,
+        todayPendingReports: todayPend,
+        pendingReports: pendReports,
+        todayCompletedReports: todayComp,
+        completedReports: compReports,
+        revenue: analytics?.todayRevenue ?? 0,
+        totalRevenue: analytics?.totalRevenue ?? 0,
+      });
+
+      if (Array.isArray(analytics?.reportsOverTime)) {
+        setChartData(analytics.reportsOverTime);
+      }
+
+      const reportsList = Array.isArray(reports) ? reports : reports?.data ?? [];
+      setRecentReports(reportsList.slice(0, 6));
     } catch (err) {
       console.error("Dashboard load error:", err);
     } finally {
@@ -92,25 +130,24 @@ export default function DashboardOverviewPage() {
     return (
       <div className="flex flex-col gap-6 w-full animate-fade-in">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-32 bg-card border border-border/70 rounded-xl p-5 animate-pulse" />
+          ))}
         </div>
-        <Skeleton className="h-[350px] w-full" />
       </div>
     );
   }
 
-  const completedReports = Math.max(0, stats.totalReports - stats.pendingReports);
-  const completionPct = stats.totalReports > 0 ? Math.round((completedReports / stats.totalReports) * 100) : 0;
+  const completionPct = stats.totalReports > 0 ? Math.round((stats.completedReports / stats.totalReports) * 100) : 0;
   const formattedChartData = chartData.map((item) => ({
     name: item.date,
     value: item.reports,
-    isToday: item.date.toUpperCase() === new Date().toLocaleDateString("en-US", { weekday: "short" }).toUpperCase() || item.date === "Today",
+    revenue: item.revenue,
+    isToday: item.date === "Today" || item.date.toUpperCase() === new Date().toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
   }));
+
   const pieData = [
-    { name: "Completed", value: completedReports, color: "hsl(160 58% 32%)" },
+    { name: "Completed / Approved", value: stats.completedReports, color: "hsl(160 58% 32%)" },
     { name: "Pending", value: stats.pendingReports, color: "hsl(36 72% 50%)" },
   ];
 
@@ -123,11 +160,11 @@ export default function DashboardOverviewPage() {
           <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
             Welcome back, {user?.name?.split(" ")[0] || "Doctor"}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Here's what's happening today.</p>
+          <p className="text-sm text-muted-foreground mt-1">Here's what's happening today in your laboratory.</p>
         </div>
         <div className="flex gap-2.5">
           <button onClick={loadDashboardData}
-            className="flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-foreground text-xs font-semibold hover:bg-accent hover:text-accent-foreground transition-all">
+            className="flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-foreground text-xs font-semibold hover:bg-accent hover:text-accent-foreground transition-all cursor-pointer">
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </button>
         </div>
@@ -135,15 +172,60 @@ export default function DashboardOverviewPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard icon={Users} label="Patients Today" value={String(stats.patientsToday)}
-          trend={<span className="flex items-center gap-0.5 text-[11px] font-semibold text-primary"><TrendingUp className="h-3 w-3" />+12.5%</span>} />
-        <StatCard icon={Clock} label="Pending Reports" value={String(stats.pendingReports)} tone="danger" href="/dashboard/reports"
-          trend={<span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-destructive/12 text-destructive">URGENT</span>} />
-        <StatCard icon={CheckCircle2} label="Completed" value={String(completedReports)}
-          trend={<span className="text-[11px] font-semibold text-muted-foreground">{completionPct}% done</span>} />
-        <StatCard icon={IndianRupee} label="Today's Revenue" tone="gold"
+        <StatCard
+          icon={Users}
+          label="Patients Today"
+          value={String(stats.patientsToday)}
+          href="/dashboard/patients"
+          trend={
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-primary">
+              <TrendingUp className="h-3 w-3" />
+              Total: {stats.totalPatients}
+            </span>
+          }
+        />
+        <StatCard
+          icon={Clock}
+          label="Pending Reports"
+          value={String(stats.todayPendingReports)}
+          tone={stats.todayPendingReports > 0 ? "danger" : "default"}
+          href="/dashboard/reports"
+          trend={
+            stats.todayPendingReports > 0 ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-destructive/12 text-destructive">
+                {stats.todayPendingReports} PENDING TODAY
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                ALL DONE TODAY
+              </span>
+            )
+          }
+        />
+        <StatCard
+          icon={CheckCircle2}
+          label="Completed Reports"
+          value={String(stats.todayCompletedReports)}
+          href="/dashboard/reports"
+          trend={
+            <span className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+              <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+              Total: {stats.completedReports}
+            </span>
+          }
+        />
+        <StatCard
+          icon={IndianRupee}
+          label="Today's Revenue"
+          tone="gold"
           value={`₹${stats.revenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`}
-          trend={<span className="flex items-center gap-0.5 text-[11px] font-semibold text-muted-foreground"><ArrowUpRight className="h-3 w-3" />₹14k</span>} />
+          trend={
+            <span className="flex items-center gap-0.5 text-[11px] font-semibold text-muted-foreground">
+              <ArrowUpRight className="h-3 w-3" />
+              Total: ₹{stats.totalRevenue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+            </span>
+          }
+        />
       </div>
 
       {/* Middle row */}
@@ -151,8 +233,8 @@ export default function DashboardOverviewPage() {
         <div className="col-span-12 lg:col-span-8 bg-card border border-border/70 rounded-xl p-6 shadow-card">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="font-display text-lg font-semibold text-foreground">Patients Overview</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Last 7 days</p>
+              <h3 className="font-display text-lg font-semibold text-foreground">Weekly Reports Trend</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Last 7 days volume</p>
             </div>
             <span className="text-[11px] font-medium px-3 py-1.5 rounded-lg bg-muted/60 text-muted-foreground border border-border/60">Weekly</span>
           </div>
@@ -161,14 +243,14 @@ export default function DashboardOverviewPage() {
               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart data={formattedChartData} margin={{ top: 4, right: 0, left: -24, bottom: 0 }}>
                   <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" />
-                  <YAxis fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" />
+                  <YAxis fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" allowDecimals={false} />
                   <Tooltip
                     cursor={{ fill: "hsl(var(--muted) / 0.45)", radius: 6 }}
                     contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "10px", fontSize: "11px", color: "hsl(var(--foreground))", boxShadow: "var(--shadow-elevated)" }}
                   />
-                  <Bar dataKey="value" radius={[5, 5, 2, 2]} maxBarSize={38}>
+                  <Bar dataKey="value" name="Reports" radius={[5, 5, 2, 2]} maxBarSize={38}>
                     {formattedChartData.map((entry, i) => (
-                      <Cell key={i} fill={entry.isToday ? "hsl(160 58% 30%)" : "hsl(160 40% 30% / 0.18)"} />
+                      <Cell key={i} fill={entry.isToday ? "hsl(160 58% 30%)" : "hsl(160 40% 30% / 0.25)"} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -180,11 +262,11 @@ export default function DashboardOverviewPage() {
         </div>
 
         <div className="col-span-12 lg:col-span-4 bg-card border border-border/70 rounded-xl p-6 shadow-card">
-          <h3 className="font-display text-lg font-semibold text-foreground mb-5">Shortcuts</h3>
+          <h3 className="font-display text-lg font-semibold text-foreground mb-5">Quick Actions</h3>
           <div className="space-y-2.5">
             {[
               { href: "/dashboard/patients/register", icon: UserPlus, label: "Add Patient", sub: "Register a new patient", tone: "bg-accent text-primary" },
-              { href: "/dashboard/reports", icon: FileSpreadsheet, label: "Add Results", sub: "Enter pending test values", tone: "bg-gold/12 text-gold" },
+              { href: "/dashboard/reports", icon: FileSpreadsheet, label: "Enter Results", sub: "Enter pending test values", tone: "bg-gold/12 text-gold" },
               { href: "/dashboard/reports", icon: Printer, label: "Print Reports", sub: "View and print completed reports", tone: "bg-muted text-muted-foreground" },
             ].map(({ href, icon: Icon, label, sub, tone }) => (
               <Link key={label} href={href}
@@ -207,7 +289,7 @@ export default function DashboardOverviewPage() {
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-12 lg:col-span-8 bg-card border border-border/70 rounded-xl shadow-card overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-border/60">
-            <h3 className="font-display text-lg font-semibold text-foreground">Recent Patients</h3>
+            <h3 className="font-display text-lg font-semibold text-foreground">Recent Patients & Reports</h3>
             <Link href="/dashboard/reports" className="text-[11px] font-semibold text-primary hover:text-secondary flex items-center gap-1 transition-colors">
               View all <ArrowUpRight className="h-3 w-3" />
             </Link>
@@ -226,13 +308,17 @@ export default function DashboardOverviewPage() {
                   const hasAbnormal = rep.results?.some((r) => r.isAbnormal);
                   const testTypeString = rep.results?.map((r) => r.test.name).join(", ") || "Diagnostic Panel";
                   let pill = "bg-accent text-accent-foreground";
-                  let statusLabel = rep.status === "PENDING" ? "In Review" : rep.status;
+                  let statusLabel = rep.status === "PENDING" ? "In Review" : (rep.status === "FINAL" ? "Final" : (rep.status === "APPROVED" ? "Approved" : rep.status));
                   if (rep.status === "PENDING") pill = "bg-gold/15 text-gold";
+                  if (rep.status === "APPROVED" || rep.status === "FINAL") pill = "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400";
                   if (hasAbnormal) { pill = "bg-destructive/12 text-destructive"; statusLabel = "Critical"; }
+                  const pid = rep.patient?.customId || (rep.patient as any)?.custom_id || "—";
+                  const pName = rep.patient?.name || "Unknown Patient";
+
                   return (
                     <tr key={rep.id} className="border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors">
-                      <td className="px-6 py-3.5 font-mono text-[11px] text-muted-foreground">{rep.patient.customId}</td>
-                      <td className="px-6 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">{rep.patient.name}</td>
+                      <td className="px-6 py-3.5 font-mono text-[11px] text-muted-foreground">{pid}</td>
+                      <td className="px-6 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">{pName}</td>
                       <td className="px-6 py-3.5 text-xs text-muted-foreground max-w-[200px] truncate">{testTypeString}</td>
                       <td className="px-6 py-3.5">
                         <span className={`inline-block whitespace-nowrap px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider ${pill}`}>{statusLabel}</span>
@@ -284,6 +370,19 @@ export default function DashboardOverviewPage() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Footer Branding Line */}
+      <div className="pt-8 pb-4 border-t border-border/60 text-center text-xs text-muted-foreground">
+        <span>Designed and Developed by </span>
+        <a
+          href="https://cocodestudio.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-bold text-primary hover:text-primary/80 hover:underline transition-colors"
+        >
+          CoCode Studio Pvt Ltd
+        </a>
       </div>
     </div>
   );

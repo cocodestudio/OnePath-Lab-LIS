@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useReactToPrint } from "react-to-print";
 import { Card } from "@/components/ui/card";
@@ -10,13 +10,14 @@ import { ReportSheet, type ReportSheetData, type PrintSettings } from "@/compone
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Edit, AlertCircle, Printer } from "lucide-react";
 import { PrintPreviewDialog } from "@/components/print-preview-dialog";
-import { fetchFromLaravel } from "@/lib/api-client";
+import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
 
 const defaultPrintSettings: PrintSettings = {
-  bgImage: null, headerHeight: 40, footerHeight: 40, marginLeft: 40, marginRight: 40
+  bgImage: null, headerHeight: 185, footerHeight: 95, marginLeft: 32, marginRight: 32
 };
 
 export default function ReportDetailPage() {
+  const router = useRouter();
   const params = useParams();
   const reportId = params.id as string;
   const [report, setReport] = useState<ReportSheetData | null>(null);
@@ -46,15 +47,18 @@ export default function ReportDetailPage() {
       const data = await fetchFromLaravel(`/reports/${reportId}`);
       setReport({
         ...data,
-        lab: data.lab || { name: "OnePath Lab Main", email: "info@onepathlab.com", address: "123 Healthcare Blvd, Medical District, Delhi", logoUrl: "/onepath-logo.png" },
+        lab: data.lab ? {
+          ...data.lab,
+          printBgImage: getCleanLetterheadUrl(data.lab.printBgImage || data.lab.print_bg_image),
+        } : { name: "OnePath Lab Main", email: "info@onepathlab.com", address: "123 Healthcare Blvd, Medical District, Delhi", logoUrl: "/onepath-logo.png", printBgImage: null },
       });
       if (data.lab) {
         setPrintSettings({
-          bgImage: data.lab.printBgImage || null,
-          headerHeight: data.lab.printHeaderHeight ?? 40,
-          footerHeight: data.lab.printFooterHeight ?? 40,
-          marginLeft: data.lab.printMarginLeft ?? 40,
-          marginRight: data.lab.printMarginRight ?? 40,
+          bgImage: getCleanLetterheadUrl(data.lab.printBgImage || data.lab.print_bg_image),
+          headerHeight: data.lab.printHeaderHeight ?? data.lab.print_header_height ?? 185,
+          footerHeight: data.lab.printFooterHeight ?? data.lab.print_footer_height ?? 95,
+          marginLeft: data.lab.printMarginLeft ?? data.lab.print_margin_left ?? 32,
+          marginRight: data.lab.printMarginRight ?? data.lab.print_margin_right ?? 32,
         });
       }
     } catch {
@@ -79,7 +83,18 @@ export default function ReportDetailPage() {
         <AlertCircle className="h-10 w-10 text-destructive mx-auto mb-3" />
         <h2 className="font-display text-lg font-semibold text-foreground mb-1">Retrieval Error</h2>
         <p className="text-sm text-muted-foreground mb-5">{error || "Report not found."}</p>
-        <Link href="/dashboard/reports"><Button variant="outline"><ArrowLeft className="h-4 w-4" /> Back to Reports</Button></Link>
+        <Button
+          variant="outline"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+            } else {
+              router.push("/dashboard/reports");
+            }
+          }}
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to Reports
+        </Button>
       </Card>
     );
   }
@@ -89,7 +104,20 @@ export default function ReportDetailPage() {
       {/* Control bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border/70 no-print shadow-card">
         <div className="flex items-center gap-3">
-          <Link href="/dashboard/reports"><Button variant="outline" size="icon" className="h-9 w-9"><ArrowLeft className="h-4 w-4" /></Button></Link>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-9 w-9"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.history.length > 1) {
+                router.back();
+              } else {
+                router.push("/dashboard/reports");
+              }
+            }}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <div>
             <h2 className="font-display text-lg font-semibold text-foreground leading-tight">{report.patient.name}</h2>
             <p className="text-xs text-muted-foreground">File {report.customId} · {report.status}</p>

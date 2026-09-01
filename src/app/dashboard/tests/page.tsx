@@ -1,47 +1,153 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import dynamic from "next/dynamic";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   Search, Plus, Edit2, Trash2, FlaskConical, AlertTriangle,
-  CheckCircle2, Loader2, Layers, IndianRupee, ChevronDown, ChevronRight, FileText
+  Loader2, ChevronDown, ChevronRight, ChevronUp,
+  FileText, ArrowLeft, Sliders, Check, GripVertical,
+  Calendar, Sparkles, CornerDownRight, Eye, X
 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Skeleton } from "@/components/ui/skeleton";
-import { TipTapEditor } from "@/components/tiptap-editor";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
-import { fetchFromLaravel } from "@/lib/api-client";
+import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
+import { TipTapEditor } from "@/components/tiptap-editor";
+import { PrintPreviewDialog } from "@/components/print-preview-dialog";
+import type { ReportSheetData, ReportTest } from "@/components/report-sheet";
 
-const PREDEFINED_UNITS = [
-  "g/dL", "mg/dL", "µg/dL", "U/L", "IU/L", "mEq/L", "mmol/L", "µmol/L", "pmol/L",
-  "%", "/cumm", "/µL", "x10^6/µL", "x10^3/µL", "/HPF", "cells/cumm", "mg/24h",
-  "mL/min", "fl", "pg", "ng/mL", "ng/dL", "mIU/mL", "nmol/L", "Sec", "Min", "Ratio"
+// Clinical Categorized Predefined Units
+const CATEGORIZED_UNITS: Record<string, string[]> = {
+  "Hematology": ["g/dL", "cells/cumm", "/cumm", "10^3/µL", "10^6/µL", "mill/µL", "fl", "pg", "%", "mm/hr", "Seconds", "Ratio", "INR"],
+  "Biochemistry": ["mg/dL", "g/dL", "U/L", "IU/L", "mmol/L", "µmol/L", "mEq/L", "ng/mL", "µg/dL", "mg/24h", "mL/min", "g/24h"],
+  "Immunology & Hormones": ["µIU/mL", "mIU/mL", "pmol/L", "nmol/L", "ng/dL", "pg/mL", "copies/mL", "Index", "S/CO", "AU/mL", "BAU/mL"],
+  "Urine & Microscopy": ["/HPF", "/LPF", "Epithelial Cells/HPF", "Pus Cells/HPF", "RBCs/HPF", "Casts/LPF", "Crystals/HPF"],
+  "General / Others": ["%", "Ratio", "Index", "Sec", "Min", "Hours", "mg/L", "µg/mL", "Negative/Positive"]
+};
+
+// Predefined Inbuilt Laboratory Methods
+const INBUILT_METHODS = [
+  "Automated Cell Counter (Impedance & Flow Cytometry)",
+  "Cyanmethemoglobin Photometric Method",
+  "Enzymatic Colorimetric (GOD-POD)",
+  "Hexokinase Enzymatic Method",
+  "Chemiluminescence Immunoassay (CLIA)",
+  "Enzyme-Linked Immunosorbent Assay (ELISA)",
+  "High Performance Liquid Chromatography (HPLC)",
+  "Ion Selective Electrode (ISE)",
+  "Real-Time Reverse Transcription PCR (RT-PCR)",
+  "Jaffe's Kinetic Method (Without Deproteinization)",
+  "IFCC with Pyridoxal-5-Phosphate",
+  "Westergren Modified Method (ESR)",
+  "Latex Enhanced Immunoturbidimetry",
+  "Reflectance Photometry / Dry Chemistry Strip",
+  "Brightfield Optical Microscopy (40x/100x)",
+  "Immunochromatographic Rapid Card Assay",
+  "Turbidimetric Immunoassay",
+  "Atomic Absorption Spectrophotometry",
+  "Capillary Zone Electrophoresis",
+  "Fluorescence Polarization Immunoassay (FPIA)"
 ];
 
-interface Test {
-  id: string; name: string; testCode?: string; category: string; fieldType: string; type: string; price: number;
+// Qualitative Custom Options Templates
+const QUICK_OPTION_PRESETS: { title: string; desc: string; options: string[] }[] = [
+  {
+    title: "Positive / Negative",
+    desc: "Standard screening tests (VDRL, Dengue NS1, Malaria, Widal)",
+    options: ["Negative", "Positive", "Equivocal / Borderline"]
+  },
+  {
+    title: "Reactive / Non-Reactive",
+    desc: "Viral serology & immunology (HIV, HBsAg, HCV, Syphilis)",
+    options: ["Non-Reactive", "Reactive", "Weakly Reactive"]
+  },
+  {
+    title: "Present / Absent",
+    desc: "Microscopic findings, urine crystals, casts & parasites",
+    options: ["Absent", "Present", "Few", "Moderate", "Plenty"]
+  },
+  {
+    title: "Normal / Abnormal",
+    desc: "Clinical cytology, histology & functional examinations",
+    options: ["Normal", "Abnormal", "Indeterminate"]
+  },
+  {
+    title: "Urine Transparency / Clarity",
+    desc: "Physical examination of fluid samples",
+    options: ["Clear", "Slightly Hazy", "Hazy", "Turbid", "Flocculent"]
+  },
+  {
+    title: "Semi-Quantitative (Trace to 4+)",
+    desc: "Urine protein, sugar, acetone & ketones",
+    options: ["Negative", "Trace", "1+ (30 mg/dL)", "2+ (100 mg/dL)", "3+ (300 mg/dL)", "4+ (1000 mg/dL)"]
+  },
+  {
+    title: "Urine / Fluid Appearance",
+    desc: "Colorimetric physical observations",
+    options: ["Pale Yellow", "Straw / Normal", "Dark Yellow", "Amber", "Reddish / Bloody", "Cloudy White"]
+  },
+  {
+    title: "Sample Adequacy",
+    desc: "Biopsy, pap smear & specimen triage",
+    options: ["Satisfactory for evaluation", "Unsatisfactory / Inadequate cellularity", "Limited by drying artifact"]
+  }
+];
+
+export interface AgeRangeBand {
+  id: string;
+  stageName: string;
+  minAge: number;
+  maxAge: number;
+  ageUnit: "days" | "months" | "years";
+  gender: "BOTH" | "MALE" | "FEMALE";
+  rangeType: "numeric" | "text";
+  refMin?: number | string;
+  refMax?: number | string;
+  textRange?: string;
+}
+
+export interface Test {
+  id: string;
+  name: string;
+  testCode?: string;
+  category: string;
+  fieldType: string;
+  type: string;
+  price: number;
   interpretation?: string;
-  unit: string | null; genderRefType: string; refRangeMin: number | null; refRangeMax: number | null;
-  refRangeMinMale: number | null; refRangeMaxMale: number | null;
-  refRangeMinFemale: number | null; refRangeMaxFemale: number | null;
-  refRangeMinChild?: number | null; refRangeMaxChild?: number | null;
-  refRangeMinNewborn?: number | null; refRangeMaxNewborn?: number | null;
-  valueType?: string; customOptions?: string;
+  comment?: string;
+  notes?: string;
+  method?: string;
+  unit: string | null;
+  genderRefType: string;
+  rangeType?: "numeric" | "text";
+  textRefRange?: string;
+  refRangeMin: number | null;
+  refRangeMax: number | null;
+  refRangeMinMale: number | null;
+  refRangeMaxMale: number | null;
+  refRangeMinFemale: number | null;
+  refRangeMaxFemale: number | null;
+  refRangeMinChild?: number | null;
+  refRangeMaxChild?: number | null;
+  refRangeMinNewborn?: number | null;
+  refRangeMaxNewborn?: number | null;
+  ageRanges?: AgeRangeBand[];
+  valueType?: string;
+  customOptions?: string;
   subTests?: Test[];
 }
 
-interface SubTestState {
+export interface SubTestState {
   id?: string;
-  testCode?: string;
   name: string;
+  method?: string;
   unit: string;
   genderRefType: string;
+  rangeType: "numeric" | "text";
+  textRefRange: string;
   refRangeMin: string;
   refRangeMax: string;
   refRangeMinMale: string;
@@ -52,11 +158,11 @@ interface SubTestState {
   refRangeMaxChild: string;
   refRangeMinNewborn: string;
   refRangeMaxNewborn: string;
-  subTests?: SubTestState[];
+  ageRanges?: AgeRangeBand[];
   fieldType?: string;
-  interpretation?: string;
   valueType?: string;
   customOptions?: string[];
+  subTests?: SubTestState[];
 }
 
 export default function TestMasterPage() {
@@ -71,77 +177,91 @@ export default function TestMasterPage() {
   const [deleting, setDeleting] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
+  // Main Test Form State
   const [name, setName] = useState("");
   const [testCode, setTestCode] = useState("");
-  const [category, setCategory] = useState("CBC");
+  const [category, setCategory] = useState("Hematology");
   const [customCategory, setCustomCategory] = useState("");
-  const [interpretation, setInterpretation] = useState("");
-  const [interpretationModalOpen, setInterpretationModalOpen] = useState(false);
-  const [customEditorActiveSubIndex, setCustomEditorActiveSubIndex] = useState<number | null>(null);
-
-  // Custom Options Modal State
-  const [customOptionsModalOpen, setCustomOptionsModalOpen] = useState(false);
-  const [activeCustomOptionsSubIndex, setActiveCustomOptionsSubIndex] = useState<number | null>(null);
-  const [activeCustomOptionsSubSubIndex, setActiveCustomOptionsSubSubIndex] = useState<number | null>(null);
-  const [tempCustomOptions, setTempCustomOptions] = useState<string[]>([]);
-  const [newOptionInput, setNewOptionInput] = useState("");
-
   const [type, setType] = useState("Pathology");
   const [price, setPrice] = useState("");
+  const [interpretation, setInterpretation] = useState("");
+  const [comment, setComment] = useState("");
+  const [notes, setNotes] = useState("");
 
   const [subTests, setSubTests] = useState<SubTestState[]>([]);
 
+  // Drag and drop state
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  // Modals
+  const [notesModalOpen, setNotesModalOpen] = useState(false);
+  const [activeNotesTab, setActiveNotesTab] = useState<"INTERPRETATION" | "COMMENT" | "NOTES">("INTERPRETATION");
+
+  // Custom Options Modal State (Horizontal Landscape)
+  const [customOptionsModalOpen, setCustomOptionsModalOpen] = useState(false);
+  const [activeCustomOptionsLocation, setActiveCustomOptionsLocation] = useState<{ parentIdx: number; subIdx?: number } | null>(null);
+  const [tempCustomOptions, setTempCustomOptions] = useState<string[]>([]);
+  const [newOptionInput, setNewOptionInput] = useState("");
+
+  // Age Ranges Modal State (Horizontal Landscape)
+  const [ageRangeModalOpen, setAgeRangeModalOpen] = useState(false);
+  const [activeAgeRangeLocation, setActiveAgeRangeLocation] = useState<{ parentIdx: number; subIdx?: number } | null>(null);
+  const [tempAgeRanges, setTempAgeRanges] = useState<AgeRangeBand[]>([]);
+
+  // Unit Search Popover / Dropdown State
+  const [activeUnitDropdownId, setActiveUnitDropdownId] = useState<string | null>(null);
+
+  // Method Search / Dropdown State
+  const [activeMethodDropdownId, setActiveMethodDropdownId] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const subtestsEndRef = useRef<HTMLDivElement>(null);
 
-  const dynamicCategories = Array.from(new Set(tests.map(t => t.category).filter(Boolean)));
-  const standardCategories = Array.from(new Set([
-    ...dynamicCategories,
-    "Haematology",
-    "Biochemistry",
-    "Clinical Chemistry",
-    "Clinical Pathology",
-    "Routine",
-    "Serology",
-    "Immunology",
-    "Microbiology",
-    "Histopathology",
-    "Biopsy",
-    "Cytology",
-    "Endocrinology",
-    "Hormones",
-    "Immunohaematology",
-    "Blood Bank",
-    "Andrology",
-    "Molecular Biology",
-    "PCR",
-    "Parasitology",
-    "Toxicology",
-    "Genetics",
-    "Cytogenetics",
-    "Flow Cytometry",
-    "Radiology",
-    "Imaging",
-    "Phlebotomy",
-    "Sample Collection",
-    "Reference",
-    "Outside Lab",
-    "Quality Control (QC)",
-    "Report Dispatch",
-    "MIS",
-    "Other"
-  ]));
-  const standardTypes = ["Pathology", "Radiology", "Cardiology", "Other"];
+  // Sample Report Preview State
+  const [labProfile, setLabProfile] = useState<any>(null);
+  const [sampleReportData, setSampleReportData] = useState<ReportSheetData | null>(null);
+  const [samplePreviewOpen, setSamplePreviewOpen] = useState(false);
 
-  useEffect(() => { fetchTests(); }, []);
+  // Only pathology-relevant departments (exclude Radiology, Ultrasound, X-Ray, etc.)
+  const PATHOLOGY_DEPARTMENTS = [
+    "Hematology",
+    "Biochemistry",
+    "Clinical Pathology",
+    "Serology & Immunology",
+    "Microbiology",
+    "Histopathology & Cytology",
+    "Endocrinology & Hormones",
+    "Molecular Biology",
+  ];
+
+  const dynamicCategories = useMemo(() => {
+    return Array.from(
+      new Set(
+        tests
+          .map((t) => t.category?.trim())
+          .filter((cat): cat is string => Boolean(cat) && !/radiology|x-ray|xray|ultrasound|usg|ct scan|mri|ecg|echo/i.test(cat))
+      )
+    );
+  }, [tests]);
+
+  const standardCategories = useMemo(() => {
+    const combined = new Set([...dynamicCategories, ...PATHOLOGY_DEPARTMENTS]);
+    return Array.from(combined);
+  }, [dynamicCategories]);
+
+  useEffect(() => { 
+    fetchTests(); 
+    fetchFromLaravel("/lab")
+      .then(data => setLabProfile(data))
+      .catch(() => {});
+  }, []);
 
   const fetchTests = async () => {
     try {
       setLoading(true);
       const data = await fetchFromLaravel("/tests");
-      setTests(data);
+      setTests(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed to fetch tests:", err);
     } finally {
@@ -149,19 +269,233 @@ export default function TestMasterPage() {
     }
   };
 
+  const handleOpenSampleReport = async (test: Test) => {
+    let currentLab = labProfile;
+    try {
+      const fresh = await fetchFromLaravel("/lab");
+      if (fresh) {
+        currentLab = fresh;
+        setLabProfile(fresh);
+      }
+    } catch (e) {}
+
+    const results: ReportTest[] = [];
+
+    // Helper to generate typical physiological sample value
+    const generateSampleValue = (item: any): { value: string; isAbnormal: boolean } => {
+      const name = (item.name || "").toLowerCase();
+
+      // Realistic values for standard CBC & haematology parameters matching doctor LIS reports
+      if (/hemoglobin|haemoglobin/i.test(name)) return { value: "12.9", isAbnormal: false };
+      if (/total leukocyte|tlc|total wbc/i.test(name)) return { value: "8,300", isAbnormal: false };
+      if (/neutrophil/i.test(name) && !/absolute/i.test(name)) return { value: "57", isAbnormal: false };
+      if (/lymphocyte/i.test(name) && !/absolute/i.test(name)) return { value: "36", isAbnormal: false };
+      if (/eosinophil/i.test(name) && !/absolute/i.test(name)) return { value: "03", isAbnormal: false };
+      if (/monocyte/i.test(name) && !/absolute/i.test(name)) return { value: "04", isAbnormal: false };
+      if (/basophil/i.test(name) && !/absolute/i.test(name)) return { value: "00", isAbnormal: false };
+      if (/platelet count/i.test(name)) return { value: "1.74", isAbnormal: false };
+      if (/total rbc/i.test(name)) return { value: "5.19", isAbnormal: false };
+      if (/hematocrit|hct|pcv/i.test(name)) return { value: "46.6", isAbnormal: false };
+      if (/\bmcv\b|mean corpuscular volume/i.test(name)) return { value: "89.8", isAbnormal: false };
+      if (/\bmch\b|mean cell haemoglobin$/i.test(name)) return { value: "24.9", isAbnormal: true }; // Low flag L
+      if (/\bmchc\b|mean cell haemoglobin con/i.test(name)) return { value: "27.7", isAbnormal: true }; // Low flag L
+      if (/rdw|r\.d\.w/i.test(name)) return { value: "12.7", isAbnormal: false };
+      if (/\bmpv\b|mean platelet volume/i.test(name)) return { value: "12.5", isAbnormal: true }; // High flag H
+      if (/absolute neutrophil|anc/i.test(name)) return { value: "4.73", isAbnormal: false };
+      if (/absolute lymphocyte|alc/i.test(name)) return { value: "2.99", isAbnormal: false };
+      if (/absolute eosinophil|aec/i.test(name)) return { value: "0.25", isAbnormal: false };
+      if (/absolute monocyte|amc/i.test(name)) return { value: "0.33", isAbnormal: false };
+      if (/neutrophil lymphocyte ratio|nlr/i.test(name)) return { value: "1.58", isAbnormal: false };
+      if (/esr|erythrocyte sedimentation/i.test(name)) return { value: "12", isAbnormal: false };
+
+      if (item.valueType === "Select" || item.rangeType === "CUSTOM_OPTIONS" || item.rangeType === "custom_options") {
+        let opts: string[] = [];
+        if (Array.isArray(item.customOptions)) opts = item.customOptions;
+        else if (typeof item.customOptions === "string") {
+          try { opts = JSON.parse(item.customOptions); } catch { opts = []; }
+        }
+        if (opts.length > 0) {
+          const normalOpt = opts.find(o => /normal|negative|non-reactive|nil|clear|absent/i.test(o)) || opts[0];
+          return { value: normalOpt, isAbnormal: false };
+        }
+        return { value: "Negative / Normal", isAbnormal: false };
+      }
+
+      if (item.fieldType === "Custom Editor") {
+        return { value: "<p>Clinical and microscopic evaluation within normal reference limits.</p>", isAbnormal: false };
+      }
+
+      const minVal = item.refRangeMinMale ?? item.refRangeMin ?? item.ref_range_min_male ?? item.ref_range_min;
+      const maxVal = item.refRangeMaxMale ?? item.refRangeMax ?? item.ref_range_max_male ?? item.ref_range_max;
+
+      const min = minVal != null ? Number(minVal) : null;
+      const max = maxVal != null ? Number(maxVal) : null;
+
+      if (min !== null && max !== null && max > min) {
+        const mid = (min + max) / 2;
+        const formatted = max < 10 ? mid.toFixed(2) : (max < 100 ? mid.toFixed(1) : Math.round(mid).toString());
+        return { value: formatted, isAbnormal: false };
+      } else if (max !== null && max > 0) {
+        const val = max * 0.7;
+        const formatted = max < 10 ? val.toFixed(2) : (max < 100 ? val.toFixed(1) : Math.round(val).toString());
+        return { value: formatted, isAbnormal: false };
+      } else if (min !== null && min > 0) {
+        const val = min * 1.3;
+        const formatted = min < 10 ? val.toFixed(2) : (min < 100 ? val.toFixed(1) : Math.round(val).toString());
+        return { value: formatted, isAbnormal: false };
+      }
+
+      if (item.textRefRange || item.text_ref_range) {
+        return { value: "Normal / Negative", isAbnormal: false };
+      }
+
+      return { value: "Normal", isAbnormal: false };
+    };
+
+    const subTestList = test.subTests || (test as any).sub_tests;
+    const hasSub = subTestList && subTestList.length > 0;
+
+    if (hasSub) {
+      subTestList.forEach((sub: any) => {
+        const nestedList = sub.subTests || sub.sub_tests;
+        const hasNested = nestedList && nestedList.length > 0;
+        if (hasNested) {
+          nestedList.forEach((nested: any) => {
+            const { value, isAbnormal } = generateSampleValue(nested);
+            results.push({
+              id: `res-${nested.id || nested.testCode || nested.test_code || Math.random()}`,
+              resultValue: value,
+              isAbnormal,
+              test: {
+                ...nested,
+                unit: nested.unit || "",
+                category: nested.category || sub.category || test.category,
+                parent: {
+                  id: sub.id || sub.testCode || sub.test_code,
+                  name: sub.name,
+                  method: sub.method,
+                  interpretation: sub.interpretation,
+                  comment: sub.comment,
+                  notes: sub.notes,
+                  parent: {
+                    id: test.id || test.testCode || (test as any).test_code,
+                    name: test.name,
+                    method: test.method,
+                    interpretation: test.interpretation,
+                    comment: test.comment,
+                    notes: test.notes,
+                  }
+                }
+              } as any
+            });
+          });
+        } else {
+          const { value, isAbnormal } = generateSampleValue(sub);
+          results.push({
+            id: `res-${sub.id || sub.testCode || sub.test_code || Math.random()}`,
+            resultValue: value,
+            isAbnormal,
+            test: {
+              ...sub,
+              unit: sub.unit || "",
+              category: sub.category || test.category,
+              parent: {
+                id: test.id || test.testCode || (test as any).test_code,
+                name: test.name,
+                method: test.method,
+                interpretation: test.interpretation,
+                comment: test.comment,
+                notes: test.notes,
+              }
+            } as any
+          });
+        }
+      });
+    } else {
+      const { value, isAbnormal } = generateSampleValue(test);
+      results.push({
+        id: `res-${test.id || test.testCode || (test as any).test_code || Math.random()}`,
+        resultValue: value,
+        isAbnormal,
+        test: {
+          ...test,
+          unit: test.unit || "",
+          category: test.category,
+          parent: undefined
+        } as any
+      });
+    }
+
+    const sampleReport: ReportSheetData = {
+      id: `sample-${test.id}`,
+      customId: `SAMPLE-${test.testCode || "TEST"}`,
+      status: "COMPLETED",
+      createdAt: new Date().toISOString(),
+      patient: {
+        name: "Rahul Sharma (Sample Patient)",
+        age: 32,
+        gender: "MALE",
+        phone: "+91 98765 43210",
+        refDoctor: "Dr. A. K. Verma, MD (Consultant Physician)",
+        customId: "PID-2026-9081",
+        address: "Civil Lines, New Delhi"
+      },
+      lab: {
+        name: currentLab?.name || "OnePath Diagnostic Reference Laboratory",
+        email: currentLab?.email || "info@onepathlab.com",
+        address: currentLab?.address || "Medical Enclave, Main Road, New Delhi",
+        logoUrl: "/onepath-logo.png",
+        printBgImage: "/letterhead.png",
+        printHeaderHeight: currentLab?.printHeaderHeight ?? currentLab?.print_header_height ?? 185,
+        printFooterHeight: currentLab?.printFooterHeight ?? currentLab?.print_footer_height ?? 95,
+        printMarginLeft: currentLab?.printMarginLeft ?? currentLab?.print_margin_left ?? 32,
+        printMarginRight: currentLab?.printMarginRight ?? currentLab?.print_margin_right ?? 32,
+        printWithLetterhead: true,
+      } as any,
+      printedInterpretations: JSON.stringify([test.id]),
+      results,
+    };
+
+    setSampleReportData(sampleReport);
+    setSamplePreviewOpen(true);
+  };
+
   const handleOpenAddDialog = () => {
     setEditingTest(null);
-    setName(""); setTestCode(""); setCategory(standardCategories[0]); setCustomCategory(""); setType("Pathology");
+    setName("");
+    setTestCode("TEST-" + Math.floor(1000 + Math.random() * 9000));
+    setCategory(standardCategories[0] || "Hematology");
+    setCustomCategory("");
+    setType("Pathology");
     setPrice("");
     setInterpretation("");
+    setComment("");
+    setNotes("");
     setSubTests([{
-      name: "", unit: "", genderRefType: "BOTH", refRangeMin: "", refRangeMax: "",
-      refRangeMinMale: "", refRangeMaxMale: "", refRangeMinFemale: "", refRangeMaxFemale: "",
-      refRangeMinChild: "", refRangeMaxChild: "", refRangeMinNewborn: "", refRangeMaxNewborn: "",
+      name: "",
+      method: "",
+      unit: "",
+      genderRefType: "BOTH",
+      rangeType: "numeric",
+      textRefRange: "",
+      refRangeMin: "",
+      refRangeMax: "",
+      refRangeMinMale: "",
+      refRangeMaxMale: "",
+      refRangeMinFemale: "",
+      refRangeMaxFemale: "",
+      refRangeMinChild: "",
+      refRangeMaxChild: "",
+      refRangeMinNewborn: "",
+      refRangeMaxNewborn: "",
+      ageRanges: [],
       fieldType: "Single Field",
-      valueType: "Numeric", customOptions: []
+      valueType: "Numeric",
+      customOptions: [],
+      subTests: []
     }]);
-    setError(null); setSuccess(null); setDialogOpen(true);
+    setError(null);
+    setDialogOpen(true);
   };
 
   const handleOpenEditDialog = (test: Test) => {
@@ -171,16 +505,20 @@ export default function TestMasterPage() {
     setCategory(standardCategories.includes(test.category) ? test.category : "Other");
     setCustomCategory(standardCategories.includes(test.category) ? "" : test.category);
     setType(test.type || "Pathology");
-    setPrice(test.price.toString());
+    setPrice(test.price ? test.price.toString() : "");
     setInterpretation(test.interpretation || "");
+    setComment(test.comment || "");
+    setNotes(test.notes || "");
 
     if (test.subTests && test.subTests.length > 0) {
       setSubTests(test.subTests.map(sub => ({
         id: sub.id,
-        testCode: sub.testCode || "",
         name: sub.name,
+        method: sub.method || "",
         unit: sub.unit || "",
         genderRefType: sub.genderRefType || "BOTH",
+        rangeType: (sub.rangeType as "numeric" | "text") || "numeric",
+        textRefRange: sub.textRefRange || "",
         refRangeMin: sub.refRangeMin?.toString() || "",
         refRangeMax: sub.refRangeMax?.toString() || "",
         refRangeMinMale: sub.refRangeMinMale?.toString() || "",
@@ -191,36 +529,42 @@ export default function TestMasterPage() {
         refRangeMaxChild: sub.refRangeMaxChild?.toString() || "",
         refRangeMinNewborn: sub.refRangeMinNewborn?.toString() || "",
         refRangeMaxNewborn: sub.refRangeMaxNewborn?.toString() || "",
+        ageRanges: Array.isArray(sub.ageRanges) ? sub.ageRanges : [],
         fieldType: sub.fieldType || "Single Field",
-        interpretation: sub.interpretation || "",
         valueType: sub.valueType || "Numeric",
-        customOptions: sub.customOptions ? JSON.parse(sub.customOptions) : [],
-        subTests: sub.subTests ? sub.subTests.map(subsub => ({
-          id: subsub.id,
-          testCode: subsub.testCode || "",
-          name: subsub.name,
-          unit: subsub.unit || "",
-          genderRefType: subsub.genderRefType || "BOTH",
-          refRangeMin: subsub.refRangeMin?.toString() || "",
-          refRangeMax: subsub.refRangeMax?.toString() || "",
-          refRangeMinMale: subsub.refRangeMinMale?.toString() || "",
-          refRangeMaxMale: subsub.refRangeMaxMale?.toString() || "",
-          refRangeMinFemale: subsub.refRangeMinFemale?.toString() || "",
-          refRangeMaxFemale: subsub.refRangeMaxFemale?.toString() || "",
-          refRangeMinChild: subsub.refRangeMinChild?.toString() || "",
-          refRangeMaxChild: subsub.refRangeMaxChild?.toString() || "",
-          refRangeMinNewborn: subsub.refRangeMinNewborn?.toString() || "",
-          refRangeMaxNewborn: subsub.refRangeMaxNewborn?.toString() || "",
-          valueType: subsub.valueType || "Numeric",
-          customOptions: subsub.customOptions ? JSON.parse(subsub.customOptions) : [],
+        customOptions: sub.customOptions ? (typeof sub.customOptions === "string" ? JSON.parse(sub.customOptions) : sub.customOptions) : [],
+        subTests: sub.subTests ? sub.subTests.map(ss => ({
+          id: ss.id,
+          name: ss.name,
+          method: ss.method || "",
+          unit: ss.unit || "",
+          genderRefType: ss.genderRefType || "BOTH",
+          rangeType: (ss.rangeType as "numeric" | "text") || "numeric",
+          textRefRange: ss.textRefRange || "",
+          refRangeMin: ss.refRangeMin?.toString() || "",
+          refRangeMax: ss.refRangeMax?.toString() || "",
+          refRangeMinMale: ss.refRangeMinMale?.toString() || "",
+          refRangeMaxMale: ss.refRangeMaxMale?.toString() || "",
+          refRangeMinFemale: ss.refRangeMinFemale?.toString() || "",
+          refRangeMaxFemale: ss.refRangeMaxFemale?.toString() || "",
+          refRangeMinChild: ss.refRangeMinChild?.toString() || "",
+          refRangeMaxChild: ss.refRangeMaxChild?.toString() || "",
+          refRangeMinNewborn: ss.refRangeMinNewborn?.toString() || "",
+          refRangeMaxNewborn: ss.refRangeMaxNewborn?.toString() || "",
+          ageRanges: Array.isArray(ss.ageRanges) ? ss.ageRanges : [],
+          fieldType: "Single Field",
+          valueType: ss.valueType || "Numeric",
+          customOptions: ss.customOptions ? (typeof ss.customOptions === "string" ? JSON.parse(ss.customOptions) : ss.customOptions) : [],
         })) : []
       })));
     } else {
       setSubTests([{
-        testCode: "",
         name: test.name,
+        method: test.method || "",
         unit: test.unit || "",
         genderRefType: test.genderRefType || "BOTH",
+        rangeType: (test.rangeType as "numeric" | "text") || "numeric",
+        textRefRange: test.textRefRange || "",
         refRangeMin: test.refRangeMin?.toString() || "",
         refRangeMax: test.refRangeMax?.toString() || "",
         refRangeMinMale: test.refRangeMinMale?.toString() || "",
@@ -231,20 +575,41 @@ export default function TestMasterPage() {
         refRangeMaxChild: test.refRangeMaxChild?.toString() || "",
         refRangeMinNewborn: test.refRangeMinNewborn?.toString() || "",
         refRangeMaxNewborn: test.refRangeMaxNewborn?.toString() || "",
+        ageRanges: Array.isArray(test.ageRanges) ? test.ageRanges : [],
+        fieldType: "Single Field",
         valueType: test.valueType || "Numeric",
-        customOptions: test.customOptions ? JSON.parse(test.customOptions) : [],
+        customOptions: test.customOptions ? (typeof test.customOptions === "string" ? JSON.parse(test.customOptions) : test.customOptions) : [],
+        subTests: []
       }]);
     }
 
-    setError(null); setSuccess(null); setDialogOpen(true);
+    setError(null);
+    setDialogOpen(true);
   };
 
   const handleAddSubTest = () => {
-    setSubTests([...subTests, {
-      name: "", unit: "", genderRefType: "BOTH", refRangeMin: "", refRangeMax: "",
-      refRangeMinMale: "", refRangeMaxMale: "", refRangeMinFemale: "", refRangeMaxFemale: "",
-      refRangeMinChild: "", refRangeMaxChild: "", refRangeMinNewborn: "", refRangeMaxNewborn: "",
-      valueType: "Numeric", customOptions: []
+    setSubTests(prev => [...prev, {
+      name: "",
+      method: "",
+      unit: "",
+      genderRefType: "BOTH",
+      rangeType: "numeric",
+      textRefRange: "",
+      refRangeMin: "",
+      refRangeMax: "",
+      refRangeMinMale: "",
+      refRangeMaxMale: "",
+      refRangeMinFemale: "",
+      refRangeMaxFemale: "",
+      refRangeMinChild: "",
+      refRangeMaxChild: "",
+      refRangeMinNewborn: "",
+      refRangeMaxNewborn: "",
+      ageRanges: [],
+      fieldType: "Single Field",
+      valueType: "Numeric",
+      customOptions: [],
+      subTests: []
     }]);
     setTimeout(() => {
       subtestsEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -252,769 +617,1834 @@ export default function TestMasterPage() {
   };
 
   const handleRemoveSubTest = (index: number) => {
-    setSubTests(subTests.filter((_, i) => i !== index));
-  };
-
-  const updateSubTest = (index: number, field: keyof SubTestState, value: any) => {
-    const updated = [...subTests];
-    updated[index] = { ...updated[index], [field]: value };
-
-    if (field === "fieldType" && value === "Custom Editor" && !updated[index].name) {
-      updated[index].name = "Report Template";
+    if (subTests.length === 1) {
+      toast.error("A test panel must have at least one parameter.");
+      return;
     }
-
-    setSubTests(updated);
+    setSubTests(prev => prev.filter((_, i) => i !== index));
   };
 
-
-  const handleAddSubSubTest = (index: number) => {
-    const updated = [...subTests];
-    if (!updated[index].subTests) updated[index].subTests = [];
-    updated[index].subTests!.push({
-      name: "", unit: "", genderRefType: "BOTH", refRangeMin: "", refRangeMax: "",
-      refRangeMinMale: "", refRangeMaxMale: "", refRangeMinFemale: "", refRangeMaxFemale: "",
-      refRangeMinChild: "", refRangeMaxChild: "", refRangeMinNewborn: "", refRangeMaxNewborn: "",
-      valueType: "Numeric", customOptions: []
+  const handleSubTestChange = (index: number, field: keyof SubTestState, val: any) => {
+    setSubTests(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: val };
+      return updated;
     });
-    setSubTests(updated);
   };
 
-  const handleRemoveSubSubTest = (index: number, subIndex: number) => {
-    const updated = [...subTests];
-    updated[index].subTests = updated[index].subTests!.filter((_, i) => i !== subIndex);
-    setSubTests(updated);
+  // Re-order drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
   };
 
-  const updateSubSubTest = (index: number, subIndex: number, field: keyof SubTestState, value: any) => {
-    const updated = [...subTests];
-    updated[index].subTests![subIndex] = { ...updated[index].subTests![subIndex], [field]: value };
-    setSubTests(updated);
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
   };
 
-  const openCustomOptionsModal = (index: number, subIndex: number | null = null) => {
-    setActiveCustomOptionsSubIndex(index);
-    setActiveCustomOptionsSubSubIndex(subIndex);
-    const sub = subIndex === null ? subTests[index] : subTests[index].subTests![subIndex];
-    setTempCustomOptions([...(sub.customOptions || [])]);
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+    setSubTests(prev => {
+      const list = [...prev];
+      const [moved] = list.splice(draggedIndex, 1);
+      list.splice(targetIndex, 0, moved);
+      return list;
+    });
+    setDraggedIndex(null);
+  };
+
+  const moveParameterUp = (index: number) => {
+    if (index === 0) return;
+    setSubTests(prev => {
+      const list = [...prev];
+      const temp = list[index - 1];
+      list[index - 1] = list[index];
+      list[index] = temp;
+      return list;
+    });
+  };
+
+  const moveParameterDown = (index: number) => {
+    if (index === subTests.length - 1) return;
+    setSubTests(prev => {
+      const list = [...prev];
+      const temp = list[index + 1];
+      list[index + 1] = list[index];
+      list[index] = temp;
+      return list;
+    });
+  };
+
+  // Sub-parameter (nested parameter) handlers
+  const handleAddNestedSubTest = (parentIndex: number) => {
+    setSubTests(prev => {
+      const updated = [...prev];
+      const currentSubs = updated[parentIndex].subTests || [];
+      updated[parentIndex] = {
+        ...updated[parentIndex],
+        fieldType: "Multiple Field",
+        subTests: [
+          ...currentSubs,
+          {
+            name: "",
+            method: updated[parentIndex].method || "",
+            unit: updated[parentIndex].unit || "",
+            genderRefType: "BOTH",
+            rangeType: "numeric",
+            textRefRange: "",
+            refRangeMin: "",
+            refRangeMax: "",
+            refRangeMinMale: "",
+            refRangeMaxMale: "",
+            refRangeMinFemale: "",
+            refRangeMaxFemale: "",
+            refRangeMinChild: "",
+            refRangeMaxChild: "",
+            refRangeMinNewborn: "",
+            refRangeMaxNewborn: "",
+            ageRanges: [],
+            fieldType: "Single Field",
+            valueType: "Numeric",
+            customOptions: [],
+          }
+        ]
+      };
+      return updated;
+    });
+  };
+
+  const handleNestedSubTestChange = (parentIndex: number, subIndex: number, field: keyof SubTestState, val: any) => {
+    setSubTests(prev => {
+      const updated = [...prev];
+      const currentSubs = [...(updated[parentIndex].subTests || [])];
+      currentSubs[subIndex] = { ...currentSubs[subIndex], [field]: val };
+      updated[parentIndex] = { ...updated[parentIndex], subTests: currentSubs };
+      return updated;
+    });
+  };
+
+  const handleRemoveNestedSubTest = (parentIndex: number, subIndex: number) => {
+    setSubTests(prev => {
+      const updated = [...prev];
+      const currentSubs = (updated[parentIndex].subTests || []).filter((_, i) => i !== subIndex);
+      updated[parentIndex] = { ...updated[parentIndex], subTests: currentSubs };
+      return updated;
+    });
+  };
+
+  // Custom Options Modal Handlers
+  const handleOpenCustomOptions = (parentIdx: number, subIdx?: number) => {
+    setActiveCustomOptionsLocation({ parentIdx, subIdx });
+    let existing: string[] = [];
+    if (subIdx !== undefined) {
+      existing = subTests[parentIdx]?.subTests?.[subIdx]?.customOptions || [];
+    } else {
+      existing = subTests[parentIdx]?.customOptions || [];
+    }
+    setTempCustomOptions([...existing]);
     setNewOptionInput("");
     setCustomOptionsModalOpen(true);
   };
 
+  const handleAddCustomOption = () => {
+    const trimmed = newOptionInput.trim();
+    if (!trimmed) return;
+    if (tempCustomOptions.includes(trimmed)) {
+      toast.error("Option already exists");
+      return;
+    }
+    setTempCustomOptions(prev => [...prev, trimmed]);
+    setNewOptionInput("");
+  };
+
+  const handleApplyPreset = (options: string[]) => {
+    setTempCustomOptions([...options]);
+  };
+
+  const handleSaveCustomOptions = () => {
+    if (activeCustomOptionsLocation) {
+      const { parentIdx, subIdx } = activeCustomOptionsLocation;
+      if (subIdx !== undefined) {
+        handleNestedSubTestChange(parentIdx, subIdx, "customOptions", tempCustomOptions);
+      } else {
+        handleSubTestChange(parentIdx, "customOptions", tempCustomOptions);
+      }
+    }
+    setCustomOptionsModalOpen(false);
+  };
+
+  // Age Ranges Modal Handlers
+  const handleOpenAgeRanges = (parentIdx: number, subIdx?: number) => {
+    setActiveAgeRangeLocation({ parentIdx, subIdx });
+    let existing: AgeRangeBand[] = [];
+    if (subIdx !== undefined) {
+      existing = subTests[parentIdx]?.subTests?.[subIdx]?.ageRanges || [];
+    } else {
+      existing = subTests[parentIdx]?.ageRanges || [];
+    }
+
+    if (existing.length > 0) {
+      setTempAgeRanges(JSON.parse(JSON.stringify(existing)));
+    } else {
+      // Auto-load standard stages automatically by default
+      const standardStages: AgeRangeBand[] = [
+        { id: "stage_newborn", stageName: "Newborn", minAge: 0, maxAge: 28, ageUnit: "days", gender: "BOTH", rangeType: "numeric", refMin: "14.0", refMax: "24.0", textRange: "" },
+        { id: "stage_infant", stageName: "Infant", minAge: 1, maxAge: 12, ageUnit: "months", gender: "BOTH", rangeType: "numeric", refMin: "11.0", refMax: "15.0", textRange: "" },
+        { id: "stage_child", stageName: "Child", minAge: 1, maxAge: 12, ageUnit: "years", gender: "BOTH", rangeType: "numeric", refMin: "11.5", refMax: "15.5", textRange: "" },
+        { id: "stage_adult_m", stageName: "Adult Male", minAge: 13, maxAge: 60, ageUnit: "years", gender: "MALE", rangeType: "numeric", refMin: "13.8", refMax: "17.2", textRange: "" },
+        { id: "stage_adult_f", stageName: "Adult Female", minAge: 13, maxAge: 60, ageUnit: "years", gender: "FEMALE", rangeType: "numeric", refMin: "12.1", refMax: "15.1", textRange: "" },
+        { id: "stage_senior", stageName: "Senior Citizen", minAge: 61, maxAge: 120, ageUnit: "years", gender: "BOTH", rangeType: "numeric", refMin: "12.0", refMax: "16.0", textRange: "" },
+      ];
+      setTempAgeRanges(standardStages);
+    }
+    setAgeRangeModalOpen(true);
+  };
+
+  const handleLoadStandardAgeStages = () => {
+    const standardStages: AgeRangeBand[] = [
+      { id: "stage_newborn", stageName: "Newborn", minAge: 0, maxAge: 28, ageUnit: "days", gender: "BOTH", rangeType: "numeric", refMin: "14.0", refMax: "24.0", textRange: "" },
+      { id: "stage_infant", stageName: "Infant", minAge: 1, maxAge: 12, ageUnit: "months", gender: "BOTH", rangeType: "numeric", refMin: "11.0", refMax: "15.0", textRange: "" },
+      { id: "stage_child", stageName: "Child", minAge: 1, maxAge: 12, ageUnit: "years", gender: "BOTH", rangeType: "numeric", refMin: "11.5", refMax: "15.5", textRange: "" },
+      { id: "stage_adult_m", stageName: "Adult Male", minAge: 13, maxAge: 60, ageUnit: "years", gender: "MALE", rangeType: "numeric", refMin: "13.8", refMax: "17.2", textRange: "" },
+      { id: "stage_adult_f", stageName: "Adult Female", minAge: 13, maxAge: 60, ageUnit: "years", gender: "FEMALE", rangeType: "numeric", refMin: "12.1", refMax: "15.1", textRange: "" },
+      { id: "stage_senior", stageName: "Senior Citizen", minAge: 61, maxAge: 120, ageUnit: "years", gender: "BOTH", rangeType: "numeric", refMin: "12.0", refMax: "16.0", textRange: "" },
+    ];
+    setTempAgeRanges(standardStages);
+  };
+
+  const handleSaveAgeRanges = () => {
+    if (activeAgeRangeLocation) {
+      const { parentIdx, subIdx } = activeAgeRangeLocation;
+      if (subIdx !== undefined) {
+        handleNestedSubTestChange(parentIdx, subIdx, "ageRanges", tempAgeRanges);
+      } else {
+        handleSubTestChange(parentIdx, "ageRanges", tempAgeRanges);
+      }
+    }
+    setAgeRangeModalOpen(false);
+  };
+
+  const handleOpenLivePreview = () => {
+    const finalCategory = category === "Other" && customCategory.trim() ? customCategory.trim() : category;
+    const currentFormTest: any = {
+      id: editingTest?.id || "preview-temp-id",
+      name: name.trim() || "Diagnostic Test Panel",
+      testCode: testCode || "PREVIEW",
+      category: finalCategory,
+      type: type,
+      price: parseFloat(price) || 0,
+      interpretation: interpretation.trim() || undefined,
+      comment: comment.trim() || undefined,
+      notes: notes.trim() || undefined,
+      subTests: subTests.map((sub, sIdx) => ({
+        id: sub.id || `preview-sub-${sIdx}`,
+        name: sub.name.trim() || `Parameter #${sIdx + 1}`,
+        method: sub.method,
+        unit: sub.unit,
+        genderRefType: sub.genderRefType,
+        rangeType: sub.rangeType,
+        textRefRange: sub.textRefRange,
+        refRangeMin: sub.refRangeMin ? parseFloat(sub.refRangeMin) : null,
+        refRangeMax: sub.refRangeMax ? parseFloat(sub.refRangeMax) : null,
+        refRangeMinMale: sub.refRangeMinMale ? parseFloat(sub.refRangeMinMale) : null,
+        refRangeMaxMale: sub.refRangeMaxMale ? parseFloat(sub.refRangeMaxMale) : null,
+        refRangeMinFemale: sub.refRangeMinFemale ? parseFloat(sub.refRangeMinFemale) : null,
+        refRangeMaxFemale: sub.refRangeMaxFemale ? parseFloat(sub.refRangeMaxFemale) : null,
+        valueType: sub.valueType,
+        sortOrder: sIdx + 1,
+        sort_order: sIdx + 1,
+        subTests: sub.subTests?.map((ss, ssIdx) => ({
+          id: ss.id || `preview-ss-${sIdx}-${ssIdx}`,
+          name: ss.name.trim() || `Sub-param #${ssIdx + 1}`,
+          method: ss.method,
+          unit: ss.unit,
+          genderRefType: ss.genderRefType,
+          rangeType: ss.rangeType,
+          textRefRange: ss.textRefRange,
+          refRangeMin: ss.refRangeMin ? parseFloat(ss.refRangeMin) : null,
+          refRangeMax: ss.refRangeMax ? parseFloat(ss.refRangeMax) : null,
+          refRangeMinMale: ss.refRangeMinMale ? parseFloat(ss.refRangeMinMale) : null,
+          refRangeMaxMale: ss.refRangeMaxMale ? parseFloat(ss.refRangeMaxMale) : null,
+          refRangeMinFemale: ss.refRangeMinFemale ? parseFloat(ss.refRangeMinFemale) : null,
+          refRangeMaxFemale: ss.refRangeMaxFemale ? parseFloat(ss.refRangeMaxFemale) : null,
+          valueType: ss.valueType,
+          sortOrder: ssIdx + 1,
+          sort_order: ssIdx + 1,
+        }))
+      }))
+    };
+    handleOpenSampleReport(currentFormTest);
+  };
+
   const handleSaveTest = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null); setSuccess(null); setSaving(true);
-    const finalCategory = category === "Other" ? customCategory.trim() : category;
+    if (!name.trim()) {
+      setError("Please provide a valid Test Name.");
+      return;
+    }
+    if (subTests.some(s => !s.name.trim())) {
+      setError("Every parameter must have a name.");
+      return;
+    }
 
-    if (!name || !finalCategory || price === "") {
-      setError("Please fill in main test details."); setSaving(false); return;
-    }
-    if (subTests.length === 0) {
-      setError("Please add at least one parameter/sub-test."); setSaving(false); return;
-    }
-    for (const sub of subTests) {
-      if (!sub.name) {
-        setError("Please fill in the name for all parameters."); setSaving(false); return;
+    setSaving(true);
+    setError(null);
+
+    const finalCategory = category === "Other" && customCategory.trim() ? customCategory.trim() : category;
+
+    // Main Test payload
+    const isSingleField = subTests.length === 1 && (!subTests[0].subTests || subTests[0].subTests.length === 0);
+    const primarySub = subTests[0];
+
+    const payload: any = {
+      name: name.trim(),
+      test_code: testCode.trim() || undefined,
+      category: finalCategory,
+      type,
+      price: parseFloat(price) || 0,
+      interpretation: interpretation.trim() || undefined,
+      comment: comment.trim() || undefined,
+      notes: notes.trim() || undefined,
+      field_type: isSingleField ? "Single Field" : "Multiple Field",
+    };
+
+    // If single field, apply parameter ranges & method to main test record too
+    if (isSingleField) {
+      payload.method = primarySub.method?.trim() || undefined;
+      payload.unit = primarySub.unit.trim() || null;
+      payload.gender_ref_type = primarySub.genderRefType;
+      payload.range_type = primarySub.rangeType;
+      payload.text_ref_range = primarySub.textRefRange || null;
+      payload.value_type = primarySub.valueType;
+      payload.custom_options = primarySub.customOptions;
+      payload.age_ranges = primarySub.ageRanges;
+
+      if (primarySub.rangeType === "numeric") {
+        payload.ref_range_min = primarySub.refRangeMin ? parseFloat(primarySub.refRangeMin) : null;
+        payload.ref_range_max = primarySub.refRangeMax ? parseFloat(primarySub.refRangeMax) : null;
+        payload.ref_range_min_male = primarySub.refRangeMinMale ? parseFloat(primarySub.refRangeMinMale) : null;
+        payload.ref_range_max_male = primarySub.refRangeMaxMale ? parseFloat(primarySub.refRangeMaxMale) : null;
+        payload.ref_range_min_female = primarySub.refRangeMinFemale ? parseFloat(primarySub.refRangeMinFemale) : null;
+        payload.ref_range_max_female = primarySub.refRangeMaxFemale ? parseFloat(primarySub.refRangeMaxFemale) : null;
+        payload.ref_range_min_child = primarySub.refRangeMinChild ? parseFloat(primarySub.refRangeMinChild) : null;
+        payload.ref_range_max_child = primarySub.refRangeMaxChild ? parseFloat(primarySub.refRangeMaxChild) : null;
+        payload.ref_range_min_newborn = primarySub.refRangeMinNewborn ? parseFloat(primarySub.refRangeMinNewborn) : null;
+        payload.ref_range_max_newborn = primarySub.refRangeMaxNewborn ? parseFloat(primarySub.refRangeMaxNewborn) : null;
       }
     }
 
+    // Map sub tests (supporting nested sub-tests with sequential sort_order)
+    payload.sub_tests = subTests.map((sub, sIdx) => {
+      const mappedSub: any = {
+        name: sub.name.trim(),
+        category: finalCategory,
+        type: type,
+        method: sub.method?.trim() || undefined,
+        unit: sub.unit.trim() || null,
+        gender_ref_type: sub.genderRefType,
+        range_type: sub.rangeType,
+        text_ref_range: sub.textRefRange || null,
+        ref_range_min: sub.refRangeMin ? parseFloat(sub.refRangeMin) : null,
+        ref_range_max: sub.refRangeMax ? parseFloat(sub.refRangeMax) : null,
+        ref_range_min_male: sub.refRangeMinMale ? parseFloat(sub.refRangeMinMale) : null,
+        ref_range_max_male: sub.refRangeMaxMale ? parseFloat(sub.refRangeMaxMale) : null,
+        ref_range_min_female: sub.refRangeMinFemale ? parseFloat(sub.refRangeMinFemale) : null,
+        ref_range_max_female: sub.refRangeMaxFemale ? parseFloat(sub.refRangeMaxFemale) : null,
+        ref_range_min_child: sub.refRangeMinChild ? parseFloat(sub.refRangeMinChild) : null,
+        ref_range_max_child: sub.refRangeMaxChild ? parseFloat(sub.refRangeMaxChild) : null,
+        ref_range_min_newborn: sub.refRangeMinNewborn ? parseFloat(sub.refRangeMinNewborn) : null,
+        ref_range_max_newborn: sub.refRangeMaxNewborn ? parseFloat(sub.refRangeMaxNewborn) : null,
+        age_ranges: sub.ageRanges,
+        field_type: (sub.subTests && sub.subTests.length > 0) ? "Multiple Field" : "Single Field",
+        value_type: sub.valueType,
+        custom_options: sub.customOptions,
+        sort_order: sIdx + 1,
+      };
+
+      if (sub.subTests && sub.subTests.length > 0) {
+        mappedSub.sub_tests = sub.subTests.map((ss, ssIdx) => ({
+          name: ss.name.trim(),
+          category: finalCategory,
+          type: type,
+          method: ss.method?.trim() || undefined,
+          unit: ss.unit.trim() || null,
+          gender_ref_type: ss.genderRefType,
+          range_type: ss.rangeType,
+          text_ref_range: ss.textRefRange || null,
+          ref_range_min: ss.refRangeMin ? parseFloat(ss.refRangeMin) : null,
+          ref_range_max: ss.refRangeMax ? parseFloat(ss.refRangeMax) : null,
+          ref_range_min_male: ss.refRangeMinMale ? parseFloat(ss.refRangeMinMale) : null,
+          ref_range_max_male: ss.refRangeMaxMale ? parseFloat(ss.refRangeMaxMale) : null,
+          ref_range_min_female: ss.refRangeMinFemale ? parseFloat(ss.refRangeMinFemale) : null,
+          ref_range_max_female: ss.refRangeMaxFemale ? parseFloat(ss.refRangeMaxFemale) : null,
+          ref_range_min_child: ss.refRangeMinChild ? parseFloat(ss.refRangeMinChild) : null,
+          ref_range_max_child: ss.refRangeMaxChild ? parseFloat(ss.refRangeMaxChild) : null,
+          ref_range_min_newborn: ss.refRangeMinNewborn ? parseFloat(ss.refRangeMinNewborn) : null,
+          ref_range_max_newborn: ss.refRangeMaxNewborn ? parseFloat(ss.refRangeMaxNewborn) : null,
+          age_ranges: ss.ageRanges,
+          field_type: "Single Field",
+          value_type: ss.valueType,
+          custom_options: ss.customOptions,
+          sort_order: ssIdx + 1,
+        }));
+      }
+
+      return mappedSub;
+    });
+
     try {
-      const url = editingTest ? `/tests/${editingTest.id}` : "/tests";
-      const method = editingTest ? "PUT" : "POST";
-      await fetchFromLaravel(url, {
-        method,
-        body: JSON.stringify({
-          testCode: testCode.trim() || undefined,
-          name: name.trim(), category: finalCategory, fieldType: "Group", type, price: parseFloat(price), interpretation,
-          subTests: subTests.map(sub => ({
-            id: sub.id,
-            testCode: sub.testCode || undefined,
-            name: sub.name.trim(),
-            unit: sub.unit.trim(),
-            genderRefType: sub.genderRefType,
-            refRangeMin: sub.refRangeMin,
-            refRangeMax: sub.refRangeMax,
-            refRangeMinMale: sub.refRangeMinMale,
-            refRangeMaxMale: sub.refRangeMaxMale,
-            refRangeMinFemale: sub.refRangeMinFemale,
-            refRangeMaxFemale: sub.refRangeMaxFemale,
-            refRangeMinChild: sub.refRangeMinChild,
-            refRangeMaxChild: sub.refRangeMaxChild,
-            refRangeMinNewborn: sub.refRangeMinNewborn,
-            refRangeMaxNewborn: sub.refRangeMaxNewborn,
-            valueType: sub.valueType || "Numeric",
-            customOptions: sub.customOptions || [],
-            fieldType: sub.fieldType || "Single Field",
-            interpretation: sub.interpretation || null,
-            subTests: sub.fieldType === "Multiple Field" && sub.subTests ? sub.subTests.map(ss => ({
-              id: ss.id,
-              testCode: ss.testCode || undefined,
-              name: ss.name.trim(),
-              unit: ss.unit.trim(),
-              genderRefType: ss.genderRefType,
-              refRangeMin: ss.refRangeMin,
-              refRangeMax: ss.refRangeMax,
-              refRangeMinMale: ss.refRangeMinMale,
-              refRangeMaxMale: ss.refRangeMaxMale,
-              refRangeMinFemale: ss.refRangeMinFemale,
-              refRangeMaxFemale: ss.refRangeMaxFemale,
-              refRangeMinChild: ss.refRangeMinChild,
-              refRangeMaxChild: ss.refRangeMaxChild,
-              refRangeMinNewborn: ss.refRangeMinNewborn,
-              refRangeMaxNewborn: ss.refRangeMaxNewborn,
-              valueType: ss.valueType || "Numeric",
-              customOptions: ss.customOptions || [],
-            })) : undefined
-          }))
-        }),
-      });
-      setSuccess("Test saved successfully.");
-      fetchTests();
-      setTimeout(() => setDialogOpen(false), 800);
+      if (editingTest) {
+        const testIdentifier = editingTest.id || editingTest.testCode;
+        await fetchFromLaravel(`/tests/${testIdentifier}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        toast.success("Test updated successfully in database!");
+      } else {
+        await fetchFromLaravel("/tests", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        toast.success("New test created successfully!");
+      }
+      setDialogOpen(false);
+      setEditingTest(null);
+      await fetchTests();
     } catch (err: any) {
-      setError(err.message || "Failed to save test.");
+      console.error("Save test error:", err);
+      setError(err.message || "Failed to save test. Please check all fields.");
+      toast.error(err.message || "Failed to save test");
     } finally {
       setSaving(false);
     }
   };
 
-  const confirmDeleteTest = async () => {
+  const handleDeleteTest = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
       await fetchFromLaravel(`/tests/${deleteTarget.id}`, { method: "DELETE" });
-      toast.success("Test deleted", `"${deleteTarget.name}" was removed from the catalog.`);
+      toast.success(`Deleted ${deleteTarget.name}`);
       setDeleteTarget(null);
       fetchTests();
-    } catch {
-      toast.error("Delete failed", "The test could not be deleted. It may be in use by a report.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete test");
     } finally {
       setDeleting(false);
     }
   };
 
-  const toggleRow = (id: string) => {
-    setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const filteredTests = tests.filter((t) => {
-    const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase()) || t.category.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = selectedCategory === "ALL" || t.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
-
-  const categories = Array.from(new Set(tests.map((t) => t.category)));
-  const avgCost = tests.length ? tests.reduce((a, t) => a + t.price, 0) / tests.length : 0;
-
-  const getCategoryColor = (cat: string) => {
-    switch (cat.toUpperCase()) {
-      case "CBC": case "HEMATOLOGY": return "bg-primary/10 text-primary";
-      case "LFT": case "BIOCHEMISTRY": return "bg-gold/12 text-gold";
-      case "KFT": return "bg-secondary/15 text-secondary";
-      case "THYROID": return "bg-accent text-accent-foreground";
-      default: return "bg-muted text-muted-foreground";
-    }
-  };
+  const filteredTests = useMemo(() => {
+    return tests.filter(t => {
+      const matchQuery = t.name.toLowerCase().includes(search.toLowerCase()) ||
+        (t.testCode && t.testCode.toLowerCase().includes(search.toLowerCase())) ||
+        (t.subTests && t.subTests.some(s => s.name.toLowerCase().includes(search.toLowerCase())));
+      const matchCat = selectedCategory === "ALL" || t.category.toLowerCase() === selectedCategory.toLowerCase();
+      return matchQuery && matchCat;
+    });
+  }, [tests, search, selectedCategory]);
 
   return (
-    <div className="space-y-6 animate-fade-in pb-10">
-      <datalist id="units-list">
-        {PREDEFINED_UNITS.map(unit => (
-          <option key={unit} value={unit} />
-        ))}
-      </datalist>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+    <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-fade-in">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
         <div>
-          <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.2em] mb-1.5">Catalog</p>
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">Tests & Packages</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage lab tests, their parameters, and pricing.</p>
+          <h1 className="font-display text-2xl font-bold text-foreground flex items-center gap-2.5">
+            <FlaskConical className="h-6 w-6 text-primary" />
+            <span>Test Master & Medical Catalog</span>
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Configure laboratory tests, age-graded reference ranges, multiple parameters, methods, and clinical interpretations.
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={handleOpenAddDialog} size="sm" className="h-10"><Plus className="h-4 w-4" /> New Test Package</Button>
+
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={handleOpenAddDialog}
+            className="rounded-lg px-4 py-2 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="h-4 w-4" />
+            <span>+ Add New Test</span>
+          </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card flex items-center justify-between">
-          <div><p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Main Tests</p><p className="font-display text-3xl font-semibold text-foreground mt-1 tnum">{tests.length}</p></div>
-          <span className="flex items-center justify-center w-11 h-11 rounded-lg bg-accent text-primary"><FlaskConical className="h-5 w-5" /></span>
+      {/* Filter & Search Bar */}
+      <div className="flex flex-col md:flex-row items-center gap-3 bg-card border border-border/80 p-3.5 rounded-xl shadow-xs">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3.5 top-3 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search test name, test code, or parameter..."
+            className="w-full h-10 pl-10 pr-4 rounded-lg border border-border bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-3 text-muted-foreground hover:text-foreground text-xs cursor-pointer"
+            >
+              ✕
+            </button>
+          )}
         </div>
-        <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card flex items-center justify-between">
-          <div><p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Categories</p><p className="font-display text-3xl font-semibold text-foreground mt-1 tnum">{categories.length}</p></div>
-          <span className="flex items-center justify-center w-11 h-11 rounded-lg bg-secondary/15 text-secondary"><Layers className="h-5 w-5" /></span>
-        </div>
-        <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card flex items-center justify-between">
-          <div><p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Average Price</p><p className="font-display text-3xl font-semibold text-gold mt-1 tnum">₹{avgCost.toFixed(0)}</p></div>
-          <span className="flex items-center justify-center w-11 h-11 rounded-lg bg-gold/12 text-gold"><IndianRupee className="h-5 w-5" /></span>
+
+        {/* Category Pills Dropdown */}
+        <div className="w-full md:w-64">
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="h-10 rounded-lg text-xs font-semibold bg-background border-border">
+              <SelectValue placeholder="All Categories" />
+            </SelectTrigger>
+            <SelectContent className="rounded-lg text-xs">
+              <SelectItem value="ALL">All Categories ({tests.length})</SelectItem>
+              {standardCategories.map(cat => (
+                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-card border border-border/70 rounded-xl shadow-card overflow-hidden">
-        <div className="p-4 border-b border-border/60 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0">
-            <button onClick={() => setSelectedCategory("ALL")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border whitespace-nowrap transition-all ${selectedCategory === "ALL" ? "gradient-primary text-primary-foreground border-transparent" : "bg-card border-border text-foreground hover:border-primary/40"}`}>All</button>
-            {categories.map((cat) => (
-              <button key={cat} onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border whitespace-nowrap transition-all ${selectedCategory === cat ? "gradient-primary text-primary-foreground border-transparent" : "bg-card border-border text-foreground hover:border-primary/40"}`}>{cat}</button>
-            ))}
-          </div>
-          <div className="relative w-full sm:max-w-xs shrink-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-            <Input placeholder="Search tests…" className="pl-9 h-9" value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
+      {/* Tests Table */}
+      {loading ? (
+        <div className="py-24 flex flex-col items-center justify-center text-muted-foreground space-y-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm font-semibold">Loading Test Catalog...</p>
         </div>
-
-        <div className="overflow-x-auto">
-          {loading ? (
-            <div className="flex flex-col gap-3 p-4">
-              <Skeleton className="h-10 w-full rounded-md" />
-              <Skeleton className="h-10 w-full rounded-md" />
-              <Skeleton className="h-10 w-full rounded-md" />
-            </div>
-          ) : filteredTests.length === 0 ? (
-            <div className="text-center py-20 text-muted-foreground"><FlaskConical className="h-9 w-9 mx-auto mb-2 opacity-25" /><p className="text-xs font-medium">No tests match your selection.</p></div>
-          ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-muted/30 border-b border-border/60">
-                  <th className="px-6 py-3.5 w-10"></th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Test Name</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Test Code</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Category</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Price</th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+      ) : filteredTests.length === 0 ? (
+        <div className="py-20 text-center bg-card border border-border/80 rounded-xl p-8 space-y-3">
+          <FlaskConical className="h-12 w-12 mx-auto text-muted-foreground opacity-30" />
+          <h3 className="font-display text-base font-bold text-foreground">No matching tests found</h3>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            Try adjusting your search keywords or click "+ Add New Test" to create a custom diagnostic test panel.
+          </p>
+        </div>
+      ) : (
+        <div className="bg-card border border-border/90 rounded-xl shadow-xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-muted/50 text-[11px] font-bold text-muted-foreground uppercase border-b border-border/80">
+                <tr>
+                  <th className="py-3 px-4 w-10"></th>
+                  <th className="py-3 px-4 font-bold">TEST NAME</th>
+                  <th className="py-3 px-4 font-bold">CODE</th>
+                  <th className="py-3 px-4 font-bold">CATEGORY</th>
+                  <th className="py-3 px-4 font-bold">PARAMETERS</th>
+                  <th className="py-3 px-4 font-bold">PRICE</th>
+                  <th className="py-3 px-4 font-bold text-right">ACTIONS</th>
                 </tr>
               </thead>
-              <tbody>
-                {filteredTests.map((test) => (
-                  <React.Fragment key={test.id}>
-                    <tr className={`border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors group cursor-pointer ${expandedRows[test.id] ? "bg-muted/20" : ""}`} onClick={() => toggleRow(test.id)}>
-                      <td className="px-6 py-3.5 text-muted-foreground">
-                        {test.subTests && test.subTests.length > 0 && (
-                          expandedRows[test.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-medium text-foreground">{test.name}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">{test.subTests?.length || 0} parameters</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-xs font-mono px-2 py-1 bg-muted rounded-md inline-flex text-muted-foreground">
-                          {test.testCode || "-"}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${getCategoryColor(test.category)}`}>{test.category}</span>
-                      </td>
-                      <td className="px-4 py-3.5 font-mono text-sm font-semibold text-foreground">₹{test.price.toFixed(0)}</td>
-                      <td className="px-4 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                          <button onClick={(e) => { e.stopPropagation(); handleOpenEditDialog(test); }} className="p-2 rounded-md text-muted-foreground hover:text-primary hover:bg-accent transition-all" title="Edit"><Edit2 className="h-3.5 w-3.5" /></button>
-                          <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(test); }} className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
-                        </div>
-                      </td>
-                    </tr>
-                    {expandedRows[test.id] && test.subTests && test.subTests.length > 0 && (
-                      <tr className="bg-muted/10 border-b border-border/30">
-                        <td></td>
-                        <td colSpan={5} className="p-0">
-                          <div className="pl-6 pr-4 py-3">
-                            <table className="w-full text-left text-xs">
-                              <thead>
-                                <tr className="border-b border-border/40 text-muted-foreground">
-                                  <th className="pb-2 font-medium">Parameter Name</th>
-                                  <th className="pb-2 font-medium">Code</th>
-                                  <th className="pb-2 font-medium text-center">Unit</th>
-                                  <th className="pb-2 font-medium text-right">Details / Range</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {test.subTests.map(sub => (
-                                  <React.Fragment key={sub.id}>
-                                    <tr className="border-b border-border/20 last:border-0">
-                                      <td className="py-2.5 font-medium text-foreground">{sub.name}</td>
-                                      <td className="py-2.5 font-mono text-muted-foreground">{sub.testCode || "-"}</td>
-                                      <td className="py-2.5 text-center text-muted-foreground">
-                                        {sub.fieldType !== "Multiple Field" && sub.fieldType !== "Custom Editor" && sub.valueType !== "Custom" ? sub.unit || "-" : "-"}
-                                      </td>
-                                      <td className="py-2.5 text-right font-mono text-muted-foreground">
-                                        {sub.fieldType === "Custom Editor" ? (
-                                          <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-sans font-semibold">Custom Editor Template</span>
-                                        ) : sub.fieldType === "Multiple Field" ? (
-                                          <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded font-sans font-semibold">Group Parameter</span>
-                                        ) : sub.valueType === "Custom" ? (
-                                          <span className="text-[10px] text-muted-foreground font-sans truncate max-w-[150px] inline-block" title={sub.customOptions}>
-                                            {(() => {
-                                              try {
-                                                const arr = JSON.parse(sub.customOptions || "[]");
-                                                return arr.length > 0 ? "Options: " + arr.join(", ") : "Custom Text (No Suggestions)";
-                                              } catch { return "Custom Text"; }
-                                            })()}
-                                          </span>
-                                        ) : (
-                                          sub.genderRefType === "GENDER_SPECIFIC" ? "Gender Specific" : sub.genderRefType === "CHILDREN" ? "Children" : sub.genderRefType === "NEWBORN" ? "Newborn" : `${sub.refRangeMin ?? 0} – ${sub.refRangeMax ?? 0}`
-                                        )}
-                                      </td>
-                                    </tr>
-                                  </React.Fragment>
-                                ))}
-                              </tbody>
-                            </table>
+              <tbody className="divide-y divide-border/60">
+                {filteredTests.map(test => {
+                  const hasSub = test.subTests && test.subTests.length > 0;
+                  const isExpanded = !!expandedRows[test.id];
+
+                  return (
+                    <React.Fragment key={test.id}>
+                      <tr className="hover:bg-muted/30 transition-colors">
+                        <td className="py-3.5 px-3 text-center">
+                          {hasSub && (
+                            <button
+                              onClick={() => setExpandedRows(prev => ({ ...prev, [test.id]: !prev[test.id] }))}
+                              className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                            >
+                              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </button>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 font-semibold text-foreground">
+                          <div className="flex items-center gap-2">
+                            <span>{test.name}</span>
+                            {test.interpretation && (
+                              <span title="Has clinical interpretation" className="text-[10px] bg-blue-500/10 text-blue-600 px-1.5 py-0.2 rounded font-bold">
+                                📝 Interp
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-primary">
+                          {test.testCode || "—"}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-muted border border-border/80 text-foreground">
+                            {test.category}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-muted-foreground">
+                          {hasSub ? `${test.subTests!.length} Parameters` : "Single Field"}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-foreground">
+                          ₹{test.price.toFixed(0)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleOpenSampleReport(test)}
+                              className="p-1.5 rounded-md border border-border/80 bg-background text-primary hover:bg-primary/10 transition-colors cursor-pointer shadow-xs"
+                              title="View Sample Report (Live Preview)"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleOpenEditDialog(test)}
+                              className="p-1.5 rounded-md border border-border/80 bg-background text-foreground hover:bg-accent cursor-pointer shadow-xs"
+                              title="Edit test"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget(test)}
+                              className="p-1.5 rounded-md border border-border/80 bg-background text-destructive hover:bg-destructive/10 cursor-pointer shadow-xs"
+                              title="Delete test"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>
-                    )}
-                  </React.Fragment>
-                ))}
+
+                      {/* Expanded Sub-tests row */}
+                      {isExpanded && hasSub && (
+                        <tr className="bg-muted/20">
+                          <td colSpan={7} className="py-3 px-8">
+                            <div className="rounded-lg border border-border/70 bg-card p-3 space-y-2">
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Test Parameters ({test.subTests!.length})
+                              </p>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                {test.subTests!.map((sub, sIdx) => (
+                                  <div key={sIdx} className="p-2.5 rounded-md border border-border/60 bg-background text-xs space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-foreground">{sub.name}</span>
+                                      <span className="font-mono text-[10px] text-muted-foreground">{sub.unit || "No Unit"}</span>
+                                    </div>
+                                    <div className="text-[11px] text-muted-foreground">
+                                      {sub.rangeType === "text" ? (
+                                        <span className="text-blue-600 dark:text-blue-400 font-mono">{sub.textRefRange || "Text Range"}</span>
+                                      ) : sub.genderRefType === "GENDER_SPECIFIC" ? (
+                                        <span>M: {sub.refRangeMinMale || 0}-{sub.refRangeMaxMale || 0} | F: {sub.refRangeMinFemale || 0}-{sub.refRangeMaxFemale || 0}</span>
+                                      ) : (
+                                        <span>Range: {sub.refRangeMin || 0} - {sub.refRangeMax || 0}</span>
+                                      )}
+                                    </div>
+                                    {sub.method && (
+                                      <div className="text-[10px] text-muted-foreground italic truncate">
+                                        Method: {sub.method}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Add/Edit modal */}
+      {/* =========================================================================
+          MAJESTIC FULL-WIDTH DIALOG WINDOW (w-[95vw] h-[92vh] max-w-[95vw])
+      ========================================================================= */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-full w-screen h-screen max-h-screen p-0 m-0 border-0 rounded-none overflow-hidden flex flex-col">
-          <DialogHeader className="px-6 py-4 border-b border-border/60 bg-muted/20 shrink-0">
+        <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-[95vw] h-[92vh] max-h-[94vh] p-0 gap-0 overflow-hidden rounded-2xl border border-border/90 bg-card shadow-2xl flex flex-col" hideClose>
+          {/* Top Bar with Back Arrow & Actions (No redundant X cross icon) */}
+          <div className="h-16 border-b border-border/80 bg-card px-6 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg gradient-primary flex items-center justify-center text-primary-foreground"><FlaskConical className="h-5 w-5" /></div>
+              <button
+                type="button"
+                onClick={() => setDialogOpen(false)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border/80 bg-background text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs"
+              >
+                <ArrowLeft className="h-4 w-4 text-primary" />
+                <span>Back</span>
+              </button>
+
+              <div className="h-5 w-px bg-border/80 hidden sm:block" />
+
               <div>
-                <DialogTitle className="text-lg">{editingTest ? "Edit Test Package" : "New Diagnostic Package"}</DialogTitle>
-                <DialogDescription>Create a main test and define its parameters.</DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-
-          <form id="test-form" onSubmit={handleSaveTest} className="flex-1 flex flex-col md:flex-row overflow-hidden">
-            {/* Left Section: Main Test */}
-            <div className="w-full md:w-[320px] shrink-0 p-6 border-b md:border-b-0 md:border-r border-border/60 bg-muted/5 overflow-y-auto custom-scrollbar flex flex-col gap-6">
-              {error && <div className="flex items-center gap-2 rounded-lg bg-destructive/8 border border-destructive/20 p-3 text-xs text-destructive font-medium"><AlertTriangle className="h-4 w-4 shrink-0" /><p>{error}</p></div>}
-              {success && <div className="flex items-center gap-2 rounded-lg bg-accent border border-primary/20 p-3 text-xs text-primary font-medium"><CheckCircle2 className="h-4 w-4 shrink-0" /><p>{success}</p></div>}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Test Name</Label>
-                  <Input placeholder="e.g. Complete Blood Count" value={name} onChange={(e) => setName(e.target.value)} required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium">Test Code</Label>
-                  <Input placeholder="Leave blank to auto-generate" value={testCode} onChange={(e) => setTestCode(e.target.value)} className="font-mono text-sm" />
-                </div>
-              </div>
-              <div className="space-y-1.5"><Label className="text-sm">Package Price (₹)</Label><Input type="number" step="0.01" placeholder="e.g. 500" value={price} onChange={(e) => setPrice(e.target.value)} className="font-mono" required /></div>
-
-              <div className="space-y-1.5">
-                <Label className="text-sm">Category</Label>
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent position="popper" side="bottom" sideOffset={4} className="max-h-[300px]">
-                    {standardCategories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {category === "Other" && (
-                <div className="space-y-1.5"><Label className="text-sm">Custom Category</Label><Input placeholder="e.g. Serology" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} required /></div>
-              )}
-
-              <div className="pt-2">
-                <Button type="button" variant="outline" onClick={() => setInterpretationModalOpen(true)} className="gap-2 w-full justify-start text-muted-foreground hover:text-foreground">
-                  <FileText className="h-4 w-4" />
-                  {interpretation ? "Edit Interpretation" : "Add Interpretation"}
-                </Button>
+                <DialogTitle className="font-display text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
+                  <span>{editingTest ? `Edit Test: ${editingTest.name}` : "Create Diagnostic Test Panel"}</span>
+                  <span className="px-2.5 py-0.5 rounded bg-primary/10 text-primary text-[11px] font-mono font-bold">
+                    {testCode || "NEW"}
+                  </span>
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground hidden sm:block">
+                  Configure clinical parameters, units, age/gender intervals, methods, and interpretations.
+                </DialogDescription>
               </div>
             </div>
 
-            {/* Right Section: Sub Tests */}
-            <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
-              <div className="flex items-center justify-between mb-6 pb-2 border-b border-border/60">
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleOpenLivePreview}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors cursor-pointer shadow-xs"
+                title="Open live report layout preview and parameter manager"
+              >
+                <Eye className="h-4 w-4 text-emerald-500" />
+                <span>Live Report Preview</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setNotesModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border/80 bg-background text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs"
+              >
+                <FileText className="h-4 w-4 text-blue-500" />
+                <span>Interpretation & Notes</span>
+              </button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+                className="rounded-lg px-4 h-10 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleSaveTest}
+                disabled={saving}
+                className="rounded-lg px-6 h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                <span>{editingTest ? "Save Changes" : "Create Test"}</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Form Scrollable Body */}
+          <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 text-xs bg-muted/10">
+            {error && (
+              <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs font-semibold flex items-center gap-2.5 shadow-xs">
+                <AlertTriangle className="h-5 w-5 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Master Overview Card (Clean Standard 4-Column Grid with Comfortable Height) */}
+            <div className="p-6 bg-card border border-border/80 rounded-xl shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                <div className="flex items-center gap-2">
+                  <FlaskConical className="h-5 w-5 text-primary" />
+                  <h3 className="font-display text-sm font-bold text-foreground uppercase tracking-wider">
+                    1. Test Classification & Overview
+                  </h3>
+                </div>
+                <span className="text-xs text-muted-foreground">General test panel metadata</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {/* 1. Test Name */}
+                <div className="space-y-2">
+                  <label className="font-bold text-xs text-foreground block">Test / Panel Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Complete Blood Count (CBC) or Lipid Profile"
+                    className="w-full h-11 px-4 rounded-lg border border-border bg-background text-foreground font-semibold focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all shadow-xs"
+                  />
+                </div>
+
+                {/* 2. Test Code */}
+                <div className="space-y-2">
+                  <label className="font-bold text-xs text-foreground block">Test Code *</label>
+                  <input
+                    type="text"
+                    required
+                    value={testCode}
+                    onChange={(e) => setTestCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. SYS_CBC_01"
+                    className="w-full h-11 px-4 rounded-lg border border-border bg-background text-primary font-mono font-bold focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all shadow-xs"
+                  />
+                </div>
+
+                {/* 3. Category */}
+                <div className="space-y-2">
+                  <label className="font-bold text-xs text-foreground block">Category / Department *</label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full h-11 px-4 rounded-lg border border-border bg-background text-foreground font-medium focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all shadow-xs"
+                  >
+                    {standardCategories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 4. Price */}
+                <div className="space-y-2">
+                  <label className="font-bold text-xs text-foreground block">Standard Price (₹)</label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-3 text-muted-foreground font-bold text-sm">₹</span>
+                    <input
+                      type="number"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="350"
+                      className="w-full h-11 pl-9 pr-4 rounded-lg border border-border bg-background text-foreground font-mono font-bold focus:ring-2 focus:ring-primary/20 outline-none text-sm transition-all shadow-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Custom Category if other */}
+                {category === "Other" && (
+                  <div className="lg:col-span-2 space-y-2">
+                    <label className="font-bold text-xs text-foreground block">Specify Department</label>
+                    <input
+                      type="text"
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      placeholder="Enter custom department"
+                      className="w-full h-11 px-4 rounded-lg border border-border bg-background text-foreground outline-none text-sm shadow-xs"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Diagnostic Parameters Section */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-xs">
                 <div>
-                  <h3 className="font-semibold text-lg text-foreground">Test Parameters</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Define the parameters and values for this test package.</p>
+                  <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
+                    <Sliders className="h-4 w-4 text-primary" />
+                    <span>2. Diagnostic Parameters & Reference Intervals ({subTests.length})</span>
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Drag <GripVertical className="inline h-3.5 w-3.5 text-muted-foreground" /> or use arrows to re-order. Click "+ Sub-param" to create nested group parameters.
+                  </p>
                 </div>
-                <Button type="button" size="sm" onClick={handleAddSubTest} className="h-9 gap-1.5">
-                  <Plus className="h-4 w-4" /> Add Parameter
+
+                <Button
+                  type="button"
+                  onClick={handleAddSubTest}
+                  className="rounded-lg px-4 py-2.5 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>+ Add Parameter</span>
                 </Button>
               </div>
 
-              <div className="space-y-5">
-                {subTests.map((sub, index) => (
-                  <div key={index} className="bg-card border border-border/70 shadow-sm rounded-xl p-5 relative group">
-                    {subTests.length > 1 && (
-                      <button type="button" onClick={() => handleRemoveSubTest(index)} className="absolute right-3 top-3 p-1.5 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover:opacity-100 transition-all">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
+              {/* Parameter Cards with Drag & Drop & Sub-Parameters */}
+              <div className="space-y-4">
+                {subTests.map((sub, sIdx) => {
+                  const isTextRange = sub.rangeType === "text";
+                  const isCustomOptions = sub.valueType === "Custom Options";
+                  const hasNested = sub.subTests && sub.subTests.length > 0;
 
-                    <div className="grid grid-cols-12 gap-3 mb-4 pr-8">
-                      <div className="col-span-5 space-y-1.5">
-                        <Label className="text-xs">Parameter Name</Label>
-                        <Input placeholder="e.g. Hemoglobin" value={sub.name} onChange={(e) => updateSubTest(index, "name", e.target.value)} className="h-8 text-sm bg-background font-medium" />
-                      </div>
-                      <div className="col-span-4 space-y-1.5">
-                        <Label className="text-xs">Parameter Code</Label>
-                        <Input placeholder="Auto-generate" value={sub.testCode || ""} onChange={(e) => updateSubTest(index, "testCode", e.target.value)} className="h-8 text-sm font-mono bg-background" />
-                      </div>
-                      {sub.fieldType !== "Multiple Field" && sub.fieldType !== "Custom Editor" && sub.valueType !== "Custom" && (
-                        <div className="col-span-3 space-y-1.5">
-                          <Label className="text-xs">Unit</Label>
-                          <Input list="units-list" placeholder="e.g. g/dL" value={sub.unit} onChange={(e) => updateSubTest(index, "unit", e.target.value)} className="h-8 text-sm bg-background" />
-                        </div>
-                      )}
-                      <div className={sub.fieldType === "Custom Editor" ? "col-span-12 space-y-1.5" : "col-span-12 space-y-1.5"}>
-                        <Label className="text-xs">Field Type</Label>
-                        <Select value={sub.fieldType || "Single Field"} onValueChange={(val) => updateSubTest(index, "fieldType", val)}>
-                          <SelectTrigger className="h-8 text-sm bg-background"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Single Field">Single Field</SelectItem>
-                            <SelectItem value="Multiple Field">Multiple Field</SelectItem>
-                            <SelectItem value="Custom Editor">Custom Editor</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    {(!sub.fieldType || sub.fieldType === "Single Field") ? (
-                      <div className="bg-background rounded-lg border border-border/50 p-3">
-                        <div className="flex items-center gap-4 mb-3">
-                          <div className="space-y-1">
-                            <Label className="text-xs text-muted-foreground">Value Type</Label>
-                            <Select value={sub.valueType || "Numeric"} onValueChange={(val) => updateSubTest(index, "valueType", val)}>
-                              <SelectTrigger className="h-7 text-xs w-[130px] border-border"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Numeric">Numeric</SelectItem>
-                                <SelectItem value="Custom">Custom</SelectItem>
-                              </SelectContent>
-                            </Select>
+                  return (
+                    <div
+                      key={sIdx}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, sIdx)}
+                      onDragOver={(e) => handleDragOver(e, sIdx)}
+                      onDrop={(e) => handleDrop(e, sIdx)}
+                      className={`p-6 bg-card border border-border/90 rounded-xl shadow-xs space-y-4 hover:border-primary/50 transition-all relative ${
+                        draggedIndex === sIdx ? "opacity-40 border-dashed border-primary" : ""
+                      }`}
+                    >
+                      {/* Row 1: Drag handle, Reorder Arrows, Number, Name, Unit, Value Type, Range Mode, Sub-param CTA, Delete */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-center">
+                        {/* Drag Handle & Parameter Name */}
+                        <div className="lg:col-span-5 flex items-center gap-2.5">
+                          <div className="flex items-center gap-0.5 text-muted-foreground">
+                            <span className="cursor-grab active:cursor-grabbing p-1.5 hover:text-foreground" title="Drag to reorder">
+                              <GripVertical className="h-4 w-4" />
+                            </span>
+                            <div className="flex flex-col">
+                              <button
+                                type="button"
+                                disabled={sIdx === 0}
+                                onClick={() => moveParameterUp(sIdx)}
+                                className="p-0.5 hover:text-foreground disabled:opacity-30 cursor-pointer"
+                                title="Move up"
+                              >
+                                <ChevronUp className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={sIdx === subTests.length - 1}
+                                onClick={() => moveParameterDown(sIdx)}
+                                className="p-0.5 hover:text-foreground disabled:opacity-30 cursor-pointer"
+                                title="Move down"
+                              >
+                                <ChevronDown className="h-3 w-3" />
+                              </button>
+                            </div>
                           </div>
-                          {(!sub.valueType || sub.valueType === "Numeric") && (
-                            <div className="space-y-1">
-                              <Label className="text-xs text-muted-foreground">Reference Range</Label>
-                              <Select value={sub.genderRefType} onValueChange={(val) => updateSubTest(index, "genderRefType", val)}>
-                                <SelectTrigger className="h-7 text-xs w-[130px] border-border"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="BOTH">Universal</SelectItem>
-                                  <SelectItem value="GENDER_SPECIFIC">Gender Specific</SelectItem>
-                                  <SelectItem value="CHILDREN">Children</SelectItem>
-                                  <SelectItem value="NEWBORN">Newborn</SelectItem>
-                                </SelectContent>
-                              </Select>
+
+                          <span className="h-8 w-8 rounded-lg bg-primary/10 text-primary font-bold flex items-center justify-center text-xs shrink-0">
+                            #{sIdx + 1}
+                          </span>
+
+                          <input
+                            type="text"
+                            required
+                            value={sub.name}
+                            onChange={(e) => handleSubTestChange(sIdx, "name", e.target.value)}
+                            placeholder="Parameter Name (e.g. Hemoglobin / Differential Count)"
+                            className="w-full h-11 px-4 rounded-lg border border-border bg-background text-foreground font-semibold text-sm focus:ring-2 focus:ring-primary/20 outline-none shadow-xs"
+                          />
+                        </div>
+
+                        {/* Unit Picker with Popover */}
+                        <div className="lg:col-span-2 relative">
+                          <input
+                            type="text"
+                            value={sub.unit}
+                            onChange={(e) => handleSubTestChange(sIdx, "unit", e.target.value)}
+                            placeholder="Unit (g/dL)"
+                            className="w-full h-11 px-3.5 pr-8 rounded-lg border border-border bg-background text-foreground font-mono text-sm focus:ring-2 focus:ring-primary/20 outline-none shadow-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setActiveUnitDropdownId(activeUnitDropdownId === `p_${sIdx}` ? null : `p_${sIdx}`)}
+                            className="absolute right-2.5 top-3.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+
+                          {/* Unit Popover */}
+                          {activeUnitDropdownId === `p_${sIdx}` && (
+                            <div className="absolute z-50 right-0 top-12 w-72 bg-card border border-border rounded-xl shadow-2xl p-3 space-y-2 animate-fade-in">
+                              <div className="flex items-center justify-between border-b border-border pb-1.5">
+                                <span className="font-bold text-xs text-foreground">Select Clinical Unit</span>
+                                <button onClick={() => setActiveUnitDropdownId(null)} className="text-xs text-muted-foreground">✕</button>
+                              </div>
+                              <div className="max-h-52 overflow-y-auto space-y-2.5 text-xs">
+                                {Object.entries(CATEGORIZED_UNITS).map(([catName, unitList]) => (
+                                  <div key={catName} className="space-y-1">
+                                    <p className="font-bold text-[10px] uppercase text-muted-foreground">{catName}</p>
+                                    <div className="flex flex-wrap gap-1">
+                                      {unitList.map(u => (
+                                        <button
+                                          key={u}
+                                          type="button"
+                                          onClick={() => {
+                                            handleSubTestChange(sIdx, "unit", u);
+                                            setActiveUnitDropdownId(null);
+                                          }}
+                                          className="px-2 py-0.5 rounded bg-muted hover:bg-primary/10 hover:text-primary text-[11px] font-mono transition-colors cursor-pointer"
+                                        >
+                                          {u}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )}
                         </div>
 
-                        {(!sub.valueType || sub.valueType === "Numeric") ? (
-                          sub.genderRefType === "BOTH" ? (
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1"><Label className="text-[10px]">Min</Label><Input type="number" step="0.0001" placeholder="12.0" value={sub.refRangeMin} onChange={(e) => updateSubTest(index, "refRangeMin", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                              <div className="space-y-1"><Label className="text-[10px]">Max</Label><Input type="number" step="0.0001" placeholder="16.0" value={sub.refRangeMax} onChange={(e) => updateSubTest(index, "refRangeMax", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                            </div>
-                          ) : sub.genderRefType === "GENDER_SPECIFIC" ? (
-                            <div className="space-y-2">
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1"><Label className="text-[10px] text-blue-500">Male Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinMale} onChange={(e) => updateSubTest(index, "refRangeMinMale", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                                <div className="space-y-1"><Label className="text-[10px] text-blue-500">Male Max</Label><Input type="number" step="0.0001" value={sub.refRangeMaxMale} onChange={(e) => updateSubTest(index, "refRangeMaxMale", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                              </div>
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1"><Label className="text-[10px] text-pink-500">Female Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinFemale} onChange={(e) => updateSubTest(index, "refRangeMinFemale", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                                <div className="space-y-1"><Label className="text-[10px] text-pink-500">Female Max</Label><Input type="number" step="0.0001" value={sub.refRangeMaxFemale} onChange={(e) => updateSubTest(index, "refRangeMaxFemale", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                              </div>
-                            </div>
-                          ) : sub.genderRefType === "CHILDREN" ? (
-                            <div className="grid grid-cols-2 gap-3 mt-2">
-                              <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinChild} onChange={(e) => updateSubTest(index, "refRangeMinChild", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                              <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Max</Label><Input type="number" step="0.0001" value={sub.refRangeMaxChild} onChange={(e) => updateSubTest(index, "refRangeMaxChild", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                            </div>
-                          ) : sub.genderRefType === "NEWBORN" ? (
-                            <div className="grid grid-cols-2 gap-3 mt-2">
-                              <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Min</Label><Input type="number" step="0.0001" value={sub.refRangeMinNewborn} onChange={(e) => updateSubTest(index, "refRangeMinNewborn", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                              <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Max</Label><Input type="number" step="0.0001" value={sub.refRangeMaxNewborn} onChange={(e) => updateSubTest(index, "refRangeMaxNewborn", e.target.value)} className="h-7 text-xs font-mono" /></div>
-                            </div>
-                          ) : null
-                        ) : (
-                          <div className="space-y-2 pt-2 border-t border-border/40">
-                            <Label className="text-xs font-medium text-foreground">Custom Options / Suggestions</Label>
-                            <div className="flex flex-wrap gap-2 items-center">
-                              {(sub.customOptions || []).map((opt, i) => (
-                                <span key={i} className="inline-flex items-center px-2 py-1 rounded bg-secondary text-secondary-foreground text-xs font-medium">
-                                  {opt}
-                                </span>
+                        {/* Value Input Type */}
+                        <div className="lg:col-span-2">
+                          <select
+                            value={sub.valueType}
+                            onChange={(e) => handleSubTestChange(sIdx, "valueType", e.target.value)}
+                            className="w-full h-11 px-3.5 rounded-lg border border-border bg-background text-foreground font-medium text-xs focus:ring-2 focus:ring-primary/20 outline-none shadow-xs"
+                          >
+                            <option value="Numeric">Numeric Input</option>
+                            <option value="Custom Options">Custom Options</option>
+                            <option value="Text">Free Text / Paragraph</option>
+                          </select>
+                        </div>
+
+                        {/* Range Mode Switch (Numeric vs Text) */}
+                        <div className="lg:col-span-2 flex items-center bg-muted/60 p-1 rounded-lg border border-border/70 h-11">
+                          <button
+                            type="button"
+                            onClick={() => handleSubTestChange(sIdx, "rangeType", "numeric")}
+                            className={`flex-1 h-9 rounded-md text-xs font-bold transition-all cursor-pointer text-center flex items-center justify-center ${
+                              !isTextRange ? "bg-background text-primary shadow-xs" : "text-muted-foreground"
+                            }`}
+                          >
+                            Numeric
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSubTestChange(sIdx, "rangeType", "text")}
+                            className={`flex-1 h-9 rounded-md text-xs font-bold transition-all cursor-pointer text-center flex items-center justify-center ${
+                              isTextRange ? "bg-background text-primary shadow-xs" : "text-muted-foreground"
+                            }`}
+                          >
+                            Text
+                          </button>
+                        </div>
+
+                        {/* Delete */}
+                        <div className="lg:col-span-1 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSubTest(sIdx)}
+                            className="p-2.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                            title="Delete parameter"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Row 2: Method Selector & Action Buttons (Age bands, Custom Choices, Sub-param) */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5 pt-3 border-t border-border/50 text-xs items-center">
+                        {/* Parameter Specific Method Selector with Dropdown */}
+                        <div className={`${isCustomOptions ? "lg:col-span-4" : "lg:col-span-6"} sm:col-span-2 relative`}>
+                          <input
+                            type="text"
+                            value={sub.method || ""}
+                            onChange={(e) => handleSubTestChange(sIdx, "method", e.target.value)}
+                            placeholder="Method / Analytical Technique (e.g. Automated Flow Cytometry / GOD-POD / CLIA)"
+                            className="w-full h-11 px-4 pr-9 rounded-lg border border-border bg-background text-foreground text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20 shadow-xs placeholder:text-muted-foreground/60"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setActiveMethodDropdownId(activeMethodDropdownId === `m_${sIdx}` ? null : `m_${sIdx}`)}
+                            className="absolute right-3 top-3.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+
+                          {/* Method Dropdown */}
+                          {activeMethodDropdownId === `m_${sIdx}` && (
+                            <div className="absolute z-50 left-0 right-0 top-12 bg-card border border-border rounded-xl shadow-2xl max-h-56 overflow-y-auto p-1.5 space-y-0.5 animate-fade-in">
+                              {INBUILT_METHODS.map(m => (
+                                <div
+                                  key={m}
+                                  onClick={() => {
+                                    handleSubTestChange(sIdx, "method", m);
+                                    setActiveMethodDropdownId(null);
+                                  }}
+                                  className="p-2.5 rounded-md hover:bg-muted cursor-pointer text-xs font-medium text-foreground transition-colors"
+                                >
+                                  {m}
+                                </div>
                               ))}
-                              <Button type="button" variant="outline" size="sm" onClick={() => openCustomOptionsModal(index)} className="h-7 px-2 border-primary/20 hover:bg-primary/5 text-primary">
-                                <Plus className="h-3 w-3 mr-1" /> Add Option
-                              </Button>
                             </div>
+                          )}
+                        </div>
+
+                        {/* Custom Options Trigger if applicable */}
+                        {isCustomOptions && (
+                          <div className="lg:col-span-3 sm:col-span-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCustomOptions(sIdx)}
+                              className="w-full h-11 px-4 rounded-lg border border-primary/40 bg-primary/10 text-primary font-bold hover:bg-primary/20 flex items-center justify-between cursor-pointer transition-colors shadow-xs text-xs"
+                            >
+                              <span>Configure Choices ({(sub.customOptions || []).length})</span>
+                              <Sliders className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Age Bands Button */}
+                        <div className={`${isCustomOptions ? "lg:col-span-3" : "lg:col-span-3"} sm:col-span-1`}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAgeRanges(sIdx)}
+                            className={`w-full h-11 px-4 rounded-lg border text-xs font-bold inline-flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-xs ${
+                              (sub.ageRanges || []).length > 0
+                                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                : "border-border bg-background text-foreground hover:bg-muted/60"
+                            }`}
+                          >
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span>Age Intervals ({(sub.ageRanges || []).length})</span>
+                          </button>
+                        </div>
+
+                        {/* Sub-param Add Button */}
+                        <div className={`${isCustomOptions ? "lg:col-span-2" : "lg:col-span-3"} sm:col-span-1`}>
+                          <button
+                            type="button"
+                            onClick={() => handleAddNestedSubTest(sIdx)}
+                            className="w-full h-11 px-4 rounded-lg border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-xs"
+                            title="Add sub-parameter under this parameter"
+                          >
+                            <Plus className="h-4 w-4" />
+                            <span>+ Add Sub-param</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Row 3: Reference Intervals / Criteria */}
+                      <div className="pt-3 border-t border-border/50">
+                        {isTextRange ? (
+                          /* Text / Paragraph Normal Range */
+                          <div className="space-y-2">
+                            <label className="font-bold text-foreground text-xs block">
+                              Text / Paragraph Normal Reference Criteria (e.g. "&lt; 200 mg/dL (Desirable)", "Non-Reactive for Antibodies", "Negative")
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={sub.textRefRange}
+                              onChange={(e) => handleSubTestChange(sIdx, "textRefRange", e.target.value)}
+                              placeholder="Enter multi-line descriptive normal range criteria..."
+                              className="w-full p-3.5 rounded-lg border border-border bg-background text-foreground font-mono text-sm outline-none focus:ring-2 focus:ring-primary/20 shadow-xs"
+                            />
+                          </div>
+                        ) : (
+                          /* Numeric Reference Intervals */
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <label className="font-bold text-foreground text-xs">
+                                Standard Reference Interval ({sub.unit || "unit"})
+                              </label>
+                              {/* Gender Specific Switch */}
+                              <div className="flex items-center gap-4 text-xs font-semibold">
+                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name={`fs_gender_${sIdx}`}
+                                    checked={sub.genderRefType === "BOTH"}
+                                    onChange={() => handleSubTestChange(sIdx, "genderRefType", "BOTH")}
+                                  />
+                                  <span>General (Both)</span>
+                                </label>
+                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                  <input
+                                    type="radio"
+                                    name={`fs_gender_${sIdx}`}
+                                    checked={sub.genderRefType === "GENDER_SPECIFIC"}
+                                    onChange={() => handleSubTestChange(sIdx, "genderRefType", "GENDER_SPECIFIC")}
+                                  />
+                                  <span>Gender-Specific (Male / Female)</span>
+                                </label>
+                              </div>
+                            </div>
+
+                            {sub.genderRefType === "BOTH" ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+                                <div className="space-y-1.5">
+                                  <span className="text-xs text-muted-foreground font-bold">Min Normal</span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={sub.refRangeMin}
+                                    onChange={(e) => handleSubTestChange(sIdx, "refRangeMin", e.target.value)}
+                                    placeholder="e.g. 13.0"
+                                    className="w-full h-11 px-4 rounded-lg border border-border bg-background text-foreground font-mono text-sm font-semibold outline-none shadow-xs"
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <span className="text-xs text-muted-foreground font-bold">Max Normal</span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={sub.refRangeMax}
+                                    onChange={(e) => handleSubTestChange(sIdx, "refRangeMax", e.target.value)}
+                                    placeholder="e.g. 17.0"
+                                    className="w-full h-11 px-4 rounded-lg border border-border bg-background text-foreground font-mono text-sm font-semibold outline-none shadow-xs"
+                                  />
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 w-full">
+                                <div className="space-y-1.5">
+                                  <span className="text-xs text-blue-600 font-bold">Male Min</span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={sub.refRangeMinMale}
+                                    onChange={(e) => handleSubTestChange(sIdx, "refRangeMinMale", e.target.value)}
+                                    placeholder="13.8"
+                                    className="w-full h-11 px-4 rounded-lg border border-border bg-background text-foreground font-mono text-sm font-semibold outline-none shadow-xs"
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <span className="text-xs text-blue-600 font-bold">Male Max</span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={sub.refRangeMaxMale}
+                                    onChange={(e) => handleSubTestChange(sIdx, "refRangeMaxMale", e.target.value)}
+                                    placeholder="17.2"
+                                    className="w-full h-11 px-4 rounded-lg border border-border bg-background text-foreground font-mono text-sm font-semibold outline-none shadow-xs"
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <span className="text-xs text-pink-600 font-bold">Female Min</span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={sub.refRangeMinFemale}
+                                    onChange={(e) => handleSubTestChange(sIdx, "refRangeMinFemale", e.target.value)}
+                                    placeholder="12.1"
+                                    className="w-full h-11 px-4 rounded-lg border border-border bg-background text-foreground font-mono text-sm font-semibold outline-none shadow-xs"
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <span className="text-xs text-pink-600 font-bold">Female Max</span>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    value={sub.refRangeMaxFemale}
+                                    onChange={(e) => handleSubTestChange(sIdx, "refRangeMaxFemale", e.target.value)}
+                                    placeholder="15.1"
+                                    className="w-full h-11 px-4 rounded-lg border border-border bg-background text-foreground font-mono text-sm font-semibold outline-none shadow-xs"
+                                  />
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    ) : sub.fieldType === "Custom Editor" ? (
-                      <div className="bg-background rounded-lg border border-border/50 p-3 mt-4">
-                        <div className="flex justify-between items-center mb-2">
-                          <Label className="text-xs text-muted-foreground font-semibold">Custom Editor Template</Label>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCustomEditorActiveSubIndex(index)}
-                            className="h-7 text-[10px] px-3 font-semibold border-primary/20 text-primary hover:bg-primary/5"
-                          >
-                            <FileText className="h-3 w-3 mr-1.5" />
-                            Open Editor
-                          </Button>
-                        </div>
-                        <div
-                          className="min-h-[100px] max-h-[150px] overflow-hidden border border-border/60 rounded-md bg-card/50 p-3 text-xs text-muted-foreground relative"
-                        >
-                          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-card/90 pointer-events-none" />
-                          {sub.interpretation ? (
-                            <div dangerouslySetInnerHTML={{ __html: sub.interpretation }} className="opacity-70 scale-90 origin-top-left" />
-                          ) : (
-                            <div className="flex items-center justify-center h-full text-muted-foreground/50 italic pt-6">No template designed yet</div>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground mt-2">
-                          Design the layout exactly how you want it to appear in the report. This template will be loaded automatically when entering results.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="mt-4 border-t border-border/50 pt-4">
-                        <div className="flex justify-between items-center mb-3">
-                          <Label className="text-xs font-semibold text-muted-foreground">Sub-Parameters</Label>
-                          <Button type="button" variant="outline" size="sm" onClick={() => handleAddSubSubTest(index)} className="h-6 text-[10px] px-2"><Plus className="h-3 w-3 mr-1" /> Add Sub-Parameter</Button>
-                        </div>
-                        <div className="space-y-3">
-                          {sub.subTests && sub.subTests.map((subsub, sIdx) => (
-                            <div key={sIdx} className="bg-background rounded-lg border border-border/50 p-3 relative group/sub">
-                              <button type="button" onClick={() => handleRemoveSubSubTest(index, sIdx)} className="absolute right-2 top-2 p-1 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive opacity-0 group-hover/sub:opacity-100 transition-all"><Trash2 className="h-3 w-3" /></button>
-                              <div className="grid grid-cols-12 gap-3 items-end">
-                                <div className="col-span-4 space-y-1.5">
-                                  <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Name</Label>
-                                  <Input placeholder="e.g. Neutrophils" value={subsub.name} onChange={(e) => updateSubSubTest(index, sIdx, "name", e.target.value)} className="h-7 text-xs font-medium" />
+
+                      {/* Nested Sub-parameters List if any */}
+                      {hasNested && (
+                        <div className="mt-4 pt-4 border-t-2 border-primary/20 pl-4 sm:pl-8 space-y-3 bg-muted/20 p-4 rounded-xl">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                              <CornerDownRight className="h-4 w-4 text-primary" />
+                              <span>Sub-Parameters of {sub.name || `Parameter #${sIdx + 1}`} ({sub.subTests!.length})</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleAddNestedSubTest(sIdx)}
+                              className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 flex items-center gap-1 cursor-pointer shadow-xs"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              <span>+ Add Sub-parameter</span>
+                            </button>
+                          </div>
+
+                          <div className="space-y-3">
+                            {sub.subTests!.map((nested, nIdx) => (
+                              <div key={nIdx} className="p-4 rounded-lg bg-card border border-border shadow-xs space-y-2.5">
+                                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                                  <div className="sm:col-span-4 flex items-center gap-2">
+                                    <span className="px-2 py-1 rounded bg-muted text-xs font-mono font-bold text-muted-foreground">
+                                      {sIdx + 1}.{nIdx + 1}
+                                    </span>
+                                    <input
+                                      type="text"
+                                      required
+                                      value={nested.name}
+                                      onChange={(e) => handleNestedSubTestChange(sIdx, nIdx, "name", e.target.value)}
+                                      placeholder="Sub-param Name (e.g. Neutrophils)"
+                                      className="w-full h-10 px-3.5 rounded-lg border border-border bg-background text-sm font-semibold shadow-xs"
+                                    />
+                                  </div>
+
+                                  <div className="sm:col-span-2">
+                                    <input
+                                      type="text"
+                                      value={nested.unit}
+                                      onChange={(e) => handleNestedSubTestChange(sIdx, nIdx, "unit", e.target.value)}
+                                      placeholder="Unit (%)"
+                                      className="w-full h-10 px-3 rounded-lg border border-border bg-background text-xs font-mono shadow-xs"
+                                    />
+                                  </div>
+
+                                  <div className="sm:col-span-3">
+                                    <input
+                                      type="text"
+                                      value={nested.method || ""}
+                                      onChange={(e) => handleNestedSubTestChange(sIdx, nIdx, "method", e.target.value)}
+                                      placeholder="Method (Optional)"
+                                      className="w-full h-10 px-3 rounded-lg border border-border bg-background text-xs shadow-xs"
+                                    />
+                                  </div>
+
+                                  <div className="sm:col-span-2 flex items-center gap-1.5">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      value={nested.refRangeMin}
+                                      onChange={(e) => handleNestedSubTestChange(sIdx, nIdx, "refRangeMin", e.target.value)}
+                                      placeholder="Min"
+                                      className="w-full h-10 px-2.5 rounded-lg border border-border bg-background text-xs font-mono text-center shadow-xs"
+                                    />
+                                    <span>-</span>
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      value={nested.refRangeMax}
+                                      onChange={(e) => handleNestedSubTestChange(sIdx, nIdx, "refRangeMax", e.target.value)}
+                                      placeholder="Max"
+                                      className="w-full h-10 px-2.5 rounded-lg border border-border bg-background text-xs font-mono text-center shadow-xs"
+                                    />
+                                  </div>
+
+                                  <div className="sm:col-span-1 flex justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveNestedSubTest(sIdx, nIdx)}
+                                      className="p-2 text-muted-foreground hover:text-destructive cursor-pointer"
+                                      title="Delete sub-parameter"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </div>
                                 </div>
-                                <div className="col-span-3 space-y-1.5">
-                                  <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Code</Label>
-                                  <Input placeholder="Auto-gen" value={subsub.testCode || ""} onChange={(e) => updateSubSubTest(index, sIdx, "testCode", e.target.value)} className="h-7 text-xs font-mono" />
-                                </div>
-                                {subsub.valueType !== "Custom" && (
-                                  <div className="col-span-4 space-y-1.5"><Label className="text-[10px]">Unit</Label><Input list="units-list" placeholder="Unit" value={subsub.unit} onChange={(e) => updateSubSubTest(index, sIdx, "unit", e.target.value)} className="h-7 text-xs" /></div>
-                                )}
                               </div>
-                              <div className="flex items-center gap-4 mb-2 mt-2 border-t border-border/30 pt-2">
-                                <div className="space-y-1">
-                                  <Label className="text-[10px] text-muted-foreground">Value Type</Label>
-                                  <Select value={subsub.valueType || "Numeric"} onValueChange={(val) => updateSubSubTest(index, sIdx, "valueType", val)}>
-                                    <SelectTrigger className="h-6 text-[10px] w-[90px] border-border"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="Numeric">Numeric</SelectItem>
-                                      <SelectItem value="Custom">Custom</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                                {(!subsub.valueType || subsub.valueType === "Numeric") && (
-                                  <div className="space-y-1">
-                                    <Label className="text-[10px] text-muted-foreground">Ref Range</Label>
-                                    <Select value={subsub.genderRefType} onValueChange={(val) => updateSubSubTest(index, sIdx, "genderRefType", val)}>
-                                      <SelectTrigger className="h-6 text-[10px] w-[90px] border-border"><SelectValue /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="BOTH">Universal</SelectItem>
-                                        <SelectItem value="GENDER_SPECIFIC">Gender</SelectItem>
-                                        <SelectItem value="CHILDREN">Children</SelectItem>
-                                        <SelectItem value="NEWBORN">Newborn</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                )}
-                              </div>
-                              {(!subsub.valueType || subsub.valueType === "Numeric") ? (
-                                subsub.genderRefType === "BOTH" ? (
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1"><Label className="text-[10px]">Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMin} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMin", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                    <div className="space-y-1"><Label className="text-[10px]">Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMax} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMax", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                  </div>
-                                ) : subsub.genderRefType === "GENDER_SPECIFIC" ? (
-                                  <div className="space-y-2">
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="space-y-1"><Label className="text-[10px] text-blue-500">Male Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinMale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinMale", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                      <div className="space-y-1"><Label className="text-[10px] text-blue-500">Male Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxMale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxMale", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="space-y-1"><Label className="text-[10px] text-pink-500">Fem Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinFemale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinFemale", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                      <div className="space-y-1"><Label className="text-[10px] text-pink-500">Fem Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxFemale} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxFemale", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                    </div>
-                                  </div>
-                                ) : subsub.genderRefType === "CHILDREN" ? (
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinChild} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinChild", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                    <div className="space-y-1"><Label className="text-[10px] text-purple-500">Child Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxChild} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxChild", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                  </div>
-                                ) : subsub.genderRefType === "NEWBORN" ? (
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Min</Label><Input type="number" step="0.0001" value={subsub.refRangeMinNewborn} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMinNewborn", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                    <div className="space-y-1"><Label className="text-[10px] text-emerald-500">Newborn Max</Label><Input type="number" step="0.0001" value={subsub.refRangeMaxNewborn} onChange={(e) => updateSubSubTest(index, sIdx, "refRangeMaxNewborn", e.target.value)} className="h-6 text-xs font-mono" /></div>
-                                  </div>
-                                ) : null
-                              ) : (
-                                <div className="space-y-2 pt-2 border-t border-border/40">
-                                  <Label className="text-[10px] font-medium text-foreground">Custom Options</Label>
-                                  <div className="flex flex-wrap gap-1.5 items-center">
-                                    {(subsub.customOptions || []).map((opt, i) => (
-                                      <span key={i} className="inline-flex items-center px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground text-[10px] font-medium">
-                                        {opt}
-                                      </span>
-                                    ))}
-                                    <Button type="button" variant="outline" size="sm" onClick={() => openCustomOptionsModal(index, sIdx)} className="h-5 px-1.5 py-0 text-[10px] border-primary/20 hover:bg-primary/5 text-primary">
-                                      <Plus className="h-2.5 w-2.5 mr-0.5" /> Add
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      )}
+                    </div>
+                  );
+                })}
                 <div ref={subtestsEndRef} />
               </div>
             </div>
-          </form>
-          <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20 shrink-0 mt-auto">
-            <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
-            <Button type="submit" form="test-form" disabled={saving}>
-              {saving ? (<><Loader2 className="h-4 w-4 animate-spin mr-2" /> Saving…</>) : editingTest ? "Update Package" : "Create Package"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
 
-      {/* Custom Options Modal */}
-      <Dialog open={customOptionsModalOpen} onOpenChange={(o) => {
-        if (!o) {
-          setCustomOptionsModalOpen(false);
-          setActiveCustomOptionsSubIndex(null);
-          setActiveCustomOptionsSubSubIndex(null);
-        }
-      }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Custom Options / Suggestions</DialogTitle>
-            <DialogDescription>
-              Add suggestions that the user can pick from when entering results for this custom field.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="flex gap-2">
-              <Input
-                placeholder="e.g. Reactive, Positive, Detected..."
-                value={newOptionInput}
-                onChange={(e) => setNewOptionInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    if (newOptionInput.trim() && !tempCustomOptions.includes(newOptionInput.trim())) {
-                      setTempCustomOptions([...tempCustomOptions, newOptionInput.trim()]);
-                      setNewOptionInput("");
-                    }
-                  }
-                }}
-              />
+          {/* Bottom Action Footer Bar */}
+          <div className="p-4 px-6 sm:px-8 border-t border-border bg-background/95 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-semibold">{subTests.length} Parameter{subTests.length !== 1 ? "s" : ""}</span>
+              <span>•</span>
+              <span className="font-semibold text-foreground">Category: {category === "Other" && customCategory ? customCategory : category}</span>
+            </div>
+
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
               <Button
                 type="button"
-                onClick={() => {
-                  if (newOptionInput.trim() && !tempCustomOptions.includes(newOptionInput.trim())) {
-                    setTempCustomOptions([...tempCustomOptions, newOptionInput.trim()]);
-                    setNewOptionInput("");
-                  }
-                }}
+                variant="outline"
+                onClick={() => setDialogOpen(false)}
+                disabled={saving}
+                className="rounded-xl px-5 h-11 text-xs font-semibold cursor-pointer"
               >
-                Add
+                Cancel
+              </Button>
+
+              <button
+                type="button"
+                onClick={() => setNotesModalOpen(true)}
+                disabled={saving}
+                className="inline-flex items-center gap-2 px-4 h-11 rounded-xl border border-border bg-card text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                <FileText className="h-4 w-4 text-blue-500" />
+                <span>Interpretation & Notes</span>
+              </button>
+
+              <Button
+                type="button"
+                onClick={handleSaveTest}
+                disabled={saving}
+                className="rounded-xl px-8 h-11 gradient-primary text-primary-foreground text-xs font-bold shadow-md hover:brightness-105 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                <span>{saving ? "Saving to Database..." : (editingTest ? "Save Changes" : "Create Test")}</span>
               </Button>
             </div>
-
-            <div className="bg-muted/30 border border-border/60 rounded-lg p-3 min-h-[100px] flex flex-wrap gap-2 items-start content-start">
-              {tempCustomOptions.length === 0 ? (
-                <span className="text-xs text-muted-foreground w-full text-center py-4">No options added yet.</span>
-              ) : (
-                tempCustomOptions.map((opt, i) => (
-                  <span key={i} className="inline-flex items-center pl-2 pr-1 py-1 rounded bg-secondary text-secondary-foreground text-xs font-medium border border-border/40">
-                    {opt}
-                    <button
-                      type="button"
-                      onClick={() => setTempCustomOptions(tempCustomOptions.filter((_, idx) => idx !== i))}
-                      className="ml-1 p-0.5 rounded-sm hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))
-              )}
-            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCustomOptionsModalOpen(false)}>Cancel</Button>
-            <Button type="button" onClick={() => {
-              if (activeCustomOptionsSubIndex !== null) {
-                if (activeCustomOptionsSubSubIndex !== null) {
-                  updateSubSubTest(activeCustomOptionsSubIndex, activeCustomOptionsSubSubIndex, "customOptions", tempCustomOptions);
-                } else {
-                  updateSubTest(activeCustomOptionsSubIndex, "customOptions", tempCustomOptions);
-                }
-              }
-              setCustomOptionsModalOpen(false);
-            }}>Save Options</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      {/* Delete confirmation */}
-      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete Test Package</DialogTitle>
-            <DialogDescription>
-              Delete <strong className="text-foreground">{deleteTarget?.name}</strong> and all its parameters from the catalog? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDeleteTest} disabled={deleting}>
-              {deleting ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Deleting…</> : "Delete"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* Interpretation Modal */}
-      <Dialog open={interpretationModalOpen} onOpenChange={setInterpretationModalOpen}>
-        <DialogContent hideClose className="max-w-4xl p-0 overflow-hidden bg-transparent border-none shadow-none">
-          <DialogTitle className="sr-only">Interpretation Editor</DialogTitle>
-          <TipTapEditor
-            value={interpretation}
-            onChange={newContent => setInterpretation(newContent)}
-            onSave={() => setInterpretationModalOpen(false)}
-            onClose={() => setInterpretationModalOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Custom Editor Dialog */}
-      <Dialog open={customEditorActiveSubIndex !== null} onOpenChange={(o) => !o && setCustomEditorActiveSubIndex(null)}>
-        <DialogContent hideClose className="max-w-4xl p-0 overflow-hidden bg-transparent border-none shadow-none">
-          <DialogTitle className="sr-only">Custom Editor</DialogTitle>
-          {customEditorActiveSubIndex !== null && (
-            <TipTapEditor
-              title="Custom Editor"
-              value={subTests[customEditorActiveSubIndex].interpretation || ""}
-              onChange={(html) => updateSubTest(customEditorActiveSubIndex, "interpretation", html)}
-              onSave={() => setCustomEditorActiveSubIndex(null)}
-              onClose={() => setCustomEditorActiveSubIndex(null)}
-            />
+          {/* Saving Progress Overlay */}
+          {saving && (
+            <div className="absolute inset-0 bg-background/70 backdrop-blur-xs flex flex-col items-center justify-center gap-3 z-50 animate-fade-in">
+              <div className="p-6 bg-card border border-border shadow-2xl rounded-2xl flex flex-col items-center gap-3 max-w-xs text-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <div>
+                  <p className="text-sm font-bold text-foreground">Saving Test Changes</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Updating parameters and database records...</p>
+                </div>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* =========================================================================
+          HORIZONTAL / LANDSCAPE CUSTOM OPTIONS MODAL DIALOG
+      ========================================================================= */}
+      <Dialog open={customOptionsModalOpen} onOpenChange={setCustomOptionsModalOpen}>
+        <DialogContent className="max-w-4xl w-full p-0 gap-0 overflow-hidden rounded-2xl border-border/80 shadow-2xl bg-card" hideClose>
+          <div className="p-4 px-6 border-b border-border/80 bg-card flex items-center justify-between">
+            <div>
+              <DialogTitle className="font-display text-base font-bold text-foreground flex items-center gap-2">
+                <Sliders className="h-4 w-4 text-primary" />
+                <span>Configure Qualitative Dropdown Options</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Select pre-built clinical choice sets or define custom qualitative values.
+              </DialogDescription>
+            </div>
+            <button
+              onClick={() => setCustomOptionsModalOpen(false)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted transition-colors cursor-pointer border border-border/70 shadow-xs"
+              title="Close dialog"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6 max-h-[75vh] overflow-y-auto">
+            {/* Left Pane: Quick Pre-built Packs */}
+            <div className="md:col-span-6 space-y-3 border-r border-border/70 pr-4">
+              <p className="font-bold text-xs text-foreground uppercase tracking-wider">
+                ⚡ Quick Clinical Preset Packs
+              </p>
+              <div className="space-y-2">
+                {QUICK_OPTION_PRESETS.map((p, pIdx) => (
+                  <div
+                    key={pIdx}
+                    onClick={() => handleApplyPreset(p.options)}
+                    className="p-3 rounded-lg border border-border/80 bg-card hover:border-primary/50 hover:bg-muted/40 transition-all cursor-pointer group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-foreground group-hover:text-primary transition-colors">
+                        {p.title}
+                      </span>
+                      <span className="text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                        Apply &rarr;
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{p.desc}</p>
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {p.options.map(opt => (
+                        <span key={opt} className="px-2 py-0.5 rounded bg-muted text-[10px] font-mono text-muted-foreground">
+                          {opt}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Right Pane: Active Selected Choices */}
+            <div className="md:col-span-6 space-y-4">
+              <div>
+                <p className="font-bold text-xs text-foreground uppercase tracking-wider">
+                  Active Options List ({tempCustomOptions.length})
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  These choices will be displayed as a dropdown when entering results.
+                </p>
+              </div>
+
+              {/* Add custom input */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newOptionInput}
+                  onChange={(e) => setNewOptionInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddCustomOption(); } }}
+                  placeholder="Type new option (e.g. 2+ (100 mg/dL))..."
+                  className="flex-1 h-10 px-3.5 rounded-lg border border-border bg-background text-xs font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <Button
+                  type="button"
+                  onClick={handleAddCustomOption}
+                  className="rounded-lg px-4 h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                >
+                  Add
+                </Button>
+              </div>
+
+              {/* Active Badges */}
+              <div className="min-h-[140px] p-3 rounded-lg bg-muted/30 border border-border/70 flex flex-wrap gap-1.5 items-start content-start">
+                {tempCustomOptions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic m-auto">No options added yet. Click a preset pack or type above.</p>
+                ) : (
+                  tempCustomOptions.map((opt, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card border border-border shadow-xs text-xs font-semibold text-foreground"
+                    >
+                      <span>{opt}</span>
+                      <button
+                        type="button"
+                        onClick={() => setTempCustomOptions(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-muted-foreground hover:text-destructive text-xs cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 px-6 border-t border-border bg-muted/30 flex items-center justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCustomOptionsModalOpen(false)}
+              className="rounded-lg px-4 text-xs font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveCustomOptions}
+              className="rounded-lg px-6 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 cursor-pointer"
+            >
+              Save Options
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* =========================================================================
+          HORIZONTAL / LANDSCAPE AGE-BASED REFERENCE RANGES DIALOG
+      ========================================================================= */}
+      <Dialog open={ageRangeModalOpen} onOpenChange={setAgeRangeModalOpen}>
+        <DialogContent className="max-w-4xl w-full p-0 gap-0 overflow-hidden rounded-2xl border-border/80 shadow-2xl bg-card" hideClose>
+          <div className="p-4 px-6 border-b border-border/80 bg-card flex items-center justify-between">
+            <div>
+              <DialogTitle className="font-display text-base font-bold text-foreground flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-primary" />
+                <span>Age-Graded Reference Ranges (Newborn, Child, Adult, Senior)</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Standard age intervals automatically pre-configured. Edit values or adjust age spans.
+              </DialogDescription>
+            </div>
+            <button
+              onClick={() => setAgeRangeModalOpen(false)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted transition-colors cursor-pointer border border-border/70 shadow-xs"
+              title="Close dialog"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+            <div className="flex items-center justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleLoadStandardAgeStages}
+                className="rounded-lg px-3.5 py-2 text-xs font-bold border-primary/30 text-primary hover:bg-primary/10 cursor-pointer flex items-center gap-1.5"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Reset to Standard Stages (0-120 Yrs)</span>
+              </Button>
+
+              <span className="text-xs text-muted-foreground font-medium">
+                {tempAgeRanges.length} Age Stages Active
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              {tempAgeRanges.map((band, bIdx) => (
+                <div key={band.id || bIdx} className="p-3.5 rounded-lg bg-card border border-border shadow-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                    {/* Stage Name */}
+                    <div className="sm:col-span-3 space-y-1.5">
+                      <label className="font-bold text-[11px] text-muted-foreground uppercase">Stage / Name</label>
+                      <input
+                        type="text"
+                        value={band.stageName}
+                        onChange={(e) => {
+                          const updated = [...tempAgeRanges];
+                          updated[bIdx].stageName = e.target.value;
+                          setTempAgeRanges(updated);
+                        }}
+                        placeholder="e.g. Newborn"
+                        className="w-full h-10 px-3 rounded-lg border border-border bg-background font-bold text-xs shadow-xs"
+                      />
+                    </div>
+
+                    {/* Age Span */}
+                    <div className="sm:col-span-4 space-y-1.5">
+                      <label className="font-bold text-[11px] text-muted-foreground uppercase">Age Span (From - To)</label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min="0"
+                          value={band.minAge}
+                          onChange={(e) => {
+                            const updated = [...tempAgeRanges];
+                            updated[bIdx].minAge = Number(e.target.value);
+                            setTempAgeRanges(updated);
+                          }}
+                          className="w-16 h-10 px-2.5 rounded-lg border border-border bg-background font-mono text-center text-xs shadow-xs"
+                        />
+                        <span className="text-muted-foreground font-semibold">to</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={band.maxAge}
+                          onChange={(e) => {
+                            const updated = [...tempAgeRanges];
+                            updated[bIdx].maxAge = Number(e.target.value);
+                            setTempAgeRanges(updated);
+                          }}
+                          className="w-16 h-10 px-2.5 rounded-lg border border-border bg-background font-mono text-center text-xs shadow-xs"
+                        />
+                        <select
+                          value={band.ageUnit}
+                          onChange={(e) => {
+                            const updated = [...tempAgeRanges];
+                            updated[bIdx].ageUnit = e.target.value as any;
+                            setTempAgeRanges(updated);
+                          }}
+                          className="h-10 px-3 rounded-lg border border-border bg-background text-xs font-semibold shadow-xs"
+                        >
+                          <option value="days">Days</option>
+                          <option value="months">Months</option>
+                          <option value="years">Years</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Gender */}
+                    <div className="sm:col-span-2 space-y-1.5">
+                      <label className="font-bold text-[11px] text-muted-foreground uppercase">Gender</label>
+                      <select
+                        value={band.gender}
+                        onChange={(e) => {
+                          const updated = [...tempAgeRanges];
+                          updated[bIdx].gender = e.target.value as any;
+                          setTempAgeRanges(updated);
+                        }}
+                        className="w-full h-10 px-3 rounded-lg border border-border bg-background text-xs font-medium shadow-xs"
+                      >
+                        <option value="BOTH">Both (M/F)</option>
+                        <option value="MALE">Male</option>
+                        <option value="FEMALE">Female</option>
+                      </select>
+                    </div>
+
+                    {/* Range Min & Max */}
+                    <div className="sm:col-span-2 space-y-1.5">
+                      <label className="font-bold text-[11px] text-muted-foreground uppercase">Ref Range</label>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={band.refMin || ""}
+                          onChange={(e) => {
+                            const updated = [...tempAgeRanges];
+                            updated[bIdx].refMin = e.target.value;
+                            setTempAgeRanges(updated);
+                          }}
+                          placeholder="Min"
+                          className="w-16 h-10 px-2 rounded-lg border border-border bg-background font-mono text-xs text-center shadow-xs"
+                        />
+                        <span className="font-bold text-muted-foreground">-</span>
+                        <input
+                          type="text"
+                          value={band.refMax || ""}
+                          onChange={(e) => {
+                            const updated = [...tempAgeRanges];
+                            updated[bIdx].refMax = e.target.value;
+                            setTempAgeRanges(updated);
+                          }}
+                          placeholder="Max"
+                          className="w-16 h-10 px-2 rounded-lg border border-border bg-background font-mono text-xs text-center shadow-xs"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Delete */}
+                    <div className="sm:col-span-1 flex justify-end pt-4 sm:pt-0">
+                      <button
+                        type="button"
+                        onClick={() => setTempAgeRanges(prev => prev.filter((_, i) => i !== bIdx))}
+                        className="p-1.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-4 px-6 border-t border-border bg-muted/30 flex items-center justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setAgeRangeModalOpen(false)}
+              className="rounded-lg px-4 text-xs font-semibold"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveAgeRanges}
+              className="rounded-lg px-6 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 cursor-pointer"
+            >
+              Save Age Intervals
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* =========================================================================
+          RICH TIPTAP INTERPRETATION, COMMENTS & NOTES MODAL EDITOR
+      ========================================================================= */}
+      <Dialog open={notesModalOpen} onOpenChange={setNotesModalOpen}>
+        <DialogContent className="max-w-6xl w-[95vw] h-[88vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl border-border/80 shadow-2xl bg-card">
+          <div className="p-4 px-6 border-b border-border/80 bg-card flex items-center justify-between shrink-0">
+            <div>
+              <DialogTitle className="font-display text-base font-bold text-foreground flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                <span>Clinical Interpretation & Report Comments: {name || "Main Test"}</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Rich text formatting with full toolbar for clinical advice, report comments, and technician precautions.
+              </DialogDescription>
+            </div>
+          </div>
+
+          {/* Tabs: Interpretation, Comment, Notes */}
+          <div className="flex items-center gap-6 px-6 border-b border-border text-xs font-bold bg-background shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveNotesTab("INTERPRETATION")}
+              className={`py-3 relative transition-colors cursor-pointer flex items-center gap-1.5 ${
+                activeNotesTab === "INTERPRETATION" ? "text-primary border-b-2 border-primary font-bold" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span>📝 Clinical Interpretation</span>
+              {interpretation && interpretation.trim() !== "" && (
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveNotesTab("COMMENT")}
+              className={`py-3 relative transition-colors cursor-pointer flex items-center gap-1.5 ${
+                activeNotesTab === "COMMENT" ? "text-primary border-b-2 border-primary font-bold" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span>💬 Default Report Comment</span>
+              {comment && comment.trim() !== "" && (
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveNotesTab("NOTES")}
+              className={`py-3 relative transition-colors cursor-pointer flex items-center gap-1.5 ${
+                activeNotesTab === "NOTES" ? "text-primary border-b-2 border-primary font-bold" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span>📌 Technician & Method Notes</span>
+              {notes && notes.trim() !== "" && (
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              )}
+            </button>
+          </div>
+
+          <div className="p-6 flex-1 overflow-y-auto bg-muted/10">
+            {activeNotesTab === "INTERPRETATION" && (
+              <div className="space-y-2 h-full flex flex-col">
+                <label className="font-bold text-xs text-foreground block shrink-0">
+                  Diagnostic Significance & Pathological Guidelines:
+                </label>
+                <div className="bg-white dark:bg-zinc-950 rounded-xl border border-border overflow-hidden flex-1 shadow-sm">
+                  <TipTapEditor
+                    value={interpretation}
+                    onChange={(html) => setInterpretation(html)}
+                    hideHeader={true}
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeNotesTab === "COMMENT" && (
+              <div className="space-y-2 h-full flex flex-col">
+                <label className="font-bold text-xs text-foreground block shrink-0">
+                  Default Patient / Doctor Comment (Printed on Patient Report):
+                </label>
+                <div className="bg-white dark:bg-zinc-950 rounded-xl border border-border overflow-hidden flex-1 shadow-sm">
+                  <TipTapEditor
+                    value={comment}
+                    onChange={(html) => setComment(html)}
+                    hideHeader={true}
+                  />
+                </div>
+              </div>
+            )}
+
+            {activeNotesTab === "NOTES" && (
+              <div className="space-y-2 h-full flex flex-col">
+                <label className="font-bold text-xs text-foreground block shrink-0">
+                  Technical Methodology & Specimen Handling Notes:
+                </label>
+                <div className="bg-white dark:bg-zinc-950 rounded-xl border border-border overflow-hidden flex-1 shadow-sm">
+                  <TipTapEditor
+                    value={notes}
+                    onChange={(html) => setNotes(html)}
+                    hideHeader={true}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 px-6 border-t border-border bg-muted/30 flex items-center justify-between shrink-0">
+            <span className="text-[11px] text-muted-foreground">
+              {activeNotesTab === "INTERPRETATION" && "Interpretation is printed on reports when enabled."}
+              {activeNotesTab === "COMMENT" && "Comments appear directly below test results."}
+              {activeNotesTab === "NOTES" && "Notes are internal to lab staff and reports."}
+            </span>
+            <Button
+              type="button"
+              onClick={() => setNotesModalOpen(false)}
+              className="rounded-xl px-8 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-sm"
+            >
+              Done / Save Notes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <DialogContent className="max-w-md w-full p-6 rounded-xl">
+          <DialogTitle className="font-display text-lg font-bold text-destructive flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            <span>Confirm Test Deletion</span>
+          </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Are you sure you want to permanently delete <strong>{deleteTarget?.name}</strong>? This action cannot be undone.
+          </DialogDescription>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              className="rounded-lg text-xs font-semibold cursor-pointer"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={handleDeleteTest}
+              className="rounded-lg text-xs font-bold cursor-pointer"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete Test"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* =========================================================================
+          LIVE SAMPLE PATIENT REPORT PREVIEW MODAL
+      ========================================================================= */}
+      {sampleReportData && (
+        <PrintPreviewDialog
+          open={samplePreviewOpen}
+          onOpenChange={setSamplePreviewOpen}
+          report={sampleReportData}
+          onLayoutSaved={fetchTests}
+        />
+      )}
     </div>
   );
 }

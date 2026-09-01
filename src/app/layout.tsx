@@ -1,16 +1,9 @@
 import type { Metadata } from "next";
-import { Fraunces } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
-
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-fraunces",
-  display: "swap",
-  axes: ["opsz"],
-});
+import { TopProgressBar } from "@/components/top-progress-bar";
 
 const geist = localFont({
   src: "./fonts/GeistVF.woff",
@@ -41,8 +34,9 @@ export default function RootLayout({
     <html lang="en" className="h-full" suppressHydrationWarning>
       <body
         suppressHydrationWarning
-        className={`${geist.variable} ${fraunces.variable} ${geistMono.variable} font-sans h-full bg-background text-foreground antialiased overflow-x-hidden`}
+        className={`${geist.variable} ${geistMono.variable} font-sans h-full bg-background text-foreground antialiased overflow-x-hidden`}
       >
+        <TopProgressBar />
         <ThemeProvider defaultTheme="light" storageKey="onepath-theme">
           <ToastProvider>
             {children}

@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Users, FileText, Receipt, LogOut, Menu, X, FlaskConical, Settings
+  LayoutDashboard, Users, FileText, Receipt, LogOut, Menu, X, FlaskConical, Settings, HelpCircle, LifeBuoy
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getStoredUser, logout } from "@/lib/api-client";
@@ -16,6 +16,7 @@ const navigation = [
   { name: "Reports", href: "/dashboard/reports", icon: FileText },
   { name: "Billing", href: "/dashboard/billing", icon: Receipt },
   { name: "Tests", href: "/dashboard/tests", icon: FlaskConical },
+  { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
@@ -41,15 +42,27 @@ export default function Sidebar() {
         <div className="relative h-8 w-8 shrink-0">
           <Image src="/onepath-logo.png" alt="OnePath" fill sizes="32px" className="object-contain" />
         </div>
-        <div className="leading-none">
-          <span className="font-display text-[17px] font-semibold tracking-tight text-foreground">OnePath</span>
-          <span className="font-display text-[17px] font-light text-muted-foreground ml-1">Lab</span>
+        <div className="flex items-center tracking-tight leading-none">
+          <span className="text-[17.5px] font-extrabold text-foreground tracking-tight">OnePath</span>
+          <span className="text-[17.5px] font-bold text-primary ml-1 tracking-tight">Lab</span>
         </div>
       </div>
 
+      {/* Quick Action: Register Patient */}
+      <div className="px-3.5 pt-4 pb-2">
+        <Link
+          href="/dashboard/patients/register"
+          onClick={() => setIsOpen(false)}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md ring-inset-top hover:-translate-y-px active:scale-[0.98] transition-all"
+        >
+          <span className="text-base leading-none font-bold">+</span>
+          <span>Add Patient</span>
+        </Link>
+      </div>
+
       {/* Nav */}
-      <nav className="flex-1 px-3.5 py-5 space-y-1 overflow-y-auto">
-        <p className="px-3 pb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+      <nav className="flex-1 px-3.5 py-3 space-y-1 overflow-y-auto">
+        <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
           Navigation
         </p>
         {navigation.map((item) => {

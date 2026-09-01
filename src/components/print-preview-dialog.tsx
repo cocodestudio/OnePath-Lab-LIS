@@ -6,70 +6,138 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Printer, FileText, CheckCircle2, MessageCircle } from "lucide-react";
+import { 
+  Printer, FileText, CheckCircle2, ChevronUp, ChevronDown, 
+  Trash2, Eye, EyeOff, Save, Check, Loader2, Sparkles, Sliders, BookOpen,
+  GripVertical, Layers, ChevronRight
+} from "lucide-react";
 import { useReactToPrint } from "react-to-print";
-import { ReportSheet, PaginatedReportPreview } from "@/components/report-sheet";
-import type { PrintSettings } from "@/components/report-sheet";
+import { ReportSheet, PaginatedReportPreview, type PrintSettings, type ReportTest } from "@/components/report-sheet";
+import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
+import { useToast } from "@/components/ui/toast";
 
 interface PrintPreviewDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   report: any;
+  onLayoutSaved?: () => void;
+}
+
+interface TopLevelBlock {
+  id: string;
+  name: string;
+  isGroup: boolean;
+  unit?: string;
+  items: ReportTest[];
 }
 
 const A4_W = 794;
 
-export function PrintPreviewDialog({ open, onOpenChange, report }: PrintPreviewDialogProps) {
-  const [useCustomLetterpad, setUseCustomLetterpad] = useState(false);
+export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }: PrintPreviewDialogProps) {
+  const toast = useToast();
+  const [useCustomLetterpad, setUseCustomLetterpad] = useState(true);
+  const [showInterpretation, setShowInterpretation] = useState(true);
   const [excludedMainTests, setExcludedMainTests] = useState<string[]>([]);
   const [previewScale, setPreviewScale] = useState(0.8);
   const [totalPages, setTotalPages] = useState(1);
-  
-  const [wpStatus, setWpStatus] = useState<'idle' | 'sending' | 'sent' | 'no_whatsapp' | 'error'>('idle');
+
+  // Top-level Parameter Blocks state (supports standalone parameters & full group blocks like DLC)
+  const [blocksList, setBlocksList] = useState<TopLevelBlock[]>([]);
+  const [hiddenBlockIds, setHiddenBlockIds] = useState<string[]>([]);
+  const [draggedBlockIdx, setDraggedBlockIdx] = useState<number | null>(null);
+  const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>([]);
+
+  const [isSavingLayout, setIsSavingLayout] = useState(false);
+  const [layoutSavedSuccess, setLayoutSavedSuccess] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollListRef = useRef<HTMLDivElement>(null);
   const printRef   = useRef<HTMLDivElement>(null);
 
-  const handleWhatsAppShare = async () => {
-    if (!report.patient?.phone) {
-      setWpStatus("no_whatsapp");
-      return;
-    }
-    setWpStatus("sending");
+  /* ── Build Top-Level Blocks from results ─────────────────── */
+  const buildBlocksFromResults = (results: ReportTest[]): TopLevelBlock[] => {
+    if (!Array.isArray(results) || results.length === 0) return [];
 
-    try {
-      const res = await fetch("/api/send-whatsapp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patientPhone: report.patient.phone,
-          patientName: report.patient.name,
-          reportId: report.customId || report.id,
-          reportDate: report.createdAt ? new Date(report.createdAt).toLocaleDateString() : new Date().toLocaleDateString(),
-          pdfUrl: "Pending Storage Upload" // Placeholder since we are skipping cloud storage
-        })
-      });
+    const blocks: TopLevelBlock[] = [];
+    const groupMap = new Map<string, TopLevelBlock>();
 
-      const data = await res.json();
-      if (data.success) {
-        setWpStatus("sent");
-      } else if (data.reason === "no_whatsapp") {
-        setWpStatus("no_whatsapp");
+    results.forEach((item) => {
+      // Check if item belongs to a subgroup (e.g. Differential Leukocyte Count)
+      if (item.test.parent?.parent) {
+        const groupName = item.test.parent.name;
+        const groupId = `group-${item.test.parent.id || groupName}`;
+
+        if (!groupMap.has(groupName)) {
+          const newGroup: TopLevelBlock = {
+            id: groupId,
+            name: groupName,
+            isGroup: true,
+            items: [item],
+          };
+          groupMap.set(groupName, newGroup);
+          blocks.push(newGroup);
+        } else {
+          groupMap.get(groupName)!.items.push(item);
+        }
       } else {
-        setWpStatus("error");
+        // Standalone parameter
+        blocks.push({
+          id: item.id || `res-${item.test.id || item.test.name}`,
+          name: item.test.name,
+          unit: item.test.unit,
+          isGroup: false,
+          items: [item],
+        });
       }
-    } catch {
-      setWpStatus("error");
-    }
-    
-    setTimeout(() => setWpStatus("idle"), 5000);
+    });
+
+    // Sort items within each group
+    blocks.forEach((b) => {
+      if (b.isGroup) {
+        b.items.sort((a, b) => {
+          const orderA = a.test.sort_order ?? (a.test as any)?.sortOrder ?? 0;
+          const orderB = b.test.sort_order ?? (b.test as any)?.sortOrder ?? 0;
+          if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;
+          return 0;
+        });
+      }
+    });
+
+    // Sort blocks by sort_order
+    blocks.sort((a, b) => {
+      const getBlockOrder = (block: TopLevelBlock) => {
+        if (block.isGroup) {
+          const pOrder = block.items[0]?.test?.parent?.sort_order ?? (block.items[0]?.test?.parent as any)?.sortOrder ?? 0;
+          const minItemOrder = block.items[0]?.test?.sort_order ?? (block.items[0]?.test as any)?.sortOrder ?? 0;
+          return minItemOrder || pOrder;
+        }
+        return block.items[0]?.test?.sort_order ?? (block.items[0]?.test as any)?.sortOrder ?? 0;
+      };
+
+      const orderA = getBlockOrder(a);
+      const orderB = getBlockOrder(b);
+      if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;
+      if (orderA !== 0 && orderB === 0) return -1;
+      if (orderA === 0 && orderB !== 0) return 1;
+      return 0;
+    });
+
+    return blocks;
   };
 
-  /* ── reset on open ─────────────────────────────────── */
+  /* ── reset & sync on open ─────────────────────────────────── */
   useEffect(() => {
     if (open && report) {
-      setUseCustomLetterpad(!!report.lab?.printBgImage);
+      setUseCustomLetterpad(true);
+      setShowInterpretation(true);
       setExcludedMainTests([]);
+      setHiddenBlockIds([]);
+      setLayoutSavedSuccess(false);
+
+      if (Array.isArray(report.results)) {
+        const initialBlocks = buildBlocksFromResults(report.results);
+        setBlocksList(initialBlocks);
+      }
     }
   }, [open, report]);
 
@@ -86,7 +154,162 @@ export function PrintPreviewDialog({ open, onOpenChange, report }: PrintPreviewD
     return () => window.removeEventListener("resize", update);
   }, [open]);
 
-  /* ── derived data ───────────────────────────────────── */
+  /* ── Drag & Drop Handlers with Auto-scroll ──────────── */
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedBlockIdx(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+
+    // Auto-scroll logic while dragging near list edges
+    if (scrollListRef.current) {
+      const rect = scrollListRef.current.getBoundingClientRect();
+      const offsetTop = e.clientY - rect.top;
+      const offsetBottom = rect.bottom - e.clientY;
+
+      if (offsetTop < 40) {
+        scrollListRef.current.scrollTop -= 8;
+      } else if (offsetBottom < 40) {
+        scrollListRef.current.scrollTop += 8;
+      }
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedBlockIdx === null || draggedBlockIdx === targetIndex) return;
+
+    setBlocksList(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(draggedBlockIdx, 1);
+      next.splice(targetIndex, 0, moved);
+      return next;
+    });
+    setDraggedBlockIdx(null);
+  };
+
+  const moveBlock = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= blocksList.length) return;
+
+    setBlocksList(prev => {
+      const next = [...prev];
+      const temp = next[index];
+      next[index] = next[targetIndex];
+      next[targetIndex] = temp;
+      return next;
+    });
+  };
+
+  const toggleBlockVisibility = (blockId: string) => {
+    setHiddenBlockIds(prev =>
+      prev.includes(blockId) ? prev.filter(id => id !== blockId) : [...prev, blockId]
+    );
+  };
+
+  const toggleGroupExpand = (groupId: string) => {
+    setExpandedGroupIds(prev =>
+      prev.includes(groupId) ? prev.filter(id => id !== groupId) : [...prev, groupId]
+    );
+  };
+
+  /* ── Save Layout to Database ────────────────────────── */
+  const handleSaveLayout = async () => {
+    if (!report?.results || blocksList.length === 0) return;
+    setIsSavingLayout(true);
+    setLayoutSavedSuccess(false);
+
+    try {
+      const firstRes = report.results[0];
+      const mainTestId = firstRes?.test?.parent?.parent?.id || firstRes?.test?.parent?.id || firstRes?.test?.id;
+
+      // Flatten blocks into parameter payload
+      const parametersPayload: any[] = [];
+      let currentOrder = 1;
+
+      blocksList.forEach(block => {
+        const isBlockHidden = hiddenBlockIds.includes(block.id);
+
+        if (block.isGroup) {
+          // If group is hidden, mark all its items hidden
+          const parentSubTestId = block.items[0]?.test?.parent?.id;
+          if (parentSubTestId) {
+            parametersPayload.push({
+              id: parentSubTestId,
+              sort_order: currentOrder++,
+              is_hidden: isBlockHidden,
+            });
+          }
+
+          block.items.forEach(item => {
+            parametersPayload.push({
+              id: item.test.id,
+              sort_order: currentOrder++,
+              is_hidden: isBlockHidden,
+            });
+          });
+        } else {
+          const item = block.items[0];
+          if (item?.test?.id) {
+            parametersPayload.push({
+              id: item.test.id,
+              sort_order: currentOrder++,
+              is_hidden: isBlockHidden,
+            });
+          }
+        }
+      });
+
+      if (mainTestId && !String(mainTestId).startsWith("sample-")) {
+        await fetchFromLaravel(`/tests/${mainTestId}/report-layout`, {
+          method: "POST",
+          body: JSON.stringify({
+            parameters: parametersPayload,
+            show_interpretation: showInterpretation,
+          }),
+        });
+      }
+
+      setLayoutSavedSuccess(true);
+      toast.success("Layout Saved", "Parameter sequence & report preferences saved permanently for this lab!");
+      onLayoutSaved?.();
+      setTimeout(() => setLayoutSavedSuccess(false), 3000);
+    } catch (err: any) {
+      console.error("Failed to save layout:", err);
+      toast.error("Save Failed", err.message || "Could not save custom layout.");
+    } finally {
+      setIsSavingLayout(false);
+    }
+  };
+
+  /* ── Derived active filtered report ──────────────────── */
+  const activeReport = useMemo(() => {
+    if (!report) return null;
+
+    // Flatten blocksList into results array in exact sequential order
+    const orderedResults: ReportTest[] = [];
+    blocksList.forEach(block => {
+      if (hiddenBlockIds.includes(block.id)) return;
+      block.items.forEach(item => {
+        let n = item.test.name;
+        if (item.test.parent?.parent) n = item.test.parent.parent.name;
+        else if (item.test.parent)    n = item.test.parent.name;
+
+        if (!excludedMainTests.includes(n)) {
+          orderedResults.push(item);
+        }
+      });
+    });
+
+    return {
+      ...report,
+      results: orderedResults,
+    };
+  }, [report, blocksList, hiddenBlockIds, excludedMainTests]);
+
   const availableMainTests = useMemo(() => {
     if (!report?.results) return [];
     const names = new Set<string>();
@@ -99,28 +322,20 @@ export function PrintPreviewDialog({ open, onOpenChange, report }: PrintPreviewD
     return Array.from(names);
   }, [report]);
 
-  const filteredReport = useMemo(() => {
-    if (!report?.results) return null;
-    return {
-      ...report,
-      results: report.results.filter((item: any) => {
-        let n = item.test.name;
-        if (item.test.parent?.parent) n = item.test.parent.parent.name;
-        else if (item.test.parent)    n = item.test.parent.name;
-        return !excludedMainTests.includes(n);
-      }),
-    };
-  }, [report, excludedMainTests]);
-
   const printSettings: PrintSettings | undefined = useMemo(() => {
     if (!report) return undefined;
-    const lab = report.lab || {};
+    const lab = (report.lab || {}) as any;
+    const rawBg = lab.printBgImage || lab.print_bg_image || null;
+    const hasBg = Boolean(rawBg && rawBg !== "null" && rawBg !== "undefined" && rawBg !== "none");
+    // Only letterhead image toggles — margins & heights ALWAYS from saved settings
+    const bgImage = useCustomLetterpad && hasBg ? getCleanLetterheadUrl(rawBg) : null;
+
     return {
-      bgImage:       useCustomLetterpad ? lab.printBgImage : null,
-      headerHeight:  lab.printHeaderHeight ?? 40,
-      footerHeight:  lab.printFooterHeight ?? 40,
-      marginLeft:    lab.printMarginLeft  ?? 40,
-      marginRight:   lab.printMarginRight ?? 40,
+      bgImage,
+      headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? 185,
+      footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? 95,
+      marginLeft:   lab.printMarginLeft  ?? lab.print_margin_left  ?? 32,
+      marginRight:  lab.printMarginRight ?? lab.print_margin_right ?? 32,
     };
   }, [report, useCustomLetterpad]);
 
@@ -129,136 +344,305 @@ export function PrintPreviewDialog({ open, onOpenChange, report }: PrintPreviewD
     documentTitle: report ? `Report_${report.customId}` : "Report",
   });
 
-  if (!report || !filteredReport) return null;
+  if (!report || !activeReport) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-full w-screen h-screen max-h-screen p-0 m-0 border-0 rounded-none overflow-hidden flex flex-col bg-background">
         <DialogHeader className="sr-only">
-          <DialogTitle>Print Preview</DialogTitle>
-          <DialogDescription>Preview and select tests to print</DialogDescription>
+          <DialogTitle>Print & Layout Preview</DialogTitle>
+          <DialogDescription>Customize parameter sequence, interpretation, and letterhead</DialogDescription>
         </DialogHeader>
 
         {/* ── Hidden print target ── */}
         <div className="sr-only" aria-hidden>
           <div ref={printRef}>
-            <ReportSheet report={filteredReport} settings={printSettings} />
+            <ReportSheet report={activeReport} settings={printSettings} hideInterpretation={!showInterpretation} />
           </div>
         </div>
 
-        {/* ── Top bar ── */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-6 py-4 bg-background border-b border-border shadow-sm z-10 shrink-0 gap-4">
+        {/* ── Top Bar ── */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-6 py-3.5 bg-background border-b border-border shadow-xs z-10 shrink-0 gap-4">
           <div className="flex items-center gap-3">
-            <div className="bg-primary/10 p-2 rounded-md">
+            <div className="bg-primary/10 p-2 rounded-lg">
               <FileText className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h2 className="font-semibold text-base leading-none mb-1">Print Preview</h2>
-              <p className="text-xs text-muted-foreground">
-                {totalPages} page{totalPages > 1 ? "s" : ""} · Adjust settings to update in real-time
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-base leading-none text-foreground">Report Sheet & Parameter Manager</h2>
+                <span className="bg-primary/15 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  Live Customizer
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {totalPages} page{totalPages > 1 ? "s" : ""} · Drag items/blocks up & down to reorder, toggle interpretation, and save lab layout in real-time.
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            
-            {/* <Button 
-              variant="outline" 
-              onClick={handleWhatsAppShare} 
-              disabled={wpStatus === 'sending' || wpStatus === 'sent'}
-              className={`gap-2 ${
-                wpStatus === 'sent' 
-                  ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200' 
-                  : wpStatus === 'error' || wpStatus === 'no_whatsapp' 
-                  ? 'bg-red-50 text-red-600 hover:bg-red-100 border-red-200'
-                  : 'hover:bg-[#E8F8F0] hover:text-[#25D366] hover:border-[#25D366]'
-              }`}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSaveLayout}
+              disabled={isSavingLayout}
+              className="gap-1.5 border-primary/40 hover:bg-primary/10 text-primary font-bold text-xs shadow-xs cursor-pointer"
             >
-              <MessageCircle className="h-4 w-4" /> 
-              {wpStatus === 'idle' && 'Share to WhatsApp'}
-              {wpStatus === 'sending' && 'Sending...'}
-              {wpStatus === 'sent' && 'Report Sent!'}
-              {wpStatus === 'no_whatsapp' && 'No WhatsApp on Number'}
-              {wpStatus === 'error' && 'Failed to Send'}
-            </Button> */}
-
-            <Button onClick={() => handlePrint()} className="gap-2">
+              {isSavingLayout ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : layoutSavedSuccess ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Save className="h-3.5 w-3.5" />}
+              <span>{isSavingLayout ? "Saving..." : layoutSavedSuccess ? "Saved to Lab DB!" : "Save Layout to Lab Account"}</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="cursor-pointer">Cancel</Button>
+            <Button size="sm" onClick={() => handlePrint()} className="gap-1.5 font-bold shadow-xs cursor-pointer">
               <Printer className="h-4 w-4" /> Print Document
             </Button>
           </div>
         </div>
 
-        {/* ── Main layout ── */}
+        {/* ── Main Layout ── */}
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
 
-          {/* Sidebar */}
-          <div className="w-full md:w-[300px] shrink-0 bg-background border-b md:border-b-0 md:border-r border-border flex flex-col overflow-y-auto custom-scrollbar max-h-[35vh] md:max-h-full md:h-full">
-            <div className="p-6 space-y-8">
-              {/* Appearance */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-muted-foreground" /> Appearance
+          {/* Sidebar Controls */}
+          <div className="w-full md:w-[350px] shrink-0 bg-card border-b md:border-b-0 md:border-r border-border flex flex-col overflow-y-auto custom-scrollbar max-h-[40vh] md:max-h-full md:h-full">
+            <div className="p-5 space-y-6">
+
+              {/* 1. Appearance & Sections */}
+              <div className="space-y-2.5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Sliders className="h-3.5 w-3.5 text-primary" />
+                  <span>Appearance & Sections</span>
                 </h3>
-                {report.lab?.printBgImage ? (
-                  <label className="flex items-start gap-3 p-3 border border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors bg-card shadow-sm">
-                    <Checkbox
-                      checked={useCustomLetterpad}
-                      onCheckedChange={(v) => setUseCustomLetterpad(v as boolean)}
-                      className="mt-0.5"
-                    />
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium text-foreground leading-none">Custom Letterpad</p>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        Print using the lab's configured background letterhead.
-                      </p>
-                    </div>
-                  </label>
-                ) : (
-                  <div className="p-3 border border-border/50 bg-muted/20 rounded-lg">
-                    <p className="text-[11px] text-muted-foreground">No background image configured.</p>
+                
+                {/* Letterhead Switch */}
+                <label className="flex items-start gap-3 p-3 border border-border rounded-xl cursor-pointer hover:bg-accent/40 transition-colors bg-background shadow-xs">
+                  <Checkbox
+                    checked={useCustomLetterpad}
+                    onCheckedChange={(v) => setUseCustomLetterpad(Boolean(v))}
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold text-foreground leading-none">Print with Letterhead</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Render with letterhead background and adjusted top/bottom margins.
+                    </p>
                   </div>
-                )}
+                </label>
+
+                {/* Interpretation Switch */}
+                <label className="flex items-start gap-3 p-3 border border-border rounded-xl cursor-pointer hover:bg-accent/40 transition-colors bg-background shadow-xs">
+                  <Checkbox
+                    checked={showInterpretation}
+                    onCheckedChange={(v) => setShowInterpretation(Boolean(v))}
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold text-foreground leading-none flex items-center gap-1.5">
+                      <BookOpen className="h-3.5 w-3.5 text-primary" />
+                      <span>Clinical Interpretation & Notes</span>
+                    </p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Show detailed medical interpretation table and notes at the end of report.
+                    </p>
+                  </div>
+                </label>
               </div>
 
-              {/* Tests */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-muted-foreground" /> Include Tests
-                </h3>
-                <div className="space-y-1 border border-border rounded-lg bg-card shadow-sm overflow-hidden p-1">
-                  {availableMainTests.map(testName => (
-                    <label key={testName} className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors group">
-                      <Checkbox
-                        checked={!excludedMainTests.includes(testName)}
-                        onCheckedChange={(checked) => {
-                          if (checked) setExcludedMainTests(p => p.filter(t => t !== testName));
-                          else         setExcludedMainTests(p => [...p, testName]);
-                        }}
-                      />
-                      <span className="text-sm text-foreground group-hover:text-primary transition-colors truncate select-none" title={testName}>
-                        {testName}
-                      </span>
-                    </label>
-                  ))}
-                  {availableMainTests.length === 0 && (
-                    <p className="text-xs text-muted-foreground italic p-3">No tests available.</p>
+              {/* 2. Manage Parameters & Sequence */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    <span>Parameters & Blocks ({blocksList.length})</span>
+                  </h3>
+                  <span className="text-[10px] text-muted-foreground font-semibold">
+                    {blocksList.length - hiddenBlockIds.length} active
+                  </span>
+                </div>
+
+                <div 
+                  ref={scrollListRef}
+                  className="space-y-2 border border-border rounded-xl bg-background p-2 shadow-xs max-h-[380px] overflow-y-auto custom-scrollbar"
+                >
+                  {blocksList.map((block, idx) => {
+                    const isHidden = hiddenBlockIds.includes(block.id);
+                    const isExpanded = expandedGroupIds.includes(block.id);
+
+                    return (
+                      <div
+                        key={block.id || idx}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, idx)}
+                        onDragOver={(e) => handleDragOver(e, idx)}
+                        onDrop={(e) => handleDrop(e, idx)}
+                        className={`rounded-lg border text-xs transition-all select-none ${
+                          draggedBlockIdx === idx
+                            ? "opacity-30 border-dashed border-primary bg-primary/5 scale-[0.98]"
+                            : isHidden 
+                            ? "bg-muted/40 border-dashed border-border/70 opacity-60" 
+                            : block.isGroup
+                            ? "bg-primary/5 border-primary/30 hover:border-primary/60 shadow-xs"
+                            : "bg-card border-border/80 hover:border-primary/40 shadow-xs"
+                        }`}
+                      >
+                        {/* Block Header Row */}
+                        <div className="flex items-center justify-between gap-2 p-2">
+                          {/* Left: Drag Grip Handle, Sequence Badge & Title */}
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            {/* Drag Grip Handle */}
+                            <span 
+                              className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground hover:text-foreground shrink-0 rounded transition-colors hover:bg-accent/60"
+                              title="Hold and drag to reorder"
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </span>
+
+                            <span className={`h-5 w-5 rounded-md flex items-center justify-center text-[10px] font-bold font-mono shrink-0 ${
+                              isHidden 
+                                ? "bg-muted text-muted-foreground" 
+                                : block.isGroup
+                                ? "bg-primary/20 text-primary font-extrabold"
+                                : "bg-primary/10 text-primary"
+                            }`}>
+                              {idx + 1}
+                            </span>
+
+                            <div className="truncate min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                {block.isGroup && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleGroupExpand(block.id)}
+                                    className="p-0.5 hover:bg-primary/10 rounded text-primary transition-transform cursor-pointer"
+                                    title={isExpanded ? "Collapse sub-parameters" : "Expand sub-parameters"}
+                                  >
+                                    <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                                  </button>
+                                )}
+                                <p className={`font-bold truncate text-[11.5px] leading-tight ${
+                                  isHidden 
+                                    ? "line-through text-muted-foreground" 
+                                    : block.isGroup 
+                                    ? "text-primary" 
+                                    : "text-foreground"
+                                }`} title={block.name}>
+                                  {block.name}
+                                </p>
+                              </div>
+                              {block.isGroup ? (
+                                <p className="text-[9.5px] text-primary/80 font-medium mt-0.5 flex items-center gap-1">
+                                  <Layers className="h-2.5 w-2.5 inline" /> Group Block ({block.items.length} sub-params)
+                                </p>
+                              ) : block.unit ? (
+                                <p className="text-[9.5px] text-muted-foreground leading-none mt-0.5 font-mono">
+                                  Unit: {block.unit}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          {/* Right: Move Up / Down & Visibility Actions */}
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            {/* Move Up */}
+                            <button
+                              type="button"
+                              onClick={() => moveBlock(idx, "up")}
+                              disabled={idx === 0}
+                              className="p-1 rounded hover:bg-accent disabled:opacity-20 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                              title="Move Up"
+                            >
+                              <ChevronUp className="h-3.5 w-3.5" />
+                            </button>
+
+                            {/* Move Down */}
+                            <button
+                              type="button"
+                              onClick={() => moveBlock(idx, "down")}
+                              disabled={idx === blocksList.length - 1}
+                              className="p-1 rounded hover:bg-accent disabled:opacity-20 text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                              title="Move Down"
+                            >
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            </button>
+
+                            {/* Visibility Toggle / Delete */}
+                            <button
+                              type="button"
+                              onClick={() => toggleBlockVisibility(block.id)}
+                              className={`p-1 rounded cursor-pointer transition-colors ${
+                                isHidden
+                                  ? "text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-950/40"
+                                  : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              }`}
+                              title={isHidden ? "Include in Report" : "Remove / Hide from Report"}
+                            >
+                              {isHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Expanded Group Items Preview */}
+                        {block.isGroup && isExpanded && (
+                          <div className="px-3 pb-2 pt-1 border-t border-primary/20 bg-background/50 space-y-1">
+                            {block.items.map((sub, sIdx) => (
+                              <div key={sub.id || sIdx} className="flex items-center justify-between text-[10.5px] text-muted-foreground pl-3 border-l-2 border-primary/30 py-0.5">
+                                <span className="truncate">{sub.test.name}</span>
+                                {sub.test.unit && <span className="font-mono text-[9px] text-muted-foreground/80">{sub.test.unit}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {blocksList.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic p-3 text-center">No parameters found.</p>
                   )}
                 </div>
+
+                <p className="text-[10.5px] text-muted-foreground leading-snug px-1 pt-1">
+                  💡 <strong>Drag & Drop:</strong> Hold <GripVertical className="inline h-3 w-3 text-foreground" /> icon to drag any parameter or entire group (like DLC) up or down. Click <strong className="text-foreground">"Save Layout to Lab Account"</strong> to keep this permanently for your lab.
+                </p>
               </div>
+
+              {/* 3. Include Panels (if multiple panels present) */}
+              {availableMainTests.length > 1 && (
+                <div className="space-y-2.5 pt-2 border-t border-border">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                    <span>Include Panels</span>
+                  </h3>
+                  <div className="space-y-1 border border-border rounded-xl bg-background shadow-xs overflow-hidden p-1.5">
+                    {availableMainTests.map(testName => (
+                      <label key={testName} className="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer hover:bg-accent/40 transition-colors group">
+                        <Checkbox
+                          checked={!excludedMainTests.includes(testName)}
+                          onCheckedChange={(checked) => {
+                            if (checked) setExcludedMainTests(p => p.filter(t => t !== testName));
+                            else         setExcludedMainTests(p => [...p, testName]);
+                          }}
+                        />
+                        <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate select-none" title={testName}>
+                          {testName}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
 
-
-          {/* ── Preview pane ── */}
+          {/* ── Preview Pane ── */}
           <div
             ref={containerRef}
-            className="flex-1 overflow-y-auto bg-zinc-300 dark:bg-zinc-800 flex justify-center py-10 custom-scrollbar"
+            className="flex-1 overflow-y-auto bg-zinc-200 dark:bg-zinc-900/90 flex justify-center py-8 px-4 custom-scrollbar shadow-inner"
           >
             {printSettings && (
               <PaginatedReportPreview
-                report={filteredReport}
+                report={activeReport}
                 settings={printSettings}
                 scale={previewScale}
+                hideInterpretation={!showInterpretation}
                 onPageCount={setTotalPages}
               />
             )}
@@ -269,5 +653,3 @@ export function PrintPreviewDialog({ open, onOpenChange, report }: PrintPreviewD
     </Dialog>
   );
 }
-
-

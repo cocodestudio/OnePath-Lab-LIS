@@ -1,53 +1,644 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import { useTheme } from "@/components/theme-provider";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Sun, Moon, LogOut, ChevronDown } from "lucide-react";
-import { getStoredUser, logout } from "@/lib/api-client";
+import {
+  Sun, Moon, LogOut, ChevronDown, Bell, LifeBuoy, HelpCircle,
+  MessageSquare, Bug, Lightbulb, CheckCircle2, AlertTriangle,
+  Clock, Check, ExternalLink, ShieldCheck, Search, ArrowLeft,
+  ArrowRight, Users, FileText, Receipt, X, Loader2, Command, Trash2,
+  Copy, Building2, FlaskConical, PlusCircle, Coins, IndianRupee, Mail as MailIcon,
+  Sparkles, Gift, User as UserIcon
+} from "lucide-react";
+import { getStoredUser, logout, fetchFromLaravel } from "@/lib/api-client";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
+} from "@/components/ui/dialog";
 
-function titleForPath(pathname: string): { eyebrow: string; title: string } {
-  if (pathname === "/dashboard") return { eyebrow: "Dashboard", title: "Overview" };
-  if (pathname.startsWith("/dashboard/patients/register")) return { eyebrow: "Patients", title: "Register Patient" };
-  if (pathname.startsWith("/dashboard/patients")) return { eyebrow: "Directory", title: "Patients" };
-  if (pathname.match(/\/dashboard\/reports\/[^/]+\/edit/)) return { eyebrow: "Reports", title: "Result Entry" };
-  if (pathname.match(/\/dashboard\/reports\/[^/]+$/)) return { eyebrow: "Reports", title: "Report Details" };
-  if (pathname.startsWith("/dashboard/reports")) return { eyebrow: "Diagnostics", title: "Reports" };
-  if (pathname.startsWith("/dashboard/billing")) return { eyebrow: "Finance", title: "Billing" };
-  if (pathname.startsWith("/dashboard/tests")) return { eyebrow: "Catalog", title: "Tests" };
-  return { eyebrow: "OnePath", title: "Lab" };
+interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  link?: string | null;
+  isRead?: boolean;
+  is_read?: boolean;
+  createdAt?: string;
+  created_at?: string;
 }
 
+const formatNotifTime = (dateVal?: string) => {
+  if (!dateVal) return "Just now";
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return "Recently";
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "Just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+};
+
 export default function Navbar() {
+  const router = useRouter();
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
-  const { eyebrow, title } = titleForPath(pathname);
   const [user, setUser] = useState<any>(null);
+
+  // Global search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<{
+    patients: any[];
+    reports: any[];
+    bills: any[];
+  }>({ patients: [], reports: [], bills: [] });
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  // Notification state
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+
+  // Lab and Sales state for profile dropdown
+  const [labData, setLabData] = useState<any>(null);
+  const [todaySales, setTodaySales] = useState<string>("₹0");
+  const [copiedLabId, setCopiedLabId] = useState(false);
 
   useEffect(() => {
     setUser(getStoredUser());
+    fetchNotifications();
+    fetchLabAndSales();
+    const interval = setInterval(() => {
+      fetchNotifications();
+      fetchLabAndSales();
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
+
+  const fetchLabAndSales = async () => {
+    try {
+      const [labRes, salesRes] = await Promise.all([
+        fetchFromLaravel("/lab"),
+        fetchFromLaravel("/today-sales"),
+      ]);
+      if (labRes) setLabData(labRes);
+      if (salesRes) {
+        if (salesRes.formatted) {
+          setTodaySales(salesRes.formatted);
+        } else if (salesRes.amount !== undefined || salesRes.today_total !== undefined) {
+          const val = Number(salesRes.amount ?? salesRes.today_total ?? 0);
+          setTodaySales(`₹${val.toLocaleString("en-IN")}`);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load lab/sales navbar info:", err);
+    }
+  };
+
+  const actualLabId = labData?.customId || labData?.custom_id || (user as any)?.lab?.custom_id || (user as any)?.lab?.customId || (user as any)?.lab_id || "47116602";
+
+  const handleCopyLabId = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const idToCopy = String(actualLabId);
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(idToCopy);
+    }
+    setCopiedLabId(true);
+    setTimeout(() => setCopiedLabId(false), 2500);
+  };
+
+  // Keyboard shortcut (Ctrl+K or Cmd+K) to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setIsSearchOpen(true);
+      }
+      if (e.key === "Escape") {
+        setIsSearchOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Click outside to close search dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Live search query debounce
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults({ patients: [], reports: [], bills: [] });
+      setIsSearching(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const [pRes, rRes, bRes] = await Promise.allSettled([
+          fetchFromLaravel(`/patients?search=${encodeURIComponent(searchQuery)}`),
+          fetchFromLaravel(`/reports?search=${encodeURIComponent(searchQuery)}`),
+          fetchFromLaravel(`/bills?search=${encodeURIComponent(searchQuery)}`),
+        ]);
+
+        const patients = pRes.status === "fulfilled" ? (Array.isArray(pRes.value) ? pRes.value : pRes.value?.data || []) : [];
+        const reports = rRes.status === "fulfilled" ? (Array.isArray(rRes.value) ? rRes.value : rRes.value?.data || []) : [];
+        const bills = bRes.status === "fulfilled" ? (Array.isArray(bRes.value) ? bRes.value : bRes.value?.data || []) : [];
+
+        setSearchResults({
+          patients: patients.slice(0, 4),
+          reports: reports.slice(0, 4),
+          bills: bills.slice(0, 3),
+        });
+      } catch (err) {
+        console.error("Global search error:", err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetchFromLaravel("/notifications");
+      const list = Array.isArray(res?.notifications)
+        ? res.notifications
+        : Array.isArray(res)
+        ? res
+        : [];
+      const unread = typeof res?.unreadCount === "number"
+        ? res.unreadCount
+        : typeof res?.unread_count === "number"
+        ? res.unread_count
+        : list.filter((n: any) => !(n.isRead ?? n.is_read)).length;
+
+      setNotifications(list);
+      setUnreadCount(unread);
+    } catch (err) {
+      console.error("Failed to load notifications:", err);
+    }
+  };
+
+  const markNotificationAsRead = async (id: string) => {
+    try {
+      await fetchFromLaravel(`/notifications/${id}/read`, { method: "PUT" });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true, is_read: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error("Failed to mark notification as read:", err);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      await fetchFromLaravel("/notifications/read-all", { method: "PUT" });
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true, is_read: true })));
+      setUnreadCount(0);
+    } catch (err) {
+      console.error("Failed to mark all as read:", err);
+    }
+  };
+
+  const handleNotificationClick = (notif: NotificationItem) => {
+    const isRead = notif.isRead ?? notif.is_read;
+    if (!isRead) {
+      markNotificationAsRead(notif.id);
+    }
+    setIsNotifOpen(false);
+    
+    // Redirect to notification's link or support history
+    const targetLink = notif.link || "/dashboard/support?view=history";
+    router.push(targetLink);
+  };
+
+  const clearAllNotifications = async () => {
+    try {
+      await fetchFromLaravel("/notifications/clear-all", { method: "DELETE" });
+      setNotifications([]);
+      setUnreadCount(0);
+    } catch (err) {
+      console.error("Failed to clear notifications:", err);
+      setNotifications([]);
+      setUnreadCount(0);
+    }
+  };
+
+  const handleSmartBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/dashboard");
+    }
+  };
+
+  const handleSmartForward = () => {
+    if (typeof window !== "undefined") {
+      window.history.forward();
+    }
+  };
 
   const name = user?.name || "User";
   const role = user?.role || "Staff";
   const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
 
+  const getNotifIcon = (type: string) => {
+    switch (type) {
+      case "SUPPORT_REPLY":
+        return <LifeBuoy className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />;
+      case "ALERT":
+        return <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />;
+      case "TICKET_UPDATE":
+        return <CheckCircle2 className="h-4 w-4 text-primary" />;
+      default:
+        return <Bell className="h-4 w-4 text-blue-600 dark:text-blue-400" />;
+    }
+  };
+
+  const hasResults = searchResults.patients.length > 0 || searchResults.reports.length > 0 || searchResults.bills.length > 0;
+
   return (
-    <header className="flex h-[68px] items-center justify-between px-6 lg:px-8 glass border-b border-border/60 shrink-0 sticky top-0 z-30">
-      {/* Page context */}
-      <div className="pl-12 md:pl-0">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80 leading-none">{eyebrow}</p>
-        <h1 className="font-display text-lg font-semibold tracking-tight text-foreground leading-tight mt-1">{title}</h1>
+    <header className="flex h-[68px] items-center justify-between px-4 sm:px-6 lg:px-8 glass border-b border-border/60 shrink-0 sticky top-0 z-30 gap-3 sm:gap-6">
+      
+      {/* Left Navigation Buttons + Full Width Global Search Bar */}
+      <div className="flex items-center gap-2.5 flex-1 max-w-2xl" ref={searchContainerRef}>
+        
+        {/* Smart History Back & Forward Buttons */}
+        <div className="hidden sm:flex items-center gap-1 bg-card/80 p-1 rounded-xl border border-border/80 shadow-xs shrink-0">
+          <button
+            type="button"
+            onClick={handleSmartBack}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            title="Go back to previous screen (Alt + Left)"
+            aria-label="Back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleSmartForward}
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            title="Go forward"
+            aria-label="Forward"
+          >
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Global Live Search Bar */}
+        <div className="relative flex-1">
+          <div className="relative flex items-center">
+            <Search className="absolute left-3.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsSearchOpen(true);
+              }}
+              onFocus={() => setIsSearchOpen(true)}
+              placeholder="Search patients by name, phone, or test report ID... (Ctrl + K)"
+              className="w-full h-10 pl-10 pr-20 bg-background/90 hover:bg-background focus:bg-background border border-border/90 focus:border-primary rounded-xl text-xs sm:text-sm font-medium text-foreground outline-none transition-all shadow-xs placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-primary/15"
+            />
+
+            <div className="absolute right-2.5 flex items-center gap-1.5">
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSearchResults({ patients: [], reports: [], bills: [] });
+                  }}
+                  className="p-1 text-muted-foreground hover:text-foreground rounded"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <kbd className="hidden md:inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-mono font-bold text-muted-foreground bg-muted border border-border/80 rounded-md">
+                  <span className="text-[11px]">⌘</span>K
+                </kbd>
+              )}
+            </div>
+          </div>
+
+          {/* Search Dropdown Results Popover */}
+          {isSearchOpen && searchQuery.trim().length > 0 && (
+            <div className="absolute left-0 right-0 top-12 bg-card border border-border/90 rounded-2xl shadow-2xl overflow-hidden z-50 animate-scale-in max-h-[440px] overflow-y-auto">
+              
+              {isSearching ? (
+                <div className="py-10 flex flex-col items-center justify-center text-muted-foreground gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  <p className="text-xs font-semibold">Searching patient records & reports...</p>
+                </div>
+              ) : !hasResults ? (
+                <div className="py-10 text-center text-muted-foreground space-y-1">
+                  <Search className="h-7 w-7 mx-auto opacity-30" />
+                  <p className="text-xs font-bold text-foreground">No matches found</p>
+                  <p className="text-[11px]">No patient, report or invoice matched &quot;{searchQuery}&quot;</p>
+                </div>
+              ) : (
+                <div className="p-2 space-y-3">
+                  
+                  {/* Patients Section */}
+                  {searchResults.patients.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <Users className="h-3 w-3 text-primary" />
+                        <span>Patients ({searchResults.patients.length})</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {searchResults.patients.map((p: any) => (
+                          <Link
+                            key={p.id}
+                            href={`/dashboard/patients`}
+                            onClick={() => setIsSearchOpen(false)}
+                            className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted/60 transition-colors text-xs"
+                          >
+                            <div>
+                              <p className="font-bold text-foreground">
+                                {p.title ? `${p.title} ` : ""}{p.full_name || p.fullName}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground font-mono">
+                                ID: {p.custom_id || p.customId} · Ph: {p.phone || "N/A"}
+                              </p>
+                            </div>
+                            <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
+                              View Patient →
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reports Section */}
+                  {searchResults.reports.length > 0 && (
+                    <div className="space-y-1 pt-1 border-t border-border/60">
+                      <div className="px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <FileText className="h-3 w-3 text-blue-500" />
+                        <span>Diagnostic Reports ({searchResults.reports.length})</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {searchResults.reports.map((r: any) => (
+                          <Link
+                            key={r.id}
+                            href={`/dashboard/reports/${r.id}/edit`}
+                            onClick={() => setIsSearchOpen(false)}
+                            className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted/60 transition-colors text-xs"
+                          >
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-primary">
+                                  {r.custom_id || r.customId}
+                                </span>
+                                <span className="text-[10px] font-bold uppercase px-1.5 py-0.2 rounded bg-muted text-muted-foreground">
+                                  {r.status}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground mt-0.5">
+                                Patient: {r.patient?.full_name || r.patient?.fullName || "Patient"}
+                              </p>
+                            </div>
+                            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">
+                              Enter Results →
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Billing Invoices Section */}
+                  {searchResults.bills.length > 0 && (
+                    <div className="space-y-1 pt-1 border-t border-border/60">
+                      <div className="px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <Receipt className="h-3 w-3 text-emerald-500" />
+                        <span>Invoices ({searchResults.bills.length})</span>
+                      </div>
+                      <div className="space-y-0.5">
+                        {searchResults.bills.map((b: any) => (
+                          <Link
+                            key={b.id}
+                            href={`/dashboard/billing`}
+                            onClick={() => setIsSearchOpen(false)}
+                            className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted/60 transition-colors text-xs"
+                          >
+                            <div>
+                              <span className="font-mono font-bold text-foreground">
+                                {b.custom_id || b.customId}
+                              </span>
+                              <p className="text-[11px] text-muted-foreground">
+                                Total: ₹{Number(b.grand_total || b.grandTotal || 0).toFixed(2)} · Status: {b.payment_status || b.paymentStatus}
+                              </p>
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+                              View Invoice →
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+            </div>
+          )}
+        </div>
+
       </div>
 
-      <div className="flex items-center gap-3">
-        {/* Theme toggle */}
-        <div className="flex items-center gap-0.5 bg-muted/50 rounded-lg p-0.5 border border-border/60">
+      {/* Right Controls: Help Dropdown, Notification Bell, Profile */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        
+        {/* Help & Support Button with Direct Action Redirection */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border/80 bg-card/80 hover:bg-accent text-foreground text-xs font-bold transition-all shadow-xs ring-inset-top"
+              title="Help & Support"
+            >
+              <LifeBuoy className="h-4 w-4 text-primary" />
+              <span className="hidden md:inline">Help</span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground/60 hidden sm:inline" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 rounded-2xl p-1.5 shadow-xl border-border/90">
+            <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2.5 py-1">
+              Helpdesk & Assistance
+            </DropdownMenuLabel>
+            
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/support?view=hub" className="flex items-center gap-2 text-xs font-semibold py-2 px-2.5 rounded-xl cursor-pointer">
+                <LifeBuoy className="h-4 w-4 text-primary" />
+                <span>Customer Support Hub</span>
+              </Link>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/support?view=issue" className="flex items-center gap-2 text-xs font-semibold py-2 px-2.5 rounded-xl cursor-pointer text-red-600 dark:text-red-400 hover:text-red-700">
+                <Bug className="h-4 w-4 text-red-500" />
+                <span>Report an Issue</span>
+              </Link>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/support?view=feedback" className="flex items-center gap-2 text-xs font-semibold py-2 px-2.5 rounded-xl cursor-pointer text-emerald-600 dark:text-emerald-400 hover:text-emerald-700">
+                <MessageSquare className="h-4 w-4 text-emerald-500" />
+                <span>Share Feedback</span>
+              </Link>
+            </DropdownMenuItem>
+
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/support?view=feature" className="flex items-center gap-2 text-xs font-semibold py-2 px-2.5 rounded-xl cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-700">
+                <Lightbulb className="h-4 w-4 text-blue-500" />
+                <span>Request a Feature</span>
+              </Link>
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard/support?view=history" className="flex items-center gap-2 text-xs font-semibold py-2 px-2.5 rounded-xl cursor-pointer text-foreground">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span>Ticket Logs & Replies</span>
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Notifications Dropdown */}
+        <DropdownMenu open={isNotifOpen} onOpenChange={setIsNotifOpen}>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="relative p-2.5 rounded-xl border border-border/80 bg-card/80 hover:bg-accent text-foreground transition-all shadow-xs outline-none"
+              title="System Notifications"
+              aria-label="Notifications"
+            >
+              <Bell className="h-4 w-4 text-foreground/80" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full gradient-primary text-[9px] font-bold text-primary-foreground animate-pulse shadow-sm">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent align="end" className="w-80 sm:w-96 p-0 rounded-2xl border-border/90 bg-card shadow-2xl overflow-hidden animate-scale-in">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-border/80 bg-muted/40">
+              <div className="flex items-center gap-2">
+                <Bell className="h-4 w-4 text-primary" />
+                <span className="font-bold text-xs text-foreground uppercase tracking-wider">Notifications</span>
+                {unreadCount > 0 && (
+                  <span className="font-mono text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.2 rounded-full">
+                    {unreadCount} new
+                  </span>
+                )}
+              </div>
+
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="text-[11px] font-bold text-primary hover:underline"
+                >
+                  Mark all as read
+                </button>
+              )}
+            </div>
+
+            {/* Notifications List */}
+            <div className="max-h-[380px] overflow-y-auto divide-y divide-border/60">
+              {notifications.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground space-y-2">
+                  <Bell className="h-8 w-8 mx-auto opacity-20" />
+                  <p className="text-xs font-bold text-foreground">No new notifications</p>
+                  <p className="text-[11px]">System alerts and support replies will appear here.</p>
+                </div>
+              ) : (
+                notifications.map((notif) => {
+                  const isRead = notif.isRead ?? notif.is_read;
+                  const timeStr = formatNotifTime(notif.createdAt || notif.created_at);
+
+                  return (
+                    <div
+                      key={notif.id}
+                      onClick={() => handleNotificationClick(notif)}
+                      className={`p-3.5 flex items-start gap-3 transition-colors cursor-pointer group ${
+                        isRead ? "opacity-75 hover:bg-muted/30" : "bg-primary/5 hover:bg-primary/10"
+                      }`}
+                    >
+                      <div className="h-8 w-8 rounded-lg bg-background border border-border/80 flex items-center justify-center shrink-0 shadow-xs group-hover:border-primary/40 transition-colors">
+                        {getNotifIcon(notif.type)}
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="font-bold text-xs text-foreground truncate group-hover:text-primary transition-colors">
+                            {notif.title}
+                          </p>
+                          <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+                            {timeStr}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
+                          {notif.message}
+                        </p>
+                        <div className="inline-flex items-center gap-1 text-[10px] font-bold text-primary group-hover:underline pt-0.5">
+                          <span>Open details</span>
+                          <ExternalLink className="h-2.5 w-2.5" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Dropdown Footer: Clear Notifications */}
+            <div className="p-2.5 px-3 bg-muted/40 border-t border-border/80 flex items-center justify-between">
+              <span className="text-[11px] font-medium text-muted-foreground">
+                {notifications.length} notification{notifications.length === 1 ? "" : "s"}
+              </span>
+              <button
+                type="button"
+                onClick={clearAllNotifications}
+                disabled={notifications.length === 0}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Clear All Notifications</span>
+              </button>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Theme toggle (Hidden) */}
+        <div className="hidden items-center gap-0.5 bg-muted/50 rounded-lg p-0.5 border border-border/60">
           <button
             onClick={() => setTheme("light")}
             title="Light mode"
@@ -66,30 +657,113 @@ export default function Navbar() {
           </button>
         </div>
 
-        {/* Profile dropdown */}
+        {/* Profile dropdown (matching exact Screenshot 1 reference) */}
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg pl-1 pr-2 py-1 outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50">
+          <DropdownMenuTrigger className="flex items-center gap-2 rounded-xl pl-1 pr-2 py-1 outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 cursor-pointer">
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="gradient-primary text-primary-foreground text-[11px] font-bold">{initials}</AvatarFallback>
+              <AvatarFallback className="gradient-primary text-primary-foreground text-[11px] font-bold">
+                {user?.name ? user.name.slice(0, 2).toUpperCase() : initials}
+              </AvatarFallback>
             </Avatar>
-            <span className="hidden sm:block text-left leading-none">
-              <span className="block text-[13px] font-semibold text-foreground">{name}</span>
+            <span className="hidden lg:block text-left leading-none">
+              <span className="block text-[13px] font-semibold text-foreground">{user?.name || name}</span>
               <span className="block text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">{role}</span>
             </span>
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60 hidden sm:block" />
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60 hidden lg:block" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-60">
-            <DropdownMenuLabel>Signed in as</DropdownMenuLabel>
-            <div className="px-2.5 pb-2 pt-0.5">
-              <p className="text-sm font-semibold text-foreground truncate">{name}</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.email || role}</p>
+
+          <DropdownMenuContent align="end" className="w-72 p-0 rounded-2xl shadow-2xl border-border/90 bg-card overflow-hidden">
+            {/* Header: Name + Account owner badge */}
+            <div className="p-4 pb-3 space-y-1.5 bg-background">
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="font-display font-bold text-sm text-foreground truncate">
+                  {user?.name || "Moh Abuzar"}
+                </h4>
+                <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-600 text-white shadow-xs">
+                  Account owner
+                </span>
+              </div>
+
+              {/* Lab ID with 1-click Copy */}
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span>Lab ID #: <strong className="font-mono text-foreground">{actualLabId}</strong></span>
+                <button
+                  type="button"
+                  onClick={handleCopyLabId}
+                  title="Copy Lab ID"
+                  className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  {copiedLabId ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                {copiedLabId && (
+                  <span className="text-[10px] font-bold text-emerald-600 animate-fade-in">Copied!</span>
+                )}
+              </div>
             </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:bg-destructive/10 focus:text-destructive [&>svg]:text-destructive" onSelect={logout}>
-              <LogOut /> Sign out
-            </DropdownMenuItem>
+
+            {/* Today's Sales Banner */}
+            <div className="bg-amber-500/10 dark:bg-amber-500/15 border-y border-amber-500/20 px-4 py-2.5 flex items-center justify-between text-xs font-bold text-amber-700 dark:text-amber-300">
+              <div className="flex items-center gap-2">
+                <div className="h-5 w-5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center text-[10px]">
+                  ₹
+                </div>
+                <span>My today's total :</span>
+              </div>
+              <div>
+                <span className="font-mono">{todaySales}</span>
+              </div>
+            </div>
+
+            {/* Menu Items */}
+            <div className="p-2 space-y-0.5 text-xs">
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/dashboard/account/profile"
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium text-foreground hover:bg-muted cursor-pointer transition-colors"
+                >
+                  <UserIcon className="h-4 w-4 text-muted-foreground" />
+                  <span>My account</span>
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/dashboard/account/lab"
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium text-foreground hover:bg-muted cursor-pointer transition-colors"
+                >
+                  <FlaskConical className="h-4 w-4 text-muted-foreground" />
+                  <span>Lab account</span>
+                </Link>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/dashboard/support"
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium text-foreground hover:bg-muted cursor-pointer transition-colors"
+                >
+                  <LifeBuoy className="h-4 w-4 text-muted-foreground" />
+                  <span>Help & Support</span>
+                </Link>
+              </DropdownMenuItem>
+            </div>
+
+            {/* Logout */}
+            <div className="p-2 border-t border-border/80 bg-muted/20">
+              <DropdownMenuItem
+                onSelect={logout}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
+              </DropdownMenuItem>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
+
       </div>
     </header>
   );

@@ -1,0 +1,596 @@
+"use client";
+
+import React, { useState, useRef, useMemo, useEffect } from "react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  X, Calendar, Printer, Download,
+  ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
+  ZoomIn, ZoomOut, RotateCcw, FileText,
+} from "lucide-react";
+import { useReactToPrint } from "react-to-print";
+import {
+  PaginatedReportPreview,
+  type PrintSettings,
+  type ReportSheetData,
+} from "@/components/report-sheet";
+import { useToast } from "@/components/ui/toast";
+import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+
+interface FullscreenPrintReportModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  report: any;
+  enteredValues?: Record<string, string>;
+  abnormalOverrides?: Record<string, boolean>;
+  paramRemarks?: Record<string, string>;
+  testNotes?: Record<string, { notes?: string; remarks?: string; advices?: string }>;
+  printedInterpretations?: string[];
+}
+
+function getTestPriority(mainTestName: string, category?: string): number {
+  const name = (mainTestName || "").trim().toLowerCase();
+  const cat = (category || "").trim().toLowerCase();
+
+  // 1. CBC Top Priority
+  if (name.includes("complete blood count") || name.includes("cbc") || name.includes("hemogram") || name.includes("haemogram")) {
+    return 10;
+  }
+
+  // 2. ESR
+  if (name.includes("erythrocyte sedimentation rate") || name.includes("esr")) {
+    return 20;
+  }
+
+  // 3. Other Haematology / Hematology
+  if (cat.includes("haemat") || cat.includes("hemat") || name.includes("blood group") || name.includes("coagulation") || name.includes("pt/inr") || name.includes("prothrombin") || name.includes("smear") || name.includes("platelet") || name.includes("bleeding time") || name.includes("clotting time")) {
+    return 30;
+  }
+
+  // 4. Biochemistry (LFT, KFT, Lipids, Sugar, HbA1c, Electrolytes, Calcium, etc.)
+  if (cat.includes("bio") || cat.includes("chem") || name.includes("liver") || name.includes("lft") || name.includes("kidney") || name.includes("kft") || name.includes("renal") || name.includes("rft") || name.includes("lipid") || name.includes("glucose") || name.includes("sugar") || name.includes("hba1c") || name.includes("electrolyte") || name.includes("calcium") || name.includes("cardiac") || name.includes("amylase") || name.includes("lipase") || name.includes("iron profile") || name.includes("iron studies")) {
+    return 40;
+  }
+
+  // 5. Serology & Immunology & Hormones
+  if (cat.includes("serol") || cat.includes("immun") || cat.includes("hormone") || cat.includes("endocrin") || name.includes("widal") || name.includes("dengue") || name.includes("typhoid") || name.includes("hiv") || name.includes("hbsag") || name.includes("hcv") || name.includes("vdrl") || name.includes("crp") || name.includes("ra factor") || name.includes("thyroid") || name.includes("tft") || name.includes("vitamin")) {
+    return 50;
+  }
+
+  // 6. Microbiology / Clinical Pathology / Urine / Semen / Stool
+  if (cat.includes("micro") || cat.includes("path") || cat.includes("urine") || cat.includes("semen") || cat.includes("stool") || name.includes("urine") || name.includes("semen") || name.includes("stool") || name.includes("culture") || name.includes("sputum") || name.includes("swab")) {
+    return 60;
+  }
+
+  // 7. General / Others
+  return 70;
+}
+
+export function FullscreenPrintReportModal({
+  open,
+  onOpenChange,
+  report,
+  enteredValues,
+  abnormalOverrides,
+  paramRemarks,
+  testNotes,
+  printedInterpretations,
+}: FullscreenPrintReportModalProps) {
+  const toast = useToast();
+  const printRef = useRef<HTMLDivElement>(null);
+
+  // ── State ─────────────────────────────────────────────
+  const [selectedMainTestIds, setSelectedMainTestIds] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [printWithHeaderFooter, setPrintWithHeaderFooter] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [zoomScale, setZoomScale] = useState<number>(0.80);
+  const [totalPages, setTotalPages] = useState(1);
+
+  // ── Extract distinct Main Tests ───────────────────────
+  const mainTests = useMemo(() => {
+    if (!report?.results || !Array.isArray(report.results)) return [];
+    const map = new Map<string, { id: string; name: string; category?: string }>();
+    report.results.forEach((item: any) => {
+      const t = item.test;
+      const mt = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
+      if (!map.has(mt.id)) map.set(mt.id, { id: mt.id, name: mt.name, category: t.category });
+    });
+    return Array.from(map.values()).sort((a, b) => {
+      const pA = getTestPriority(a.name, a.category);
+      const pB = getTestPriority(b.name, b.category);
+      if (pA !== pB) return pA - pB;
+      return a.name.localeCompare(b.name);
+    });
+  }, [report]);
+
+  // ── Sync on modal open ────────────────────────────────
+  useEffect(() => {
+    if (open && report) {
+      setSelectedMainTestIds(mainTests.map((m) => m.id));
+      const ds = report.reportDate || report.createdAt;
+      if (ds) {
+        const d = new Date(ds);
+        setSelectedDate(isNaN(d.getTime()) ? new Date() : d);
+      } else {
+        setSelectedDate(new Date());
+      }
+    }
+  }, [open, report, mainTests]);
+
+  // ── Print Settings ────────────────────────────────────
+  // Margins & heights ALWAYS come from saved lab settings.
+  // Only bgImage toggles on/off based on printWithHeaderFooter.
+  const printSettings: PrintSettings = useMemo(() => {
+    const lab = (report?.lab || {}) as any;
+    const rawBg = lab.printBgImage || lab.print_bg_image || null;
+    const hasBg = Boolean(rawBg && rawBg !== "null" && rawBg !== "undefined" && rawBg !== "none");
+    const bgImage = printWithHeaderFooter && hasBg ? getCleanLetterheadUrl(rawBg) : null;
+
+    return {
+      bgImage,
+      headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? 185,
+      footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? 95,
+      marginLeft:   lab.printMarginLeft  ?? lab.print_margin_left  ?? 32,
+      marginRight:  lab.printMarginRight ?? lab.print_margin_right ?? 32,
+    };
+  }, [report, printWithHeaderFooter]);
+
+  // ── Active Report Data ────────────────────────────────
+  const activeReportData: ReportSheetData | null = useMemo(() => {
+    if (!report) return null;
+    const filteredResults = (report.results || [])
+      .filter((item: any) => {
+        const t = item.test;
+        const mt = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
+        return selectedMainTestIds.includes(mt.id);
+      })
+      .map((item: any) => ({
+        ...item,
+        resultValue: enteredValues?.[item.id] ?? item.resultValue,
+        isAbnormal: abnormalOverrides?.[item.id] ?? item.isAbnormal,
+        remarks: paramRemarks?.[item.id] ?? item.remarks,
+      }));
+
+    return {
+      ...report,
+      reportDate: selectedDate.toISOString(),
+      results: filteredResults,
+      printedInterpretations: JSON.stringify(printedInterpretations ?? (typeof report.printedInterpretations === 'string' ? JSON.parse(report.printedInterpretations || '[]') : (report.printedInterpretations ?? report.printed_interpretations ?? []))),
+      testNotes: testNotes || report.testNotes || report.test_notes,
+      test_notes: testNotes || report.test_notes || report.testNotes,
+    };
+  }, [report, selectedMainTestIds, enteredValues, abnormalOverrides, paramRemarks, testNotes, printedInterpretations, selectedDate]);
+
+  // ── Date & Time Helpers ───────────────────────────────
+  const adj = (fn: (d: Date) => void) =>
+    setSelectedDate((prev) => {
+      const d = new Date(prev);
+      fn(d);
+      return d;
+    });
+
+  const adjustDay = (n: number) => adj((d) => d.setDate(d.getDate() + n));
+  const adjustHour = (n: number) => adj((d) => d.setHours(d.getHours() + n));
+  const adjustMinute = (n: number) => adj((d) => d.setMinutes(d.getMinutes() + n));
+  const adjustSecond = (n: number) => adj((d) => d.setSeconds(d.getSeconds() + n));
+  const toggleAmPm = () => adj((d) => d.setHours((d.getHours() + 12) % 24));
+
+  const dateInputVal = useMemo(() => {
+    try {
+      const tz = selectedDate.getTimezoneOffset() * 60000;
+      return new Date(selectedDate.getTime() - tz).toISOString().slice(0, 10);
+    } catch {
+      return "";
+    }
+  }, [selectedDate]);
+
+  const hours12 = selectedDate.getHours() % 12 || 12;
+  const isPm = selectedDate.getHours() >= 12;
+
+  // ── Native Browser Print ──────────────────────────────
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `Report_${report?.customId || "Patient"}_${report?.patient?.name || ""}`,
+    onAfterPrint: async () => {
+      toast.success("Printed", "Print job sent to printer. Status updated to APPROVED.");
+      if (report?.id) {
+        try {
+          await fetchFromLaravel(`/reports/${report.id}`, {
+            method: "PUT",
+            body: JSON.stringify({ status: "APPROVED" }),
+          });
+        } catch (e) {
+          console.error("Failed to update report status to APPROVED on print:", e);
+        }
+      }
+    },
+  });
+
+  // ── High-Quality Compressed PDF Download (100% Exact Match with Print Preview) ──
+  const handleDownloadPdf = async (withLetterhead: boolean) => {
+    if (!printRef.current || !activeReportData) {
+      toast.error("Not Ready", "Preview still loading. Please wait a moment.");
+      return;
+    }
+
+    setIsDownloadingPdf(true);
+    const label = withLetterhead ? "Letterhead" : "Plain";
+    toast.info("Generating PDF", `Preparing ${label} PDF...`);
+
+    try {
+      const pageEls = printRef.current.querySelectorAll<HTMLElement>(".report-print-page");
+      if (!pageEls || pageEls.length === 0) throw new Error("No report pages found.");
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
+      const pdfW = pdf.internal.pageSize.getWidth();  // 595.28 pt
+      const pdfH = pdf.internal.pageSize.getHeight(); // 841.89 pt
+
+      for (let i = 0; i < pageEls.length; i++) {
+        if (i > 0) pdf.addPage("a4", "portrait");
+
+        const canvas = await html2canvas(pageEls[i], {
+          scale: 2,           // 2x → 1588×2246px ultra-crisp resolution
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          width: 794,
+          height: 1123,
+          windowWidth: 794,
+          windowHeight: 1123,
+          scrollX: 0,
+          scrollY: 0,
+          x: 0,
+          y: 0,
+          imageTimeout: 20000,
+          onclone: (_doc, clonedEl) => {
+            // 1. Reset scale and positioning on the cloned page
+            clonedEl.style.transform = "none";
+            clonedEl.style.width = "794px";
+            clonedEl.style.height = "1123px";
+            clonedEl.style.position = "relative";
+            clonedEl.style.top = "0";
+            clonedEl.style.left = "0";
+            clonedEl.style.margin = "0";
+            clonedEl.style.overflow = "hidden";
+
+            // 2. Unconstrain parent card wrapper
+            if (clonedEl.parentElement) {
+              clonedEl.parentElement.style.width = "794px";
+              clonedEl.parentElement.style.height = "1123px";
+              clonedEl.parentElement.style.transform = "none";
+              clonedEl.parentElement.style.overflow = "visible";
+            }
+
+            // 3. Handle Letterhead
+            if (!withLetterhead) {
+              clonedEl.querySelectorAll<HTMLElement>(".letterhead-bg-img").forEach((img) => {
+                img.style.display = "none";
+              });
+            }
+          },
+        });
+
+        const imgData = canvas.toDataURL("image/jpeg", 0.92);
+        pdf.addImage(imgData, "JPEG", 0, 0, pdfW, pdfH, `page-${i}`, "FAST");
+      }
+
+      const filename = `Report_${report.customId || "Patient"}_${label}.pdf`;
+      pdf.save(filename);
+      toast.success("PDF Downloaded", `Saved as ${filename}`);
+    } catch (err: any) {
+      console.error("PDF generation error:", err);
+      toast.error("Download Error", "Could not generate PDF. Try printing instead.");
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  // ── WhatsApp Dispatch (Phone number from patient record) ──────────────────
+  const handleWhatsApp = () => {
+    const phone = report?.patient?.phone;
+    if (!phone) {
+      toast.error("No Phone", "Patient has no phone number on record.");
+      return;
+    }
+    const cleaned = phone.replace(/\D/g, "");
+    const intl = cleaned.startsWith("91") ? cleaned : `91${cleaned}`;
+    const msg = encodeURIComponent(
+      `Hello ${report?.patient?.name || "Patient"}, your lab report (ID: ${report?.customId}) is ready. Please contact us for details.`
+    );
+    window.open(`https://wa.me/${intl}?text=${msg}`, "_blank");
+  };
+
+  if (!report || !activeReportData) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] max-h-[92vh] p-0 m-0 border border-border/80 rounded-3xl overflow-hidden flex flex-col bg-background shadow-2xl [&>button.absolute]:hidden">
+        <DialogTitle className="sr-only">Print & Preview Report</DialogTitle>
+
+        {/* ── Main 3-Column Layout ─────────────────────────────────────── */}
+        <div className="flex-1 flex flex-col lg:flex-row h-full overflow-hidden">
+          
+          {/* ═══════════════════════════════════════════════════════════════
+              1. LEFT SIDEBAR: Tests List (~260px)
+          ═══════════════════════════════════════════════════════════════ */}
+          <div className="w-full lg:w-[260px] bg-card border-r border-border/80 flex flex-col shrink-0 overflow-hidden">
+            <div className="p-4 border-b border-border/80 bg-muted/20 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                <h3 className="font-bold text-sm text-foreground">Tests List</h3>
+              </div>
+              <span className="text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                {selectedMainTestIds.length}/{mainTests.length}
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+              <div className="pb-2 border-b border-border/60">
+                <label className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-muted/40 transition-colors cursor-pointer select-none">
+                  <Checkbox
+                    checked={selectedMainTestIds.length === mainTests.length && mainTests.length > 0}
+                    onCheckedChange={() =>
+                      setSelectedMainTestIds(
+                        selectedMainTestIds.length === mainTests.length ? [] : mainTests.map((m) => m.id)
+                      )
+                    }
+                  />
+                  <span className="text-xs font-bold text-foreground">Select All Tests</span>
+                </label>
+              </div>
+
+              <div className="space-y-1.5">
+                {mainTests.map((mt) => {
+                  const isSelected = selectedMainTestIds.includes(mt.id);
+                  return (
+                    <label
+                      key={mt.id}
+                      className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
+                        isSelected
+                          ? "bg-accent/70 border-primary/40 text-foreground font-semibold shadow-2xs"
+                          : "bg-card border-border/70 text-muted-foreground hover:bg-muted/30"
+                      }`}
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() =>
+                          setSelectedMainTestIds((prev) =>
+                            prev.includes(mt.id) ? prev.filter((id) => id !== mt.id) : [...prev, mt.id]
+                          )
+                        }
+                      />
+                      <span className="text-xs truncate">{mt.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* ═══════════════════════════════════════════════════════════════
+              2. CENTER PANEL: Live Canvas Viewport
+          ═══════════════════════════════════════════════════════════════ */}
+          <div className="flex-1 flex flex-col bg-zinc-900/95 dark:bg-zinc-950 overflow-hidden relative">
+            {/* Top Toolbar */}
+            <div className="h-12 bg-zinc-800/90 border-b border-zinc-700/80 px-4 flex items-center justify-between text-zinc-200 shrink-0">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-zinc-200 font-mono">
+                  {report.patient?.name || "Patient Report"}
+                </span>
+                <span className="text-zinc-500">·</span>
+                <span className="text-xs font-mono text-zinc-400 font-bold bg-zinc-700/60 px-2 py-0.5 rounded">
+                  {report.customId}
+                </span>
+                <span className="text-zinc-500">|</span>
+                <span className="text-xs font-bold text-zinc-300 font-mono">
+                  Page 1 / {totalPages}
+                </span>
+              </div>
+
+              {/* Zoom & Action Controls */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setZoomScale((p) => Math.max(0.4, Number((p - 0.08).toFixed(2))))}
+                  className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+                <span className="text-xs font-mono font-bold w-12 text-center text-zinc-300">
+                  {Math.round(zoomScale * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoomScale((p) => Math.min(1.4, Number((p + 0.08).toFixed(2))))}
+                  className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomScale(0.84)}
+                  className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer ml-1"
+                  title="Reset Zoom"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+
+                <div className="h-4 w-px bg-zinc-700 mx-2" />
+
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPdf(printWithHeaderFooter)}
+                  className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                  title="Download PDF"
+                >
+                  <Download className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePrint()}
+                  className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                  title="Print Report"
+                >
+                  <Printer className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Live Center Sheet Viewport (Rendered with forwarded printRef!) */}
+            <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-8 flex justify-center items-start custom-scrollbar">
+              <div className="rounded-xl overflow-hidden shadow-2xl">
+                <PaginatedReportPreview
+                  ref={printRef}
+                  report={activeReportData}
+                  settings={printSettings}
+                  scale={zoomScale}
+                  hideInterpretation={false}
+                  onPageCount={setTotalPages}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ═══════════════════════════════════════════════════════════════
+              3. RIGHT SIDEBAR: Settings & Actions (~320px)
+          ═══════════════════════════════════════════════════════════════ */}
+          <div className="w-full lg:w-[320px] bg-card border-l border-border/80 flex flex-col shrink-0 overflow-hidden">
+            <div className="p-4 border-b border-border/80 bg-muted/20 flex items-center justify-between">
+              <h3 className="font-bold text-sm text-foreground">Settings</h3>
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="p-1.5 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-5 custom-scrollbar text-xs">
+              {/* Date & Time Picker */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-primary" />
+                    Report Date & Time
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate(new Date())}
+                    className="text-[10.5px] text-primary hover:underline font-bold cursor-pointer"
+                  >
+                    Set Current (Now)
+                  </button>
+                </div>
+
+                {/* Day Navigation */}
+                <div className="flex items-center gap-1.5 bg-muted/30 p-1.5 rounded-xl border border-border/80">
+                  <button
+                    type="button"
+                    onClick={() => adjustDay(-1)}
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer shrink-0"
+                    title="Previous Day"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <input
+                    type="date"
+                    value={dateInputVal}
+                    onChange={(e) => {
+                      const d = new Date(e.target.value);
+                      if (!isNaN(d.getTime())) {
+                        adj((prev) => {
+                          prev.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
+                        });
+                      }
+                    }}
+                    className="flex-1 bg-background border border-border/70 rounded-lg px-2.5 py-1 text-xs font-mono font-bold text-foreground text-center outline-none focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => adjustDay(1)}
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer shrink-0"
+                    title="Next Day"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* Time Steppers: Hour, Min, Sec, AM/PM */}
+                <div className="grid grid-cols-4 gap-1.5 bg-muted/30 p-2 rounded-xl border border-border/80">
+                  {[
+                    { label: "Hr", value: hours12.toString().padStart(2, "0"), up: () => adjustHour(1), down: () => adjustHour(-1) },
+                    { label: "Min", value: selectedDate.getMinutes().toString().padStart(2, "0"), up: () => adjustMinute(1), down: () => adjustMinute(-1) },
+                    { label: "Sec", value: selectedDate.getSeconds().toString().padStart(2, "0"), up: () => adjustSecond(5), down: () => adjustSecond(-5) },
+                  ].map(({ label, value, up, down }) => (
+                    <div key={label} className="flex flex-col items-center bg-background p-1.5 rounded-lg border border-border/70">
+                      <button type="button" onClick={up} className="p-0.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground cursor-pointer">
+                        <ChevronUp className="h-3 w-3" />
+                      </button>
+                      <span className="text-xs font-mono font-bold text-foreground my-0.5">{value}</span>
+                      <button type="button" onClick={down} className="p-0.5 hover:bg-muted rounded text-muted-foreground hover:text-foreground cursor-pointer">
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
+                      <span className="text-[8.5px] font-bold text-muted-foreground uppercase">{label}</span>
+                    </div>
+                  ))}
+
+                  <div className="flex flex-col items-center justify-center bg-background p-1.5 rounded-lg border border-border/70">
+                    <button
+                      type="button"
+                      onClick={toggleAmPm}
+                      className="w-full h-full flex flex-col items-center justify-center gap-0.5 hover:bg-muted rounded text-primary font-bold text-xs cursor-pointer transition-colors"
+                    >
+                      <span className="font-bold text-xs">{isPm ? "PM" : "AM"}</span>
+                      <span className="text-[8.5px] text-muted-foreground font-semibold">Toggle</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Header & Footer Toggle */}
+              <div className="pt-2 border-t border-border/60">
+                <label className="flex items-center justify-between p-3 bg-muted/20 rounded-xl border border-border/80 cursor-pointer hover:bg-muted/40 transition-colors">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-bold text-foreground block">Print with Header & Footer</span>
+                    <span className="text-[10px] text-muted-foreground block">Uncheck for pre-printed letterhead paper</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={printWithHeaderFooter}
+                    onChange={(e) => setPrintWithHeaderFooter(e.target.checked)}
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 cursor-pointer accent-primary"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Bottom Actions Footer */}
+            <div className="p-4 border-t border-border/80 bg-muted/20">
+              <Button
+                type="button"
+                onClick={handleWhatsApp}
+                className="w-full h-11 gap-2.5 font-bold text-sm bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white cursor-pointer shadow-sm rounded-xl transition-colors"
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                <span>Send WhatsApp Report</span>
+              </Button>
+            </div>
+
+          </div>
+
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
