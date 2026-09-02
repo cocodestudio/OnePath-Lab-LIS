@@ -93,10 +93,20 @@ export function getCleanLetterheadUrl(url?: string | null): string | null {
   if (trimmed.startsWith("blob:")) {
     return null;
   }
+
+  const authBase = getAuthBaseUrl();
+  const origin = authBase.replace(/\/api\/auth.*$/, "");
+
   if (trimmed.startsWith("/storage/")) {
-    const rawApi = process.env.NEXT_PUBLIC_API_URL || "https://api.onepathlab.com/api";
-    const origin = rawApi.replace(/\/api.*$/, "");
     return `${origin}${trimmed}`;
   }
+  if (trimmed.startsWith("storage/")) {
+    return `${origin}/${trimmed}`;
+  }
+  if (trimmed.includes("/storage/")) {
+    const storagePath = trimmed.substring(trimmed.indexOf("/storage/"));
+    return `${origin}${storagePath}`;
+  }
+
   return trimmed;
 }
