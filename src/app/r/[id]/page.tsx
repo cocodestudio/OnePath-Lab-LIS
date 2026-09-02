@@ -94,8 +94,58 @@ export default function PublicReportVerificationPage() {
     }
   }, [report]);
 
+  const [letterheadBase64, setLetterheadBase64] = useState<string | null>(null);
+
+  // Pre-convert letterhead image into base64 Data URL so html2canvas renders it 100% reliably
+  useEffect(() => {
+    const rawBg = lab?.print_bg_image || lab?.printBgImage;
+    const cleanUrl = getCleanLetterheadUrl(rawBg);
+    if (!cleanUrl) {
+      setLetterheadBase64(null);
+      return;
+    }
+
+    if (cleanUrl.startsWith("data:")) {
+      setLetterheadBase64(cleanUrl);
+      return;
+    }
+
+    let isMounted = true;
+    const convert = async () => {
+      try {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth || 794;
+            canvas.height = img.naturalHeight || 1123;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(img, 0, 0);
+              const dataUrl = canvas.toDataURL("image/png");
+              if (isMounted) setLetterheadBase64(dataUrl);
+            }
+          } catch {
+            if (isMounted) setLetterheadBase64(cleanUrl);
+          }
+        };
+        img.onerror = () => {
+          if (isMounted) setLetterheadBase64(cleanUrl);
+        };
+        img.src = cleanUrl;
+      } catch {
+        if (isMounted) setLetterheadBase64(cleanUrl);
+      }
+    };
+
+    convert();
+    return () => { isMounted = false; };
+  }, [lab]);
+
   const sheetData = useMemo(() => {
     if (!report) return null;
+    const bg = letterheadBase64 || getCleanLetterheadUrl(lab.print_bg_image || lab.printBgImage);
     return {
       id: report.id,
       customId: report.custom_id || report.customId,
@@ -177,25 +227,26 @@ export default function PublicReportVerificationPage() {
         address: lab.address || "Main Laboratory Diagnostic Center",
         phone: lab.phone || "+91 98765 43210",
         logoUrl: lab.logo_url || lab.logoUrl || "/onepath-logo.png",
-        printBgImage: getCleanLetterheadUrl(lab.print_bg_image || lab.printBgImage),
+        printBgImage: bg,
         printHeaderHeight: lab.print_header_height ?? lab.printHeaderHeight ?? 185,
         printFooterHeight: lab.print_footer_height ?? lab.printFooterHeight ?? 95,
         printMarginLeft: lab.print_margin_left ?? lab.printMarginLeft ?? 32,
         printMarginRight: lab.print_margin_right ?? lab.printMarginRight ?? 32,
       }
     };
-  }, [report, patient, lab]);
+  }, [report, patient, lab, letterheadBase64]);
 
   const labSettings = useMemo(() => {
+    const bg = letterheadBase64 || getCleanLetterheadUrl(lab.print_bg_image || lab.printBgImage);
     return {
-      bgImage: getCleanLetterheadUrl(lab.print_bg_image || lab.printBgImage),
+      bgImage: bg,
       headerHeight: lab.print_header_height ?? lab.printHeaderHeight ?? 185,
       footerHeight: lab.print_footer_height ?? lab.printFooterHeight ?? 95,
       marginLeft: lab.print_margin_left ?? lab.printMarginLeft ?? 32,
       marginRight: lab.print_margin_right ?? lab.printMarginRight ?? 32,
       printWithLetterhead: true,
     };
-  }, [lab]);
+  }, [lab, letterheadBase64]);
 
   // Direct High-Resolution Exact PDF Download (100% Identical to Print Preview with Letterhead)
   const handleDownloadPdf = async () => {
@@ -225,7 +276,7 @@ export default function PublicReportVerificationPage() {
           height: 1123,
           windowWidth: 794,
           windowHeight: 1123,
-          imageTimeout: 20000,
+          imageTimeout: 25000,
           onclone: (_doc, clonedEl) => {
             // 1. Reset scale and positioning on the cloned page
             clonedEl.style.transform = "none";
@@ -244,10 +295,22 @@ export default function PublicReportVerificationPage() {
               clonedEl.parentElement.style.transform = "none";
               clonedEl.parentElement.style.overflow = "visible";
             }
+
+            // 3. Ensure letterhead background image is explicitly visible & positioned
+            const letterheadImg = clonedEl.querySelector<HTMLImageElement>(".letterhead-bg-img");
+            if (letterheadImg) {
+              letterheadImg.style.position = "absolute";
+              letterheadImg.style.inset = "0";
+              letterheadImg.style.width = "100%";
+              letterheadImg.style.height = "100%";
+              letterheadImg.style.display = "block";
+              letterheadImg.style.opacity = "1";
+              letterheadImg.style.zIndex = "0";
+            }
           },
         });
 
-        const imgData = canvas.toDataURL("image/jpeg", 0.95);
+        const imgData = canvas.toDataURL("image/jpeg", 0.96);
         pdf.addImage(imgData, "JPEG", 0, 0, pdfW, pdfH, `page-${i}`, "FAST");
       }
 

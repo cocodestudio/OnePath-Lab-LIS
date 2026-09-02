@@ -1062,8 +1062,9 @@ export const PaginatedReportPreview = React.forwardRef<
               {effectiveSettings.bgImage && (
                 <img
                   src={effectiveSettings.bgImage}
-                  alt=""
+                  alt="Letterhead Background"
                   aria-hidden
+                  crossOrigin="anonymous"
                   className="letterhead-bg-img"
                   style={{
                     position: "absolute",

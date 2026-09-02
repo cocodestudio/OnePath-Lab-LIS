@@ -7,13 +7,14 @@ import {
   CreditCard, MessageSquare, FileText, Building2, CheckCircle2,
   AlertCircle, Download, Printer, Shield, ArrowRight, Sparkles,
   Loader2, RefreshCw, Eye, Plus, Check, Info, Phone, Mail, MapPin,
-  Upload, Trash2, Calendar, Zap, Receipt
+  Upload, Trash2, Calendar, Zap, Receipt, Activity, TrendingUp
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import {
   Dialog, DialogContent, DialogTitle
 } from "@/components/ui/dialog";
 import { SubscriptionTaxInvoiceSheet, type SubscriptionInvoiceData } from "@/components/subscription-tax-invoice";
+import { printInvoiceElement } from "@/lib/print-invoice";
 
 interface LabData {
   id: string;
@@ -35,6 +36,14 @@ interface LabData {
   plan_expires_at?: string;
   billLimit?: number;
   bill_limit?: number;
+  dailyPatientVolumeTier?: string;
+  daily_patient_volume_tier?: string;
+  todayBillsCount?: number;
+  today_bills_count?: number;
+  extraBillsCount?: number;
+  extra_bills_count?: number;
+  extraBillsCharge?: number;
+  extra_bills_charge?: number;
   smsCredits?: number;
   sms_credits?: number;
   smsFreeCredits?: number;
@@ -79,11 +88,11 @@ interface InvoiceItem {
   payment_method?: string;
 }
 
-const SMS_BUNDLES = [
-  { credits: 1000, price: 238, label: "Buy 1000 Credits (Rs. 238.0/-)" },
-  { credits: 2500, price: 590, label: "Buy 2500 Credits (Rs. 590.0/-)" },
-  { credits: 5000, price: 1180, label: "Buy 5000 Credits (Rs. 1,180.0/-)" },
-  { credits: 10000, price: 2360, label: "Buy 10000 Credits (Rs. 2,360.0/-)" },
+const VOLUME_TIERS = [
+  { id: "1_50", label: "1–50 Patients / day", subtitle: "Included FREE in base plan (0 extra charge)", limit: 50, rate: 0 },
+  { id: "51_200", label: "51–200 Patients / day", subtitle: "1–50 Free · ₹0.10 (10 paise) per bill beyond 50", limit: 200, rate: 0.10 },
+  { id: "201_500", label: "201–500 Patients / day", subtitle: "1–50 Free · ₹0.10 per bill beyond 50", limit: 500, rate: 0.10 },
+  { id: "500_PLUS", label: "500+ High Volume", subtitle: "1–50 Free · ₹0.10 per bill beyond 50", limit: 99999, rate: 0.10 },
 ];
 
 function LabAccountContent() {
@@ -92,11 +101,14 @@ function LabAccountContent() {
   const [lab, setLab] = useState<LabData | null>(null);
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedBundle, setSelectedBundle] = useState(1000);
-  const [buyingSms, setBuyingSms] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceItem | null>(null);
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
   const [invoiceNotice, setInvoiceNotice] = useState<{ text: string; type: "success" | "error" | "warning" } | null>(null);
+
+  // Daily Patient Volume State
+  const [selectedVolumeTier, setSelectedVolumeTier] = useState("51_200");
+  const [updatingVolume, setUpdatingVolume] = useState(false);
+  const [volumeSaved, setVolumeSaved] = useState(false);
 
   // Centre Form State
   const [centreForm, setCentreForm] = useState({
@@ -137,6 +149,10 @@ function LabAccountContent() {
 
       setLab(labRes);
       setInvoices(Array.isArray(invRes) ? invRes : []);
+
+      if (labRes.dailyPatientVolumeTier || labRes.daily_patient_volume_tier) {
+        setSelectedVolumeTier(labRes.dailyPatientVolumeTier || labRes.daily_patient_volume_tier);
+      }
 
       setCentreForm({
         centreName: labRes.centreName || labRes.centre_name || labRes.name || "",
@@ -191,36 +207,38 @@ function LabAccountContent() {
     reader.readAsDataURL(file);
   };
 
-  const handlePurchaseSms = async () => {
+  // Update Daily Patient Volume Preference
+  const handleSaveVolumeTier = async (tierId: string) => {
+    setSelectedVolumeTier(tierId);
     try {
-      setBuyingSms(true);
-      const res = await fetchFromLaravel("/lab/sms-credits/buy", {
-        method: "POST",
-        body: JSON.stringify({ credits: selectedBundle }),
+      setUpdatingVolume(true);
+      setVolumeSaved(false);
+      const res = await fetchFromLaravel("/lab/centre", {
+        method: "PUT",
+        body: JSON.stringify({ daily_patient_volume_tier: tierId }),
       });
-
-      if (res && res.status === "success") {
-        setLab(prev => prev ? ({ ...prev, smsCredits: res.sms_credits, sms_credits: res.sms_credits }) : null);
-        if (res.invoice) {
-          setInvoices(prev => [res.invoice, ...prev]);
-        }
-        alert(`Success: ${selectedBundle} SMS Credits added to your account!`);
+      if (res) {
+        setLab(prev => prev ? ({ ...prev, dailyPatientVolumeTier: tierId, daily_patient_volume_tier: tierId }) : null);
+        setVolumeSaved(true);
+        setTimeout(() => setVolumeSaved(false), 3000);
       }
-    } catch (err) {
-      console.error("Failed to buy SMS credits:", err);
-      alert("Failed to complete SMS credit transaction. Please try again.");
+    } catch (e) {
+      console.error("Failed to update volume tier:", e);
     } finally {
-      setBuyingSms(false);
+      setUpdatingVolume(false);
     }
   };
 
-  const handleGenerateInvoice = async (planType: "1_YEAR" | "6_MONTHS" = "1_YEAR") => {
+  // Generate Tax Invoice for the Current Active Plan (Only one single button)
+  const handleGenerateInvoice = async () => {
     setInvoiceNotice(null);
 
-    const baseAmt = planType === "6_MONTHS" ? 2499.00 : 4999.00;
-    const planLabel = planType === "6_MONTHS" ? "Pathology Lab 6-Month License" : "Pathology Lab 1-Year License";
+    const isSixMonths = (lab?.planPeriod || "").toLowerCase().includes("6 month") || (lab?.planPrice === 2499);
+    const planType = isSixMonths ? "6_MONTHS" : "1_YEAR";
+    const baseAmt = isSixMonths ? 2499.00 : 4999.00;
+    const planLabel = isSixMonths ? "Pathology Lab 6-Month License" : "Pathology Lab 1-Year License";
 
-    // Check if subscription invoice already exists locally
+    // Check if an invoice for the current active subscription has already been generated
     const existing = invoices.find(inv => {
       const desc = (inv.description || "").toLowerCase();
       if (planType === "6_MONTHS") return desc.includes("6-month") || desc.includes("6 month") || inv.baseAmount === 2499;
@@ -231,7 +249,7 @@ function LabAccountContent() {
       const invId = existing.customId || existing.custom_id || existing.id.slice(0, 8);
       setInvoiceNotice({
         type: "warning",
-        text: `Official GST Tax Invoice #${invId} is already available. Opening Tax Invoice view...`,
+        text: `Official GST Tax Invoice #${invId} has already been generated for your active plan. Opening Tax Invoice view...`,
       });
       setSelectedInvoice(existing);
       return;
@@ -266,7 +284,7 @@ function LabAccountContent() {
       }
     } catch (err: any) {
       console.error("Failed to generate invoice:", err);
-      // Fallback local invoice generation so user is never blocked
+      // Fallback local invoice generation
       const seq = String(invoices.length + 13371);
       const cgst = Math.round(baseAmt * 0.09 * 100) / 100;
       const sgst = Math.round(baseAmt * 0.09 * 100) / 100;
@@ -344,6 +362,11 @@ function LabAccountContent() {
   const planExpires = lab?.planExpiresAt || lab?.plan_expires_at || "2027-07-27";
   const billLimit = (lab?.billLimit || lab?.bill_limit || 12000).toLocaleString();
 
+  // Daily Patient Volume & Extra Usage Calculations
+  const todayBills = lab?.todayBillsCount ?? lab?.today_bills_count ?? 8;
+  const extraBills = Math.max(0, todayBills - 50);
+  const extraCharges = (extraBills * 0.10).toFixed(2);
+
   // Map Selected Invoice for the Tax Invoice Component
   const mappedInvoiceData: SubscriptionInvoiceData | null = selectedInvoice ? {
     id: selectedInvoice.id,
@@ -382,13 +405,13 @@ function LabAccountContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="font-display text-2xl font-bold text-foreground">Lab Account & Billing</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground">Lab Account &amp; Billing</h1>
             <span className="font-mono text-xs font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20">
               Lab ID #: {customLabId}
             </span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Manage your pathology software subscription, CoCode Studio GST tax invoices, and diagnostic centre details.
+            Manage your pathology software subscription, daily patient volume, GST tax invoices, and diagnostic centre profile.
           </p>
         </div>
 
@@ -411,7 +434,7 @@ function LabAccountContent() {
             activeTab === "SUBSCRIPTION" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          <span>Subscription Plans</span>
+          <span>Subscription &amp; Usage</span>
           {activeTab === "SUBSCRIPTION" && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
           )}
@@ -435,7 +458,7 @@ function LabAccountContent() {
             activeTab === "CENTRE" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          <span>Centre & GST Profile</span>
+          <span>Centre &amp; GST Profile</span>
           {activeTab === "CENTRE" && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
           )}
@@ -458,7 +481,7 @@ function LabAccountContent() {
             </div>
 
             {/* Plan Metrics Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 pt-4 border-t border-border/70 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-4 border-t border-border/70 text-xs">
               <div>
                 <p className="text-[11px] font-semibold text-muted-foreground">Status</p>
                 <span className="inline-block mt-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
@@ -473,37 +496,88 @@ function LabAccountContent() {
               </div>
 
               <div>
-                <p className="text-[11px] font-semibold text-muted-foreground">Total Paid Amount</p>
-                <p className="font-bold text-emerald-600 mt-1.5">₹5,899.00 (Inc. GST)</p>
-                <p className="text-[10px] text-muted-foreground">GSTIN: 09EAMPA2104K3ZT</p>
-              </div>
-
-              <div>
-                <p className="text-[11px] font-semibold text-muted-foreground">Patient Bill Limit</p>
+                <p className="text-[11px] font-semibold text-muted-foreground">Patient Bill Quota</p>
                 <p className="font-bold text-foreground mt-1.5">{billLimit} bills</p>
-                <p className="text-[10px] text-muted-foreground">Unlimited Tests</p>
+                <p className="text-[10px] text-muted-foreground">Unlimited Diagnostic Tests</p>
               </div>
 
               <div>
                 <p className="text-[11px] font-semibold text-muted-foreground">Plan Valid Till</p>
                 <p className="font-bold text-foreground mt-1.5">{formatDate(planExpires)}</p>
-                <p className="text-[10px] text-muted-foreground">Auto-Renewal Active</p>
+                <p className="text-[10px] text-muted-foreground">Auto-Renewal Enabled</p>
               </div>
             </div>
 
-            {/* Actions Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-6 border-t border-border/70 text-xs">
-              <p className="text-muted-foreground">
-                Billed by <strong className="text-foreground">CoCode Studio</strong> (Prop. Moh Abuzar) · SAC Code: <strong>998314</strong>
-              </p>
-              <button
-                type="button"
-                onClick={() => handleGenerateInvoice("1_YEAR")}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-xs hover:brightness-105 cursor-pointer"
-              >
-                <Receipt className="h-3.5 w-3.5" />
-                <span>View / Download Official Tax Invoice</span>
-              </button>
+            {/* Daily Patient Volume & Extra Usage Meter */}
+            <div className="pt-6 border-t border-border/70 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="font-display font-bold text-sm text-foreground flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-primary" />
+                    <span>Daily Patient Volume &amp; Over-Limit Billing</span>
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    1–50 patients per day are included <strong>FREE</strong> in both plans. Bills beyond 50/day are billed at just <strong>0.1 paisa (₹0.10) per bill</strong>.
+                  </p>
+                </div>
+                {volumeSaved && (
+                  <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Saved
+                  </span>
+                )}
+              </div>
+
+              {/* Volume Tier Selector */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {VOLUME_TIERS.map((tier) => {
+                  const isSelected = selectedVolumeTier === tier.id;
+                  return (
+                    <div
+                      key={tier.id}
+                      onClick={() => handleSaveVolumeTier(tier.id)}
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-1 ${
+                        isSelected
+                          ? "bg-primary/5 border-primary shadow-xs ring-1 ring-primary/30"
+                          : "bg-muted/20 border-border hover:border-primary/50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-bold ${isSelected ? "text-primary" : "text-foreground"}`}>
+                          {tier.label}
+                        </span>
+                        {isSelected && <CheckCircle2 className="h-4 w-4 text-primary" />}
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">{tier.subtitle}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Live Daily Usage Tracker */}
+              <div className="p-4 bg-muted/40 rounded-xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
+                    <TrendingUp className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-foreground">Today's Daily Patient Usage:</span>
+                    <p className="text-[11px] text-muted-foreground">
+                      <strong>{todayBills}</strong> bills created today · <strong>50 Free</strong> quota base
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-6">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Over-Limit Bills:</span>
+                    <p className="font-mono font-bold text-foreground">{extraBills} bills</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Extra Charges (@ ₹0.10):</span>
+                    <p className="font-mono font-bold text-emerald-600">₹{extraCharges}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -511,7 +585,7 @@ function LabAccountContent() {
           <div className="space-y-4">
             <h3 className="font-display font-bold text-base text-foreground flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
-              <span>Available Subscription Tiers (with 18% GST Compliance)</span>
+              <span>Available Subscription Tiers</span>
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -522,7 +596,7 @@ function LabAccountContent() {
                 </div>
                 <div>
                   <h4 className="font-display font-bold text-lg text-foreground">1 Year Pro Annual Plan</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">Complete Pathology LIS with Unlimited Tests & QR Reports</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Complete Pathology LIS with Unlimited Tests &amp; QR Reports</p>
                 </div>
 
                 <div className="p-4 bg-muted/40 rounded-xl space-y-1.5 border border-border">
@@ -540,7 +614,7 @@ function LabAccountContent() {
                       <span className="font-mono font-semibold text-foreground">+ ₹899.82</span>
                     </div>
                     <div className="flex justify-between font-bold text-xs text-emerald-600 pt-1 border-t border-border/60">
-                      <span>Total Invoice Value:</span>
+                      <span>Total Renewal Value:</span>
                       <span className="font-mono">₹5,899.00 (Inc. GST)</span>
                     </div>
                   </div>
@@ -553,21 +627,17 @@ function LabAccountContent() {
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <span><strong>1–50 Daily Patients Free</strong> (Extra @ ₹0.10/bill)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
                     <span><strong>LAN &amp; RS-232 Machine Integration</strong> included</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span><strong>Official CoCode Studio GST Tax Invoice</strong> for portal upload</span>
+                    <span><strong>24/7 Priority Support</strong>, Automated Backups &amp; Setup</span>
                   </li>
                 </ul>
-
-                <button
-                  onClick={() => handleGenerateInvoice("1_YEAR")}
-                  className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-xs hover:brightness-105 cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Receipt className="h-3.5 w-3.5" />
-                  <span>Generate 1-Year Tax Invoice (₹5,899)</span>
-                </button>
               </div>
 
               {/* 6 Months Plan Card */}
@@ -592,7 +662,7 @@ function LabAccountContent() {
                       <span className="font-mono font-semibold text-foreground">+ ₹449.82</span>
                     </div>
                     <div className="flex justify-between font-bold text-xs text-emerald-600 pt-1 border-t border-border/60">
-                      <span>Total Invoice Value:</span>
+                      <span>Total Renewal Value:</span>
                       <span className="font-mono">₹2,949.00 (Inc. GST)</span>
                     </div>
                   </div>
@@ -605,21 +675,17 @@ function LabAccountContent() {
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <span><strong>1–50 Daily Patients Free</strong> (Extra @ ₹0.10/bill)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
                     <span>QR Verification Portal &amp; PDF generation</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span><strong>Official CoCode Studio GST Tax Invoice</strong></span>
+                    <span>Multi-department pathology reporting</span>
                   </li>
                 </ul>
-
-                <button
-                  onClick={() => handleGenerateInvoice("6_MONTHS")}
-                  className="w-full py-2.5 rounded-xl border border-border bg-card hover:bg-accent text-foreground font-bold text-xs shadow-xs cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Receipt className="h-3.5 w-3.5 text-primary" />
-                  <span>Generate 6-Month Tax Invoice (₹2,949)</span>
-                </button>
               </div>
             </div>
           </div>
@@ -633,27 +699,18 @@ function LabAccountContent() {
             <div>
               <h3 className="font-display text-lg font-bold text-foreground">Official GST Tax Invoices</h3>
               <p className="text-xs text-muted-foreground">
-                Issued by <strong className="text-foreground">CoCode Studio</strong> (GSTIN: 09EAMPA2104K3ZT) with 18% GST compliance for IT &amp; GST portal uploads.
+                Official Flipkart-style GST tax invoices generated for your active OnePath LIS subscriptions.
               </p>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => handleGenerateInvoice("1_YEAR")}
-                disabled={generatingInvoice}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm cursor-pointer disabled:opacity-50"
-              >
-                {generatingInvoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                <span>+ 1 Year Tax Invoice (₹5,899)</span>
-              </button>
-              <button
-                onClick={() => handleGenerateInvoice("6_MONTHS")}
-                disabled={generatingInvoice}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold text-foreground hover:bg-accent transition-all shadow-xs cursor-pointer disabled:opacity-50"
-              >
-                <span>+ 6 Month Tax Invoice (₹2,949)</span>
-              </button>
-            </div>
+            <button
+              onClick={handleGenerateInvoice}
+              disabled={generatingInvoice}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+            >
+              {generatingInvoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              <span>+ Generate Invoice</span>
+            </button>
           </div>
 
           {invoiceNotice && (
@@ -691,7 +748,7 @@ function LabAccountContent() {
               <div className="py-16 text-center text-muted-foreground space-y-2">
                 <FileText className="h-10 w-10 mx-auto opacity-30" />
                 <p className="text-xs font-bold text-foreground">No invoices generated yet</p>
-                <p className="text-[11px]">Click "Generate 1-Year Tax Invoice" above to create an official GST invoice.</p>
+                <p className="text-[11px]">Click "+ Generate Invoice" above to create an official tax invoice for your active plan.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -745,8 +802,8 @@ function LabAccountContent() {
                               onClick={() => setSelectedInvoice(inv)}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold shadow-2xs hover:brightness-105 cursor-pointer"
                             >
-                              <Eye className="h-3.5 w-3.5" />
-                              <span>View Tax Invoice</span>
+                              <Download className="h-3.5 w-3.5" />
+                              <span>Download PDF</span>
                             </button>
                           </td>
                         </tr>
@@ -944,7 +1001,7 @@ function LabAccountContent() {
         </div>
       )}
 
-      {/* ── Dialog: Official GST Tax Invoice Modal (Flipkart / SaaS Style with Moh Abuzar Signature) ── */}
+      {/* ── Dialog: Official GST Tax Invoice Modal (Flipkart Style with Moh Abuzar Signature) ── */}
       <Dialog open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
         <DialogContent className="max-w-4xl w-full p-0 gap-0 overflow-hidden rounded-2xl bg-transparent border-0 shadow-2xl">
           <DialogTitle className="sr-only">GST Tax Invoice</DialogTitle>
