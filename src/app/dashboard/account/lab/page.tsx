@@ -14,7 +14,8 @@ import {
   Dialog, DialogContent, DialogTitle
 } from "@/components/ui/dialog";
 import { SubscriptionTaxInvoiceSheet, type SubscriptionInvoiceData } from "@/components/subscription-tax-invoice";
-import { printInvoiceElement } from "@/lib/print-invoice";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 interface LabData {
   id: string;
@@ -90,9 +91,9 @@ interface InvoiceItem {
 
 const VOLUME_TIERS = [
   { id: "1_50", label: "1–50 Patients / day", subtitle: "Included FREE in base plan (0 extra charge)", limit: 50, rate: 0 },
-  { id: "51_200", label: "51–200 Patients / day", subtitle: "1–50 Free · ₹0.10 (10 paise) per bill beyond 50", limit: 200, rate: 0.10 },
-  { id: "201_500", label: "201–500 Patients / day", subtitle: "1–50 Free · ₹0.10 per bill beyond 50", limit: 500, rate: 0.10 },
-  { id: "500_PLUS", label: "500+ High Volume", subtitle: "1–50 Free · ₹0.10 per bill beyond 50", limit: 99999, rate: 0.10 },
+  { id: "51_200", label: "51–200 Patients / day", subtitle: "1–50 Free · 1 paisa (₹0.01) per bill beyond 50", limit: 200, rate: 0.01 },
+  { id: "201_500", label: "201–500 Patients / day", subtitle: "1–50 Free · 1 paisa (₹0.01) per bill beyond 50", limit: 500, rate: 0.01 },
+  { id: "500_PLUS", label: "500+ High Volume", subtitle: "1–50 Free · 1 paisa (₹0.01) per bill beyond 50", limit: 99999, rate: 0.01 },
 ];
 
 function LabAccountContent() {
@@ -104,6 +105,11 @@ function LabAccountContent() {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceItem | null>(null);
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
   const [invoiceNotice, setInvoiceNotice] = useState<{ text: string; type: "success" | "error" | "warning" } | null>(null);
+
+  // Direct PDF Download State
+  const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
+  const directPrintContainerRef = useRef<HTMLDivElement>(null);
+  const [invoiceToDownload, setInvoiceToDownload] = useState<SubscriptionInvoiceData | null>(null);
 
   // Daily Patient Volume State
   const [selectedVolumeTier, setSelectedVolumeTier] = useState("51_200");
@@ -229,6 +235,81 @@ function LabAccountContent() {
     }
   };
 
+  const mapInvoiceToData = (inv: InvoiceItem): SubscriptionInvoiceData => {
+    const pName = lab?.planName || lab?.plan_name || "OnePath Pathology LIS Pro";
+    return {
+      id: inv.id,
+      customId: inv.customId || inv.custom_id,
+      invoiceNumber: inv.customId || inv.custom_id ? `CCS/2026-27/${inv.customId || inv.custom_id}` : undefined,
+      invoiceDate: inv.invoiceDate || inv.invoice_date || new Date().toISOString(),
+      planName: pName,
+      planDuration: (inv.description?.includes("6-Month") || inv.description?.includes("6 Month") || inv.baseAmount === 2499) ? "6_MONTHS" : "1_YEAR",
+      description: inv.description || `OnePath Pathology LIS Platform - ${pName} (Unlimited Tests & QR Reports)`,
+      sacCode: inv.sacCode || inv.sac_code || "998314",
+      baseAmount: inv.baseAmount ?? inv.base_amount ?? 4999.00,
+      cgstRate: 9.00,
+      cgstAmount: inv.cgstAmount ?? inv.cgst_amount ?? 449.91,
+      sgstRate: 9.00,
+      sgstAmount: inv.sgstAmount ?? inv.sgst_amount ?? 449.91,
+      totalAmount: inv.totalAmount ?? inv.total_amount ?? 5899.00,
+      status: inv.status || "PAID",
+      paymentMethod: inv.paymentMethod || inv.payment_method || "Online (UPI / Razorpay / NetBanking)",
+      transactionId: `PAY-${(inv.customId || inv.id).slice(0, 8).toUpperCase()}`,
+      customer: {
+        name: centreForm.centreName || lab?.centreName || lab?.centre_name || lab?.name || "OnePath Diagnostic Centre",
+        contactPerson: centreForm.contactPerson || lab?.contactPerson || lab?.contact_person || "Chief Medical Officer",
+        address: centreForm.address || lab?.address || "Main Diagnostic Center Address",
+        city: centreForm.city || lab?.city || "",
+        state: centreForm.state || lab?.state || "Uttar Pradesh",
+        pincode: centreForm.pincode || lab?.pincode || "",
+        gstin: centreForm.gstin || lab?.gstin || "",
+        phone: centreForm.phone || lab?.phone || "",
+        email: centreForm.email || lab?.email || "",
+      }
+    };
+  };
+
+  // Direct 1-Click PDF Download without opening modal view
+  const handleDirectDownloadPdf = async (inv: InvoiceItem) => {
+    try {
+      setDownloadingInvoiceId(inv.id);
+      const mapped = mapInvoiceToData(inv);
+      setInvoiceToDownload(mapped);
+
+      // Wait 150ms for React to render the hidden container
+      await new Promise(r => setTimeout(r, 150));
+
+      const el = directPrintContainerRef.current?.querySelector<HTMLElement>(".flipkart-invoice-sheet");
+      if (el) {
+        const rawId = mapped.customId || mapped.id.replace(/[^0-9]/g, "").slice(0, 10) || "224210950120";
+        const orderId = `OD${rawId.padStart(18, "0")}`;
+
+        const canvas = await html2canvas(el, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          width: 800,
+          windowWidth: 800,
+        });
+
+        const imgData = canvas.toDataURL("image/jpeg", 0.96);
+        const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+        const pdfW = pdf.internal.pageSize.getWidth();
+        const pdfH = (canvas.height * pdfW) / canvas.width;
+        pdf.addImage(imgData, "JPEG", 0, 0, pdfW, Math.min(pdfH, pdf.internal.pageSize.getHeight()));
+        pdf.save(`Tax_Invoice_${orderId}.pdf`);
+      }
+    } catch (e) {
+      console.error("Direct invoice PDF download error:", e);
+      alert("Failed to download PDF. Please try again.");
+    } finally {
+      setDownloadingInvoiceId(null);
+      setInvoiceToDownload(null);
+    }
+  };
+
   // Generate Tax Invoice for the Current Active Plan (Only one single button)
   const handleGenerateInvoice = async () => {
     setInvoiceNotice(null);
@@ -249,9 +330,8 @@ function LabAccountContent() {
       const invId = existing.customId || existing.custom_id || existing.id.slice(0, 8);
       setInvoiceNotice({
         type: "warning",
-        text: `Official GST Tax Invoice #${invId} has already been generated for your active plan. Opening Tax Invoice view...`,
+        text: `Official GST Tax Invoice #${invId} has already been generated for your active plan. Click "Download PDF" below to download it.`,
       });
-      setSelectedInvoice(existing);
       return;
     }
 
@@ -268,19 +348,17 @@ function LabAccountContent() {
 
       if (res && res.id) {
         setInvoices(prev => [res, ...prev]);
-        setSelectedInvoice(res);
         setInvoiceNotice({
           type: "success",
-          text: `Official GST Tax Invoice #${res.customId || res.custom_id || res.id.slice(0, 8)} generated successfully!`,
+          text: `Official GST Tax Invoice #${res.customId || res.custom_id || res.id.slice(0, 8)} generated successfully! You can now click "Download PDF".`,
         });
+        // Auto trigger direct PDF download
+        handleDirectDownloadPdf(res);
       } else if (res && res.status === "error") {
         setInvoiceNotice({
           type: "error",
           text: res.message || "Invoice already generated for active subscription.",
         });
-        if (res.existing_invoice) {
-          setSelectedInvoice(res.existing_invoice);
-        }
       }
     } catch (err: any) {
       console.error("Failed to generate invoice:", err);
@@ -305,11 +383,11 @@ function LabAccountContent() {
       };
 
       setInvoices(prev => [fallbackInv, ...prev]);
-      setSelectedInvoice(fallbackInv);
       setInvoiceNotice({
         type: "success",
         text: `Official GST Tax Invoice #${seq} generated successfully!`,
       });
+      handleDirectDownloadPdf(fallbackInv);
     } finally {
       setGeneratingInvoice(false);
     }
@@ -362,42 +440,10 @@ function LabAccountContent() {
   const planExpires = lab?.planExpiresAt || lab?.plan_expires_at || "2027-07-27";
   const billLimit = (lab?.billLimit || lab?.bill_limit || 12000).toLocaleString();
 
-  // Daily Patient Volume & Extra Usage Calculations
+  // Daily Patient Volume & Extra Usage Calculations (1 paisa = ₹0.01 per bill)
   const todayBills = lab?.todayBillsCount ?? lab?.today_bills_count ?? 8;
   const extraBills = Math.max(0, todayBills - 50);
-  const extraCharges = (extraBills * 0.10).toFixed(2);
-
-  // Map Selected Invoice for the Tax Invoice Component
-  const mappedInvoiceData: SubscriptionInvoiceData | null = selectedInvoice ? {
-    id: selectedInvoice.id,
-    customId: selectedInvoice.customId || selectedInvoice.custom_id,
-    invoiceNumber: selectedInvoice.customId || selectedInvoice.custom_id ? `CCS/2026-27/${selectedInvoice.customId || selectedInvoice.custom_id}` : undefined,
-    invoiceDate: selectedInvoice.invoiceDate || selectedInvoice.invoice_date || new Date().toISOString(),
-    planName: planName,
-    planDuration: (selectedInvoice.description?.includes("6-Month") || selectedInvoice.description?.includes("6 Month") || selectedInvoice.baseAmount === 2499) ? "6_MONTHS" : "1_YEAR",
-    description: selectedInvoice.description || `OnePath Pathology LIS Platform - ${planName} (Unlimited Tests & QR Reports)`,
-    sacCode: selectedInvoice.sacCode || selectedInvoice.sac_code || "998314",
-    baseAmount: selectedInvoice.baseAmount ?? selectedInvoice.base_amount ?? 4999.00,
-    cgstRate: 9.00,
-    cgstAmount: selectedInvoice.cgstAmount ?? selectedInvoice.cgst_amount ?? 449.91,
-    sgstRate: 9.00,
-    sgstAmount: selectedInvoice.sgstAmount ?? selectedInvoice.sgst_amount ?? 449.91,
-    totalAmount: selectedInvoice.totalAmount ?? selectedInvoice.total_amount ?? 5899.00,
-    status: selectedInvoice.status || "PAID",
-    paymentMethod: selectedInvoice.paymentMethod || selectedInvoice.payment_method || "Online (UPI / Razorpay / NetBanking)",
-    transactionId: `PAY-${(selectedInvoice.customId || selectedInvoice.id).slice(0, 8).toUpperCase()}`,
-    customer: {
-      name: centreForm.centreName || lab?.centreName || lab?.centre_name || lab?.name || "OnePath Diagnostic Centre",
-      contactPerson: centreForm.contactPerson || lab?.contactPerson || lab?.contact_person || "Chief Medical Officer",
-      address: centreForm.address || lab?.address || "Main Diagnostic Center Address",
-      city: centreForm.city || lab?.city || "",
-      state: centreForm.state || lab?.state || "Uttar Pradesh",
-      pincode: centreForm.pincode || lab?.pincode || "",
-      gstin: centreForm.gstin || lab?.gstin || "",
-      phone: centreForm.phone || lab?.phone || "",
-      email: centreForm.email || lab?.email || "",
-    }
-  } : null;
+  const extraCharges = (extraBills * 0.01).toFixed(2);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-16 animate-fade-in">
@@ -508,7 +554,7 @@ function LabAccountContent() {
               </div>
             </div>
 
-            {/* Daily Patient Volume & Extra Usage Meter */}
+            {/* Daily Patient Volume & Extra Usage Meter (1 paisa = ₹0.01 per bill) */}
             <div className="pt-6 border-t border-border/70 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
@@ -517,7 +563,7 @@ function LabAccountContent() {
                     <span>Daily Patient Volume &amp; Over-Limit Billing</span>
                   </h4>
                   <p className="text-xs text-muted-foreground">
-                    1–50 patients per day are included <strong>FREE</strong> in both plans. Bills beyond 50/day are billed at just <strong>0.1 paisa (₹0.10) per bill</strong>.
+                    1–50 patients per day are included <strong>FREE</strong> in both plans. Bills beyond 50/day are billed at just <strong>1 paisa (₹0.01) per bill</strong>.
                   </p>
                 </div>
                 {volumeSaved && (
@@ -573,7 +619,7 @@ function LabAccountContent() {
                     <p className="font-mono font-bold text-foreground">{extraBills} bills</p>
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Extra Charges (@ ₹0.10):</span>
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Extra Charges (@ 1 Paisa / ₹0.01):</span>
                     <p className="font-mono font-bold text-emerald-600">₹{extraCharges}</p>
                   </div>
                 </div>
@@ -627,7 +673,7 @@ function LabAccountContent() {
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span><strong>1–50 Daily Patients Free</strong> (Extra @ ₹0.10/bill)</span>
+                    <span><strong>1–50 Daily Patients Free</strong> (Extra @ 1 paisa / ₹0.01 per bill)</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -675,7 +721,7 @@ function LabAccountContent() {
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span><strong>1–50 Daily Patients Free</strong> (Extra @ ₹0.10/bill)</span>
+                    <span><strong>1–50 Daily Patients Free</strong> (Extra @ 1 paisa / ₹0.01 per bill)</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -773,6 +819,7 @@ function LabAccountContent() {
                       const cgstAmt = inv.cgstAmount ?? inv.cgst_amount ?? Math.round(baseAmt * 0.09 * 100) / 100;
                       const sgstAmt = inv.sgstAmount ?? inv.sgst_amount ?? Math.round(baseAmt * 0.09 * 100) / 100;
                       const invAmt = inv.totalAmount ?? inv.total_amount ?? (baseAmt + cgstAmt + sgstAmt);
+                      const isDownloading = downloadingInvoiceId === inv.id;
 
                       return (
                         <tr key={inv.id} className="hover:bg-muted/30 transition-colors">
@@ -799,11 +846,21 @@ function LabAccountContent() {
                           </td>
                           <td className="py-3.5 px-4 text-right">
                             <button
-                              onClick={() => setSelectedInvoice(inv)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold shadow-2xs hover:brightness-105 cursor-pointer"
+                              onClick={() => handleDirectDownloadPdf(inv)}
+                              disabled={isDownloading}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold shadow-2xs hover:brightness-105 cursor-pointer disabled:opacity-50"
                             >
-                              <Download className="h-3.5 w-3.5" />
-                              <span>Download PDF</span>
+                              {isDownloading ? (
+                                <>
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  <span>Downloading...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Download className="h-3.5 w-3.5" />
+                                  <span>Download PDF</span>
+                                </>
+                              )}
                             </button>
                           </td>
                         </tr>
@@ -1001,13 +1058,31 @@ function LabAccountContent() {
         </div>
       )}
 
-      {/* ── Dialog: Official GST Tax Invoice Modal (Flipkart Style with Moh Abuzar Signature) ── */}
+      {/* Hidden Off-Screen Container for Direct Instant 1-Click PDF Generation */}
+      <div
+        ref={directPrintContainerRef}
+        style={{
+          position: "fixed",
+          top: -99999,
+          left: -99999,
+          width: 800,
+          visibility: "hidden",
+          pointerEvents: "none",
+        }}
+        aria-hidden
+      >
+        {invoiceToDownload && (
+          <SubscriptionTaxInvoiceSheet invoice={invoiceToDownload} />
+        )}
+      </div>
+
+      {/* ── Dialog: Optional Modal if needed ── */}
       <Dialog open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
         <DialogContent className="max-w-4xl w-full p-0 gap-0 overflow-hidden rounded-2xl bg-transparent border-0 shadow-2xl">
           <DialogTitle className="sr-only">GST Tax Invoice</DialogTitle>
-          {mappedInvoiceData && (
+          {selectedInvoice && (
             <SubscriptionTaxInvoiceSheet
-              invoice={mappedInvoiceData}
+              invoice={mapInvoiceToData(selectedInvoice)}
               onClose={() => setSelectedInvoice(null)}
             />
           )}

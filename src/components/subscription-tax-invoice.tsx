@@ -139,7 +139,7 @@ export function SubscriptionTaxInvoiceSheet({
       <div className="overflow-x-auto p-4 sm:p-6 bg-slate-100 dark:bg-slate-950 flex justify-center">
         <div
           ref={printRef}
-          className="w-[800px] min-h-[1050px] bg-white text-black p-8 sm:p-10 font-sans text-[10px] leading-[1.35] border border-slate-300"
+          className="flipkart-invoice-sheet w-[800px] min-h-[1050px] bg-white text-black p-8 sm:p-10 font-sans text-[10px] leading-[1.35] border border-slate-300"
           style={{ boxSizing: "border-box", color: "#000000", fontFamily: "Arial, Helvetica, sans-serif" }}
         >
           {/* ================= 1. HEADER SECTION (Flipkart Exact Header) ================= */}
