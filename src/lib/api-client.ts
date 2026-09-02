@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/lis";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.onepathlab.com/api/lis";
 
 export function getStoredUser() {
   if (typeof window === "undefined") return null;
@@ -77,7 +77,7 @@ export function getCleanLetterheadUrl(url?: string | null): string | null {
     return null;
   }
   if (trimmed.startsWith("/storage/")) {
-    const rawApi = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+    const rawApi = process.env.NEXT_PUBLIC_API_URL || "https://api.onepathlab.com/api";
     const origin = rawApi.replace(/\/api.*$/, "");
     return `${origin}${trimmed}`;
   }
