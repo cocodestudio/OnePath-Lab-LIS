@@ -10,10 +10,12 @@ import {
   Tag, Sparkles, ArrowLeftRight, Columns, MessageSquare,
   Pilcrow, MoveHorizontal, Receipt, QrCode, PlusCircle,
   CreditCard, PenTool, Image as ImageIcon, ClipboardList,
-  CheckSquare, Stethoscope, User, Shield, Lock, Asterisk
+  CheckSquare, Stethoscope, User, Shield, Lock, Asterisk,
+  Cpu, Radio, Activity, HardDrive, Terminal
 } from "lucide-react";
 import { ReportSheet, type PrintSettings, type ReportSheetData } from "@/components/report-sheet";
 import { InvoiceSheet, type InvoiceData } from "@/components/invoice-sheet";
+import { MachineIntegrationTab } from "@/components/machine-integration-tab";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
 import {
@@ -236,7 +238,7 @@ function optimizeLetterheadImage(file: File): Promise<string> {
 }
 
 function SettingsContent() {
-  const [activeTab, setActiveTab] = useState<"letterhead" | "report-layout" | "bills-layout">("letterhead");
+  const [activeTab, setActiveTab] = useState<"letterhead" | "report-layout" | "bills-layout" | "machine-integration">("letterhead");
   const [settings, setSettings] = useState<ExtendedPrintSettings>(defaultPrintSettings);
   const [layoutSettings, setLayoutSettings] = useState<ReportLayoutSettings>(defaultReportLayoutSettings);
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
@@ -729,6 +731,18 @@ function SettingsContent() {
             >
               <Receipt className="h-3.5 w-3.5" />
               <span>Bills Layout</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("machine-integration")}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === "machine-integration"
+                  ? "bg-background text-primary shadow-xs font-extrabold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Cpu className="h-3.5 w-3.5" />
+              <span>Machine Integration</span>
             </button>
           </div>
         </div>
@@ -2463,6 +2477,11 @@ function SettingsContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB 4: MACHINE INTEGRATION & LIVE HUB */}
+      {activeTab === "machine-integration" && (
+        <MachineIntegrationTab />
       )}
 
       {/* Add Signature Dialog Modal */}
