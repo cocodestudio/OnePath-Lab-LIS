@@ -369,9 +369,24 @@ function LabAccountContent() {
       setSavingCentre(true);
       setSaveSuccess(false);
 
+      const payload = {
+        name: centreForm.centreName,
+        centre_name: centreForm.centreName,
+        logo_url: centreForm.logoUrl,
+        license_number: centreForm.licenseNumber,
+        gstin: centreForm.gstin,
+        contact_person: centreForm.contactPerson,
+        phone: centreForm.phone,
+        email: centreForm.email,
+        address: centreForm.address,
+        city: centreForm.city,
+        state: centreForm.state,
+        pincode: centreForm.pincode,
+      };
+
       const res = await fetchFromLaravel("/lab/centre", {
         method: "PUT",
-        body: JSON.stringify(centreForm),
+        body: JSON.stringify(payload),
       });
 
       if (res) {
