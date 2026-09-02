@@ -6,7 +6,7 @@ import {
   CheckCircle2, RefreshCw, PlusCircle, Trash2, Sliders,
   Play, Download, Eye, AlertCircle, ArrowRight, Check,
   Zap, FileText, ChevronRight, Layers, Lock, ShieldCheck,
-  Server, Shield, Loader2, Sparkles, ExternalLink
+  Server, Shield, Loader2, Sparkles, ExternalLink, Cable
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -75,7 +75,7 @@ export function MachineIntegrationTab() {
     connection_type: "TCP_IP",
     ip_address: "192.168.1.100",
     port: 8080,
-    com_port: "COM1",
+    com_port: "COM3",
     baud_rate: 9600,
     is_active: true,
     auto_apply: true,
@@ -139,7 +139,7 @@ export function MachineIntegrationTab() {
 
   const handleToggleAutoApply = async (inst: Instrument) => {
     try {
-      const updated = await fetchFromLaravel(`/instruments/${inst.id}`, {
+      await fetchFromLaravel(`/instruments/${inst.id}`, {
         method: "PUT",
         body: JSON.stringify({ auto_apply: !inst.auto_apply }),
       });
@@ -227,7 +227,7 @@ export function MachineIntegrationTab() {
         </div>
       )}
 
-      {/* ── Top Status Banner: Active LAN / TCP Listener ── */}
+      {/* ── Top Status Banner: Active LAN / TCP & Serial Cable Listener ── */}
       <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
@@ -241,11 +241,11 @@ export function MachineIntegrationTab() {
               </h2>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-                PORT 8080 READY
+                LAN (PORT 8080) & SERIAL (RS-232) READY
               </span>
             </div>
             <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
-              Connect your <strong>Aveacon Cell Counter</strong>, <strong>Nihon Kohden MEK-1305</strong>, or <strong>Beacon B200 Biochemistry</strong> analyzers directly over local LAN / TCP or RS-232. Test results automatically ingest, match sample barcodes, and fill patient reports in 1 second!
+              Connect your <strong>Aveacon Cell Counter</strong>, <strong>Nihon Kohden MEK-1305</strong>, <strong>Beacon B200</strong>, <strong>Mindray</strong>, or <strong>Sysmex</strong> analyzers via <strong>LAN Ethernet Cable (TCP/IP)</strong> or <strong>RS-232 Serial Cable (USB-to-DB9)</strong>. Results automatically ingest, match barcodes, and fill patient reports!
             </p>
           </div>
 
@@ -270,22 +270,30 @@ export function MachineIntegrationTab() {
           </div>
         </div>
 
-        {/* Setup Instruction Steps Box */}
-        <div className="mt-6 pt-5 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-emerald-400">Step 1: Machine Settings</span>
-            <p className="text-slate-300 font-semibold">LIS IP: Enter Your PC's IPv4</p>
-            <p className="text-[11px] text-slate-400">In Aveacon LIS tab, enter your Lab PC's IP address (e.g. 192.168.1.15).</p>
+        {/* Dual Mode Connection Options Box */}
+        <div className="mt-6 pt-5 border-t border-slate-800/80 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          {/* Mode 1: LAN / TCP-IP */}
+          <div className="bg-slate-900/80 border border-emerald-500/20 rounded-xl p-4 space-y-1.5">
+            <div className="flex items-center gap-2 text-emerald-400 font-bold">
+              <Server className="h-4 w-4" />
+              <span>Option A: LAN Ethernet Cable / Wi-Fi (Aveacon / Beacon)</span>
+            </div>
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              1. In machine screen (LIS Tab), enter <strong>LIS IP: Your Lab PC's IPv4</strong> and <strong>Port: 8080</strong>.<br/>
+              2. Check <strong>[✔] Auto Communication</strong> and press Save. Tests stream automatically over LAN!
+            </p>
           </div>
-          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-emerald-400">Step 2: Communication Port</span>
-            <p className="text-slate-300 font-semibold">Port: 8080 (TCP / LAN)</p>
-            <p className="text-[11px] text-slate-400">Set Port to 8080 and tick <strong>[✔] Auto Communication</strong>.</p>
-          </div>
-          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 space-y-1">
-            <span className="text-[10px] uppercase font-bold text-emerald-400">Step 3: Run & Auto-Fill</span>
-            <p className="text-slate-300 font-semibold">1-Click Auto Fill in Report</p>
-            <p className="text-[11px] text-slate-400">Aspirate blood sample. Values auto-fill in patient's CBC report instantly!</p>
+
+          {/* Mode 2: RS-232 Serial Cable */}
+          <div className="bg-slate-900/80 border border-blue-500/20 rounded-xl p-4 space-y-1.5">
+            <div className="flex items-center gap-2 text-blue-400 font-bold">
+              <Cable className="h-4 w-4" />
+              <span>Option B: RS-232 Serial Cable (Nihon Kohden / Mindray / Erba)</span>
+            </div>
+            <p className="text-slate-300 text-[11px] leading-relaxed">
+              1. Connect DB9 Serial to USB cable into PC (e.g. COM1 or COM3).<br/>
+              2. Set machine Baud Rate: <strong>9600</strong>, Protocol: <strong>ASTM E1394</strong>, 8-N-1. Data auto-captures on test!
+            </p>
           </div>
         </div>
       </div>
@@ -299,7 +307,7 @@ export function MachineIntegrationTab() {
               <span>Instant Machine Simulator & Test Tool</span>
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Want to test without aspirating real blood? Simulate an instant live test packet from your machine.
+              Simulate an instant live test run to verify CBC or Biochemistry auto-population in patient reports.
             </p>
           </div>
 
@@ -381,8 +389,12 @@ export function MachineIntegrationTab() {
                         {inst.model || inst.category} · <span className="font-mono text-foreground font-semibold">{inst.protocol}</span>
                       </p>
                       <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-2 font-mono">
-                        <span>Port: <strong className="text-foreground">{inst.port}</strong></span>
-                        <span>Mode: <strong className="text-foreground">{inst.connection_type}</strong></span>
+                        {inst.connection_type === "TCP_IP" ? (
+                          <span>Port: <strong className="text-foreground">{inst.port} (TCP)</strong></span>
+                        ) : (
+                          <span>Port: <strong className="text-foreground">{inst.com_port || "COM3"} @ {inst.baud_rate} baud</strong></span>
+                        )}
+                        <span>Mode: <strong className="text-foreground">{inst.connection_type === "TCP_IP" ? "LAN / TCP" : "RS-232 Cable"}</strong></span>
                       </div>
                     </div>
                   </div>
@@ -594,7 +606,7 @@ export function MachineIntegrationTab() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Dialog: Add New Machine ── */}
+      {/* ── Dialog: Add New Machine (TCP/IP or Serial RS-232) ── */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent className="max-w-md bg-card border border-border rounded-2xl p-6 shadow-2xl">
           <DialogHeader>
@@ -608,7 +620,7 @@ export function MachineIntegrationTab() {
                 required
                 value={newDevice.name}
                 onChange={(e) => setNewDevice({ ...newDevice, name: e.target.value })}
-                placeholder="e.g. Aveacon 3-Part Cell Counter"
+                placeholder="e.g. Nihon Kohden MEK-1305 / Aveacon"
                 className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs font-semibold focus:border-primary outline-none"
               />
             </div>
@@ -625,9 +637,24 @@ export function MachineIntegrationTab() {
                   <option value="Biochemistry">Biochemistry</option>
                   <option value="Immunology">Immunology / Hormones</option>
                   <option value="Coagulation">Coagulation (PT/INR)</option>
+                  <option value="Electrolytes">Electrolytes (ISE)</option>
                 </select>
               </div>
 
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-foreground">Connection Type</label>
+                <select
+                  value={newDevice.connection_type}
+                  onChange={(e) => setNewDevice({ ...newDevice, connection_type: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs font-semibold focus:border-primary outline-none"
+                >
+                  <option value="TCP_IP">LAN Ethernet Cable (TCP/IP)</option>
+                  <option value="SERIAL_RS232">Serial Cable (RS-232 / USB)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-foreground">Protocol</label>
                 <select
@@ -635,37 +662,67 @@ export function MachineIntegrationTab() {
                   onChange={(e) => setNewDevice({ ...newDevice, protocol: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs font-semibold focus:border-primary outline-none"
                 >
-                  <option value="ASTM / TCP-IP">ASTM / TCP-IP</option>
+                  <option value="ASTM / TCP-IP">ASTM (E1381 / E1394)</option>
                   <option value="HL7 v2.x">HL7 v2.x</option>
-                  <option value="ASTM E1394">ASTM E1394 (RS-232)</option>
                   <option value="JSON / Webhook">JSON / Webhook</option>
                 </select>
               </div>
+
+              {newDevice.connection_type === "TCP_IP" ? (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-foreground">TCP Port</label>
+                  <input
+                    type="number"
+                    value={newDevice.port}
+                    onChange={(e) => setNewDevice({ ...newDevice, port: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs font-semibold focus:border-primary outline-none font-mono"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-foreground">COM Port</label>
+                  <select
+                    value={newDevice.com_port}
+                    onChange={(e) => setNewDevice({ ...newDevice, com_port: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs font-semibold focus:border-primary outline-none font-mono"
+                  >
+                    <option value="COM1">COM1</option>
+                    <option value="COM2">COM2</option>
+                    <option value="COM3">COM3 (USB-Serial)</option>
+                    <option value="COM4">COM4</option>
+                    <option value="COM5">COM5</option>
+                    <option value="COM6">COM6</option>
+                    <option value="COM7">COM7</option>
+                    <option value="COM8">COM8</option>
+                  </select>
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-foreground">Port</label>
-                <input
-                  type="number"
-                  value={newDevice.port}
-                  onChange={(e) => setNewDevice({ ...newDevice, port: Number(e.target.value) })}
-                  className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs font-semibold focus:border-primary outline-none"
-                />
+            {newDevice.connection_type === "SERIAL_RS232" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-foreground">Baud Rate</label>
+                  <select
+                    value={newDevice.baud_rate}
+                    onChange={(e) => setNewDevice({ ...newDevice, baud_rate: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs font-semibold focus:border-primary outline-none font-mono"
+                  >
+                    <option value={9600}>9600 baud</option>
+                    <option value={19200}>19200 baud</option>
+                    <option value={38400}>38400 baud</option>
+                    <option value={57600}>57600 baud</option>
+                    <option value={115200}>115200 baud</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-foreground">Data/Parity/Stop</label>
+                  <div className="w-full px-3 py-2 rounded-xl bg-muted text-xs font-mono text-muted-foreground">
+                    8 - None - 1
+                  </div>
+                </div>
               </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-foreground">Connection</label>
-                <select
-                  value={newDevice.connection_type}
-                  onChange={(e) => setNewDevice({ ...newDevice, connection_type: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs font-semibold focus:border-primary outline-none"
-                >
-                  <option value="TCP_IP">LAN / TCP-IP Socket</option>
-                  <option value="SERIAL_RS232">Serial RS-232 COM</option>
-                </select>
-              </div>
-            </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-2">
               <button

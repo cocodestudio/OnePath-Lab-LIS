@@ -4,6 +4,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { getCleanLetterheadUrl } from "@/lib/api-client";
 import { BarcodeSVG } from "@/components/barcode-svg";
 import { normalizeReportSettings, type ReportLayoutSettings, defaultReportLayoutSettings } from "@/lib/report-settings";
+import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 
 interface Test { 
   id: string; name: string; category: string; price: number; unit: string; 
@@ -404,10 +405,15 @@ export function buildReportBlocks(
   }
 
   let printedInterps: string[] = [];
+  let hasExplicitInterpSetting = false;
   try {
-    if (report.printedInterpretations) {
-      const parsed = JSON.parse(report.printedInterpretations);
-      printedInterps = Array.isArray(parsed) ? parsed : [];
+    const raw = report.printedInterpretations ?? (report as any).printed_interpretations;
+    if (raw !== undefined && raw !== null) {
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (Array.isArray(parsed)) {
+        hasExplicitInterpSetting = true;
+        printedInterps = parsed;
+      }
     }
   } catch (e) {}
 
@@ -811,9 +817,20 @@ export function buildReportBlocks(
       }
 
       // Clinical Interpretation
-      const isInterpEnabled = !opts?.hideInterpretation && 
-        (printedInterps.includes(mainTestObj.id) || printedInterps.includes(firstTestObj.id) || printedInterps.includes("ALL")) && 
-        Boolean(mainTestObj.interpretation);
+      const directInterp = mainTestObj.interpretation || firstTestObj.interpretation || itemsList.find(i => i.test?.interpretation)?.test?.interpretation;
+      const interpContent = getClinicalInterpretation(mainTestName, directInterp, category);
+      const hasInterpText = Boolean(interpContent && interpContent.trim() !== "" && interpContent !== "<p><br></p>");
+
+      const isInterpEnabled = !opts?.hideInterpretation && hasInterpText && (
+        !hasExplicitInterpSetting ||
+        printedInterps.length === 0 ||
+        printedInterps.includes(mainTestObj.id) ||
+        printedInterps.includes(firstTestObj.id) ||
+        printedInterps.includes(itemsList[0]?.test?.id) ||
+        printedInterps.includes("ALL") ||
+        mainTestName.toUpperCase().includes("CBC") ||
+        mainTestName.toUpperCase().includes("COMPLETE BLOOD")
+      );
 
       if (isInterpEnabled) {
         blocks.push({
@@ -827,8 +844,8 @@ export function buildReportBlocks(
                 Clinical Notes & Interpretation ({mainTestName}):
               </p>
               <div 
-                className="[&_table]:border-collapse [&_table]:w-full [&_table]:my-1.5 [&_table]:border [&_table]:border-zinc-300 [&_th]:border [&_th]:border-zinc-300 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:bg-zinc-100 [&_th]:font-bold [&_th]:text-[10px] [&_th]:text-left [&_td]:border [&_td]:border-zinc-300 [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-[9.5px] [&_td]:leading-relaxed" 
-                dangerouslySetInnerHTML={{ __html: mainTestObj.interpretation || "" }} 
+                className="[&_table]:border-collapse [&_table]:w-full [&_table]:my-1.5 [&_table]:border [&_table]:border-zinc-300 [&_th]:border [&_th]:border-zinc-300 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:bg-zinc-100 [&_th]:font-bold [&_th]:text-[10px] [&_th]:text-left [&_td]:border [&_td]:border-zinc-300 [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-[9.5px] [&_td]:leading-relaxed text-zinc-800" 
+                dangerouslySetInnerHTML={{ __html: interpContent || "" }} 
               />
             </div>
           ),

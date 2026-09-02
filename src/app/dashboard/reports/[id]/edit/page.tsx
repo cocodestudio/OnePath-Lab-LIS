@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { TipTapEditor } from "@/components/tiptap-editor";
 import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
+import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 
 // Clinical Categorized Predefined Units
 const CATEGORIZED_UNITS: Record<string, string[]> = {
@@ -752,8 +753,11 @@ export default function ResultEntryPage() {
       const testsWithInterp = resultsList
         .map((r: any) => {
           const t = r.test;
+          if (!t) return null;
           const mt = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
-          const hasInterp = !!mt?.interpretation && mt.interpretation.trim() !== '' && mt.interpretation !== '<p><br></p>';
+          const rawInterp = mt?.interpretation || t.interpretation || (t.parent ? t.parent.interpretation : null);
+          const interp = getClinicalInterpretation(mt?.name || t.name, rawInterp, t.category);
+          const hasInterp = !!interp && interp.trim() !== '' && interp !== '<p><br></p>';
           return hasInterp ? mt.id : null;
         })
         .filter(Boolean) as string[];
@@ -1228,7 +1232,9 @@ export default function ResultEntryPage() {
       const mt = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
       const mtId = mt.id;
       const mtName = mt.name;
-      const hasInterp = !!mt.interpretation && mt.interpretation.trim() !== '' && mt.interpretation !== '<p><br></p>';
+      const rawInterp = mt.interpretation || t.interpretation || (t.parent ? t.parent.interpretation : null);
+      const interp = getClinicalInterpretation(mtName, rawInterp, t.category);
+      const hasInterp = !!interp && interp.trim() !== '' && interp !== '<p><br></p>';
 
       if (!map.has(mtId)) {
         map.set(mtId, {
