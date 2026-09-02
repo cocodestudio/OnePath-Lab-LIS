@@ -14,8 +14,7 @@ import {
   Dialog, DialogContent, DialogTitle
 } from "@/components/ui/dialog";
 import { SubscriptionTaxInvoiceSheet, type SubscriptionInvoiceData } from "@/components/subscription-tax-invoice";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import { downloadSubscriptionTaxInvoicePdf } from "@/lib/download-invoice-pdf";
 
 interface LabData {
   id: string;
@@ -108,8 +107,6 @@ function LabAccountContent() {
 
   // Direct PDF Download State
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
-  const directPrintContainerRef = useRef<HTMLDivElement>(null);
-  const [invoiceToDownload, setInvoiceToDownload] = useState<SubscriptionInvoiceData | null>(null);
 
   // Daily Patient Volume State
   const [selectedVolumeTier, setSelectedVolumeTier] = useState("51_200");
@@ -274,39 +271,12 @@ function LabAccountContent() {
     try {
       setDownloadingInvoiceId(inv.id);
       const mapped = mapInvoiceToData(inv);
-      setInvoiceToDownload(mapped);
-
-      // Wait 150ms for React to render the hidden container
-      await new Promise(r => setTimeout(r, 150));
-
-      const el = directPrintContainerRef.current?.querySelector<HTMLElement>(".flipkart-invoice-sheet");
-      if (el) {
-        const rawId = mapped.customId || mapped.id.replace(/[^0-9]/g, "").slice(0, 10) || "224210950120";
-        const orderId = `OD${rawId.padStart(18, "0")}`;
-
-        const canvas = await html2canvas(el, {
-          scale: 2,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: "#ffffff",
-          logging: false,
-          width: 800,
-          windowWidth: 800,
-        });
-
-        const imgData = canvas.toDataURL("image/jpeg", 0.96);
-        const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-        const pdfW = pdf.internal.pageSize.getWidth();
-        const pdfH = (canvas.height * pdfW) / canvas.width;
-        pdf.addImage(imgData, "JPEG", 0, 0, pdfW, Math.min(pdfH, pdf.internal.pageSize.getHeight()));
-        pdf.save(`Tax_Invoice_${orderId}.pdf`);
-      }
+      await downloadSubscriptionTaxInvoicePdf(mapped);
     } catch (e) {
       console.error("Direct invoice PDF download error:", e);
       alert("Failed to download PDF. Please try again.");
     } finally {
       setDownloadingInvoiceId(null);
-      setInvoiceToDownload(null);
     }
   };
 
@@ -1057,24 +1027,6 @@ function LabAccountContent() {
           </form>
         </div>
       )}
-
-      {/* Hidden Off-Screen Container for Direct Instant 1-Click PDF Generation */}
-      <div
-        ref={directPrintContainerRef}
-        style={{
-          position: "fixed",
-          top: -99999,
-          left: -99999,
-          width: 800,
-          visibility: "hidden",
-          pointerEvents: "none",
-        }}
-        aria-hidden
-      >
-        {invoiceToDownload && (
-          <SubscriptionTaxInvoiceSheet invoice={invoiceToDownload} />
-        )}
-      </div>
 
       {/* ── Dialog: Optional Modal if needed ── */}
       <Dialog open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
