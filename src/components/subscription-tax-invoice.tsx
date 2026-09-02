@@ -3,6 +3,7 @@
 import React, { useRef } from "react";
 import { Download, Printer } from "lucide-react";
 import { printInvoiceElement } from "@/lib/print-invoice";
+import { downloadSubscriptionTaxInvoicePdf } from "@/lib/download-invoice-pdf";
 import { QRCodeSVG } from "qrcode.react";
 
 export interface SubscriptionInvoiceData {
@@ -90,11 +91,28 @@ export function SubscriptionTaxInvoiceSheet({
     ? `${String(dateObj.getDate()).padStart(2, "0")}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${dateObj.getFullYear()}, ${dateObj.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}`
     : "19-02-2026, 12:34 PM";
 
+  const isSixMonths =
+    invoice.planDuration === "6_MONTHS" ||
+    (invoice.description || "").toLowerCase().includes("6-month") ||
+    (invoice.description || "").toLowerCase().includes("6 month") ||
+    invoice.baseAmount === 2499;
+
+  const productTitle = isSixMonths
+    ? "OnePathLab LIS Software - 6 Months Semi-Annual License Plan"
+    : "OnePathLab LIS Software - 1 Year Annual License Plan";
+
+  const productDescription =
+    "Complete Pathology Laboratory Information System (LIS) Software License with Unlimited Diagnostic Tests, Machine Interfacing & QR Patient Reports | SAC: 998314";
+
   const handlePrint = () => {
     printInvoiceElement(printRef.current, `Tax_Invoice_${orderId}`);
   };
 
-  const qrData = `TAX INVOICE | Order ID: ${orderId} | Inv No: ${invNumber} | Date: ${formattedDate} | Seller GSTIN: 09EAMPA2104K3ZT | Total: INR ${total.toFixed(2)}`;
+  const handleDownload = () => {
+    downloadSubscriptionTaxInvoicePdf(invoice);
+  };
+
+  const qrData = `TAX INVOICE: ${invNumber}\nORDER ID: ${orderId}\nPRODUCT: ${productTitle}\nTOTAL: INR ${total.toFixed(2)}\nDATE: ${formattedDate}\nSELLER: CoCode Studio\nGSTIN: 09EAMPA2104K3ZT\nSTATUS: PAID`;
 
   return (
     <div className="flex flex-col bg-card rounded-2xl overflow-hidden shadow-2xl border border-border">
@@ -126,7 +144,7 @@ export function SubscriptionTaxInvoiceSheet({
           </button>
           <button
             type="button"
-            onClick={handlePrint}
+            onClick={handleDownload}
             className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white transition-all cursor-pointer shadow-md"
           >
             <Download className="h-3.5 w-3.5" />
@@ -262,10 +280,10 @@ export function SubscriptionTaxInvoiceSheet({
                 <tr className="border-b border-black align-top">
                   <td className="border-r border-black p-2 font-medium">
                     <p className="font-bold text-black">
-                      {invoice.planName || "OnePath LIS Platform - 1 Year Subscription Plan"}
+                      {productTitle}
                     </p>
                     <p className="text-[8.5px] text-zinc-700 mt-0.5">
-                      Includes Unlimited Tests, Machine Integration &amp; Patient QR Reports | SAC: 998314
+                      {productDescription}
                     </p>
                   </td>
                   <td className="border-r border-black p-2">

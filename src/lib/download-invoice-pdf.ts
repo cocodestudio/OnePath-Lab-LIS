@@ -2,9 +2,7 @@
 
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import React from "react";
-import { renderToString } from "react-dom/server";
-import { QRCodeSVG } from "qrcode.react";
+import QRCode from "qrcode";
 import { type SubscriptionInvoiceData } from "@/components/subscription-tax-invoice";
 
 export async function downloadSubscriptionTaxInvoicePdf(invoice: SubscriptionInvoiceData) {
@@ -14,7 +12,13 @@ export async function downloadSubscriptionTaxInvoicePdf(invoice: SubscriptionInv
     !invoice.customer.state.toLowerCase().includes("uttar pradesh") &&
     !invoice.customer.state.toLowerCase().includes("up");
 
-  const base = invoice.baseAmount || 4999.0;
+  const isSixMonths =
+    invoice.planDuration === "6_MONTHS" ||
+    (invoice.description || "").toLowerCase().includes("6-month") ||
+    (invoice.description || "").toLowerCase().includes("6 month") ||
+    invoice.baseAmount === 2499;
+
+  const base = invoice.baseAmount || (isSixMonths ? 2499.0 : 4999.0);
   const discount = invoice.discount || 0.0;
   const taxable = base - discount;
 
@@ -42,20 +46,27 @@ export async function downloadSubscriptionTaxInvoicePdf(invoice: SubscriptionInv
     ? `${String(dateObj.getDate()).padStart(2, "0")}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${dateObj.getFullYear()}, ${dateObj.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}`
     : "19-02-2026, 12:34 PM";
 
-  const qrText = `TAX INVOICE | Order ID: ${orderId} | Inv No: ${invNumber} | Date: ${formattedDate} | Seller GSTIN: 09EAMPA2104K3ZT | Total: INR ${total.toFixed(2)}`;
+  const productTitle = isSixMonths
+    ? "OnePathLab LIS Software - 6 Months Semi-Annual License Plan"
+    : "OnePathLab LIS Software - 1 Year Annual License Plan";
 
-  // 2. Generate Inline QR Code SVG String
-  let qrSvgString = "";
+  const productDescription =
+    "Complete Pathology Laboratory Information System (LIS) Software License with Unlimited Diagnostic Tests, Machine Interfacing & QR Patient Reports | SAC: 998314";
+
+  // Clean Scan-Friendly Text for QR Code (Displays Invoice details instantly upon camera scan)
+  const qrText = `TAX INVOICE: ${invNumber}\nORDER ID: ${orderId}\nPRODUCT: ${productTitle}\nTOTAL: INR ${total.toFixed(2)}\nDATE: ${formattedDate}\nSELLER: CoCode Studio\nGSTIN: 09EAMPA2104K3ZT\nSTATUS: PAID`;
+
+  // 2. Generate Ultra-Crisp Base64 PNG QR Code
+  let qrDataUrl = "";
   try {
-    qrSvgString = renderToString(
-      React.createElement(QRCodeSVG, {
-        value: qrText,
-        size: 84,
-        level: "M",
-      })
-    );
+    qrDataUrl = await QRCode.toDataURL(qrText, {
+      width: 200,
+      margin: 2,
+      color: { dark: "#000000", light: "#ffffff" },
+      errorCorrectionLevel: "M",
+    });
   } catch (e) {
-    console.warn("QR code render error:", e);
+    console.warn("QR code generation error:", e);
   }
 
   // 3. Load Signature Base64
@@ -105,11 +116,11 @@ export async function downloadSubscriptionTaxInvoicePdf(invoice: SubscriptionInv
           </div>
         </div>
         <div style="flex-shrink: 0; padding: 3px; border: 1px solid #000000; background: #ffffff;">
-          ${qrSvgString || `<div style="width: 84px; height: 84px;"></div>`}
+          ${qrDataUrl ? `<img src="${qrDataUrl}" style="width: 84px; height: 84px; display: block;" alt="QR" />` : `<div style="width: 84px; height: 84px;"></div>`}
         </div>
       </div>
 
-      <!-- 2. Address 3-Column Block -->
+      <!-- 2. Address 3-Column Block (Dynamic real user details) -->
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; border-top: 1px solid #000000; border-bottom: 1px solid #000000; padding: 10px 0; margin: 8px 0; font-size: 9.5px;">
         <div>
           <p style="font-weight: bold; text-transform: uppercase; margin: 0 0 2px 0;">Sold By</p>
@@ -166,8 +177,8 @@ export async function downloadSubscriptionTaxInvoicePdf(invoice: SubscriptionInv
           <tbody>
             <tr style="border-bottom: 1px solid #000000; vertical-align: top;">
               <td style="border-right: 1px solid #000000; padding: 8px;">
-                <p style="font-weight: bold; color: #000000; margin: 0;">${invoice.planName || "OnePath LIS Platform - 1 Year Subscription Plan"}</p>
-                <p style="font-size: 8.5px; color: #444444; margin: 2px 0 0 0;">Includes Unlimited Tests, Machine Integration & Patient QR Reports | SAC: 998314</p>
+                <p style="font-weight: bold; color: #000000; margin: 0;">${productTitle}</p>
+                <p style="font-size: 8.5px; color: #444444; margin: 2px 0 0 0;">${productDescription}</p>
               </td>
               <td style="border-right: 1px solid #000000; padding: 8px;">
                 <p style="margin: 0;">HSN/SAC: <span style="font-weight: 600;">${invoice.sacCode || "998314"}</span></p>
@@ -229,7 +240,7 @@ export async function downloadSubscriptionTaxInvoicePdf(invoice: SubscriptionInv
   document.body.appendChild(container);
 
   try {
-    // Wait for signature image to load
+    // Wait for images to load
     const images = Array.from(container.querySelectorAll("img"));
     await Promise.all(
       images.map(
