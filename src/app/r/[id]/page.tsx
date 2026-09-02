@@ -1,15 +1,15 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
-import Image from "next/image";
 import { 
-  ShieldCheck, Download, Printer, AlertCircle, Loader2, 
-  Building2, User, Calendar, CheckCircle2, FileText, Lock
+  ShieldCheck, Download, AlertCircle, Loader2, 
+  User, Calendar, CheckCircle2, Lock, FileText, Check
 } from "lucide-react";
 import { ReportSheet } from "@/components/report-sheet";
-import { Button } from "@/components/ui/button";
 import { getCleanLetterheadUrl } from "@/lib/api-client";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 export default function PublicReportVerificationPage() {
   const params = useParams();
@@ -18,6 +18,27 @@ export default function PublicReportVerificationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<any | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [scale, setScale] = useState(1);
+  const printRef = useRef<HTMLDivElement>(null);
+
+  // Dynamic mobile & tablet responsive auto-scaling for A4 report sheet
+  useEffect(() => {
+    const updateScale = () => {
+      const screenW = window.innerWidth;
+      if (screenW < 840) {
+        const padding = screenW < 480 ? 20 : 36;
+        const availableW = Math.max(280, screenW - padding);
+        setScale(Math.min(1, availableW / 794));
+      } else {
+        setScale(1);
+      }
+    };
+
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, []);
 
   useEffect(() => {
     if (!reportId) return;
@@ -27,25 +48,24 @@ export default function PublicReportVerificationPage() {
         setLoading(true);
         setError(null);
 
-        // Fetch from Laravel public report endpoint
-        const rawApiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
-        const cleanApiBase = rawApiBase.replace(/\/lis\/?$/, "");
-        const res = await fetch(`${cleanApiBase}/lis/public/reports/${reportId}`, {
-          headers: {
-            "Accept": "application/json",
-          },
+        const apiOrigin = process.env.NEXT_PUBLIC_API_URL 
+          ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/lis\/?$/, "").replace(/\/api\/?$/, "")
+          : "https://api.onepathlab.com";
+
+        const res = await fetch(`${apiOrigin}/api/lis/public/reports/${reportId}`, {
+          headers: { "Accept": "application/json" },
         });
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || "Report not found or invalid QR verification code.");
+          throw new Error(errData.error || errData.message || "Report not found or invalid QR verification code.");
         }
 
         const data = await res.json();
         setReport(data);
       } catch (err: any) {
         console.error("Public report verification error:", err);
-        setError(err.message || "Unable to retrieve verified report.");
+        setError(err.message || "Unable to retrieve verified laboratory report.");
       } finally {
         setLoading(false);
       }
@@ -54,20 +74,76 @@ export default function PublicReportVerificationPage() {
     fetchReport();
   }, [reportId]);
 
-  const handlePrintOrDownload = () => {
-    window.print();
+  const handleDownloadPdf = async () => {
+    if (!printRef.current || isDownloading) return;
+    setIsDownloading(true);
+
+    try {
+      const pageEls = printRef.current.querySelectorAll<HTMLElement>(".report-print-page");
+      if (!pageEls || pageEls.length === 0) {
+        window.print();
+        return;
+      }
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
+      const pdfW = pdf.internal.pageSize.getWidth();  // 595.28 pt
+      const pdfH = pdf.internal.pageSize.getHeight(); // 841.89 pt
+
+      for (let i = 0; i < pageEls.length; i++) {
+        if (i > 0) pdf.addPage("a4", "portrait");
+
+        const canvas = await html2canvas(pageEls[i], {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          width: 794,
+          height: 1123,
+          windowWidth: 794,
+          windowHeight: 1123,
+          imageTimeout: 15000,
+          onclone: (_doc, clonedEl) => {
+            clonedEl.style.transform = "none";
+            clonedEl.style.width = "794px";
+            clonedEl.style.height = "1123px";
+            clonedEl.style.position = "relative";
+            clonedEl.style.margin = "0";
+            clonedEl.style.overflow = "hidden";
+            if (clonedEl.parentElement) {
+              clonedEl.parentElement.style.width = "794px";
+              clonedEl.parentElement.style.height = "1123px";
+              clonedEl.parentElement.style.transform = "none";
+              clonedEl.parentElement.style.overflow = "visible";
+            }
+          },
+        });
+
+        const imgData = canvas.toDataURL("image/jpeg", 0.95);
+        pdf.addImage(imgData, "JPEG", 0, 0, pdfW, pdfH, undefined, "FAST");
+      }
+
+      const patientName = (patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const code = report?.custom_id || report?.customId || reportId;
+      pdf.save(`${patientName}_Report_${code}.pdf`);
+    } catch (err) {
+      console.error("PDF generation fallback to print:", err);
+      window.print();
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col items-center justify-center p-4">
-        <div className="flex flex-col items-center space-y-4 max-w-sm text-center">
-          <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="flex flex-col items-center space-y-4 max-w-sm text-center bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+          <div className="h-14 w-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-xs">
             <Loader2 className="h-7 w-7 animate-spin" />
           </div>
           <div>
-            <h2 className="text-base font-bold tracking-tight text-white">Verifying Laboratory Record...</h2>
-            <p className="text-xs text-slate-400 mt-1">Connecting to OnePath Secure Diagnostic Repository</p>
+            <h2 className="text-base font-bold text-slate-800 tracking-tight">Verifying Medical Record...</h2>
+            <p className="text-xs text-slate-500 mt-1">Connecting to OnePath Secure Diagnostic Repository</p>
           </div>
         </div>
       </div>
@@ -76,18 +152,18 @@ export default function PublicReportVerificationPage() {
 
   if (error || !report) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-2xl">
-          <div className="h-12 w-12 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-sm">
+          <div className="h-12 w-12 rounded-full bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center mx-auto">
             <AlertCircle className="h-6 w-6" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white">Verification Failed</h2>
-            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+            <h2 className="text-lg font-bold text-slate-900">Verification Failed</h2>
+            <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
               {error || "The scanned QR code is either expired or does not match any registered diagnostic record in the OnePath LIS network."}
             </p>
           </div>
-          <div className="pt-2 text-[11px] text-slate-500 font-mono">
+          <div className="pt-2 text-[11px] text-slate-400 font-mono">
             Security Reference: {reportId}
           </div>
         </div>
@@ -106,7 +182,6 @@ export default function PublicReportVerificationPage() {
     }
   })();
 
-  // Transform report data into ReportSheetData format
   const sheetData = {
     id: report.id,
     customId: report.custom_id || report.customId,
@@ -205,86 +280,135 @@ export default function PublicReportVerificationPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased">
-      {/* ── Official Verification Banner (Screen Only) ── */}
-      <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-50 print:hidden shadow-lg">
-        <div className="max-w-6xl mx-auto px-4 py-3 sm:py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3">
-          {/* Verified Badge & Info */}
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="h-10 w-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 shadow-xs">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col antialiased">
+      {/* ── Top Official Header (Light, Clean, Professional) ── */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 print:hidden shadow-xs">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          {/* Official Verification Badge & Lab Title */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center shrink-0 shadow-xs">
               <ShieldCheck className="h-5 w-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-bold text-white tracking-tight flex items-center gap-1.5">
-                  <span>Verified Diagnostic Report</span>
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                </h1>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  OFFICIAL AUTHENTIC
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-bold text-slate-900 tracking-tight">Verified Diagnostic Report</span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Check className="h-3 w-3 stroke-[3]" /> OFFICIAL AUTHENTIC
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                {lab.name || "OnePath Laboratory"} · <span className="font-mono text-emerald-400">{report.custom_id || report.customId}</span>
+              <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                {lab.name || "OnePath Laboratory"} · <span className="font-mono font-semibold text-slate-700">Ref: {report.custom_id || report.customId}</span>
               </p>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          {/* Desktop/Tablet Download PDF Button */}
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
             <button
-              onClick={handlePrintOrDownload}
-              className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md hover:-translate-y-px transition-all cursor-pointer"
+              onClick={handleDownloadPdf}
+              disabled={isDownloading}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold shadow-sm transition-all cursor-pointer disabled:opacity-75"
             >
-              <Download className="h-3.5 w-3.5" />
-              <span>Download Official PDF</span>
-            </button>
-            <button
-              onClick={handlePrintOrDownload}
-              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold transition-all cursor-pointer"
-              title="Print Report"
-            >
-              <Printer className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Print</span>
+              {isDownloading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Generating PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  <span>Download Official PDF</span>
+                </>
+              )}
             </button>
           </div>
         </div>
       </header>
 
-      {/* ── Summary Details Ribbon (Mobile / Quick View) ── */}
-      <section className="bg-slate-900/60 border-b border-slate-800/80 px-4 py-2.5 print:hidden">
-        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-y-2 text-xs text-slate-300">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <User className="h-3.5 w-3.5 text-slate-400" />
-              <span>Patient: <strong className="text-white">{patient.name}</strong> ({patient.age}Y/{patient.gender})</span>
+      {/* ── Patient & Verification Summary Info Card ── */}
+      <section className="max-w-5xl mx-auto w-full px-4 pt-4 pb-2 print:hidden">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-4 flex-wrap text-xs text-slate-600">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+                <User className="h-3.5 w-3.5" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">Patient</span>
+                <strong className="text-slate-800 font-semibold text-xs">{patient.name}</strong>
+                <span className="text-slate-500 text-[11px] ml-1">({patient.age}Y / {patient.gender})</span>
+              </div>
             </div>
-            <div className="hidden sm:flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5 text-slate-400" />
-              <span>Date: <strong className="text-white">{reportDateStr}</strong></span>
+
+            <div className="hidden md:flex items-center gap-2 border-l border-slate-200 pl-4">
+              <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+                <Calendar className="h-3.5 w-3.5" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">Report Date</span>
+                <span className="text-slate-800 font-medium text-xs">{reportDateStr}</span>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-mono">
-            <Lock className="h-3 w-3" />
-            <span>256-Bit Cryptographically Verified Record</span>
+
+          <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 bg-emerald-50/70 border border-emerald-200/80 px-3 py-1 rounded-full font-medium">
+            <Lock className="h-3 w-3 text-emerald-600" />
+            <span>256-Bit Cryptographically Sealed Diagnostic Record</span>
           </div>
         </div>
       </section>
 
-      {/* ── Main Report Sheet Container ── */}
-      <main className="flex-1 p-3 sm:p-6 md:p-8 flex justify-center bg-slate-950 overflow-y-auto print:p-0 print:bg-white print:m-0">
-        <div className="shadow-2xl ring-1 ring-slate-800 rounded-xl overflow-hidden bg-white text-zinc-900 print:ring-0 print:shadow-none print:rounded-none w-full max-w-[794px]">
-          <ReportSheet 
-            report={sheetData} 
-            settings={labSettings} 
-          />
+      {/* ── Main Report Sheet Container (Mobile Auto-Scaled & Centered) ── */}
+      <main className="flex-1 px-2 sm:px-4 py-4 flex justify-center items-start overflow-x-hidden print:p-0 print:m-0">
+        <div 
+          className="flex justify-center transition-all print:w-full print:max-w-none"
+          style={{
+            width: scale < 1 ? `${794 * scale}px` : "100%",
+            maxWidth: "794px",
+          }}
+        >
+          <div
+            ref={printRef}
+            style={{
+              transform: scale < 1 ? `scale(${scale})` : "none",
+              transformOrigin: "top center",
+              width: "794px",
+            }}
+            className="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden print:shadow-none print:border-none print:rounded-none print:transform-none"
+          >
+            <ReportSheet 
+              report={sheetData} 
+              settings={labSettings} 
+            />
+          </div>
         </div>
       </main>
 
-      {/* ── Footer / Trust Badge ── */}
-      <footer className="bg-slate-900 border-t border-slate-800 py-3 text-center text-[11px] text-slate-400 print:hidden">
+      {/* ── Mobile Sticky Bottom Action Bar ── */}
+      <div className="sm:hidden sticky bottom-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 shadow-lg print:hidden">
+        <button
+          onClick={handleDownloadPdf}
+          disabled={isDownloading}
+          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold shadow-md transition-all cursor-pointer disabled:opacity-75"
+        >
+          {isDownloading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Generating PDF...</span>
+            </>
+          ) : (
+            <>
+              <Download className="h-4 w-4" />
+              <span>Download Official Report (PDF)</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* ── Professional Footer ── */}
+      <footer className="bg-white border-t border-slate-200 py-3 text-center text-[11px] text-slate-500 print:hidden">
         <p>
-          Powered by <strong className="text-white">OnePath Laboratory Information System</strong> · India's Premier LIS Network
+          Verified by <strong className="text-slate-700 font-semibold">{lab.name || "OnePath Diagnostic Network"}</strong> · Powered by OnePath LIS
         </p>
       </footer>
     </div>
