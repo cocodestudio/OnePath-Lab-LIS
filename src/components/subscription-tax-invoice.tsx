@@ -202,16 +202,19 @@ export function SubscriptionTaxInvoiceSheet({
             <div>
               <p className="font-bold text-black uppercase mb-0.5">Billing Address</p>
               <p className="font-bold">
-                {invoice.customer.contactPerson || invoice.customer.name || "Shahzad Ahmad,"}
+                {invoice.customer.contactPerson || invoice.customer.name || "Authorized Customer"}
               </p>
               {invoice.customer.name && invoice.customer.contactPerson && (
-                <p className="font-semibold">{invoice.customer.name},</p>
+                <p className="font-semibold">{invoice.customer.name}</p>
               )}
-              <p>{invoice.customer.address || "Deoband Road Near Petrol Pump, Nagal Saharanpur,"}</p>
-              <p>{invoice.customer.city || "Nagal Saharanpur"},</p>
-              <p>{invoice.customer.state || "Uttar Pradesh"} - {invoice.customer.pincode || "247551"}, IN-{isInterState ? "OS" : "UP"}</p>
+              {invoice.customer.address && <p>{invoice.customer.address}</p>}
+              {invoice.customer.city && <p>{invoice.customer.city}</p>}
+              <p>{invoice.customer.state || "Uttar Pradesh"}{invoice.customer.pincode ? ` - ${invoice.customer.pincode}` : ""}, IN-{isInterState ? "OS" : "UP"}</p>
               {invoice.customer.gstin && (
                 <p className="mt-0.5"><span className="font-semibold">GSTIN:</span> {invoice.customer.gstin}</p>
+              )}
+              {invoice.customer.phone && (
+                <p className="mt-0.5"><span className="font-semibold">Phone:</span> {invoice.customer.phone}</p>
               )}
             </div>
 
@@ -219,14 +222,14 @@ export function SubscriptionTaxInvoiceSheet({
             <div>
               <p className="font-bold text-black uppercase mb-0.5">Shipping Address</p>
               <p className="font-bold">
-                {invoice.customer.contactPerson || invoice.customer.name || "Shahzad Ahmad,"}
+                {invoice.customer.contactPerson || invoice.customer.name || "Authorized Customer"}
               </p>
               {invoice.customer.name && invoice.customer.contactPerson && (
-                <p className="font-semibold">{invoice.customer.name},</p>
+                <p className="font-semibold">{invoice.customer.name}</p>
               )}
-              <p>{invoice.customer.address || "Deoband Road Near Petrol Pump, Nagal Saharanpur,"}</p>
-              <p>{invoice.customer.city || "Nagal Saharanpur"},</p>
-              <p>{invoice.customer.state || "Uttar Pradesh"} - {invoice.customer.pincode || "247551"}, IN-{isInterState ? "OS" : "UP"}</p>
+              {invoice.customer.address && <p>{invoice.customer.address}</p>}
+              {invoice.customer.city && <p>{invoice.customer.city}</p>}
+              <p>{invoice.customer.state || "Uttar Pradesh"}{invoice.customer.pincode ? ` - ${invoice.customer.pincode}` : ""}, IN-{isInterState ? "OS" : "UP"}</p>
               {invoice.customer.phone && (
                 <p className="mt-0.5"><span className="font-semibold">Phone:</span> {invoice.customer.phone}</p>
               )}

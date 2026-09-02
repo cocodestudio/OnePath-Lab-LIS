@@ -123,21 +123,22 @@ export async function downloadSubscriptionTaxInvoicePdf(invoice: SubscriptionInv
 
         <div>
           <p style="font-weight: bold; text-transform: uppercase; margin: 0 0 2px 0;">Billing Address</p>
-          <p style="font-weight: bold; margin: 0;">${invoice.customer.contactPerson || invoice.customer.name || "Shahzad Ahmad,"}</p>
-          ${invoice.customer.name && invoice.customer.contactPerson ? `<p style="font-weight: 600; margin: 0;">${invoice.customer.name},</p>` : ""}
-          <p style="margin: 0;">${invoice.customer.address || "Deoband Road Near Petrol Pump, Nagal Saharanpur,"}</p>
-          <p style="margin: 0;">${invoice.customer.city || "Nagal Saharanpur"},</p>
-          <p style="margin: 0;">${invoice.customer.state || "Uttar Pradesh"} - ${invoice.customer.pincode || "247551"}, IN-${isInterState ? "OS" : "UP"}</p>
+          <p style="font-weight: bold; margin: 0;">${invoice.customer.contactPerson || invoice.customer.name || "Authorized Customer"}</p>
+          ${invoice.customer.name && invoice.customer.contactPerson ? `<p style="font-weight: 600; margin: 0;">${invoice.customer.name}</p>` : ""}
+          ${invoice.customer.address ? `<p style="margin: 0;">${invoice.customer.address}</p>` : ""}
+          ${invoice.customer.city ? `<p style="margin: 0;">${invoice.customer.city}</p>` : ""}
+          <p style="margin: 0;">${invoice.customer.state || "Uttar Pradesh"}${invoice.customer.pincode ? ` - ${invoice.customer.pincode}` : ""}, IN-${isInterState ? "OS" : "UP"}</p>
           ${invoice.customer.gstin ? `<p style="margin: 2px 0 0 0;"><span style="font-weight: 600;">GSTIN:</span> ${invoice.customer.gstin}</p>` : ""}
+          ${invoice.customer.phone ? `<p style="margin: 2px 0 0 0;"><span style="font-weight: 600;">Phone:</span> ${invoice.customer.phone}</p>` : ""}
         </div>
 
         <div>
           <p style="font-weight: bold; text-transform: uppercase; margin: 0 0 2px 0;">Shipping Address</p>
-          <p style="font-weight: bold; margin: 0;">${invoice.customer.contactPerson || invoice.customer.name || "Shahzad Ahmad,"}</p>
-          ${invoice.customer.name && invoice.customer.contactPerson ? `<p style="font-weight: 600; margin: 0;">${invoice.customer.name},</p>` : ""}
-          <p style="margin: 0;">${invoice.customer.address || "Deoband Road Near Petrol Pump, Nagal Saharanpur,"}</p>
-          <p style="margin: 0;">${invoice.customer.city || "Nagal Saharanpur"},</p>
-          <p style="margin: 0;">${invoice.customer.state || "Uttar Pradesh"} - ${invoice.customer.pincode || "247551"}, IN-${isInterState ? "OS" : "UP"}</p>
+          <p style="font-weight: bold; margin: 0;">${invoice.customer.contactPerson || invoice.customer.name || "Authorized Customer"}</p>
+          ${invoice.customer.name && invoice.customer.contactPerson ? `<p style="font-weight: 600; margin: 0;">${invoice.customer.name}</p>` : ""}
+          ${invoice.customer.address ? `<p style="margin: 0;">${invoice.customer.address}</p>` : ""}
+          ${invoice.customer.city ? `<p style="margin: 0;">${invoice.customer.city}</p>` : ""}
+          <p style="margin: 0;">${invoice.customer.state || "Uttar Pradesh"}${invoice.customer.pincode ? ` - ${invoice.customer.pincode}` : ""}, IN-${isInterState ? "OS" : "UP"}</p>
           ${invoice.customer.phone ? `<p style="margin: 2px 0 0 0;"><span style="font-weight: 600;">Phone:</span> ${invoice.customer.phone}</p>` : ""}
         </div>
       </div>
