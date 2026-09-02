@@ -200,8 +200,9 @@ function optimizeLetterheadImage(file: File): Promise<string> {
       const img = new Image();
       img.onerror = reject;
       img.onload = () => {
-        const MAX_WIDTH = 1600;
-        const MAX_HEIGHT = 2300;
+        // Standard A4 aspect ratio at crisp resolution (1240 x 1754 px at 150 DPI)
+        const MAX_WIDTH = 1240;
+        const MAX_HEIGHT = 1754;
         let { width, height } = img;
 
         if (width > MAX_WIDTH || height > MAX_HEIGHT) {
@@ -218,15 +219,22 @@ function optimizeLetterheadImage(file: File): Promise<string> {
           return resolve(e.target?.result as string);
         }
 
+        // Fill solid white background so transparent PNGs don't render black in JPEG
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, 0, 0, width, height);
 
-        const isPng = file.type === "image/png";
-        let compressed = canvas.toDataURL(isPng ? "image/png" : "image/jpeg", 0.90);
+        // Always compress as high quality JPEG (crisp, small size ~150-250KB)
+        let quality = 0.82;
+        let compressed = canvas.toDataURL("image/jpeg", quality);
 
-        if (compressed.length > 1.5 * 1024 * 1024) {
-          compressed = canvas.toDataURL("image/jpeg", 0.88);
+        // Keep decreasing quality slightly if still above 400KB to guarantee Nginx 1MB body limit is never exceeded
+        while (compressed.length > 420 * 1024 && quality > 0.45) {
+          quality -= 0.1;
+          compressed = canvas.toDataURL("image/jpeg", quality);
         }
 
         resolve(compressed);
@@ -264,15 +272,25 @@ function SettingsContent() {
       setIsLoading(true);
       const lab = await fetchFromLaravel("/lab");
       if (lab) {
-        const rawBg = lab.printBgImage || lab.print_bg_image || null;
+        let rawBg = lab.printBgImage || lab.print_bg_image || null;
+        if (!rawBg) {
+          try {
+            rawBg = localStorage.getItem("lis_cached_letterhead");
+          } catch {}
+        }
         const cleanBg = getCleanLetterheadUrl(rawBg);
+        if (cleanBg) {
+          try {
+            localStorage.setItem("lis_cached_letterhead", cleanBg);
+          } catch {}
+        }
         setSettings({
           bgImage: cleanBg,
           headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? 40,
           footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? 40,
           marginLeft: lab.printMarginLeft ?? lab.print_margin_left ?? 40,
           marginRight: lab.printMarginRight ?? lab.print_margin_right ?? 40,
-          printWithLetterhead: lab.printWithLetterhead ?? lab.print_with_letterhead ?? false,
+          printWithLetterhead: lab.printWithLetterhead ?? lab.print_with_letterhead ?? (cleanBg ? true : false),
         });
 
         const parsedLayout = normalizeReportSettings(lab.report_settings || lab.reportSettings);
@@ -310,22 +328,43 @@ function SettingsContent() {
       setSettings(prev => ({ ...prev, bgImage: base64Url, printWithLetterhead: true }));
       setShowWithLetterheadPreview(true);
 
-      const updatedLab = await fetchFromLaravel("/lab/letterhead", {
-        method: "POST",
-        body: JSON.stringify({
-          print_bg_image: base64Url,
-          print_header_height: settings.headerHeight,
-          print_footer_height: settings.footerHeight,
-          print_margin_left: settings.marginLeft,
-          print_margin_right: settings.marginRight,
-          print_with_letterhead: true,
-          default_designation: layoutSettings.defaultDesignation || "MR.",
-          report_settings: layoutSettings,
-          bill_settings: billSettings,
-        }),
-      });
+      let updatedLab: any;
+      try {
+        updatedLab = await fetchFromLaravel("/lab/letterhead", {
+          method: "POST",
+          body: JSON.stringify({
+            print_bg_image: base64Url,
+            print_header_height: settings.headerHeight,
+            print_footer_height: settings.footerHeight,
+            print_margin_left: settings.marginLeft,
+            print_margin_right: settings.marginRight,
+            print_with_letterhead: true,
+            default_designation: layoutSettings.defaultDesignation || "MR.",
+            report_settings: layoutSettings,
+            bill_settings: billSettings,
+          }),
+        });
+      } catch (jsonErr: any) {
+        console.warn("JSON letterhead upload failed, trying FormData:", jsonErr);
+        const formData = new FormData();
+        formData.append("letterhead", file);
+        formData.append("print_bg_image", base64Url);
+        formData.append("print_header_height", String(settings.headerHeight));
+        formData.append("print_footer_height", String(settings.footerHeight));
+        formData.append("print_margin_left", String(settings.marginLeft));
+        formData.append("print_margin_right", String(settings.marginRight));
+        formData.append("print_with_letterhead", "1");
+        formData.append("default_designation", layoutSettings.defaultDesignation || "MR.");
+        formData.append("report_settings", JSON.stringify(layoutSettings));
+        formData.append("bill_settings", JSON.stringify(billSettings));
 
-      const serverBg = updatedLab.printBgImage ?? updatedLab.print_bg_image ?? base64Url;
+        updatedLab = await fetchFromLaravel("/lab/letterhead", {
+          method: "POST",
+          body: formData,
+        });
+      }
+
+      const serverBg = updatedLab?.printBgImage ?? updatedLab?.print_bg_image ?? base64Url;
       const cleanUrl = getCleanLetterheadUrl(serverBg) || base64Url;
 
       setSettings(prev => ({
@@ -333,6 +372,11 @@ function SettingsContent() {
         bgImage: cleanUrl,
         printWithLetterhead: true,
       }));
+
+      try {
+        localStorage.setItem("lis_cached_letterhead", cleanUrl);
+      } catch {}
+
       setToast({ text: "Letterhead uploaded & saved permanently in database!", type: "success" });
       setTimeout(() => setToast(null), 4000);
     } catch (err: any) {
@@ -372,6 +416,10 @@ function SettingsContent() {
           bill_settings: billSettings,
         }),
       });
+
+      try {
+        localStorage.removeItem("lis_cached_letterhead");
+      } catch {}
 
       setSettings(prev => ({
         ...prev,

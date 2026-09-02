@@ -216,10 +216,18 @@ function LabAccountContent() {
     try {
       setUpdatingVolume(true);
       setVolumeSaved(false);
-      const res = await fetchFromLaravel("/lab/centre", {
-        method: "PUT",
-        body: JSON.stringify({ daily_patient_volume_tier: tierId }),
-      });
+      let res;
+      try {
+        res = await fetchFromLaravel("/lab", {
+          method: "PUT",
+          body: JSON.stringify({ daily_patient_volume_tier: tierId }),
+        });
+      } catch {
+        res = await fetchFromLaravel("/lab/centre", {
+          method: "PUT",
+          body: JSON.stringify({ daily_patient_volume_tier: tierId }),
+        });
+      }
       if (res) {
         setLab(prev => prev ? ({ ...prev, dailyPatientVolumeTier: tierId, daily_patient_volume_tier: tierId }) : null);
         setVolumeSaved(true);
@@ -384,19 +392,31 @@ function LabAccountContent() {
         pincode: centreForm.pincode,
       };
 
-      const res = await fetchFromLaravel("/lab/centre", {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
+      let res;
+      try {
+        res = await fetchFromLaravel("/lab", {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+      } catch (err1) {
+        console.warn("/lab update failed, attempting /lab/centre:", err1);
+        res = await fetchFromLaravel("/lab/centre", {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+      }
 
       if (res) {
         setLab(prev => prev ? ({ ...prev, ...res }) : res);
+        try {
+          localStorage.setItem("lis_cached_centre_profile", JSON.stringify(payload));
+        } catch {}
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 4000);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to update centre details:", err);
-      alert("Failed to save centre details. Please check your connection.");
+      alert(err.message || "Failed to save centre details. Please check your connection.");
     } finally {
       setSavingCentre(false);
     }
