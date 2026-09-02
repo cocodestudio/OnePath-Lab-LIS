@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Stethoscope, MapPin, Phone, User, Hash, FlaskConical, CheckCircle2,
@@ -42,7 +43,14 @@ const defaultDoctors = ["Self", "Dr. Rajesh Sharma", "Dr. Amit Verma", "Dr. Anja
 const defaultCollectionPoints = ["Main Lab", "Home Collection", "Hospital OPD", "Branch 1 - City Center"];
 const defaultPhlebotomists = ["Self / Lab Staff", "Rahul Phlebotomist", "Pooja Sharma (Tech)", "Vikram Collector"];
 
-export default function RegisterPatientPage() {
+function RegisterPatientPage() {
+  const searchParams = useSearchParams();
+  const editId = searchParams?.get("edit");
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [existingReport, setExistingReport] = useState<any>(null);
+  const [existingBill, setExistingBill] = useState<any>(null);
+
   // Dynamic Intake Field Rules State
   const [intakeFields, setIntakeFields] = useState<IntakeFieldConfig[]>(DEFAULT_INTAKE_FIELDS);
   const [tempIntakeFields, setTempIntakeFields] = useState<IntakeFieldConfig[]>(DEFAULT_INTAKE_FIELDS);
@@ -251,6 +259,129 @@ export default function RegisterPatientPage() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!editId) return;
+    setIsEditMode(true);
+    setEditPatientId(editId);
+
+    (async () => {
+      try {
+        const patientData = await fetchFromLaravel(`/patients/${editId}`);
+        if (patientData) {
+          // Parse Name
+          const rawName = (patientData.name || "").trim();
+          const parts = rawName.split(/\s+/);
+          let des = patientData.designation || "Mr.";
+          let fn = "";
+          let ln = "";
+
+          if (ALL_DESIGNATIONS.includes(parts[0])) {
+            des = parts[0];
+            fn = parts[1] || "";
+            ln = parts.slice(2).join(" ");
+          } else {
+            fn = parts[0] || "";
+            ln = parts.slice(1).join(" ");
+          }
+
+          setDesignation(des);
+          setFirstName(fn);
+          setLastName(ln);
+
+          setAgeYears((patientData.age || 0).toString());
+          setAgeMonths("0");
+          setAgeDays("0");
+          setGender(patientData.gender || "Male");
+          setPhone(patientData.phone && patientData.phone !== "N/A" ? patientData.phone : "");
+          setEmail(patientData.email || "");
+          setAddress(patientData.address && patientData.address !== "N/A" ? patientData.address : "");
+          setPincode(patientData.pincode || "");
+          setCity(patientData.city || "");
+          setDistrict(patientData.district || "");
+          setState(patientData.state || "");
+
+          const doc = patientData.ref_doctor || patientData.refDoctor || "Self";
+          setRefDoctorSelect(doc);
+          setSecondReferral(patientData.second_referral || patientData.secondReferral || "");
+
+          const coll = patientData.collected_at || patientData.collectedAt || "Main Lab (Self / Lab Staff)";
+          const match = coll.match(/^(.*?)(?:\s*\((.*?)\))?$/);
+          const point = match && match[1] ? match[1].trim() : "Main Lab";
+          const phlebo = match && match[2] ? match[2].trim() : "Self / Lab Staff";
+          setCollectedAtSelect(point);
+          setCollectedBySelect(phlebo);
+
+          // Identification & Corporate
+          setAadhaarNo(patientData.aadhaar_no || patientData.aadhaarNo || "");
+          setInsuranceNo(patientData.insurance_no || patientData.insuranceNo || "");
+          setTpa(patientData.tpa || "");
+          setHfrId(patientData.hfr_id || patientData.hfrId || "");
+          setUhid(patientData.uhid || "");
+          setPassportNumber(patientData.passport_number || patientData.passportNumber || "");
+          setCorporateName(patientData.corporate_name || patientData.corporateName || "");
+          setCorporatePlan(patientData.corporate_plan || patientData.corporatePlan || "");
+          setGovPanel(patientData.gov_panel || patientData.govPanel || "");
+
+          // Physical metrics
+          setHeight(patientData.height || "");
+          setWeight(patientData.weight || "");
+          setOwnerName(patientData.owner_name || patientData.ownerName || "");
+          setBreed(patientData.breed || "");
+          setSpecies(patientData.species || "");
+
+          const patObj: Patient = {
+            id: patientData.id,
+            customId: patientData.custom_id || patientData.customId || "",
+            name: patientData.name,
+            age: patientData.age || 0,
+            gender: patientData.gender || "Male",
+            phone: patientData.phone || "",
+            refDoctor: doc,
+            address: patientData.address || "",
+            collectedAt: coll,
+          };
+          setNewPatient(patObj);
+
+          // Fetch associated reports & bills for this patient
+          try {
+            const reportsRes = await fetchFromLaravel("/reports");
+            const allReports = Array.isArray(reportsRes) ? reportsRes : (reportsRes?.data || []);
+            const patReport = allReports.find((r: any) => (r.patient_id === editId || r.patientId === editId));
+            if (patReport) {
+              setExistingReport(patReport);
+              if (patReport.results && Array.isArray(patReport.results)) {
+                const testIds: string[] = [];
+                patReport.results.forEach((res: any) => {
+                  const tId = res.test_id || res.testId || (res.test && res.test.id);
+                  if (tId && !testIds.includes(tId)) {
+                    testIds.push(tId);
+                  }
+                });
+                if (testIds.length > 0) {
+                  setSelectedTests(testIds);
+                }
+              }
+            }
+          } catch (e) {}
+
+          try {
+            const billsRes = await fetchFromLaravel("/bills");
+            const allBills = Array.isArray(billsRes) ? billsRes : (billsRes?.data || []);
+            const patBill = allBills.find((b: any) => (b.patient_id === editId || b.patientId === editId));
+            if (patBill) {
+              setExistingBill(patBill);
+              setDiscount((patBill.discount || 0).toString());
+              setPaidAmount((patBill.paid_amount || patBill.paidAmount || 0).toString());
+              setPaymentStatus(patBill.status || "UNPAID");
+            }
+          } catch (e) {}
+        }
+      } catch (err) {
+        console.error("Error loading patient for edit:", err);
+      }
+    })();
+  }, [editId]);
+
   // Doctor Helpers
   const handleAddDoctor = (e: React.FormEvent) => {
     e.preventDefault();
@@ -394,45 +525,83 @@ export default function RegisterPatientPage() {
       const fullName = `${designation} ${firstName.trim()} ${lastName.trim()}`.trim();
       const calculatedAge = parseInt(ageYears) || (parseInt(ageMonths) > 0 ? 1 : 0) || 0;
 
-      const data = await fetchFromLaravel("/patients", {
-        method: "POST",
-        body: JSON.stringify({
-          designation,
-          name: fullName,
-          age: calculatedAge,
-          gender,
-          phone: phone.trim() || "N/A",
-          email: email.trim() || null,
-          refDoctor: refDoctorSelect || "Self",
-          secondReferral: secondReferral.trim() || null,
-          address: address.trim() || "N/A",
-          city: city.trim() || null,
-          district: district.trim() || null,
-          state: state.trim() || null,
-          pincode: pincode.trim() || null,
-          collectedAt: `${collectedAtSelect} (${collectedBySelect})`,
-          collectedBy: collectedBySelect || null,
-          aadhaarNo: aadhaarNo.trim() || null,
-          insuranceNo: insuranceNo.trim() || null,
-          tpa: tpa.trim() || null,
-          hfrId: hfrId.trim() || null,
-          uhid: uhid.trim() || null,
-          passportNumber: passportNumber.trim() || null,
-          corporateName: corporateName.trim() || null,
-          corporatePlan: corporatePlan.trim() || null,
-          govPanel: govPanel.trim() || null,
-          height: height.trim() || null,
-          weight: weight.trim() || null,
-          ownerName: ownerName.trim() || null,
-          breed: breed.trim() || null,
-          species: species.trim() || null,
-        }),
-      });
+      let data;
+      if (editPatientId) {
+        data = await fetchFromLaravel(`/patients/${editPatientId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            designation,
+            name: fullName,
+            age: calculatedAge,
+            gender,
+            phone: phone.trim() || "N/A",
+            email: email.trim() || null,
+            ref_doctor: refDoctorSelect || "Self",
+            second_referral: secondReferral.trim() || null,
+            address: address.trim() || "N/A",
+            city: city.trim() || null,
+            district: district.trim() || null,
+            state: state.trim() || null,
+            pincode: pincode.trim() || null,
+            collected_at: `${collectedAtSelect} (${collectedBySelect})`,
+            collected_by: collectedBySelect || null,
+            aadhaar_no: aadhaarNo.trim() || null,
+            insurance_no: insuranceNo.trim() || null,
+            tpa: tpa.trim() || null,
+            hfr_id: hfrId.trim() || null,
+            uhid: uhid.trim() || null,
+            passport_number: passportNumber.trim() || null,
+            corporate_name: corporateName.trim() || null,
+            corporate_plan: corporatePlan.trim() || null,
+            gov_panel: govPanel.trim() || null,
+            height: height.trim() || null,
+            weight: weight.trim() || null,
+            owner_name: ownerName.trim() || null,
+            breed: breed.trim() || null,
+            species: species.trim() || null,
+          }),
+        });
+      } else {
+        data = await fetchFromLaravel("/patients", {
+          method: "POST",
+          body: JSON.stringify({
+            designation,
+            name: fullName,
+            age: calculatedAge,
+            gender,
+            phone: phone.trim() || "N/A",
+            email: email.trim() || null,
+            refDoctor: refDoctorSelect || "Self",
+            secondReferral: secondReferral.trim() || null,
+            address: address.trim() || "N/A",
+            city: city.trim() || null,
+            district: district.trim() || null,
+            state: state.trim() || null,
+            pincode: pincode.trim() || null,
+            collectedAt: `${collectedAtSelect} (${collectedBySelect})`,
+            collectedBy: collectedBySelect || null,
+            aadhaarNo: aadhaarNo.trim() || null,
+            insuranceNo: insuranceNo.trim() || null,
+            tpa: tpa.trim() || null,
+            hfrId: hfrId.trim() || null,
+            uhid: uhid.trim() || null,
+            passportNumber: passportNumber.trim() || null,
+            corporateName: corporateName.trim() || null,
+            corporatePlan: corporatePlan.trim() || null,
+            govPanel: govPanel.trim() || null,
+            height: height.trim() || null,
+            weight: weight.trim() || null,
+            ownerName: ownerName.trim() || null,
+            breed: breed.trim() || null,
+            species: species.trim() || null,
+          }),
+        });
+      }
 
       const patientObj: Patient = {
-        id: data.id,
-        customId: data.customId || data.custom_id || data.customID || "",
-        name: data.name || fullName,
+        id: data?.id || editPatientId,
+        customId: data?.customId || data?.custom_id || data?.customID || (newPatient?.customId || ""),
+        name: data?.name || fullName,
         age: calculatedAge,
         gender,
         phone: phone.trim() || "N/A",
@@ -456,7 +625,7 @@ export default function RegisterPatientPage() {
       setIsModalOpen(true);
     } catch (err: any) {
       console.error("Registration error:", err);
-      setRegisterError(err.message || "Failed to register patient. Please verify your details.");
+      setRegisterError(err.message || "Failed to save patient. Please verify your details.");
       setRegistering(false);
     }
   };
@@ -600,14 +769,23 @@ export default function RegisterPatientPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-            <p className="text-[11px] font-bold text-primary uppercase tracking-[0.2em]">Diagnostic Intake Flow</p>
+            <span className={`h-2 w-2 rounded-full ${isEditMode ? "bg-amber-500 animate-pulse" : "bg-primary animate-pulse"}`} />
+            <p className={`text-[11px] font-bold uppercase tracking-[0.2em] ${isEditMode ? "text-amber-500" : "text-primary"}`}>
+              {isEditMode ? "Patient Profile & Order Edit Mode" : "Diagnostic Intake Flow"}
+            </p>
+            {isEditMode && newPatient && (
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-mono font-bold text-[11px]">
+                PID: {newPatient.customId || (newPatient as any).custom_id || editPatientId}
+              </span>
+            )}
           </div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-1">
-            Register Patient & Clinical Investigations
+            {isEditMode ? "Edit Patient & Clinical Investigations" : "Register Patient & Clinical Investigations"}
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Capture demographics, assign pathology investigations, apply concessions, and issue billing receipts.
+            {isEditMode
+              ? "Update patient demographics, referral doctor, assigned test catalog items, and billing details."
+              : "Capture demographics, assign pathology investigations, apply concessions, and issue billing receipts."}
           </p>
         </div>
 
@@ -697,7 +875,7 @@ export default function RegisterPatientPage() {
                       <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
                         Title <span className="text-primary">*</span>
                       </label>
-                      <Select value={designation} onValueChange={setDesignation} disabled={registering || !!newPatient}>
+                      <Select value={designation} onValueChange={setDesignation} disabled={registering || (!!newPatient && !isEditMode)}>
                         <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
                           <SelectValue />
                         </SelectTrigger>
@@ -723,7 +901,7 @@ export default function RegisterPatientPage() {
                           placeholder="Enter First Name"
                           value={firstName}
                           onChange={(e) => setFirstName(e.target.value)}
-                          disabled={registering || !!newPatient}
+                          disabled={registering || (!!newPatient && !isEditMode)}
                           required={isFieldRequired("name")}
                         />
                       </div>
@@ -739,7 +917,7 @@ export default function RegisterPatientPage() {
                         placeholder="Enter Last Name"
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
-                        disabled={registering || !!newPatient}
+                        disabled={registering || (!!newPatient && !isEditMode)}
                       />
                     </div>
                   </div>
@@ -762,7 +940,7 @@ export default function RegisterPatientPage() {
                             className="w-full text-center h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-sm placeholder:text-muted-foreground/50 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white outline-none text-foreground font-bold shadow-2xs"
                             value={ageYears}
                             onChange={(e) => setAgeYears(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                           />
                           <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-muted-foreground pointer-events-none">Y</span>
                         </div>
@@ -775,7 +953,7 @@ export default function RegisterPatientPage() {
                             className="w-full text-center h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-sm placeholder:text-muted-foreground/50 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white outline-none text-foreground font-bold shadow-2xs"
                             value={ageMonths}
                             onChange={(e) => setAgeMonths(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                           />
                           <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-muted-foreground pointer-events-none">M</span>
                         </div>
@@ -788,7 +966,7 @@ export default function RegisterPatientPage() {
                             className="w-full text-center h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-sm placeholder:text-muted-foreground/50 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white outline-none text-foreground font-bold shadow-2xs"
                             value={ageDays}
                             onChange={(e) => setAgeDays(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                           />
                           <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-muted-foreground pointer-events-none">D</span>
                         </div>
@@ -800,7 +978,7 @@ export default function RegisterPatientPage() {
                       <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
                         Gender {isFieldRequired("ageGender") && <span className="text-rose-500 font-extrabold">*</span>}
                       </label>
-                      <Select value={gender} onValueChange={setGender} disabled={registering || !!newPatient}>
+                      <Select value={gender} onValueChange={setGender} disabled={registering || (!!newPatient && !isEditMode)}>
                         <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
                           <SelectValue />
                         </SelectTrigger>
@@ -829,7 +1007,7 @@ export default function RegisterPatientPage() {
                             placeholder="Enter 10-digit Phone Number"
                             value={phone}
                             onChange={(e) => setPhone(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("phone")}
                           />
                         </div>
@@ -849,7 +1027,7 @@ export default function RegisterPatientPage() {
                             placeholder="patient@example.com"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("email")}
                           />
                         </div>
@@ -871,7 +1049,7 @@ export default function RegisterPatientPage() {
                           placeholder="Enter Complete Residential Address"
                           value={address}
                           onChange={(e) => setAddress(e.target.value)}
-                          disabled={registering || !!newPatient}
+                          disabled={registering || (!!newPatient && !isEditMode)}
                           required={isFieldRequired("address")}
                         />
                       </div>
@@ -892,7 +1070,7 @@ export default function RegisterPatientPage() {
                             placeholder="Enter Town/City"
                             value={city}
                             onChange={(e) => setCity(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("city")}
                           />
                         </div>
@@ -909,7 +1087,7 @@ export default function RegisterPatientPage() {
                             placeholder="Enter District"
                             value={district}
                             onChange={(e) => setDistrict(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("district")}
                           />
                         </div>
@@ -927,7 +1105,7 @@ export default function RegisterPatientPage() {
                             placeholder="6-digit PIN"
                             value={pincode}
                             onChange={(e) => setPincode(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("pincode")}
                           />
                         </div>
@@ -956,7 +1134,7 @@ export default function RegisterPatientPage() {
                         <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
                           Referred By {isFieldRequired("refDoctor") && <span className="text-rose-500 font-extrabold">*</span>}
                         </label>
-                        <Select value={refDoctorSelect} onValueChange={setRefDoctorSelect} disabled={registering || !!newPatient}>
+                        <Select value={refDoctorSelect} onValueChange={setRefDoctorSelect} disabled={registering || (!!newPatient && !isEditMode)}>
                           <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
                             <SelectValue />
                           </SelectTrigger>
@@ -969,7 +1147,7 @@ export default function RegisterPatientPage() {
                         <button
                           type="button"
                           onClick={() => setIsDoctorModalOpen(true)}
-                          disabled={registering || !!newPatient}
+                          disabled={registering || (!!newPatient && !isEditMode)}
                           className="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline pt-0.5"
                         >
                           <PlusCircle className="h-3.5 w-3.5" />
@@ -990,7 +1168,7 @@ export default function RegisterPatientPage() {
                           placeholder="Secondary Doctor / Clinic"
                           value={secondReferral}
                           onChange={(e) => setSecondReferral(e.target.value)}
-                          disabled={registering || !!newPatient}
+                          disabled={registering || (!!newPatient && !isEditMode)}
                           required={isFieldRequired("secondReferral")}
                         />
                       </div>
@@ -1002,7 +1180,7 @@ export default function RegisterPatientPage() {
                         <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
                           Collection Center {isFieldRequired("collectedAt") && <span className="text-rose-500 font-extrabold">*</span>}
                         </label>
-                        <Select value={collectedAtSelect} onValueChange={setCollectedAtSelect} disabled={registering || !!newPatient}>
+                        <Select value={collectedAtSelect} onValueChange={setCollectedAtSelect} disabled={registering || (!!newPatient && !isEditMode)}>
                           <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
                             <SelectValue />
                           </SelectTrigger>
@@ -1015,7 +1193,7 @@ export default function RegisterPatientPage() {
                         <button
                           type="button"
                           onClick={() => setIsCollectionModalOpen(true)}
-                          disabled={registering || !!newPatient}
+                          disabled={registering || (!!newPatient && !isEditMode)}
                           className="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline pt-0.5"
                         >
                           <Building className="h-3.5 w-3.5" />
@@ -1030,7 +1208,7 @@ export default function RegisterPatientPage() {
                         <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
                           Collected By {isFieldRequired("collectedBy") && <span className="text-rose-500 font-extrabold">*</span>}
                         </label>
-                        <Select value={collectedBySelect} onValueChange={setCollectedBySelect} disabled={registering || !!newPatient}>
+                        <Select value={collectedBySelect} onValueChange={setCollectedBySelect} disabled={registering || (!!newPatient && !isEditMode)}>
                           <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
                             <SelectValue />
                           </SelectTrigger>
@@ -1043,7 +1221,7 @@ export default function RegisterPatientPage() {
                         <button
                           type="button"
                           onClick={() => setIsPhleboModalOpen(true)}
-                          disabled={registering || !!newPatient}
+                          disabled={registering || (!!newPatient && !isEditMode)}
                           className="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline pt-0.5"
                         >
                           <UserCheck className="h-3.5 w-3.5" />
@@ -1081,7 +1259,7 @@ export default function RegisterPatientPage() {
                             placeholder="Enter 12-digit Aadhaar / ID"
                             value={aadhaarNo}
                             onChange={(e) => setAadhaarNo(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("aadhaarNo")}
                           />
                         </div>
@@ -1098,7 +1276,7 @@ export default function RegisterPatientPage() {
                             placeholder="Enter Policy / Card Number"
                             value={insuranceNo}
                             onChange={(e) => setInsuranceNo(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("insuranceNo")}
                           />
                         </div>
@@ -1115,7 +1293,7 @@ export default function RegisterPatientPage() {
                             placeholder="Enter TPA Name"
                             value={tpa}
                             onChange={(e) => setTpa(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("tpa")}
                           />
                         </div>
@@ -1132,7 +1310,7 @@ export default function RegisterPatientPage() {
                             placeholder="Enter HFR ID / ABHA"
                             value={hfrId}
                             onChange={(e) => setHfrId(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("hfrId")}
                           />
                         </div>
@@ -1149,7 +1327,7 @@ export default function RegisterPatientPage() {
                             placeholder="Unique Hospital ID"
                             value={uhid}
                             onChange={(e) => setUhid(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("uhid")}
                           />
                         </div>
@@ -1166,7 +1344,7 @@ export default function RegisterPatientPage() {
                             placeholder="Passport Number"
                             value={passportNumber}
                             onChange={(e) => setPassportNumber(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("passportNumber")}
                           />
                         </div>
@@ -1183,7 +1361,7 @@ export default function RegisterPatientPage() {
                             placeholder="Company / Corporate Name"
                             value={corporateName}
                             onChange={(e) => setCorporateName(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("corporateName")}
                           />
                         </div>
@@ -1200,7 +1378,7 @@ export default function RegisterPatientPage() {
                             placeholder="Corporate Plan Type"
                             value={corporatePlan}
                             onChange={(e) => setCorporatePlan(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("corporatePlan")}
                           />
                         </div>
@@ -1217,7 +1395,7 @@ export default function RegisterPatientPage() {
                             placeholder="CGHS / ECHS / State Panel"
                             value={govPanel}
                             onChange={(e) => setGovPanel(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("govPanel")}
                           />
                         </div>
@@ -1251,7 +1429,7 @@ export default function RegisterPatientPage() {
                             placeholder="e.g. 175 cm"
                             value={height}
                             onChange={(e) => setHeight(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("height")}
                           />
                         </div>
@@ -1268,7 +1446,7 @@ export default function RegisterPatientPage() {
                             placeholder="e.g. 70 kg"
                             value={weight}
                             onChange={(e) => setWeight(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("weight")}
                           />
                         </div>
@@ -1285,7 +1463,7 @@ export default function RegisterPatientPage() {
                             placeholder="Pet / Animal Owner"
                             value={ownerName}
                             onChange={(e) => setOwnerName(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("ownerName")}
                           />
                         </div>
@@ -1302,7 +1480,7 @@ export default function RegisterPatientPage() {
                             placeholder="e.g. Labrador / Persian"
                             value={breed}
                             onChange={(e) => setBreed(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("breed")}
                           />
                         </div>
@@ -1319,7 +1497,7 @@ export default function RegisterPatientPage() {
                             placeholder="Canine / Feline / Bovine"
                             value={species}
                             onChange={(e) => setSpecies(e.target.value)}
-                            disabled={registering || !!newPatient}
+                            disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("species")}
                           />
                         </div>
@@ -1329,7 +1507,7 @@ export default function RegisterPatientPage() {
                 )}
 
                 {/* Form Action CTA */}
-                {!newPatient && (
+                {(!newPatient || isEditMode) && (
                   <div className="flex items-center justify-end gap-3 pt-5 border-t border-border/80">
                     <button
                       type="submit"
@@ -1339,11 +1517,11 @@ export default function RegisterPatientPage() {
                       {registering ? (
                         <>
                           <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Saving Demographics…</span>
+                          <span>{isEditMode ? "Updating Patient Info…" : "Saving Demographics…"}</span>
                         </>
                       ) : (
                         <>
-                          <span>Save & Select Clinical Tests</span>
+                          <span>{isEditMode ? "Save Changes & Select Clinical Tests" : "Save & Select Clinical Tests"}</span>
                           <ArrowRight className="h-4 w-4" />
                         </>
                       )}
@@ -2432,5 +2610,18 @@ export default function RegisterPatientPage() {
       </Dialog>
 
     </div>
+  );
+}
+
+export default function RegisterPatientPageWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center p-12 text-muted-foreground text-xs gap-2">
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <span>Loading Patient Intake Flow…</span>
+      </div>
+    }>
+      <RegisterPatientPage />
+    </Suspense>
   );
 }

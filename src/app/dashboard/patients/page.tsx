@@ -253,10 +253,12 @@ export default function PatientsPage() {
     setDeleting(true);
     try {
       await fetchFromLaravel(`/patients/${deletePatient.id}`, { method: "DELETE" });
+      toast.success("Patient record deleted successfully");
+      setPatients(prev => prev.filter(p => p.id !== deletePatient.id));
       setDeletePatient(null);
-      await fetchPatients();
     } catch (err: any) {
       console.error("Delete patient error:", err);
+      toast.error(err.message || "Failed to delete patient");
     } finally {
       setDeleting(false);
     }
@@ -436,15 +438,16 @@ export default function PatientsPage() {
                           >
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-primary cursor-pointer"
-                            onClick={() => handleOpenEdit(patient)}
-                            title="Edit Patient"
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </Button>
+                          <Link href={`/dashboard/patients/register?edit=${patient.id}`}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-primary cursor-pointer"
+                              title="Edit Patient Details & Tests"
+                            >
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </Link>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -498,226 +501,6 @@ export default function PatientsPage() {
       </div>
 
       {/* ===================== MODALS ===================== */}
-
-      {/* 1. CLEAN SEAMLESS EDIT PATIENT MODAL */}
-      <Dialog open={!!editPatient} onOpenChange={() => setEditPatient(null)}>
-        <DialogContent className="max-w-3xl w-[95vw] sm:max-w-3xl max-h-[92vh] overflow-y-auto p-6 sm:p-7 rounded-2xl bg-card border border-border shadow-2xl space-y-6">
-          <DialogTitle className="sr-only">Edit Patient Profile</DialogTitle>
-          
-          {/* Modal Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-border/80">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl gradient-primary text-primary-foreground flex items-center justify-center shadow-sm">
-                <Edit2 className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="font-display text-lg font-bold text-foreground leading-tight">
-                  Edit Patient Profile
-                </h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Update demographic details and referral information for <strong className="text-primary font-mono">{editPatient?.custom_id || editPatient?.customId}</strong>
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {editError && (
-            <div className="flex items-center gap-2 p-3.5 rounded-xl bg-destructive/10 text-destructive text-xs font-semibold">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{editError}</span>
-            </div>
-          )}
-
-          {editSuccess && (
-            <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-500/10 text-emerald-600 text-xs font-semibold">
-              <CheckCircle2 className="h-4 w-4 shrink-0" />
-              <span>{editSuccess}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSaveEdit} className="space-y-6 text-xs">
-            {/* Section 1: Demographics */}
-            <div className="space-y-3.5">
-              <div className="flex items-center gap-2 text-foreground font-bold text-xs uppercase tracking-wider">
-                <User className="h-4 w-4 text-primary" />
-                <span>Demographics & Identity</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
-                <div className="sm:col-span-3 space-y-1.5">
-                  <label className="font-bold text-muted-foreground uppercase text-[10px]">Title</label>
-                  <Select value={editDesignation} onValueChange={setEditDesignation}>
-                    <SelectTrigger className="h-10 text-xs font-medium bg-background border-border/90 rounded-lg"><SelectValue /></SelectTrigger>
-                    <SelectContent className="max-h-72">
-                      {ALL_DESIGNATIONS.map((title) => (
-                        <SelectItem key={title} value={title}>
-                          {title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="sm:col-span-5 space-y-1.5">
-                  <label className="font-bold text-muted-foreground uppercase text-[10px]">Full Name</label>
-                  <input
-                    type="text"
-                    className="w-full h-10 px-3 bg-background border border-border/90 rounded-lg text-xs font-medium text-foreground outline-none focus:border-primary transition-all"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="sm:col-span-4 space-y-1.5">
-                  <label className="font-bold text-muted-foreground uppercase text-[10px]">Gender</label>
-                  <Select value={editGender} onValueChange={setEditGender}>
-                    <SelectTrigger className="h-10 text-xs font-medium bg-background border-border/90 rounded-lg"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Male">Male</SelectItem>
-                      <SelectItem value="Female">Female</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Age & Phone */}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
-                <div className="sm:col-span-6 space-y-1.5">
-                  <label className="font-bold text-muted-foreground uppercase text-[10px]">Age (Years / Months / Days)</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="relative">
-                      <input
-                        type="number"
-                        placeholder="Y"
-                        className="w-full h-10 text-center bg-background border border-border/90 rounded-lg text-xs font-bold text-foreground outline-none focus:border-primary transition-all"
-                        value={editAgeYears}
-                        onChange={(e) => setEditAgeYears(e.target.value)}
-                      />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground pointer-events-none">Y</span>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        placeholder="M"
-                        className="w-full h-10 text-center bg-background border border-border/90 rounded-lg text-xs font-bold text-foreground outline-none focus:border-primary transition-all"
-                        value={editAgeMonths}
-                        onChange={(e) => setEditAgeMonths(e.target.value)}
-                      />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground pointer-events-none">M</span>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        placeholder="D"
-                        className="w-full h-10 text-center bg-background border border-border/90 rounded-lg text-xs font-bold text-foreground outline-none focus:border-primary transition-all"
-                        value={editAgeDays}
-                        onChange={(e) => setEditAgeDays(e.target.value)}
-                      />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground pointer-events-none">D</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="sm:col-span-6 space-y-1.5">
-                  <label className="font-bold text-muted-foreground uppercase text-[10px]">Phone Number</label>
-                  <input
-                    type="tel"
-                    className="w-full h-10 px-3 bg-background border border-border/90 rounded-lg text-xs font-medium text-foreground outline-none focus:border-primary transition-all"
-                    value={editPhone}
-                    onChange={(e) => setEditPhone(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Section 2: Referrals & Logistics */}
-            <div className="space-y-3.5 pt-2">
-              <div className="flex items-center gap-2 text-foreground font-bold text-xs uppercase tracking-wider">
-                <Stethoscope className="h-4 w-4 text-primary" />
-                <span>Clinical Referral & Collection Logistics</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                <div className="space-y-1.5">
-                  <label className="font-bold text-muted-foreground uppercase text-[10px]">Referred By (Doctor)</label>
-                  <Select value={editRefDoctor} onValueChange={setEditRefDoctor}>
-                    <SelectTrigger className="h-10 text-xs font-medium bg-background border-border/90 rounded-lg">
-                      <SelectValue placeholder="Select Doctor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {doctorsList.map((doc) => (
-                        <SelectItem key={doc} value={doc}>{doc}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="font-bold text-muted-foreground uppercase text-[10px]">Collection Point / Center</label>
-                  <Select value={editCollectedAt} onValueChange={setEditCollectedAt}>
-                    <SelectTrigger className="h-10 text-xs font-medium bg-background border-border/90 rounded-lg">
-                      <SelectValue placeholder="Select Center" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {collectionPoints.map((point) => (
-                        <SelectItem key={point} value={point}>{point}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="font-bold text-muted-foreground uppercase text-[10px]">Collected By (Phlebotomist)</label>
-                  <Select value={editCollectedBy} onValueChange={setEditCollectedBy}>
-                    <SelectTrigger className="h-10 text-xs font-medium bg-background border-border/90 rounded-lg">
-                      <SelectValue placeholder="Select Phlebotomist" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {phlebotomists.map((phlebo) => (
-                        <SelectItem key={phlebo} value={phlebo}>{phlebo}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="font-bold text-muted-foreground uppercase text-[10px]">Residential Address</label>
-                <input
-                  type="text"
-                  placeholder="Enter patient full residential address"
-                  className="w-full h-10 px-3 bg-background border border-border/90 rounded-lg text-xs font-medium text-foreground outline-none focus:border-primary transition-all"
-                  value={editAddress}
-                  onChange={(e) => setEditAddress(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border/80">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setEditPatient(null)}
-                className="h-10 px-5 text-xs font-bold cursor-pointer"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={saving}
-                className="gradient-primary text-primary-foreground font-bold text-xs px-6 h-10 rounded-xl hover:-translate-y-px transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
-              >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                <span>Save Changes</span>
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* 2. COMPREHENSIVE VIEW PATIENT DETAILS MODAL */}
       <Dialog open={!!viewPatient} onOpenChange={() => setViewPatient(null)}>
