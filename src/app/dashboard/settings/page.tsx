@@ -303,31 +303,29 @@ function SettingsContent() {
     }
 
     setIsUploadingLetterhead(true);
-    setToast({ text: "Optimizing & uploading letterhead to server...", type: "success" });
+    setToast({ text: "Optimizing & saving letterhead to database...", type: "success" });
 
     try {
       const base64Url = await optimizeLetterheadImage(file);
       setSettings(prev => ({ ...prev, bgImage: base64Url, printWithLetterhead: true }));
       setShowWithLetterheadPreview(true);
 
-      const formData = new FormData();
-      formData.append("letterhead", file);
-      formData.append("print_bg_image", base64Url);
-      formData.append("print_header_height", String(settings.headerHeight));
-      formData.append("print_footer_height", String(settings.footerHeight));
-      formData.append("print_margin_left", String(settings.marginLeft));
-      formData.append("print_margin_right", String(settings.marginRight));
-      formData.append("print_with_letterhead", "1");
-      formData.append("default_designation", layoutSettings.defaultDesignation || "MR.");
-      formData.append("report_settings", JSON.stringify(layoutSettings));
-      formData.append("bill_settings", JSON.stringify(billSettings));
-
       const updatedLab = await fetchFromLaravel("/lab/letterhead", {
         method: "POST",
-        body: formData,
+        body: JSON.stringify({
+          print_bg_image: base64Url,
+          print_header_height: settings.headerHeight,
+          print_footer_height: settings.footerHeight,
+          print_margin_left: settings.marginLeft,
+          print_margin_right: settings.marginRight,
+          print_with_letterhead: true,
+          default_designation: layoutSettings.defaultDesignation || "MR.",
+          report_settings: layoutSettings,
+          bill_settings: billSettings,
+        }),
       });
 
-      const serverBg = updatedLab.printBgImage ?? updatedLab.print_bg_image ?? null;
+      const serverBg = updatedLab.printBgImage ?? updatedLab.print_bg_image ?? base64Url;
       const cleanUrl = getCleanLetterheadUrl(serverBg) || base64Url;
 
       setSettings(prev => ({
@@ -335,7 +333,7 @@ function SettingsContent() {
         bgImage: cleanUrl,
         printWithLetterhead: true,
       }));
-      setToast({ text: "Letterhead uploaded & saved successfully!", type: "success" });
+      setToast({ text: "Letterhead uploaded & saved permanently in database!", type: "success" });
       setTimeout(() => setToast(null), 4000);
     } catch (err: any) {
       console.error("Auto upload letterhead error:", err);
@@ -362,7 +360,8 @@ function SettingsContent() {
       await fetchFromLaravel("/lab/letterhead", {
         method: "POST",
         body: JSON.stringify({
-          print_bg_image: null,
+          delete_letterhead: true,
+          print_bg_image: "DELETE",
           print_header_height: settings.headerHeight,
           print_footer_height: settings.footerHeight,
           print_margin_left: settings.marginLeft,
