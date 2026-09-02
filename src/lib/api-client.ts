@@ -1,4 +1,19 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.onepathlab.com/api/lis";
+export function getApiBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (!envUrl) return "https://api.onepathlab.com/api/lis";
+  const clean = envUrl.replace(/\/+$/, "");
+  if (clean.endsWith("/api/lis")) return clean;
+  if (clean.endsWith("/api")) return `${clean}/lis`;
+  return `${clean}/api/lis`;
+}
+
+export function getAuthBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (!envUrl) return "https://api.onepathlab.com/api/auth";
+  const clean = envUrl.replace(/\/+$/, "");
+  const withoutLis = clean.replace(/\/lis$/, "").replace(/\/api$/, "");
+  return `${withoutLis}/api/auth`;
+}
 
 export function getStoredUser() {
   if (typeof window === "undefined") return null;
@@ -38,7 +53,9 @@ export async function fetchFromLaravel(endpoint: string, options: RequestInit = 
     ...(options.headers as Record<string, string> || {}),
   };
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
+  const apiBase = getApiBaseUrl();
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const response = await fetch(`${apiBase}${cleanEndpoint}`, { ...options, headers });
 
   if (response.status === 401) {
     logout();

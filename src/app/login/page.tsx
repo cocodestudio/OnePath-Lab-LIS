@@ -6,6 +6,7 @@ import {
   AlertCircle, Lock, Mail, Loader2, FlaskConical, ShieldCheck,
   Eye, EyeOff, ArrowRight, Microscope, Activity, Beaker,
 } from "lucide-react";
+import { getAuthBaseUrl } from "@/lib/api-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,19 +23,18 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const apiURL = process.env.NEXT_PUBLIC_API_URL || "https://api.onepathlab.com/api/lis";
-      const loginURL = apiURL.replace(/\/api\/lis\/?$/, "/api/auth/login");
+      const loginURL = `${getAuthBaseUrl()}/login`;
 
       const res = await fetch(loginURL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setError(data.message || "Invalid credentials.");
+        setError(data.message || data.error || "Invalid email or password.");
         setLoading(false);
         return;
       }
@@ -48,8 +48,9 @@ export default function LoginPage() {
 
       router.push("/dashboard");
       router.refresh();
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
+    } catch (err: any) {
+      console.error("Login request failed:", err);
+      setError(err?.message || "An unexpected network error occurred. Please try again.");
       setLoading(false);
     }
   };
