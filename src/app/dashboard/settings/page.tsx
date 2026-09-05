@@ -2211,15 +2211,6 @@ function SettingsContent() {
                     Upload and manage official doctor/pathologist signatures. You can add multiple doctors to appear on reports simultaneously (e.g. Consultant Pathologist, Lab Director, Biochemist). White paper backgrounds are auto-removed to clean transparent PNGs.
                   </p>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleAddDoctorSig}
-                  className="px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all flex items-center gap-2 shadow-xs cursor-pointer shrink-0"
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  <span>Add Doctor Signature</span>
-                </button>
               </div>
 
               {/* Signature Display & Printing Rules */}

@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import { TopProgressBar } from "@/components/top-progress-bar";
+import { SmoothScrolling } from "@/components/smooth-scrolling";
 
 const geist = localFont({
   src: "./fonts/GeistVF.woff",
@@ -164,7 +165,9 @@ export default function RootLayout({
         <TopProgressBar />
         <ThemeProvider defaultTheme="light" storageKey="onepath-theme">
           <ToastProvider>
-            {children}
+            <SmoothScrolling>
+              {children}
+            </SmoothScrolling>
           </ToastProvider>
         </ThemeProvider>
       </body>
