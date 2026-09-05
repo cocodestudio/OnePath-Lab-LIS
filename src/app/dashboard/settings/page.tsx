@@ -2319,17 +2319,7 @@ function SettingsContent() {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                          <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-background hover:bg-muted/40 cursor-pointer text-xs font-bold select-none" title="Only display signature image for this doctor (hide printed name & degree)">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(sig.showSignatureOnly)}
-                              onChange={(e) => handleUpdateDoctorSig(sigIndex, { showSignatureOnly: e.target.checked })}
-                              className="h-3.5 w-3.5 rounded border-border text-primary accent-primary cursor-pointer"
-                            />
-                            <span>Image Only</span>
-                          </label>
-
+                        <div className="flex items-center gap-3">
                           <label className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-border bg-background hover:bg-muted/40 cursor-pointer text-xs font-bold select-none">
                             <input
                               type="checkbox"

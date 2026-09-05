@@ -12,6 +12,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { CollectionCenterOverview } from "@/components/collection-center-overview";
+import { DashboardShimmer } from "@/components/dashboard-shimmer";
 
 interface Stats {
   patientsToday: number;
@@ -134,15 +135,7 @@ export default function DashboardOverviewPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex flex-col gap-6 w-full animate-fade-in">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-32 bg-card border border-border/70 rounded-xl p-5 animate-pulse" />
-          ))}
-        </div>
-      </div>
-    );
+    return <DashboardShimmer />;
   }
 
   if (user?.role === "COLLECTION_CENTER") {
