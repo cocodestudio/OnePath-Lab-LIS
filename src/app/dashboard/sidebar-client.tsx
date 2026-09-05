@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Users, FileText, Receipt, LogOut, Menu, X, FlaskConical, Settings, HelpCircle, LifeBuoy
+  LayoutDashboard, Users, FileText, Receipt, LogOut, Menu, X, FlaskConical, Settings, HelpCircle, LifeBuoy, Clock
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getStoredUser, logout } from "@/lib/api-client";
@@ -32,8 +32,25 @@ export default function Sidebar() {
   const getInitials = (name: string) =>
     name ? name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) : "US";
 
-  const isActive = (href: string) =>
-    href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
+  const isActive = (href: string) => {
+    if (href === "/dashboard") return pathname === "/dashboard";
+    if (href === "/dashboard/patients") return pathname === "/dashboard/patients";
+    if (href === "/dashboard/today-samples") return pathname === "/dashboard/today-samples";
+    if (href === "/dashboard/reports") return pathname === "/dashboard/reports";
+    return pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/"));
+  };
+
+  const isCollectionCenter = user?.role === "COLLECTION_CENTER";
+
+  const collectionNav = [
+    { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Today Samples", href: "/dashboard/today-samples", icon: Clock },
+    { name: "Reports", href: "/dashboard/reports", icon: FileText },
+    { name: "Billing", href: "/dashboard/billing", icon: Receipt },
+    { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
+  ];
+
+  const visibleNav = isCollectionCenter ? collectionNav : navigation;
 
   const content = (
     <aside className="flex h-full w-[256px] flex-col bg-card border-r border-border/70">
@@ -48,7 +65,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Quick Action: Register Patient */}
+      {/* Quick Action: Register Patient / Sample Entry */}
       <div className="px-3.5 pt-4 pb-2">
         <Link
           href="/dashboard/patients/register"
@@ -56,16 +73,16 @@ export default function Sidebar() {
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md ring-inset-top hover:-translate-y-px active:scale-[0.98] transition-all"
         >
           <span className="text-base leading-none font-bold">+</span>
-          <span>Add Patient</span>
+          <span>{isCollectionCenter ? "Sample Entry" : "Add Patient"}</span>
         </Link>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 px-3.5 py-3 space-y-1 overflow-y-auto">
         <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
-          Navigation
+          {isCollectionCenter ? "Terminal Portal" : "Navigation"}
         </p>
-        {navigation.map((item) => {
+        {visibleNav.map((item) => {
           const active = isActive(item.href);
           return (
             <Link
@@ -95,12 +112,14 @@ export default function Sidebar() {
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-semibold text-foreground truncate">{user?.name}</p>
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground truncate">{user?.role || "Staff"}</p>
+            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground truncate">
+              {isCollectionCenter ? "Collection Center" : (user?.role || "Staff")}
+            </p>
           </div>
           <button
             onClick={logout}
             title="Sign out"
-            className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0"
+            className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0 cursor-pointer"
           >
             <LogOut className="h-4 w-4" />
           </button>

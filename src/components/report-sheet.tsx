@@ -3,7 +3,7 @@ import { FileText } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { getCleanLetterheadUrl } from "@/lib/api-client";
 import { BarcodeSVG } from "@/components/barcode-svg";
-import { normalizeReportSettings, type ReportLayoutSettings, defaultReportLayoutSettings } from "@/lib/report-settings";
+import { normalizeReportSettings, type ReportLayoutSettings, defaultReportLayoutSettings, resolveSignatureUrl } from "@/lib/report-settings";
 import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 
 interface Test { 
@@ -95,7 +95,7 @@ export interface ReportBlock { key: string; node: React.ReactNode; }
 export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
   const patient = report.patient || ({} as any);
   const lab = (report.lab || {}) as any;
-  const reportSettings = normalizeReportSettings(lab.report_settings || lab.reportSettings);
+  const reportSettings = normalizeReportSettings(lab.report_settings || lab.reportSettings || (report as any).report_settings || (report as any).reportSettings);
 
   const regDateStr = (() => {
     try {
@@ -280,7 +280,7 @@ export function buildReportBlocks(
 ): ReportBlock[] {
   const blocks: ReportBlock[] = [];
   const lab = (report.lab || {}) as any;
-  const reportSettings = normalizeReportSettings(lab.report_settings || lab.reportSettings);
+  const reportSettings = normalizeReportSettings(lab.report_settings || lab.reportSettings || (report as any).report_settings || (report as any).reportSettings);
   const typo = reportSettings.typography;
   const flagsConf = reportSettings.flags;
   const sp = reportSettings.spacing;
@@ -613,7 +613,7 @@ export function buildReportBlocks(
           return 0;
         });
 
-        const vAlign = typo.rowAlignment === "Start" ? "top" : typo.rowAlignment === "End" ? "bottom" : "middle";
+        const vAlign = (typo.rowAlignment as string) === "Top" ? "top" : "middle";
 
         const renderSingleRow = (item: ReportTest, isIndented = false) => {
           const refRange = getRefRange(item);
@@ -854,23 +854,225 @@ export function buildReportBlocks(
     });
   });
 
-  // End of report
+  // End of report & Doctor Signatures Footer
+  const doctorSignatures = Array.isArray(reportSettings.doctorSignatures) && reportSettings.doctorSignatures.length > 0
+    ? reportSettings.doctorSignatures
+    : (reportSettings.doctorSignature ? [reportSettings.doctorSignature] : []);
+
+  const enabledSignatures = doctorSignatures.filter(s => s.enabled);
+
+  // Group into rows of 2 (pairs): Left & Right
+  const signatureRows: Array<[typeof enabledSignatures[0], typeof enabledSignatures[0] | undefined]> = [];
+  for (let i = 0; i < enabledSignatures.length; i += 2) {
+    signatureRows.push([enabledSignatures[i], enabledSignatures[i + 1]]);
+  }
+
   blocks.push({
     key: "report-signatures-footer",
     node: (
       <div 
-        className="mt-4 pt-2 text-zinc-700"
+        className="mt-4 pt-2 text-zinc-700 select-none"
         style={{ 
           fontFamily: 'Arial, "Segoe UI", Roboto, sans-serif',
           pageBreakInside: 'avoid' 
         }}
       >
         <div 
-          className="text-center font-bold text-zinc-400 uppercase tracking-widest"
+          className="text-center font-bold text-zinc-400 uppercase tracking-widest pb-3"
           style={{ fontSize: `${endConf.fontSize || 9}px` }}
         >
           {endConf.text || "*** END OF REPORT ***"}
         </div>
+
+        {/* Dynamic Multi-Doctor Signatures Grid (2 per row: Left & Right) */}
+        {enabledSignatures.length > 0 && (
+          <div className="pt-2 space-y-4">
+            {signatureRows.map((pair, rowIdx) => {
+              const leftSig = pair[0];
+              const rightSig = pair[1];
+
+              // If only 1 signature in total, respect its alignment
+              if (enabledSignatures.length === 1 && leftSig) {
+                const align = leftSig.alignment || "right";
+                const resolvedUrl = resolveSignatureUrl(leftSig.imageUrl);
+                const vertOffset = (leftSig.marginTop || 0) - (leftSig.marginBottom || 0);
+                const horizOffset = (leftSig.marginLeft || 0) - (leftSig.marginRight || 0);
+
+                return (
+                  <div 
+                    key={rowIdx} 
+                    className={`flex px-2 text-[10px] ${
+                      align === "left" ? "justify-start" : align === "center" ? "justify-center" : "justify-end"
+                    }`}
+                  >
+                    <div 
+                      style={{
+                        position: "relative",
+                        marginTop: `${vertOffset}px`,
+                        left: `${horizOffset}px`,
+                        textAlign: align,
+                      }}
+                    >
+                      {resolvedUrl ? (
+                        <div 
+                          className="inline-block"
+                          style={{
+                            width: `${leftSig.width || 130}px`,
+                            marginBottom: "2px",
+                          }}
+                        >
+                          <img
+                            src={resolvedUrl}
+                            alt={leftSig.name || "Doctor Signature"}
+                            style={{
+                              width: "100%",
+                              height: "auto",
+                              maxHeight: "75px",
+                              objectFit: "contain",
+                              display: "block",
+                              marginLeft: align === "center" ? "auto" : (align === "right" ? "auto" : "0"),
+                              marginRight: align === "center" ? "auto" : (align === "right" ? "0" : "auto"),
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className={`w-32 border-b border-dashed border-zinc-400 mb-1 ${align === "right" ? "ml-auto" : align === "center" ? "mx-auto" : "mr-auto"}`} />
+                      )}
+
+                      <p className="font-bold text-zinc-900 leading-tight text-[10px]">
+                        {leftSig.name}
+                      </p>
+                      <p className="text-[8.5px] text-zinc-600 leading-tight">
+                        {leftSig.designation}
+                      </p>
+                      {leftSig.registrationNo && (
+                        <p className="text-[7.5px] text-zinc-400 font-mono leading-tight">
+                          {leftSig.registrationNo}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={rowIdx} className="flex items-start justify-between px-2 text-[10px]">
+                  {/* Left Signature */}
+                  {leftSig ? (() => {
+                    const resolvedUrl = resolveSignatureUrl(leftSig.imageUrl);
+                    const align = leftSig.alignment || "left";
+                    const vertOffset = (leftSig.marginTop || 0) - (leftSig.marginBottom || 0);
+                    const horizOffset = (leftSig.marginLeft || 0) - (leftSig.marginRight || 0);
+                    return (
+                      <div 
+                        style={{
+                          position: "relative",
+                          marginTop: `${vertOffset}px`,
+                          left: `${horizOffset}px`,
+                          textAlign: align,
+                        }}
+                      >
+                        {resolvedUrl ? (
+                          <div 
+                            className="inline-block"
+                            style={{
+                              width: `${leftSig.width || 130}px`,
+                              marginBottom: "2px",
+                            }}
+                          >
+                            <img
+                              src={resolvedUrl}
+                              alt={leftSig.name || "Doctor Signature"}
+                              style={{
+                                width: "100%",
+                                height: "auto",
+                                maxHeight: "75px",
+                                objectFit: "contain",
+                                display: "block",
+                                marginLeft: align === "center" ? "auto" : (align === "right" ? "auto" : "0"),
+                                marginRight: align === "center" ? "auto" : (align === "right" ? "0" : "auto"),
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className={`w-32 border-b border-dashed border-zinc-400 mb-1 ${align === "right" ? "ml-auto" : align === "center" ? "mx-auto" : "mr-auto"}`} />
+                        )}
+
+                        <p className="font-bold text-zinc-900 leading-tight text-[10px]">
+                          {leftSig.name}
+                        </p>
+                        <p className="text-[8.5px] text-zinc-600 leading-tight">
+                          {leftSig.designation}
+                        </p>
+                        {leftSig.registrationNo && (
+                          <p className="text-[7.5px] text-zinc-400 font-mono leading-tight">
+                            {leftSig.registrationNo}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })() : <div />}
+
+                  {/* Right Signature */}
+                  {rightSig ? (() => {
+                    const resolvedUrl = resolveSignatureUrl(rightSig.imageUrl);
+                    const align = rightSig.alignment || "right";
+                    const vertOffset = (rightSig.marginTop || 0) - (rightSig.marginBottom || 0);
+                    const horizOffset = (rightSig.marginLeft || 0) - (rightSig.marginRight || 0);
+                    return (
+                      <div 
+                        style={{
+                          position: "relative",
+                          marginTop: `${vertOffset}px`,
+                          left: `${horizOffset}px`,
+                          textAlign: align,
+                        }}
+                      >
+                        {resolvedUrl ? (
+                          <div 
+                            className="inline-block"
+                            style={{
+                              width: `${rightSig.width || 130}px`,
+                              marginBottom: "2px",
+                            }}
+                          >
+                            <img
+                              src={resolvedUrl}
+                              alt={rightSig.name || "Doctor Signature"}
+                              style={{
+                                width: "100%",
+                                height: "auto",
+                                maxHeight: "75px",
+                                objectFit: "contain",
+                                display: "block",
+                                marginLeft: align === "center" ? "auto" : (align === "right" ? "auto" : "0"),
+                                marginRight: align === "center" ? "auto" : (align === "right" ? "0" : "auto"),
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className={`w-32 border-b border-dashed border-zinc-400 mb-1 ${align === "right" ? "ml-auto" : align === "center" ? "mx-auto" : "mr-auto"}`} />
+                        )}
+
+                        <p className="font-bold text-zinc-900 leading-tight text-[10px]">
+                          {rightSig.name}
+                        </p>
+                        <p className="text-[8.5px] text-zinc-600 leading-tight">
+                          {rightSig.designation}
+                        </p>
+                        {rightSig.registrationNo && (
+                          <p className="text-[7.5px] text-zinc-400 font-mono leading-tight">
+                            {rightSig.registrationNo}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })() : <div />}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     )
   });
@@ -937,14 +1139,39 @@ export const PaginatedReportPreview = React.forwardRef<
     return () => clearTimeout(t);
   }, [blocks, contentWidth]);
 
+  // Extract enabled signatures to compute max user margin for smart pagination
+  const enabledSignaturesList = React.useMemo(() => {
+    const lab = (report.lab || {}) as any;
+    const reportSettings = normalizeReportSettings(
+      lab.report_settings || lab.reportSettings || (report as any).report_settings || (report as any).reportSettings
+    );
+    const sigs = Array.isArray(reportSettings.doctorSignatures) && reportSettings.doctorSignatures.length > 0
+      ? reportSettings.doctorSignatures
+      : (reportSettings.doctorSignature ? [reportSettings.doctorSignature] : []);
+    return sigs.filter((s: any) => s.enabled);
+  }, [report]);
+
+  const maxUserMarginTop = React.useMemo(() => {
+    if (!enabledSignaturesList.length) return 0;
+    return Math.max(0, ...enabledSignaturesList.map((s: any) => Number(s.marginTop || 0)));
+  }, [enabledSignaturesList]);
+
   // Pack blocks into pages with Patient Block room on every page
   const pages = React.useMemo(() => {
     if (heights.length !== blocks.length) return [blocks.map((_, i) => i)];
     const result: number[][] = [];
     let current: number[] = [];
     let used = 0;
-    blocks.forEach((_, i) => {
-      const h = heights[i] || 0;
+
+    blocks.forEach((b, i) => {
+      const isSig = b.key === "report-signatures-footer";
+      const measuredH = heights[i] || 0;
+      // For signature footer, calculate base physical content height without user's large top margin
+      // so user can push signature to the footer without falsely creating a 2nd empty page!
+      const h = isSig
+        ? Math.max(75, measuredH - maxUserMarginTop)
+        : measuredH;
+
       if (current.length > 0 && used + h > effectiveUsableH) {
         result.push(current);
         current = [];
@@ -953,9 +1180,10 @@ export const PaginatedReportPreview = React.forwardRef<
       current.push(i);
       used += h;
     });
+
     if (current.length) result.push(current);
     return result.length ? result : [[]];
-  }, [blocks, heights, effectiveUsableH]);
+  }, [blocks, heights, effectiveUsableH, maxUserMarginTop]);
 
   React.useEffect(() => {
     onPageCount?.(pages.length);

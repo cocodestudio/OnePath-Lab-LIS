@@ -17,8 +17,6 @@ import {
 } from "@/components/report-sheet";
 import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 
 interface FullscreenPrintReportModalProps {
   open: boolean;
@@ -89,6 +87,7 @@ export function FullscreenPrintReportModal({
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [zoomScale, setZoomScale] = useState<number>(0.80);
   const [totalPages, setTotalPages] = useState(1);
+  const [liveLab, setLiveLab] = useState<any>(null);
 
   // ── Extract distinct Main Tests ───────────────────────
   const mainTests = useMemo(() => {
@@ -107,7 +106,17 @@ export function FullscreenPrintReportModal({
     });
   }, [report]);
 
-  // ── Sync on modal open ────────────────────────────────
+  // ── Sync on modal open & Fetch Latest Lab Settings ────
+  useEffect(() => {
+    if (open) {
+      fetchFromLaravel("/lab")
+        .then((fresh) => {
+          if (fresh) setLiveLab(fresh);
+        })
+        .catch(() => {});
+    }
+  }, [open]);
+
   useEffect(() => {
     if (open && report) {
       setSelectedMainTestIds(mainTests.map((m) => m.id));
@@ -125,7 +134,7 @@ export function FullscreenPrintReportModal({
   // Margins & heights ALWAYS come from saved lab settings.
   // Only bgImage toggles on/off based on printWithHeaderFooter.
   const printSettings: PrintSettings = useMemo(() => {
-    const lab = (report?.lab || {}) as any;
+    const lab = (liveLab || report?.lab || {}) as any;
     const rawBg = lab.printBgImage || lab.print_bg_image || null;
     const hasBg = Boolean(rawBg && rawBg !== "null" && rawBg !== "undefined" && rawBg !== "none");
     const bgImage = printWithHeaderFooter && hasBg ? getCleanLetterheadUrl(rawBg) : null;
@@ -137,11 +146,12 @@ export function FullscreenPrintReportModal({
       marginLeft:   lab.printMarginLeft  ?? lab.print_margin_left  ?? 32,
       marginRight:  lab.printMarginRight ?? lab.print_margin_right ?? 32,
     };
-  }, [report, printWithHeaderFooter]);
+  }, [report, liveLab, printWithHeaderFooter]);
 
   // ── Active Report Data ────────────────────────────────
   const activeReportData: ReportSheetData | null = useMemo(() => {
     if (!report) return null;
+    const currentLab = liveLab || report.lab;
     const filteredResults = (report.results || [])
       .filter((item: any) => {
         const t = item.test;
@@ -157,13 +167,14 @@ export function FullscreenPrintReportModal({
 
     return {
       ...report,
+      lab: currentLab,
       reportDate: selectedDate.toISOString(),
       results: filteredResults,
       printedInterpretations: JSON.stringify(printedInterpretations ?? (typeof report.printedInterpretations === 'string' ? JSON.parse(report.printedInterpretations || '[]') : (report.printedInterpretations ?? report.printed_interpretations ?? []))),
       testNotes: testNotes || report.testNotes || report.test_notes,
       test_notes: testNotes || report.test_notes || report.testNotes,
     };
-  }, [report, selectedMainTestIds, enteredValues, abnormalOverrides, paramRemarks, testNotes, printedInterpretations, selectedDate]);
+  }, [report, liveLab, selectedMainTestIds, enteredValues, abnormalOverrides, paramRemarks, testNotes, printedInterpretations, selectedDate]);
 
   // ── Date & Time Helpers ───────────────────────────────
   const adj = (fn: (d: Date) => void) =>
@@ -210,84 +221,15 @@ export function FullscreenPrintReportModal({
     },
   });
 
-  // ── High-Quality Compressed PDF Download (100% Exact Match with Print Preview) ──
-  const handleDownloadPdf = async (withLetterhead: boolean) => {
+  // ── Native Vector PDF Download (Approach 1: Zero overlap, 100% Vector Quality) ──
+  const handleDownloadPdf = async (_withLetterhead: boolean) => {
     if (!printRef.current || !activeReportData) {
       toast.error("Not Ready", "Preview still loading. Please wait a moment.");
       return;
     }
 
-    setIsDownloadingPdf(true);
-    const label = withLetterhead ? "Letterhead" : "Plain";
-    toast.info("Generating PDF", `Preparing ${label} PDF...`);
-
-    try {
-      const pageEls = printRef.current.querySelectorAll<HTMLElement>(".report-print-page");
-      if (!pageEls || pageEls.length === 0) throw new Error("No report pages found.");
-
-      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
-      const pdfW = pdf.internal.pageSize.getWidth();  // 595.28 pt
-      const pdfH = pdf.internal.pageSize.getHeight(); // 841.89 pt
-
-      for (let i = 0; i < pageEls.length; i++) {
-        if (i > 0) pdf.addPage("a4", "portrait");
-
-        const canvas = await html2canvas(pageEls[i], {
-          scale: 2,           // 2x → 1588×2246px ultra-crisp resolution
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: "#ffffff",
-          logging: false,
-          width: 794,
-          height: 1123,
-          windowWidth: 794,
-          windowHeight: 1123,
-          scrollX: 0,
-          scrollY: 0,
-          x: 0,
-          y: 0,
-          imageTimeout: 20000,
-          onclone: (_doc, clonedEl) => {
-            // 1. Reset scale and positioning on the cloned page
-            clonedEl.style.transform = "none";
-            clonedEl.style.width = "794px";
-            clonedEl.style.height = "1123px";
-            clonedEl.style.position = "relative";
-            clonedEl.style.top = "0";
-            clonedEl.style.left = "0";
-            clonedEl.style.margin = "0";
-            clonedEl.style.overflow = "hidden";
-
-            // 2. Unconstrain parent card wrapper
-            if (clonedEl.parentElement) {
-              clonedEl.parentElement.style.width = "794px";
-              clonedEl.parentElement.style.height = "1123px";
-              clonedEl.parentElement.style.transform = "none";
-              clonedEl.parentElement.style.overflow = "visible";
-            }
-
-            // 3. Handle Letterhead
-            if (!withLetterhead) {
-              clonedEl.querySelectorAll<HTMLElement>(".letterhead-bg-img").forEach((img) => {
-                img.style.display = "none";
-              });
-            }
-          },
-        });
-
-        const imgData = canvas.toDataURL("image/jpeg", 0.92);
-        pdf.addImage(imgData, "JPEG", 0, 0, pdfW, pdfH, `page-${i}`, "FAST");
-      }
-
-      const filename = `Report_${report.customId || "Patient"}_${label}.pdf`;
-      pdf.save(filename);
-      toast.success("PDF Downloaded", `Saved as ${filename}`);
-    } catch (err: any) {
-      console.error("PDF generation error:", err);
-      toast.error("Download Error", "Could not generate PDF. Try printing instead.");
-    } finally {
-      setIsDownloadingPdf(false);
-    }
+    toast.info("Vector PDF Export", "Select 'Save as PDF' in the destination dropdown to save crisp vector PDF.");
+    handlePrint();
   };
 
   // ── WhatsApp Dispatch (Phone number from patient record) ──────────────────

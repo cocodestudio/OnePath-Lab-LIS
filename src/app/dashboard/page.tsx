@@ -4,14 +4,14 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Users, Clock, CheckCircle2, IndianRupee, RefreshCw, Download,
-  UserPlus, FileSpreadsheet, Printer, ArrowUpRight, TrendingUp,
+  UserPlus, FileSpreadsheet, Printer, ArrowUpRight, TrendingUp, Building2
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie,
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchFromLaravel } from "@/lib/api-client";
-import { getStoredUser } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
+import { CollectionCenterOverview } from "@/components/collection-center-overview";
 
 interface Stats {
   patientsToday: number;
@@ -81,7 +81,12 @@ export default function DashboardOverviewPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setUser(getStoredUser());
+    const u = getStoredUser();
+    setUser(u);
+    if (u?.role === "COLLECTION_CENTER") {
+      setLoading(false);
+      return;
+    }
     loadDashboardData();
   }, []);
 
@@ -136,6 +141,10 @@ export default function DashboardOverviewPage() {
         </div>
       </div>
     );
+  }
+
+  if (user?.role === "COLLECTION_CENTER") {
+    return <CollectionCenterOverview user={user} />;
   }
 
   const completionPct = stats.totalReports > 0 ? Math.round((stats.completedReports / stats.totalReports) * 100) : 0;

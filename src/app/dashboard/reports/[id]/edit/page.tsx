@@ -190,6 +190,172 @@ function getTestPriority(mainTestName: string, category?: string): number {
   return 70;
 }
 
+function hasReportParam(patterns: (string | RegExp)[], report: Report | null, excludeId?: string): boolean {
+  if (!report || !report.results || !Array.isArray(report.results)) return false;
+  return report.results.some((r) => {
+    if (excludeId && r.id === excludeId) return false;
+    const name = (r.test?.name || "").trim().toLowerCase();
+    const code = (r.test?.testCode || (r.test as any)?.test_code || "").trim().toUpperCase();
+    return patterns.some((pat) => {
+      if (typeof pat === "string") {
+        return name === pat.toLowerCase() || code === pat.toUpperCase() || name.includes(pat.toLowerCase());
+      } else if (pat instanceof RegExp) {
+        return pat.test(name) || pat.test(code);
+      }
+      return false;
+    });
+  });
+}
+
+function canParamBeCalculatedInReport(test: Test, report: Report | null, currentResultId?: string): boolean {
+  if (!test || !report) return false;
+  const name = (test?.name || "").trim().toLowerCase();
+  const code = (test?.testCode || (test as any)?.test_code || "").trim().toUpperCase();
+
+  // EXCLUDE Calcium, minerals and electrolytes from auto calculation
+  if (name.includes("calcium") || code.includes("CALCIUM") || code.includes("CALC")) return false;
+  if (name.includes("phosphorus") || code.includes("PHOS")) return false;
+  if (name.includes("uric acid") || code.includes("URIC")) return false;
+  if (name.includes("sodium") || code.includes("SODIUM") || name.includes("potassium") || code.includes("POTASSIUM") || name.includes("chloride") || code.includes("CHLORIDE")) return false;
+
+  // CBC Absolute counts (AEC, ANC, ALC, AMC, ABC) - require TLC AND respective differential parameter in report
+  const hasTlc = hasReportParam([/\btlc\b|\bwbc\b|total leucocyte|total leukocyte/i, "CBC_TLC", "CBC_WBC", "HAEM_TLC"], report, currentResultId);
+  if (/\baec\b|absolute eosinophil/i.test(name) || /(^|_|-)AEC($|_|-)/.test(code)) {
+    const hasEosino = hasReportParam([/\beosinophil/i, "CBC_EOSINOPHILS", "HAEM_EOSINOPHILS"], report, currentResultId);
+    return hasTlc && hasEosino;
+  }
+  if (/\banc\b|absolute neutrophil/i.test(name) || /(^|_|-)ANC($|_|-)/.test(code)) {
+    const hasNeutro = hasReportParam([/\bneutrophil/i, "CBC_NEUTROPHILS", "HAEM_NEUTROPHILS"], report, currentResultId);
+    return hasTlc && hasNeutro;
+  }
+  if (/\balc\b|absolute lymphocyte/i.test(name) || /(^|_|-)ALC($|_|-)/.test(code)) {
+    const hasLympho = hasReportParam([/\blymphocyte/i, "CBC_LYMPHOCYTES", "HAEM_LYMPHOCYTES"], report, currentResultId);
+    return hasTlc && hasLympho;
+  }
+  if (/\bamc\b|absolute monocyte/i.test(name) || /(^|_|-)AMC($|_|-)/.test(code)) {
+    const hasMono = hasReportParam([/\bmonocyte/i, "CBC_MONOCYTES", "HAEM_MONOCYTES"], report, currentResultId);
+    return hasTlc && hasMono;
+  }
+  if (/\babc\b|absolute basophil/i.test(name) || /(^|_|-)ABC($|_|-)/.test(code)) {
+    const hasBaso = hasReportParam([/\bbasophil/i, "CBC_BASOPHILS", "HAEM_BASOPHILS"], report, currentResultId);
+    return hasTlc && hasBaso;
+  }
+
+  // NLR - requires Neutrophil AND Lymphocyte in report
+  if (/\bnlr\b|neutrophil.*lymphocyte.*ratio/i.test(name) || /(^|_|-)NLR($|_|-)/.test(code)) {
+    const hasNeutro = hasReportParam([/\bneutrophil/i, "CBC_NEUTROPHILS", "HAEM_NEUTROPHILS"], report, currentResultId);
+    const hasLympho = hasReportParam([/\blymphocyte/i, "CBC_LYMPHOCYTES", "HAEM_LYMPHOCYTES"], report, currentResultId);
+    return hasNeutro && hasLympho;
+  }
+
+  // MCV, MCH, MCHC - require RBC AND (PCV or Hb)
+  const hasRbc = hasReportParam([/\brbc\b|red blood|erythrocyte/i, "CBC_RBC", "HAEM_RBC"], report, currentResultId);
+  const hasHb = hasReportParam([/\bhb\b|h[ae]moglobin/i, "CBC_HB", "HAEM_HB"], report, currentResultId);
+  const hasPcv = hasReportParam([/\bpcv\b|\bhct\b|packed cell|h[ae]matocrit/i, "CBC_PCV", "CBC_HCT", "HAEM_HCT"], report, currentResultId);
+
+  if (/\bmcv\b|mean corpuscular volume|mean cell volume/i.test(name) || /(^|_|-)MCV($|_|-)/.test(code)) {
+    return hasRbc && (hasPcv || hasHb);
+  }
+  if (/\bmch\b|mean corpuscular h[ae]moglobin|mean cell h[ae]moglobin/i.test(name) || (/(^|_|-)MCH($|_|-)/.test(code) && !code.includes("MCHC"))) {
+    return hasRbc && hasHb;
+  }
+  if (/\bmchc\b|mean corpuscular h[ae]moglobin conc|mean cell h[ae]moglobin con|m\.c\.h\.c/i.test(name) || /(^|_|-)MCHC($|_|-)/.test(code)) {
+    return (hasHb && hasPcv) || (hasRbc && hasHb);
+  }
+
+  // LFT
+  if (/\bindirect bilirubin\b|\bbilirubin indirect\b|\bunconjugated\b/i.test(name) || /(^|_|-)IBILI($|_|-)/.test(code)) {
+    const hasTbili = hasReportParam([/\btotal bilirubin\b|\bbilirubin total\b|\bt\.?bili\b/i, "LFT_TBILI", "BIO_TBILI"], report, currentResultId);
+    const hasDbili = hasReportParam([/\bdirect bilirubin\b|\bbilirubin direct\b|\bd\.?bili\b/i, "LFT_DBILI", "BIO_DBILI"], report, currentResultId);
+    return hasTbili && hasDbili;
+  }
+  if (/\bglobulin\b/i.test(name) || /(^|_|-)GLOBULIN($|_|-)/.test(code)) {
+    const hasTprot = hasReportParam([/\btotal protein\b|\bprotein total\b|\bt\.?prot\b/i, "LFT_TOTAL_PROTEIN", "BIO_TOTAL_PROTEIN"], report, currentResultId);
+    const hasAlb = hasReportParam([/\balbumin\b/i, "LFT_ALBUMIN", "BIO_ALBUMIN"], report, currentResultId);
+    return hasTprot && hasAlb;
+  }
+  if (/\ba\s*:\s*g\b|\ba\s*\/\s*g\b|albumin.*globulin.*ratio/i.test(name) || /(^|_|-)AG_RATIO($|_|-)/.test(code)) {
+    const hasAlb = hasReportParam([/\balbumin\b/i, "LFT_ALBUMIN", "BIO_ALBUMIN"], report, currentResultId);
+    const hasTprot = hasReportParam([/\btotal protein\b|\bprotein total\b|\bt\.?prot\b/i, "LFT_TOTAL_PROTEIN", "BIO_TOTAL_PROTEIN"], report, currentResultId);
+    const hasGlob = hasReportParam([/\bglobulin\b/i, "LFT_GLOBULIN", "BIO_GLOBULIN"], report, currentResultId);
+    return hasAlb && (hasGlob || hasTprot);
+  }
+  if (/\bsgot\s*\/\s*sgpt\b|\bast\s*\/\s*alt\b|de ritis/i.test(name) || /(^|_|-)AST_ALT($|_|-)/.test(code)) {
+    const hasSgot = hasReportParam([/\bsgot\b|\bast\b|aspartate/i, "LFT_SGOT", "BIO_SGOT"], report, currentResultId);
+    const hasSgpt = hasReportParam([/\bsgpt\b|\balt\b|alanine/i, "LFT_SGPT", "BIO_SGPT"], report, currentResultId);
+    return hasSgot && hasSgpt;
+  }
+
+  // KFT
+  const hasUrea = hasReportParam([/\bblood urea\b|\burea\b/i, "KFT_UREA", "BIO_UREA"], report, currentResultId);
+  const hasCreat = hasReportParam([/\bserum creatinine\b|\bcreatinine\b/i, "KFT_CREAT", "BIO_CREAT"], report, currentResultId);
+
+  if (/\bblood urea nitrogen\b|\bbun\b/i.test(name) || (/(^|_|-)BUN($|_|-)/.test(code) && !code.includes("CREAT"))) {
+    return hasUrea;
+  }
+  if (/\bbun\s*\/\s*creatinine\b|\bbun.*creat.*ratio/i.test(name) || /(^|_|-)BUN_CREAT($|_|-)/.test(code)) {
+    return (hasUrea || hasReportParam([/\bbun\b/i, "KFT_BUN"], report, currentResultId)) && hasCreat;
+  }
+  if (/\begfr\b|estimated gfr/i.test(name) || /(^|_|-)EGFR($|_|-)/.test(code)) {
+    return hasCreat;
+  }
+  if (/\bgfr category\b|\bgfr stage\b|kdigo.*gfr/i.test(name) || /(^|_|-)GFR_STAGE($|_|-)/.test(code)) {
+    return hasCreat;
+  }
+
+  // Lipid
+  const hasTchol = hasReportParam([/\btotal cholesterol\b|\bcholesterol total\b|\bcholesterol\b/i, "LIPID_TOTAL_CHOL", "BIO_TOTAL_CHOL"], report, currentResultId);
+  const hasTg = hasReportParam([/\btriglycerides\b|\btriglyceride\b|\btg\b/i, "LIPID_TRIGLYCERIDES", "BIO_TRIGLYCERIDES"], report, currentResultId);
+  const hasHdl = hasReportParam([/\bhdl cholesterol\b|\bhdl\b/i, "LIPID_HDL", "BIO_HDL"], report, currentResultId);
+
+  if (/\bvldl cholesterol\b|\bvldl\b/i.test(name) || /(^|_|-)VLDL($|_|-)/.test(code)) {
+    return hasTg;
+  }
+  if (/\bldl cholesterol\b|\bldl\b/i.test(name) || (/(^|_|-)LDL($|_|-)/.test(code) && !code.includes("HDL"))) {
+    return hasTchol && hasHdl;
+  }
+  if (/\bnon-hdl cholesterol\b|\bnon hdl\b/i.test(name) || /(^|_|-)NON_HDL($|_|-)/.test(code)) {
+    return hasTchol && hasHdl;
+  }
+  if (/\btotal chol.*hdl ratio\b|\btc\s*\/\s*hdl\b|\bcholesterol\s*\/\s*hdl\b/i.test(name) || /(^|_|-)CHOL_HDL($|_|-)/.test(code)) {
+    return hasTchol && hasHdl;
+  }
+  if (/\bldl\s*\/\s*hdl\b|\bldl.*hdl ratio\b/i.test(name) || /(^|_|-)LDL_HDL($|_|-)/.test(code)) {
+    return hasHdl && (hasTchol || hasReportParam([/\bldl\b/i, "LIPID_LDL"], report, currentResultId));
+  }
+
+  // HbA1c
+  if (/\bestimated average glucose\b|\beag\b/i.test(name) || /(^|_|-)EAG($|_|-)/.test(code)) {
+    return hasReportParam([/\bglycated hemoglobin\b|\bglycosylated hemoglobin\b|\bhba1c\b/i, "HBA1C_VALUE", "BIO_HBA1C"], report, currentResultId);
+  }
+
+  // Iron
+  if (/\bunsaturated iron binding capacity\b|\buibc\b/i.test(name) || /(^|_|-)UIBC($|_|-)/.test(code)) {
+    const hasIron = hasReportParam([/\bserum iron\b|\biron, serum\b|\biron\b/i, "IRON_SERUM"], report, currentResultId);
+    const hasTibc = hasReportParam([/\btotal iron binding capacity\b|\btibc\b/i, "IRON_TIBC"], report, currentResultId);
+    return hasIron && hasTibc;
+  }
+  if (/\btransferrin saturation\b|\biron saturation\b/i.test(name) || /(^|_|-)SATURATION($|_|-)/.test(code)) {
+    const hasIron = hasReportParam([/\bserum iron\b|\biron, serum\b|\biron\b/i, "IRON_SERUM"], report, currentResultId);
+    const hasTibc = hasReportParam([/\btotal iron binding capacity\b|\btibc\b/i, "IRON_TIBC"], report, currentResultId);
+    return hasIron && hasTibc;
+  }
+
+  // Semen
+  if (/total sperm count per ejaculate/i.test(name) || /(^|_|-)EJACULATE($|_|-)/.test(code)) {
+    const hasSemVol = hasReportParam([/\bvolume\b|\bquantity\b/i, "SEMEN_VOLUME"], report, currentResultId);
+    const hasSemCount = hasReportParam([/\btotal sperm count\b|\bsperm concentration/i, "SEMEN_TOTAL_COUNT"], report, currentResultId);
+    return hasSemVol && hasSemCount;
+  }
+  if (/total motile|total motility/i.test(name) || /(^|_|-)TOTAL_MOTILITY($|_|-)/.test(code)) {
+    const hasSemProg = hasReportParam([/\bprogressive motile\b|motility \(progressive\)/i, "SEMEN_PROG_MOTILE"], report, currentResultId);
+    const hasSemNonProg = hasReportParam([/\bnon-progressive\b|\bnon progressive\b/i, "SEMEN_NON_PROG_MOTILE"], report, currentResultId);
+    return hasSemProg && hasSemNonProg;
+  }
+
+  return false;
+}
+
 function isParamFormulaCalculated(test: Test): boolean {
   const name = (test?.name || "").trim().toLowerCase();
   const code = (test?.testCode || (test as any)?.test_code || "").trim().toUpperCase();
@@ -313,7 +479,7 @@ function computeAutomatedFormulas(
   // MCV = (PCV * 10) / RBC
   const mcvTarget = findParam([/\bmcv\b|mean corpuscular volume|mean cell volume/i, "CBC_MCV", "HAEM_MCV"]);
   let calculatedMcv = 0;
-  if (mcvTarget) {
+  if (mcvTarget && rbc && (pcv || hb)) {
     calculatedIds.add(mcvTarget.id);
     if (!isNaN(pcvVal) && !isNaN(rbc?.num || NaN) && (rbc?.num || 0) > 0) {
       calculatedMcv = (pcvVal * 10) / rbc!.num;
@@ -324,7 +490,7 @@ function computeAutomatedFormulas(
   // MCH = (Hb * 10) / RBC
   const mchTarget = findParam([/\bmch\b|mean corpuscular h[ae]moglobin|mean cell h[ae]moglobin/i, "CBC_MCH", "HAEM_MCH"]);
   let calculatedMch = 0;
-  if (mchTarget) {
+  if (mchTarget && rbc && hb) {
     calculatedIds.add(mchTarget.id);
     if (!isNaN(hb?.num || NaN) && !isNaN(rbc?.num || NaN) && (rbc?.num || 0) > 0) {
       calculatedMch = (hb!.num * 10) / rbc!.num;
@@ -334,7 +500,7 @@ function computeAutomatedFormulas(
 
   // MCHC = (Hb * 100) / PCV  (or (MCH / MCV) * 100)
   const mchcTarget = findParam([/\bmchc\b|mean corpuscular h[ae]moglobin conc|mean cell h[ae]moglobin con|m\.c\.h\.c/i, "CBC_MCHC", "HAEM_MCHC"]);
-  if (mchcTarget) {
+  if (mchcTarget && hb && (pcv || rbc)) {
     calculatedIds.add(mchcTarget.id);
     if (!isNaN(hb?.num || NaN) && (hb?.num || 0) > 0) {
       if (!isNaN(pcvVal) && pcvVal > 0) {
@@ -347,37 +513,37 @@ function computeAutomatedFormulas(
 
   // NLR = Neutrophils / Lymphocytes
   const nlrTarget = findParam([/\bnlr\b|neutrophil.*lymphocyte.*ratio/i, "CBC_NLR", "HAEM_NLR"]);
-  if (nlrTarget) {
+  if (nlrTarget && neutro && lympho) {
     calculatedIds.add(nlrTarget.id);
     if (!isNaN(neutro?.num || NaN) && !isNaN(lympho?.num || NaN) && (lympho?.num || 0) > 0) {
       setCalc(nlrTarget, (neutro!.num / lympho!.num).toFixed(2));
     }
   }
 
-  // Absolute Differential Leukocyte Counts
-  if (!isNaN(tlc?.num || NaN) && (tlc?.num || 0) > 0) {
+  // Absolute Differential Leukocyte Counts - only calculate if TLC AND the differential test exist in the report!
+  if (tlc && !isNaN(tlc?.num || NaN) && (tlc?.num || 0) > 0) {
     const ancTarget = findParam([/\banc\b|absolute neutrophil/i, "CBC_ANC", "HAEM_ANC"]);
-    if (ancTarget) {
+    if (ancTarget && neutro) {
       calculatedIds.add(ancTarget.id);
       if (!isNaN(neutro?.num || NaN)) setCalc(ancTarget, Math.round((tlc!.num * neutro!.num) / 100));
     }
     const alcTarget = findParam([/\balc\b|absolute lymphocyte/i, "CBC_ALC", "HAEM_ALC"]);
-    if (alcTarget) {
+    if (alcTarget && lympho) {
       calculatedIds.add(alcTarget.id);
       if (!isNaN(lympho?.num || NaN)) setCalc(alcTarget, Math.round((tlc!.num * lympho!.num) / 100));
     }
     const aecTarget = findParam([/\baec\b|absolute eosinophil/i, "CBC_AEC", "HAEM_AEC"]);
-    if (aecTarget) {
+    if (aecTarget && eosino) {
       calculatedIds.add(aecTarget.id);
       if (!isNaN(eosino?.num || NaN)) setCalc(aecTarget, Math.round((tlc!.num * eosino!.num) / 100));
     }
     const amcTarget = findParam([/\bamc\b|absolute monocyte/i, "CBC_AMC", "HAEM_AMC"]);
-    if (amcTarget) {
+    if (amcTarget && mono) {
       calculatedIds.add(amcTarget.id);
       if (!isNaN(mono?.num || NaN)) setCalc(amcTarget, Math.round((tlc!.num * mono!.num) / 100));
     }
     const abcTarget = findParam([/\babc\b|absolute basophil/i, "CBC_ABC", "HAEM_ABC"]);
-    if (abcTarget) {
+    if (abcTarget && baso) {
       calculatedIds.add(abcTarget.id);
       if (!isNaN(baso?.num || NaN)) setCalc(abcTarget, Math.round((tlc!.num * baso!.num) / 100));
     }
@@ -393,7 +559,7 @@ function computeAutomatedFormulas(
 
   // Indirect Bilirubin = Total Bilirubin - Direct Bilirubin
   const ibiliTarget = findParam([/\bindirect bilirubin\b|\bbilirubin indirect\b|\bunconjugated\b|\bi\.?bili\b/i, "LFT_IBILI", "BIO_IBILI"]);
-  if (ibiliTarget) {
+  if (ibiliTarget && tbili && dbili) {
     calculatedIds.add(ibiliTarget.id);
     if (!isNaN(tbili?.num || NaN) && !isNaN(dbili?.num || NaN)) {
       setCalc(ibiliTarget, Math.max(0, tbili!.num - dbili!.num).toFixed(2));
@@ -403,7 +569,7 @@ function computeAutomatedFormulas(
   // Globulin = Total Protein - Albumin
   const globTarget = findParam([/\bglobulin\b/i, "LFT_GLOBULIN", "BIO_GLOBULIN"]);
   let calculatedGlob = 0;
-  if (globTarget) {
+  if (globTarget && tprot && alb) {
     calculatedIds.add(globTarget.id);
     if (!isNaN(tprot?.num || NaN) && !isNaN(alb?.num || NaN)) {
       calculatedGlob = Math.max(0, tprot!.num - alb!.num);
@@ -413,7 +579,7 @@ function computeAutomatedFormulas(
 
   // A : G Ratio = Albumin / Globulin
   const agTarget = findParam([/\ba\s*:\s*g\b|\ba\s*\/\s*g\b|albumin.*globulin.*ratio/i, "LFT_AG_RATIO", "BIO_AG_RATIO"]);
-  if (agTarget) {
+  if (agTarget && alb && (globTarget || tprot)) {
     calculatedIds.add(agTarget.id);
     if (!isNaN(alb?.num || NaN)) {
       const globVal = calculatedGlob > 0 ? calculatedGlob : (globTarget ? parseFloat(currentValues[globTarget.id]) : (!isNaN(tprot?.num || NaN) ? tprot!.num - alb!.num : NaN));
@@ -425,7 +591,7 @@ function computeAutomatedFormulas(
 
   // SGOT / SGPT Ratio
   const sgotSgptTarget = findParam([/\bsgot\s*\/\s*sgpt\b|\bast\s*\/\s*alt\b|de ritis/i, "LFT_AST_ALT_RATIO", "BIO_AST_ALT_RATIO"]);
-  if (sgotSgptTarget) {
+  if (sgotSgptTarget && sgot && sgpt) {
     calculatedIds.add(sgotSgptTarget.id);
     if (!isNaN(sgot?.num || NaN) && !isNaN(sgpt?.num || NaN) && (sgpt?.num || 0) > 0) {
       setCalc(sgotSgptTarget, (sgot!.num / sgpt!.num).toFixed(2));
@@ -439,7 +605,7 @@ function computeAutomatedFormulas(
   // BUN = Blood Urea / 2.14
   const bunTarget = findParam([/\bblood urea nitrogen\b|\bbun\b/i, "KFT_BUN", "BIO_BUN"]);
   let calculatedBun = 0;
-  if (bunTarget) {
+  if (bunTarget && urea) {
     calculatedIds.add(bunTarget.id);
     if (!isNaN(urea?.num || NaN) && (urea?.num || 0) > 0) {
       calculatedBun = urea!.num / 2.14;
@@ -449,7 +615,7 @@ function computeAutomatedFormulas(
 
   // BUN / Creatinine Ratio
   const bunCreatTarget = findParam([/\bbun\s*\/\s*creatinine\b|\bbun.*creat.*ratio/i, "KFT_BUN_CREAT_RATIO", "BIO_BUN_CREAT_RATIO"]);
-  if (bunCreatTarget) {
+  if (bunCreatTarget && (urea || bunTarget) && creat) {
     calculatedIds.add(bunCreatTarget.id);
     if (!isNaN(creat?.num || NaN) && (creat?.num || 0) > 0) {
       const bunVal = calculatedBun > 0 ? calculatedBun : (bunTarget ? parseFloat(currentValues[bunTarget.id]) : (!isNaN(urea?.num || NaN) ? urea!.num / 2.14 : NaN));
@@ -463,10 +629,10 @@ function computeAutomatedFormulas(
   const egfrTarget = findParam([/\begfr\b|estimated gfr/i, "KFT_EGFR", "BIO_EGFR"]);
   const gfrStageTarget = findParam([/\bgfr category\b|\bgfr stage\b|kdigo.*gfr/i, "KFT_GFR_STAGE", "BIO_GFR_STAGE"]);
 
-  if (egfrTarget) calculatedIds.add(egfrTarget.id);
-  if (gfrStageTarget) calculatedIds.add(gfrStageTarget.id);
+  if (egfrTarget && creat) calculatedIds.add(egfrTarget.id);
+  if (gfrStageTarget && creat) calculatedIds.add(gfrStageTarget.id);
 
-  if (!isNaN(creat?.num || NaN) && (creat?.num || 0) > 0) {
+  if (creat && !isNaN(creat?.num || NaN) && (creat?.num || 0) > 0) {
     const scr = creat!.num;
     const age = (report.patient?.age && report.patient.age > 0) ? report.patient.age : 40;
     const isFemale = (report.patient?.gender || "").toLowerCase().startsWith("f");
@@ -504,7 +670,7 @@ function computeAutomatedFormulas(
   // VLDL = Triglycerides / 5
   const vldlTarget = findParam([/\bvldl cholesterol\b|\bvldl\b/i, "LIPID_VLDL", "BIO_VLDL"]);
   let calculatedVldl = 0;
-  if (vldlTarget) {
+  if (vldlTarget && tg) {
     calculatedIds.add(vldlTarget.id);
     if (!isNaN(tg?.num || NaN) && (tg?.num || 0) > 0) {
       calculatedVldl = tg!.num / 5;
@@ -515,7 +681,7 @@ function computeAutomatedFormulas(
   // LDL = Total Cholesterol - HDL - VLDL (Friedewald)
   const ldlTarget = findParam([/\bldl cholesterol\b|\bldl\b/i, "LIPID_LDL", "BIO_LDL"]);
   let calculatedLdl = 0;
-  if (ldlTarget) {
+  if (ldlTarget && tchol && hdl) {
     calculatedIds.add(ldlTarget.id);
     if (!isNaN(tchol?.num || NaN) && !isNaN(hdl?.num || NaN)) {
       const vldlVal = calculatedVldl > 0 ? calculatedVldl : (!isNaN(tg?.num || NaN) ? tg!.num / 5 : (vldlTarget ? parseFloat(currentValues[vldlTarget.id]) || 0 : 0));
@@ -526,7 +692,7 @@ function computeAutomatedFormulas(
 
   // Non-HDL Cholesterol = Total Cholesterol - HDL
   const nonHdlTarget = findParam([/\bnon-hdl cholesterol\b|\bnon hdl\b/i, "LIPID_NON_HDL", "BIO_NON_HDL"]);
-  if (nonHdlTarget) {
+  if (nonHdlTarget && tchol && hdl) {
     calculatedIds.add(nonHdlTarget.id);
     if (!isNaN(tchol?.num || NaN) && !isNaN(hdl?.num || NaN)) {
       setCalc(nonHdlTarget, Math.max(0, tchol!.num - hdl!.num).toFixed(1));
@@ -535,7 +701,7 @@ function computeAutomatedFormulas(
 
   // Total Cholesterol / HDL Ratio
   const cholHdlTarget = findParam([/\btotal chol.*hdl ratio\b|\btc\s*\/\s*hdl\b|\bcholesterol\s*\/\s*hdl\b/i, "LIPID_CHOL_HDL_RATIO"]);
-  if (cholHdlTarget) {
+  if (cholHdlTarget && tchol && hdl) {
     calculatedIds.add(cholHdlTarget.id);
     if (!isNaN(tchol?.num || NaN) && !isNaN(hdl?.num || NaN) && (hdl?.num || 0) > 0) {
       setCalc(cholHdlTarget, (tchol!.num / hdl!.num).toFixed(2));
@@ -544,7 +710,7 @@ function computeAutomatedFormulas(
 
   // LDL / HDL Ratio
   const ldlHdlTarget = findParam([/\bldl\s*\/\s*hdl\b|\bldl.*hdl ratio\b/i, "LIPID_LDL_HDL_RATIO"]);
-  if (ldlHdlTarget) {
+  if (ldlHdlTarget && hdl && (tchol || ldlTarget)) {
     calculatedIds.add(ldlHdlTarget.id);
     if (!isNaN(hdl?.num || NaN) && (hdl?.num || 0) > 0) {
       const ldlVal = calculatedLdl > 0 ? calculatedLdl : (ldlTarget ? parseFloat(currentValues[ldlTarget.id]) : NaN);
@@ -557,7 +723,7 @@ function computeAutomatedFormulas(
   // 5. HbA1c -> eAG
   const hba1c = findParam([/\bglycated hemoglobin\b|\bglycosylated hemoglobin\b|\bhba1c\b/i, "HBA1C_VALUE", "BIO_HBA1C"]);
   const eagTarget = findParam([/\bestimated average glucose\b|\beag\b/i, "HBA1C_EAG"]);
-  if (eagTarget) {
+  if (eagTarget && hba1c) {
     calculatedIds.add(eagTarget.id);
     if (!isNaN(hba1c?.num || NaN) && (hba1c?.num || 0) > 0) {
       const eagVal = Math.round((28.7 * hba1c!.num) - 46.7);
@@ -570,7 +736,7 @@ function computeAutomatedFormulas(
   const tibc = findParam([/\btotal iron binding capacity\b|\btibc\b/i, "IRON_TIBC"]);
 
   const uibcTarget = findParam([/\bunsaturated iron binding capacity\b|\buibc\b/i, "IRON_UIBC"]);
-  if (uibcTarget) {
+  if (uibcTarget && iron && tibc) {
     calculatedIds.add(uibcTarget.id);
     if (!isNaN(tibc?.num || NaN) && !isNaN(iron?.num || NaN)) {
       setCalc(uibcTarget, Math.max(0, tibc!.num - iron!.num).toFixed(1));
@@ -578,7 +744,7 @@ function computeAutomatedFormulas(
   }
 
   const transSatTarget = findParam([/\btransferrin saturation\b|\biron saturation\b/i, "IRON_SATURATION"]);
-  if (transSatTarget) {
+  if (transSatTarget && iron && tibc) {
     calculatedIds.add(transSatTarget.id);
     if (!isNaN(iron?.num || NaN) && !isNaN(tibc?.num || NaN) && (tibc?.num || 0) > 0) {
       setCalc(transSatTarget, ((iron!.num / tibc!.num) * 100).toFixed(1));
@@ -592,7 +758,7 @@ function computeAutomatedFormulas(
   const semNonProg = findParam([/\bnon-progressive\b|\bnon progressive\b/i, "SEMEN_NON_PROG_MOTILE"]);
 
   const semEjacTarget = findParam([/total sperm count per ejaculate/i, "SEMEN_EJACULATE_COUNT"]);
-  if (semEjacTarget) {
+  if (semEjacTarget && semVol && semCount) {
     calculatedIds.add(semEjacTarget.id);
     if (!isNaN(semVol?.num || NaN) && !isNaN(semCount?.num || NaN)) {
       setCalc(semEjacTarget, (semVol!.num * semCount!.num).toFixed(1));
@@ -600,7 +766,7 @@ function computeAutomatedFormulas(
   }
 
   const semMotTarget = findParam([/total motile|total motility/i, "SEMEN_TOTAL_MOTILITY"]);
-  if (semMotTarget) {
+  if (semMotTarget && semProg && semNonProg) {
     calculatedIds.add(semMotTarget.id);
     if (!isNaN(semProg?.num || NaN) && !isNaN(semNonProg?.num || NaN)) {
       setCalc(semMotTarget, (semProg!.num + semNonProg!.num).toFixed(1));
@@ -1318,12 +1484,12 @@ export default function ResultEntryPage() {
   if (!report) return null;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 max-w-[1400px] mx-auto animate-fade-in pb-0">
+    <div className="flex flex-col gap-6 max-w-[1400px] mx-auto animate-fade-in min-h-[calc(100vh-68px-1.75rem)] -mb-7">
       {/* Main Container */}
-      <div className="flex-1 space-y-6 min-w-0">
+      <div className="flex-1 flex flex-col min-w-0">
 
         {/* Top Header Bar with Save Results on the Right */}
-        <div className="flex items-center justify-between gap-4 border-b border-border/80 pb-4">
+        <div className="flex items-center justify-between gap-4 border-b border-border/80 pb-4 mb-6">
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
@@ -1358,7 +1524,7 @@ export default function ResultEntryPage() {
         </div>
 
         {/* Patient Ribbon with View Details Button */}
-        <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center text-primary shrink-0">
               <User className="h-6 w-6" />
@@ -1395,8 +1561,9 @@ export default function ResultEntryPage() {
         </div>
 
         {/* Form Container with Enter Key Navigation */}
-        <form onSubmit={(e) => { e.preventDefault(); handleSaveResults("PENDING"); }} onKeyDown={handleFormKeyDown} className="space-y-6">
-          {error && (
+        <form onSubmit={(e) => { e.preventDefault(); handleSaveResults("PENDING"); }} onKeyDown={handleFormKeyDown} className="flex-1 flex flex-col justify-between">
+          <div className="space-y-6 flex-1 pb-8">
+            {error && (
             <div className="flex items-center gap-3 rounded-xl bg-destructive/8 border border-destructive/20 p-4 text-sm text-destructive font-medium">
               <AlertCircle className="h-5 w-5 shrink-0" />
               <p>{error}</p>
@@ -1532,7 +1699,8 @@ export default function ResultEntryPage() {
                                 const { abnormal, flag } = isValueAbnormal(item.test, val);
                                 const isForcedAbnormal = !!abnormalOverrides[item.id];
                                 const isCustomEditor = (item.test.fieldType || item.test.field_type) === "Custom Editor";
-                                const isCalculated = isParamFormulaCalculated(item.test) || calculatedParamIds.has(item.id);
+                                const canAutoCalc = canParamBeCalculatedInReport(item.test, report, item.id);
+                                const isCalculated = canAutoCalc && (isParamFormulaCalculated(item.test) || calculatedParamIds.has(item.id));
                                 const isTextType = (item.test.valueType || item.test.value_type) === "Text";
                                 const isTextRange = (item.test.rangeType || item.test.range_type) === "TEXT" || !!(item.test.textRefRange || item.test.text_ref_range);
                                 const range = getRefRange(item.test, report.patient.gender, report.patient.age);
@@ -1952,9 +2120,10 @@ export default function ResultEntryPage() {
               );
             })}
           </div>
+          </div>
 
           {/* Sticky Bottom Action Footer with Save (Pending), Final, Save & Authorize, and Print Buttons */}
-          <div className="sticky bottom-0 z-30 bg-card/95 backdrop-blur-md border-t border-x border-border/90 rounded-t-2xl rounded-b-none p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_-8px_20px_rgba(0,0,0,0.3)] flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="sticky bottom-0 z-30 mt-auto bg-card/95 backdrop-blur-md border-t border-x border-border/90 rounded-t-2xl rounded-b-none p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_-8px_20px_rgba(0,0,0,0.3)] flex flex-col sm:flex-row items-center justify-between gap-3">
             <Link href="/dashboard/reports">
               <Button type="button" variant="outline" disabled={saving} className="cursor-pointer w-full sm:w-auto">
                 Cancel

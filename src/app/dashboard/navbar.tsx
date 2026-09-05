@@ -53,6 +53,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const [user, setUser] = useState<any>(null);
+  const isCollectionCenter = user?.role === "COLLECTION_CENTER";
 
   // Global search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -278,7 +279,9 @@ export default function Navbar() {
     }
   };
 
-  const hasResults = searchResults.patients.length > 0 || searchResults.reports.length > 0 || searchResults.bills.length > 0;
+  const hasResults = isCollectionCenter
+    ? searchResults.reports.length > 0
+    : (searchResults.patients.length > 0 || searchResults.reports.length > 0 || searchResults.bills.length > 0);
 
   return (
     <header className="flex h-[68px] items-center justify-between px-4 sm:px-6 lg:px-8 glass border-b border-border/60 shrink-0 sticky top-0 z-30 gap-3 sm:gap-6">
@@ -363,8 +366,8 @@ export default function Navbar() {
               ) : (
                 <div className="p-2 space-y-3">
                   
-                  {/* Patients Section */}
-                  {searchResults.patients.length > 0 && (
+                  {/* Patients Section - Hidden for Collection Center */}
+                  {!isCollectionCenter && searchResults.patients.length > 0 && (
                     <div className="space-y-1">
                       <div className="px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                         <Users className="h-3 w-3 text-primary" />
@@ -406,7 +409,7 @@ export default function Navbar() {
                         {searchResults.reports.map((r: any) => (
                           <Link
                             key={r.id}
-                            href={`/dashboard/reports/${r.id}/edit`}
+                            href={isCollectionCenter ? `/dashboard/reports` : `/dashboard/reports/${r.id}/edit`}
                             onClick={() => setIsSearchOpen(false)}
                             className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted/60 transition-colors text-xs"
                           >
@@ -420,11 +423,11 @@ export default function Navbar() {
                                 </span>
                               </div>
                               <p className="text-[11px] text-muted-foreground mt-0.5">
-                                Patient: {r.patient?.full_name || r.patient?.fullName || "Patient"}
+                                Patient: {r.patient?.name || r.patient?.full_name || r.patient?.fullName || "Patient"}
                               </p>
                             </div>
                             <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">
-                              Enter Results →
+                              {isCollectionCenter ? "View Reports →" : "Enter Results →"}
                             </span>
                           </Link>
                         ))}
@@ -432,8 +435,8 @@ export default function Navbar() {
                     </div>
                   )}
 
-                  {/* Billing Invoices Section */}
-                  {searchResults.bills.length > 0 && (
+                  {/* Billing Invoices Section - Hidden for Collection Center */}
+                  {!isCollectionCenter && searchResults.bills.length > 0 && (
                     <div className="space-y-1 pt-1 border-t border-border/60">
                       <div className="px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                         <Receipt className="h-3 w-3 text-emerald-500" />

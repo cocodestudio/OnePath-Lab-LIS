@@ -116,6 +116,34 @@ export const DEFAULT_INTAKE_FIELDS: IntakeFieldConfig[] = [
   { key: "species", label: "Species (Vet)", orderingName: "Species", category: "Veterinary", enabled: false, required: false, showOnReport: false },
 ];
 
+export interface DoctorSignatureConfig {
+  id?: string;
+  enabled: boolean;
+  imageUrl: string | null;
+  name: string;
+  designation: string;
+  registrationNo?: string;
+  alignment?: "left" | "center" | "right";
+  position?: "left" | "right";
+  width: number;
+  marginTop: number;
+  marginBottom: number;
+  marginLeft: number;
+  marginRight: number;
+}
+
+export function resolveSignatureUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("data:") || url.startsWith("blob:") || url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  const apiOrigin = process.env.NEXT_PUBLIC_API_URL 
+    ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/lis\/?$/, "").replace(/\/api\/?$/, "")
+    : (typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:8000" : "https://api.onepathlab.com");
+  const cleanPath = url.startsWith("/") ? url : `/${url}`;
+  return `${apiOrigin}${cleanPath}`;
+}
+
 export interface ReportLayoutSettings {
   defaultDesignation: string;
   flags: {
@@ -132,7 +160,7 @@ export interface ReportLayoutSettings {
     departmentName: boolean;
   };
   patientDetailsOrder: string[];
-  intakeFields: IntakeFieldConfig[];
+  intakeFields?: IntakeFieldConfig[];
   typography: {
     departmentFontSize: number;
     columnHeadingFontSize: number;
@@ -153,7 +181,7 @@ export interface ReportLayoutSettings {
     departmentNameAlignment: "Left" | "Middle";
     testNameAlignment: "Left" | "Middle";
     testBodyImageAlignment: "Left" | "Center" | "Right";
-    rowAlignment: "Start" | "Center" | "End";
+    rowAlignment: "Top" | "Center";
   };
   spacing: {
     department: number;
@@ -191,6 +219,8 @@ export interface ReportLayoutSettings {
     text: string;
     fontSize: number;
   };
+  doctorSignature: DoctorSignatureConfig;
+  doctorSignatures: DoctorSignatureConfig[];
 }
 
 export const defaultReportLayoutSettings: ReportLayoutSettings = {
@@ -275,6 +305,36 @@ export const defaultReportLayoutSettings: ReportLayoutSettings = {
     text: "*** END OF REPORT ***",
     fontSize: 9,
   },
+  doctorSignature: {
+    id: "sig-1",
+    enabled: false,
+    imageUrl: null,
+    name: "Dr. S. K. Mukherjee",
+    designation: "Consultant Pathologist, MD (Pathology)",
+    registrationNo: "MCI-48291",
+    alignment: "left",
+    width: 130,
+    marginTop: 0,
+    marginBottom: 0,
+    marginLeft: 0,
+    marginRight: 0,
+  },
+  doctorSignatures: [
+    {
+      id: "sig-1",
+      enabled: false,
+      imageUrl: null,
+      name: "Dr. S. K. Mukherjee",
+      designation: "Consultant Pathologist, MD (Pathology)",
+      registrationNo: "MCI-48291",
+      alignment: "left",
+      width: 130,
+      marginTop: 0,
+      marginBottom: 0,
+      marginLeft: 0,
+      marginRight: 0,
+    }
+  ],
 };
 
 export function normalizeReportSettings(raw: any): ReportLayoutSettings {
@@ -291,6 +351,8 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
     columnWidth: { ...defaultReportLayoutSettings.columnWidth },
     columnLabels: { ...defaultReportLayoutSettings.columnLabels },
     endingLine: { ...defaultReportLayoutSettings.endingLine },
+    doctorSignature: { ...defaultReportLayoutSettings.doctorSignature },
+    doctorSignatures: defaultReportLayoutSettings.doctorSignatures.map(s => ({ ...s })),
   };
 
   if (raw.defaultDesignation || raw.default_designation) {
@@ -379,6 +441,34 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
       ...res.endingLine,
       ...(raw.endingLine || raw.ending_line),
     };
+  }
+
+  const normalizeSingleSig = (rawSig: any, index = 0): DoctorSignatureConfig => {
+    return {
+      id: rawSig.id || `sig-${index + 1}`,
+      enabled: rawSig.enabled !== undefined ? !!rawSig.enabled : false,
+      imageUrl: rawSig.imageUrl || rawSig.image_url || null,
+      name: rawSig.name || `Dr. ${index === 0 ? "S. K. Mukherjee" : "Authorized Pathologist"}`,
+      designation: rawSig.designation || "Consultant Pathologist, MD",
+      registrationNo: rawSig.registrationNo || rawSig.registration_no || "",
+      alignment: rawSig.alignment || (index % 2 === 0 ? "left" : "right"),
+      position: rawSig.position || (index % 2 === 0 ? "left" : "right"),
+      width: typeof rawSig.width === 'number' ? rawSig.width : 130,
+      marginTop: typeof rawSig.marginTop === 'number' ? rawSig.marginTop : (typeof rawSig.margin_top === 'number' ? rawSig.margin_top : 0),
+      marginBottom: typeof rawSig.marginBottom === 'number' ? rawSig.marginBottom : (typeof rawSig.margin_bottom === 'number' ? rawSig.margin_bottom : 0),
+      marginLeft: typeof rawSig.marginLeft === 'number' ? rawSig.marginLeft : (typeof rawSig.margin_left === 'number' ? rawSig.margin_left : 0),
+      marginRight: typeof rawSig.marginRight === 'number' ? rawSig.marginRight : (typeof rawSig.margin_right === 'number' ? rawSig.margin_right : 0),
+    };
+  };
+
+  const rawSignaturesArray = raw.doctorSignatures || raw.doctor_signatures;
+  if (Array.isArray(rawSignaturesArray) && rawSignaturesArray.length > 0) {
+    res.doctorSignatures = rawSignaturesArray.map((sig, idx) => normalizeSingleSig(sig, idx));
+    res.doctorSignature = res.doctorSignatures[0];
+  } else if (raw.doctorSignature || raw.doctor_signature) {
+    const single = normalizeSingleSig(raw.doctorSignature || raw.doctor_signature, 0);
+    res.doctorSignature = single;
+    res.doctorSignatures = [single];
   }
 
   return res;

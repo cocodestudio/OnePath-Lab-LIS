@@ -12,12 +12,12 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Printer, ChevronLeft, ChevronRight, Edit3, AlertTriangle,
-  Filter, X, Eye, Plus, Loader2,
+  Filter, X, Eye, Plus, Loader2, Clock,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
 import { Checkbox } from "@/components/ui/checkbox";
-import { fetchFromLaravel } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 
 interface Test { 
   name: string; 
@@ -37,12 +37,15 @@ interface Report {
 const DEFAULT_LAB = { name: "OnePath Lab Main", email: "info@onepathlab.com", address: "123 Healthcare Blvd, Medical District, Delhi", logoUrl: "/onepath-logo.png" };
 
 export default function ReportsListPage() {
-  const { error: toastError } = useToast();
+  const { toast } = useToast();
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [reports, setReports] = useState<Report[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [filterDate, setFilterDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER";
 
   const shiftDate = (days: number) => {
     const base = filterDate ? new Date(filterDate) : new Date();
@@ -58,7 +61,10 @@ export default function ReportsListPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  useEffect(() => { fetchReports(); }, []);
+  useEffect(() => {
+    setCurrentUser(getStoredUser());
+    fetchReports();
+  }, []);
 
   const fetchReports = async () => {
     try {
@@ -74,14 +80,28 @@ export default function ReportsListPage() {
     }
   };
 
-  const triggerPrint = async (id: string) => {
+  const triggerPrint = async (rep: any) => {
+    const isFinal = rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED";
+    if (isCollectionCenter && !isFinal) {
+      toast({
+        variant: "info",
+        title: "Report Not Finalized",
+        description: `Report #${rep.custom_id || rep.customId || "Pending"} has not been finalized by the central lab yet. Printing is locked until final approval.`
+      });
+      return;
+    }
+
     try {
-      setPrintingId(id);
-      const data = await fetchFromLaravel(`/reports/${id}`);
+      setPrintingId(rep.id);
+      const data = await fetchFromLaravel(`/reports/${rep.id}`);
       setPrintReport({ ...data, lab: data.lab || DEFAULT_LAB });
       setShowPrintOptions(true);
     } catch {
-      toastError("Could not load report", "Failed to fetch report data for printing.");
+      toast({
+        variant: "error",
+        title: "Could not load report",
+        description: "Failed to fetch report data for printing."
+      });
     } finally {
       setPrintingId(null);
     }
@@ -142,9 +162,15 @@ export default function ReportsListPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.2em] mb-1.5">Diagnostics</p>
+          <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.2em] mb-1.5">
+            {isCollectionCenter ? "Diagnostic Archives" : "Diagnostics"}
+          </p>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">Reports</h1>
-          <p className="text-sm text-muted-foreground mt-1">Enter test results, review findings, and issue diagnostic patient reports.</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isCollectionCenter
+              ? "View authorized clinical reports and print diagnostic sheets for your patients."
+              : "Enter test results, review findings, and issue diagnostic patient reports."}
+          </p>
         </div>
       </div>
 
@@ -332,21 +358,25 @@ export default function ReportsListPage() {
                       </td>
                       <td className="px-6 py-3.5 text-right">
                         <div className="flex flex-col items-end gap-1.5 min-w-[125px]">
-                          <Link href={`/dashboard/reports/${rep.id}/edit`} className="w-full">
-                            <Button size="sm" className="h-8 gap-1.5 w-full font-bold text-xs">
-                              <Edit3 className="h-3.5 w-3.5" /> Enter Results
-                            </Button>
-                          </Link>
+                          {!isCollectionCenter && (
+                            <Link href={`/dashboard/reports/${rep.id}/edit`} className="w-full">
+                              <Button size="sm" className="h-8 gap-1.5 w-full font-bold text-xs">
+                                <Edit3 className="h-3.5 w-3.5" /> Enter Results
+                              </Button>
+                            </Link>
+                          )}
                           <Button 
                             type="button"
-                            variant="outline" 
+                            variant={isCollectionCenter ? "default" : "outline"} 
                             size="sm" 
-                            onClick={() => triggerPrint(rep.id)} 
+                            onClick={() => triggerPrint(rep)} 
                             disabled={printingId === rep.id}
-                            className="h-8 gap-1.5 w-full font-bold text-xs rounded-xl border border-border/80 hover:bg-muted text-foreground cursor-pointer"
-                            title="Print report"
+                            className={`h-8 gap-1.5 w-full font-bold text-xs rounded-xl cursor-pointer ${
+                              isCollectionCenter ? "gradient-primary text-primary-foreground shadow-xs ring-inset-top" : "border border-border/80 hover:bg-muted text-foreground"
+                            }`}
+                            title={isCollectionCenter && !(rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED") ? "Report abhi admin side se final nahi hui hai" : "Print report"}
                           >
-                            {printingId === rep.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5 text-primary" />}
+                            {printingId === rep.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
                             <span>Print Report</span>
                           </Button>
                         </div>

@@ -15,7 +15,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { fetchFromLaravel } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { InvoiceSheet } from "@/components/invoice-sheet";
 import { printInvoiceElement } from "@/lib/print-invoice";
 
@@ -150,8 +150,11 @@ export default function BillingPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
 
   useEffect(() => {
+    const user = getStoredUser();
+    if (user?.role) setCurrentUserRole(user.role);
     fetchBills();
     fetchAvailableTests();
   }, []);
@@ -241,6 +244,41 @@ export default function BillingPage() {
   const editDiscount = Math.min(editSubtotal, Math.max(0, parseFloat(discountVal) || 0));
   const editNetTotal = Math.max(0, editSubtotal - editDiscount);
   const editPaid = Math.max(0, parseFloat(paidAmountVal) || 0);
+  const isFullyPaid = editNetTotal > 0 && editPaid >= editNetTotal;
+
+  // Toggle or auto-fill full cash payment
+  const handleTogglePaidFull = (forcePaid?: boolean) => {
+    const shouldBePaid = forcePaid !== undefined ? forcePaid : !isFullyPaid;
+    if (shouldBePaid) {
+      setPaidAmountVal(editNetTotal.toFixed(2));
+      setPaymentStatus("PAID");
+    } else {
+      setPaidAmountVal("0");
+      setPaymentStatus("UNPAID");
+    }
+  };
+
+  const [updatingBillId, setUpdatingBillId] = useState<string | null>(null);
+
+  // Quick mark paid directly from table row
+  const handleQuickMarkPaid = async (bill: Bill) => {
+    const netTotal = Math.max(0, (Number(bill.total) || 0) - (Number(bill.discount) || 0));
+    try {
+      setUpdatingBillId(bill.id);
+      await fetchFromLaravel(`/bills/${bill.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          paid_amount: netTotal,
+          status: "PAID",
+        }),
+      });
+      await fetchBills();
+    } catch (err: any) {
+      console.error("Failed to mark bill as paid:", err);
+    } finally {
+      setUpdatingBillId(null);
+    }
+  };
 
   const handleSaveBill = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -605,6 +643,23 @@ export default function BillingPage() {
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {bill.status !== "PAID" && (
+                            <button
+                              type="button"
+                              disabled={updatingBillId === bill.id}
+                              onClick={() => handleQuickMarkPaid(bill)}
+                              className="px-2 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] cursor-pointer transition-colors flex items-center gap-1 border border-emerald-500/20 disabled:opacity-50"
+                              title="1-Click Mark as Paid (Cash Collected)"
+                            >
+                              {updatingBillId === bill.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Check className="h-3 w-3" />
+                              )}
+                              <span>Pay Cash</span>
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => handleOpenInvoiceModal(bill)}
@@ -904,11 +959,60 @@ export default function BillingPage() {
               {/* Right Column: Financial Breakdown & Payment Adjustments */}
               <div className="lg:col-span-5 space-y-5 bg-card/90 p-5 rounded-2xl border border-border/90 flex flex-col justify-between shadow-sm">
                 <div className="space-y-4">
-                  <div className="border-b border-border/80 pb-2.5">
+                  <div className="border-b border-border/80 pb-2.5 flex items-center justify-between">
                     <span className="font-bold text-foreground uppercase tracking-wider text-xs flex items-center gap-2">
                       <Wallet className="h-4 w-4 text-primary" />
                       Invoice Payment Calculation
                     </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                      isFullyPaid 
+                        ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                        : "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                    }`}>
+                      {isFullyPaid ? "PAID" : "UNPAID / DUE"}
+                    </span>
+                  </div>
+
+                  {/* Cash Payment One-Click Toggle Card */}
+                  <div className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                    isFullyPaid 
+                      ? "bg-emerald-500/10 border-emerald-500/30" 
+                      : "bg-amber-500/10 border-amber-500/30"
+                  }`}>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                        isFullyPaid ? "bg-emerald-600 text-white" : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                      }`}>
+                        {isFullyPaid ? <CheckCircle2 className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-xs text-foreground truncate">
+                          {isFullyPaid ? "Paid in Full (Cash / Cleared)" : "Pending Balance"}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {isFullyPaid ? "Zero dues remaining on bill" : "Click to mark 100% Cash Paid"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePaidFull()}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs ${
+                        isFullyPaid
+                          ? "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border"
+                          : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                      }`}
+                    >
+                      {isFullyPaid ? (
+                        <span>Reset Unpaid</span>
+                      ) : (
+                        <>
+                          <Check className="h-3.5 w-3.5" />
+                          <span>Mark Paid (Cash)</span>
+                        </>
+                      )}
+                    </button>
                   </div>
 
                   <div className="space-y-3">
@@ -941,13 +1045,29 @@ export default function BillingPage() {
 
                     {/* Paid Amount */}
                     <div className="flex justify-between items-center text-xs p-2.5 rounded-xl bg-muted/40">
-                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Amount Paid (₹)</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Amount Paid (₹)</span>
+                        {!isFullyPaid && editNetTotal > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePaidFull(true)}
+                            className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 cursor-pointer border border-emerald-500/30 transition-colors"
+                            title="Auto-fill 100% full amount as cash payment"
+                          >
+                            + 100% Cash
+                          </button>
+                        )}
+                      </div>
                       <div className="w-28">
                         <input
                           type="number"
                           min="0"
                           value={paidAmountVal}
-                          onChange={(e) => setPaidAmountVal(e.target.value)}
+                          onChange={(e) => {
+                            setPaidAmountVal(e.target.value);
+                            const val = parseFloat(e.target.value) || 0;
+                            setPaymentStatus(val >= editNetTotal ? "PAID" : (val > 0 ? "PARTIAL" : "UNPAID"));
+                          }}
                           className="w-full font-mono font-bold text-xs text-right text-emerald-600 dark:text-emerald-400 bg-background px-2.5 py-1.5 rounded-lg border border-border outline-none focus:border-emerald-500"
                         />
                       </div>

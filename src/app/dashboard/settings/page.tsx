@@ -11,11 +11,12 @@ import {
   Pilcrow, MoveHorizontal, Receipt, QrCode, PlusCircle,
   CreditCard, PenTool, Image as ImageIcon, ClipboardList,
   CheckSquare, Stethoscope, User, Shield, Lock, Asterisk,
-  Cpu, Radio, Activity, HardDrive, Terminal
+  Cpu, Radio, Activity, HardDrive, Terminal, Building2
 } from "lucide-react";
 import { ReportSheet, type PrintSettings, type ReportSheetData } from "@/components/report-sheet";
 import { InvoiceSheet, type InvoiceData } from "@/components/invoice-sheet";
 import { MachineIntegrationTab } from "@/components/machine-integration-tab";
+import { CollectionCentersTab } from "@/components/collection-centers-tab";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
 import {
@@ -24,6 +25,7 @@ import {
   DEFAULT_INTAKE_FIELDS,
   type IntakeFieldConfig,
   type ReportLayoutSettings,
+  type DoctorSignatureConfig,
   defaultReportLayoutSettings,
   normalizeReportSettings,
 } from "@/lib/report-settings";
@@ -34,6 +36,7 @@ import {
   defaultBillLayoutSettings,
   normalizeBillSettings,
 } from "@/lib/bill-settings";
+import { processSignatureImage } from "@/lib/signature-processor";
 
 interface ExtendedPrintSettings extends PrintSettings {
   printWithLetterhead?: boolean;
@@ -79,6 +82,7 @@ function getDummyReportWithSettings(layoutSettings: ReportLayoutSettings, printS
       printMarginLeft: printSettings.marginLeft,
       printMarginRight: printSettings.marginRight,
       report_settings: layoutSettings,
+      reportSettings: layoutSettings,
       default_designation: layoutSettings.defaultDesignation,
     },
     results: [
@@ -246,7 +250,7 @@ function optimizeLetterheadImage(file: File): Promise<string> {
 }
 
 function SettingsContent() {
-  const [activeTab, setActiveTab] = useState<"letterhead" | "report-layout" | "bills-layout" | "machine-integration">("letterhead");
+  const [activeTab, setActiveTab] = useState<"letterhead" | "report-layout" | "bills-layout" | "machine-integration" | "collection-centers">("letterhead");
   const [settings, setSettings] = useState<ExtendedPrintSettings>(defaultPrintSettings);
   const [layoutSettings, setLayoutSettings] = useState<ReportLayoutSettings>(defaultReportLayoutSettings);
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
@@ -262,6 +266,202 @@ function SettingsContent() {
   const [isSigModalOpen, setIsSigModalOpen] = useState(false);
   const [newSigName, setNewSigName] = useState("");
   const [newSigDesig, setNewSigDesig] = useState("");
+
+  // Doctor Digital Signature processing state (per-doctor indexing)
+  const [processingSigIdx, setProcessingSigIdx] = useState<number | null>(null);
+  const [sigSensitivityMap, setSigSensitivityMap] = useState<Record<number, number>>({});
+  const [rawUploadedSigMap, setRawUploadedSigMap] = useState<Record<number, string>>({});
+
+  const rawUploadedSig = rawUploadedSigMap[0] || null;
+  const setRawUploadedSig = (val: string | null) => {
+    setRawUploadedSigMap(prev => ({ ...prev, 0: val || "" }));
+  };
+  const sigSensitivity = sigSensitivityMap[0] ?? 210;
+  const isProcessingSig = processingSigIdx !== null;
+
+  const handleDoctorSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>, sigIndex: number = 0) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setProcessingSigIdx(sigIndex);
+      setToast({ text: `Processing Dr. #${sigIndex + 1} signature & removing white paper background...`, type: "success" });
+
+      const reader = new FileReader();
+      reader.onload = async (re) => {
+        try {
+          const rawUrl = re.target?.result as string;
+          setRawUploadedSigMap(prev => ({ ...prev, [sigIndex]: rawUrl }));
+          const sens = sigSensitivityMap[sigIndex] ?? 210;
+
+          const transparentPng = await processSignatureImage(rawUrl, {
+            removeBackground: true,
+            threshold: sens,
+            cropWhitespace: true,
+          });
+
+          setLayoutSettings(prev => {
+            const list = Array.isArray(prev.doctorSignatures) && prev.doctorSignatures.length > 0
+              ? prev.doctorSignatures.map(item => ({ ...item }))
+              : [{ ...prev.doctorSignature }];
+
+            while (list.length <= sigIndex) {
+              list.push({
+                id: `sig-${Date.now()}-${list.length}`,
+                enabled: true,
+                imageUrl: null,
+                name: `Dr. Pathologist ${list.length + 1}`,
+                designation: "Consultant Pathologist, MD",
+                registrationNo: "",
+                alignment: list.length % 2 === 1 ? "right" : "left",
+                width: 130,
+                marginTop: 0,
+                marginBottom: 0,
+                marginLeft: 0,
+                marginRight: 0,
+              });
+            }
+
+            list[sigIndex] = {
+              ...list[sigIndex],
+              enabled: true,
+              imageUrl: transparentPng,
+            };
+
+            return {
+              ...prev,
+              doctorSignature: list[0] ? { ...list[0] } : prev.doctorSignature,
+              doctorSignatures: list,
+            };
+          });
+
+          setToast({ text: `Dr. #${sigIndex + 1} signature background removed cleanly! Check live preview.`, type: "success" });
+          setTimeout(() => setToast(null), 3500);
+        } catch (err) {
+          console.error("Signature processing error:", err);
+          setToast({ text: "Failed to process signature image.", type: "error" });
+        } finally {
+          setProcessingSigIdx(null);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Signature upload error:", err);
+      setProcessingSigIdx(null);
+      setToast({ text: "Failed to upload signature file.", type: "error" });
+    } finally {
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const handleReprocessSignature = async (newThreshold: number, sigIndex: number = 0) => {
+    setSigSensitivityMap(prev => ({ ...prev, [sigIndex]: newThreshold }));
+    const rawUrl = rawUploadedSigMap[sigIndex];
+    if (!rawUrl) return;
+    try {
+      setProcessingSigIdx(sigIndex);
+      const transparentPng = await processSignatureImage(rawUrl, {
+        removeBackground: true,
+        threshold: newThreshold,
+        cropWhitespace: true,
+      });
+
+      setLayoutSettings(prev => {
+        const list = Array.isArray(prev.doctorSignatures) && prev.doctorSignatures.length > 0
+          ? prev.doctorSignatures.map(item => ({ ...item }))
+          : [{ ...prev.doctorSignature }];
+
+        if (list[sigIndex]) {
+          list[sigIndex] = {
+            ...list[sigIndex],
+            imageUrl: transparentPng,
+          };
+        }
+
+        return {
+          ...prev,
+          doctorSignature: list[0] ? { ...list[0] } : prev.doctorSignature,
+          doctorSignatures: list,
+        };
+      });
+    } catch (err) {
+      console.error("Reprocess error:", err);
+    } finally {
+      setProcessingSigIdx(null);
+    }
+  };
+
+  const handleUpdateDoctorSig = (sigIndex: number, updates: Partial<DoctorSignatureConfig>) => {
+    setLayoutSettings(prev => {
+      const list = Array.isArray(prev.doctorSignatures) && prev.doctorSignatures.length > 0
+        ? prev.doctorSignatures.map(item => ({ ...item }))
+        : [{ ...prev.doctorSignature }];
+
+      if (list[sigIndex]) {
+        list[sigIndex] = { ...list[sigIndex], ...updates };
+      }
+
+      return {
+        ...prev,
+        doctorSignature: list[0] ? { ...list[0] } : prev.doctorSignature,
+        doctorSignatures: list,
+      };
+    });
+  };
+
+  const handleAddDoctorSig = () => {
+    setLayoutSettings(prev => {
+      const list = Array.isArray(prev.doctorSignatures) && prev.doctorSignatures.length > 0
+        ? prev.doctorSignatures.map(item => ({ ...item }))
+        : [{ ...prev.doctorSignature }];
+
+      const newIdx = list.length + 1;
+      const newSig: DoctorSignatureConfig = {
+        id: `sig-${Date.now()}`,
+        enabled: true,
+        imageUrl: null,
+        name: `Dr. Pathologist ${newIdx}`,
+        designation: "Consultant Pathologist, MD",
+        registrationNo: "",
+        alignment: newIdx % 2 === 0 ? "right" : "left",
+        width: 130,
+        marginTop: 0,
+        marginBottom: 0,
+        marginLeft: 0,
+        marginRight: 0,
+      };
+
+      const updatedList = [...list, newSig];
+      return {
+        ...prev,
+        doctorSignature: updatedList[0],
+        doctorSignatures: updatedList,
+      };
+    });
+    setToast({ text: "Added another doctor signature. Configure details below.", type: "success" });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleRemoveDoctorSig = (sigIndex: number) => {
+    setLayoutSettings(prev => {
+      const list = Array.isArray(prev.doctorSignatures) && prev.doctorSignatures.length > 0
+        ? prev.doctorSignatures.map(item => ({ ...item }))
+        : [{ ...prev.doctorSignature }];
+
+      if (list.length <= 1) {
+        return prev;
+      }
+
+      const updatedList = list.filter((_, i) => i !== sigIndex);
+      return {
+        ...prev,
+        doctorSignature: updatedList[0],
+        doctorSignatures: updatedList,
+      };
+    });
+    setToast({ text: `Removed Doctor #${sigIndex + 1} signature.`, type: "success" });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
     fetchSettings();
@@ -791,51 +991,65 @@ function SettingsContent() {
               <Cpu className="h-3.5 w-3.5" />
               <span>Machine Integration</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("collection-centers")}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === "collection-centers"
+                  ? "bg-background text-primary shadow-xs font-extrabold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Building2 className="h-3.5 w-3.5" />
+              <span>Collection Centers</span>
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
-          <Dialog>
-            <DialogTrigger asChild>
-              <button
-                type="button"
-                className="px-4 py-2.5 rounded-xl border border-border bg-card text-xs font-bold text-foreground hover:bg-accent transition-colors inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
-              >
-                <Eye className="h-4 w-4 text-primary" />
-                <span>Full Preview</span>
-              </button>
-            </DialogTrigger>
-            <DialogContent className="max-w-5xl h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border/80 shadow-2xl">
-              <DialogHeader className="px-6 py-4 border-b border-border/80 bg-card shrink-0">
-                <DialogTitle className="font-display font-bold text-foreground flex items-center justify-between">
-                  <span>{activeTab === "bills-layout" ? "Diagnostic Bill / Receipt Preview" : "Diagnostic Report Print Layout Preview"}</span>
-                  <span className="text-xs text-muted-foreground font-normal">
-                    {activeTab === "bills-layout" ? "Includes dynamic UPI, GST & custom ordering" : "Includes dynamic barcode & custom styling"}
-                  </span>
-                </DialogTitle>
-              </DialogHeader>
-              <div className="flex-1 overflow-y-auto bg-muted/50 p-4 sm:p-8 flex justify-center">
-                <div className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 w-[794px] bg-white">
-                  {activeTab === "bills-layout" ? (
-                    <InvoiceSheet invoice={previewInvoiceData} settings={billSettings} />
-                  ) : (
-                    <ReportSheet report={previewReportData} settings={activePreviewSettings} />
-                  )}
+        {activeTab !== "machine-integration" && activeTab !== "collection-centers" && (
+          <div className="flex items-center gap-2.5 shrink-0">
+            <Dialog>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className="px-4 py-2.5 rounded-xl border border-border bg-card text-xs font-bold text-foreground hover:bg-accent transition-colors inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Eye className="h-4 w-4 text-primary" />
+                  <span>Full Preview</span>
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-5xl h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border/80 shadow-2xl">
+                <DialogHeader className="px-6 py-4 border-b border-border/80 bg-card shrink-0">
+                  <DialogTitle className="font-display font-bold text-foreground flex items-center justify-between">
+                    <span>{activeTab === "bills-layout" ? "Diagnostic Bill / Receipt Preview" : "Diagnostic Report Print Layout Preview"}</span>
+                    <span className="text-xs text-muted-foreground font-normal">
+                      {activeTab === "bills-layout" ? "Includes dynamic UPI, GST & custom ordering" : "Includes dynamic barcode & custom styling"}
+                    </span>
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="flex-1 overflow-y-auto bg-muted/50 p-4 sm:p-8 flex justify-center">
+                  <div className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 w-[794px] bg-white">
+                    {activeTab === "bills-layout" ? (
+                      <InvoiceSheet invoice={previewInvoiceData} settings={billSettings} />
+                    ) : (
+                      <ReportSheet report={previewReportData} settings={activePreviewSettings} />
+                    )}
+                  </div>
                 </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
 
-          <button
-            type="button"
-            onClick={saveSettings}
-            disabled={isSaving}
-            className="px-6 py-2.5 rounded-xl gradient-primary text-primary-foreground text-xs font-bold shadow-md hover:brightness-105 transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-50 ring-inset-top"
-          >
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            <span>{isSaving ? "Saving..." : "Save Settings"}</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={saveSettings}
+              disabled={isSaving}
+              className="px-6 py-2.5 rounded-xl gradient-primary text-primary-foreground text-xs font-bold shadow-md hover:brightness-105 transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-50 ring-inset-top"
+            >
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              <span>{isSaving ? "Saving..." : "Save Settings"}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* TAB 1: LETTERHEAD DESIGNER */}
@@ -1979,8 +2193,511 @@ function SettingsContent() {
               </div>
             </div>
           </div>
-        </div>
-      )}
+
+            {/* SECTION 7: DOCTOR DIGITAL SIGNATURE & AUTHENTICATION */}
+            <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <PenTool className="h-5 w-5 text-primary" />
+                    <h2 className="font-display text-base font-bold text-foreground">
+                      Doctor Digital Signatures
+                    </h2>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                      {(layoutSettings.doctorSignatures || [layoutSettings.doctorSignature]).length} Doctor{(layoutSettings.doctorSignatures || [layoutSettings.doctorSignature]).length > 1 ? "s" : ""} Added
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Upload and manage official doctor/pathologist signatures. You can add multiple doctors to appear on reports simultaneously (e.g. Consultant Pathologist, Lab Director, Biochemist). White paper backgrounds are auto-removed to clean transparent PNGs.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddDoctorSig}
+                  className="px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all flex items-center gap-2 shadow-xs cursor-pointer shrink-0"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  <span>Add Doctor Signature</span>
+                </button>
+              </div>
+
+              {/* List of Doctor Signatures */}
+              <div className="space-y-6">
+                {(layoutSettings.doctorSignatures && layoutSettings.doctorSignatures.length > 0 ? layoutSettings.doctorSignatures : [layoutSettings.doctorSignature]).map((sig, sigIndex) => {
+                  const rawSig = rawUploadedSigMap[sigIndex] || null;
+                  const sens = sigSensitivityMap[sigIndex] ?? 210;
+                  const isProcessingThisSig = processingSigIdx === sigIndex;
+                  const totalSigs = (layoutSettings.doctorSignatures && layoutSettings.doctorSignatures.length > 0 ? layoutSettings.doctorSignatures : [layoutSettings.doctorSignature]).length;
+
+                  return (
+                    <div 
+                      key={sig.id || `doc-sig-${sigIndex}`}
+                      className="p-5 rounded-2xl border border-border bg-card/60 shadow-xs space-y-5"
+                    >
+                      {/* Doctor Card Top Bar */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/70 pb-3">
+                        <div className="flex items-center gap-2.5">
+                          <span className="h-6 w-6 rounded-full bg-primary/10 text-primary text-xs font-black flex items-center justify-center">
+                            {sigIndex + 1}
+                          </span>
+                          <span className="font-bold text-sm text-foreground">
+                            {sig.name || `Doctor #${sigIndex + 1}`}
+                          </span>
+                          {sig.designation && (
+                            <span className="text-xs text-muted-foreground font-medium hidden sm:inline">
+                              • {sig.designation}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <label className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-border bg-background hover:bg-muted/40 cursor-pointer text-xs font-bold select-none">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(sig.enabled)}
+                              onChange={(e) => handleUpdateDoctorSig(sigIndex, { enabled: e.target.checked })}
+                              className="h-3.5 w-3.5 rounded border-border text-primary accent-primary cursor-pointer"
+                            />
+                            <span>Show on Report</span>
+                          </label>
+
+                          {totalSigs > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDoctorSig(sigIndex)}
+                              className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                              title="Delete this Doctor Signature"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {!sig.enabled && (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-semibold flex items-center gap-2">
+                          <span>⚠️ Signature is currently unticked (OFF). Tick &quot;Show on Report&quot; above when you want this signature to appear on reports.</span>
+                        </div>
+                      )}
+
+                      <div className="space-y-6 animate-fade-in">
+                          {/* Doctor Signature Details & Upload */}
+                          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+                            {/* Image Upload / Cutout Preview */}
+                            <div className="md:col-span-5 space-y-3">
+                              <label className="text-xs font-bold text-foreground block">
+                                Signature Image (.png, .jpg)
+                              </label>
+
+                              {sig.imageUrl ? (
+                                <div className="space-y-3">
+                                  <div 
+                                    className="relative rounded-xl border-2 border-dashed border-primary/40 p-4 flex items-center justify-center min-h-[120px] overflow-hidden"
+                                    style={{
+                                      backgroundImage: `
+                                        linear-gradient(45deg, #e2e8f0 25%, transparent 25%), 
+                                        linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), 
+                                        linear-gradient(45deg, transparent 75%, #e2e8f0 75%), 
+                                        linear-gradient(-45deg, transparent 75%, #e2e8f0 75%)
+                                      `,
+                                      backgroundSize: '16px 16px',
+                                      backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+                                      backgroundColor: '#ffffff'
+                                    }}
+                                  >
+                                    <img
+                                      src={sig.imageUrl}
+                                      alt={sig.name || `Doctor #${sigIndex + 1}`}
+                                      className="max-h-24 max-w-full object-contain filter drop-shadow-xs"
+                                    />
+
+                                    <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-600 text-white shadow-xs">
+                                        Transparent PNG
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setRawUploadedSigMap(prev => ({ ...prev, [sigIndex]: "" }));
+                                          handleUpdateDoctorSig(sigIndex, { imageUrl: null });
+                                        }}
+                                        className="p-1 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors shadow-xs"
+                                        title="Delete Signature"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Sensitivity Slider */}
+                                  {rawSig && (
+                                    <div className="p-3 rounded-xl bg-muted/40 border border-border/80 space-y-2">
+                                      <div className="flex items-center justify-between text-xs">
+                                        <span className="font-bold text-foreground flex items-center gap-1.5">
+                                          <Sliders className="h-3.5 w-3.5 text-primary" />
+                                          <span>Auto Background Removal</span>
+                                        </span>
+                                        <span className="font-mono font-bold text-primary">{sens}</span>
+                                      </div>
+                                      <input
+                                        type="range"
+                                        min="140"
+                                        max="245"
+                                        value={sens}
+                                        disabled={isProcessingThisSig}
+                                        onChange={(e) => handleReprocessSignature(Number(e.target.value), sigIndex)}
+                                        className="w-full accent-primary cursor-pointer"
+                                      />
+                                      <p className="text-[10px] text-muted-foreground">
+                                        Slide right if paper tone remains; slide left if ink lines appear faint.
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  <label className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-xs font-bold text-foreground hover:bg-muted/40 cursor-pointer transition-colors">
+                                    <Upload className="h-3.5 w-3.5 text-primary" />
+                                    <span>Replace Signature File</span>
+                                    <input
+                                      type="file"
+                                      accept="image/png,image/jpeg,image/webp"
+                                      onChange={(e) => handleDoctorSignatureUpload(e, sigIndex)}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                </div>
+                              ) : (
+                                <label className="flex flex-col items-center justify-center border-2 border-dashed border-border/90 hover:border-primary/60 bg-muted/20 hover:bg-muted/40 rounded-2xl p-6 text-center cursor-pointer transition-all group">
+                                  <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                                    {isProcessingThisSig ? (
+                                      <Loader2 className="h-6 w-6 animate-spin" />
+                                    ) : (
+                                      <Upload className="h-6 w-6" />
+                                    )}
+                                  </div>
+                                  <span className="text-xs font-bold text-foreground">
+                                    {isProcessingThisSig ? "Removing background..." : "Upload Signature Image"}
+                                  </span>
+                                  <p className="text-[11px] text-muted-foreground mt-1 max-w-xs">
+                                    Upload PNG or photo on white paper. Background will be removed automatically to transparent.
+                                  </p>
+                                  <input
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/webp"
+                                    disabled={isProcessingThisSig}
+                                    onChange={(e) => handleDoctorSignatureUpload(e, sigIndex)}
+                                    className="hidden"
+                                  />
+                                </label>
+                              )}
+                            </div>
+
+                            {/* Doctor Metadata (Name, Designation, Reg No, Alignment) */}
+                            <div className="md:col-span-7 space-y-4">
+                              <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-foreground">Doctor Full Name</label>
+                                <input
+                                  type="text"
+                                  value={sig.name}
+                                  onChange={(e) => handleUpdateDoctorSig(sigIndex, { name: e.target.value })}
+                                  placeholder="Dr. S. K. Mukherjee"
+                                  className="w-full px-3.5 py-2 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none"
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-bold text-foreground">Designation & Degree</label>
+                                  <input
+                                    type="text"
+                                    value={sig.designation}
+                                    onChange={(e) => handleUpdateDoctorSig(sigIndex, { designation: e.target.value })}
+                                    placeholder="Consultant Pathologist, MD"
+                                    className="w-full px-3.5 py-2 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none"
+                                  />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                  <label className="text-xs font-bold text-foreground">Medical Council Reg. No</label>
+                                  <input
+                                    type="text"
+                                    value={sig.registrationNo || ""}
+                                    onChange={(e) => handleUpdateDoctorSig(sigIndex, { registrationNo: e.target.value })}
+                                    placeholder="Reg. No: 48291/MCI"
+                                    className="w-full px-3.5 py-2 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Alignment Row */}
+                              <div className="space-y-1.5 pt-1">
+                                <label className="text-xs font-bold text-foreground block">
+                                  Signature Alignment / Position on Page
+                                </label>
+                                <div className="grid grid-cols-3 gap-2">
+                                  {(["left", "center", "right"] as const).map((align) => {
+                                    const isSel = (sig.alignment || (sigIndex % 2 === 0 ? "left" : "right")) === align;
+                                    return (
+                                      <button
+                                        key={align}
+                                        type="button"
+                                        onClick={() => handleUpdateDoctorSig(sigIndex, { alignment: align })}
+                                        className={`py-2 px-3 rounded-xl border text-xs font-bold capitalize transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none ${
+                                          isSel
+                                            ? "bg-primary text-primary-foreground border-primary shadow-xs ring-2 ring-primary/20"
+                                            : "bg-background border-border text-foreground hover:bg-muted/40"
+                                        }`}
+                                      >
+                                        {align === "left" && <AlignLeft className="h-3.5 w-3.5" />}
+                                        {align === "center" && <AlignCenter className="h-3.5 w-3.5" />}
+                                        {align === "right" && <AlignRight className="h-3.5 w-3.5" />}
+                                        <span>{align}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Margins & Size Sliders Box */}
+                          <div className="p-4 rounded-xl bg-muted/20 border border-border/80 space-y-4">
+                            <div className="flex flex-wrap items-center justify-between border-b border-border/80 pb-2.5 gap-2">
+                              <div className="flex items-center gap-2">
+                                <Sliders className="h-3.5 w-3.5 text-primary" />
+                                <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                                  Doctor #{sigIndex + 1} Size & Margin Sliders
+                                </h3>
+                              </div>
+
+                              {/* Quick Placement Presets & Reset */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDoctorSig(sigIndex, {
+                                    marginTop: 450,
+                                    marginBottom: 0,
+                                  })}
+                                  className="px-2.5 py-1 rounded-lg border border-primary/40 bg-primary/10 hover:bg-primary/20 text-[10.5px] font-bold text-primary transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                  title="Slide signature all the way down to touch the letterhead footer"
+                                >
+                                  <span>👇 Push to Footer</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDoctorSig(sigIndex, {
+                                    marginTop: 16,
+                                    marginBottom: 0,
+                                  })}
+                                  className="px-2.5 py-1 rounded-lg border border-border bg-background hover:bg-muted text-[10.5px] font-bold text-foreground transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                  title="Position right below the test tables"
+                                >
+                                  <span>📄 Below Tests</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDoctorSig(sigIndex, {
+                                    marginTop: -10,
+                                    marginBottom: 0,
+                                  })}
+                                  className="px-2.5 py-1 rounded-lg border border-border bg-background hover:bg-muted text-[10.5px] font-bold text-foreground transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                  title="Pull signature upwards towards test content"
+                                >
+                                  <span>⬆️ Compact</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateDoctorSig(sigIndex, {
+                                    width: 130,
+                                    marginTop: 0,
+                                    marginBottom: 0,
+                                    marginLeft: 0,
+                                    marginRight: 0,
+                                  })}
+                                  className="px-2 py-1 rounded-lg border border-border bg-background hover:bg-muted text-[10.5px] font-bold text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1 cursor-pointer"
+                                  title="Reset all margins to default"
+                                >
+                                  <RotateCcw className="h-3 w-3" />
+                                  <span>Reset</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Width Slider + Numeric Input */}
+                            <div className="space-y-1.5">
+                              <div className="flex justify-between items-center text-xs font-bold text-foreground">
+                                <span>Signature Width / Scale</span>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    min="50"
+                                    max="320"
+                                    step="5"
+                                    value={sig.width || 130}
+                                    onChange={(e) => handleUpdateDoctorSig(sigIndex, { width: Number(e.target.value) })}
+                                    className="w-16 px-2 py-0.5 text-right font-mono text-xs rounded-md bg-background border border-border text-primary font-bold focus:border-primary outline-none"
+                                  />
+                                  <span className="text-[11px] text-muted-foreground">px</span>
+                                </div>
+                              </div>
+                              <input
+                                type="range"
+                                min="50"
+                                max="320"
+                                step="5"
+                                value={sig.width || 130}
+                                onChange={(e) => handleUpdateDoctorSig(sigIndex, { width: Number(e.target.value) })}
+                                className="w-full accent-primary cursor-pointer"
+                              />
+                            </div>
+
+                            {/* 4-Direction Margins Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                              {/* Top Margin */}
+                              <div className="space-y-1.5 p-2.5 rounded-xl bg-background border border-border/80 hover:border-primary/50 transition-colors">
+                                <div className="flex justify-between items-center text-[11px] font-bold text-foreground">
+                                  <span className="flex items-center gap-1">Top Margin <span className="text-[9px] text-muted-foreground">(to footer)</span></span>
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min="-60"
+                                      max="750"
+                                      step="2"
+                                      value={sig.marginTop || 0}
+                                      onChange={(e) => handleUpdateDoctorSig(sigIndex, { marginTop: Number(e.target.value) })}
+                                      className="w-16 px-1.5 py-0.5 text-right font-mono text-[11px] rounded bg-muted/40 border border-border text-primary font-bold focus:border-primary outline-none"
+                                    />
+                                    <span className="text-[10px] text-muted-foreground">px</span>
+                                  </div>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="-60"
+                                  max="750"
+                                  step="2"
+                                  value={sig.marginTop || 0}
+                                  onChange={(e) => handleUpdateDoctorSig(sigIndex, { marginTop: Number(e.target.value) })}
+                                  className="w-full accent-primary cursor-pointer"
+                                />
+                                <p className="text-[9.5px] text-muted-foreground leading-tight">
+                                  Slide right to push signature all the way down to footer.
+                                </p>
+                              </div>
+
+                              {/* Bottom Margin */}
+                              <div className="space-y-1.5 p-2.5 rounded-xl bg-background border border-border/80 hover:border-primary/50 transition-colors">
+                                <div className="flex justify-between items-center text-[11px] font-bold text-foreground">
+                                  <span>Bottom Margin</span>
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min="-60"
+                                      max="400"
+                                      step="2"
+                                      value={sig.marginBottom || 0}
+                                      onChange={(e) => handleUpdateDoctorSig(sigIndex, { marginBottom: Number(e.target.value) })}
+                                      className="w-16 px-1.5 py-0.5 text-right font-mono text-[11px] rounded bg-muted/40 border border-border text-primary font-bold focus:border-primary outline-none"
+                                    />
+                                    <span className="text-[10px] text-muted-foreground">px</span>
+                                  </div>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="-60"
+                                  max="400"
+                                  step="2"
+                                  value={sig.marginBottom || 0}
+                                  onChange={(e) => handleUpdateDoctorSig(sigIndex, { marginBottom: Number(e.target.value) })}
+                                  className="w-full accent-primary cursor-pointer"
+                                />
+                                <p className="text-[9.5px] text-muted-foreground leading-tight">
+                                  Spacing below signature before footer.
+                                </p>
+                              </div>
+
+                              {/* Left Margin */}
+                              <div className="space-y-1.5 p-2.5 rounded-xl bg-background border border-border/80 hover:border-primary/50 transition-colors">
+                                <div className="flex justify-between items-center text-[11px] font-bold text-foreground">
+                                  <span>Left Margin</span>
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min="-60"
+                                      max="350"
+                                      step="2"
+                                      value={sig.marginLeft || 0}
+                                      onChange={(e) => handleUpdateDoctorSig(sigIndex, { marginLeft: Number(e.target.value) })}
+                                      className="w-16 px-1.5 py-0.5 text-right font-mono text-[11px] rounded bg-muted/40 border border-border text-primary font-bold focus:border-primary outline-none"
+                                    />
+                                    <span className="text-[10px] text-muted-foreground">px</span>
+                                  </div>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="-60"
+                                  max="350"
+                                  step="2"
+                                  value={sig.marginLeft || 0}
+                                  onChange={(e) => handleUpdateDoctorSig(sigIndex, { marginLeft: Number(e.target.value) })}
+                                  className="w-full accent-primary cursor-pointer"
+                                />
+                                <p className="text-[9.5px] text-muted-foreground leading-tight">
+                                  Horizontal offset from left edge.
+                                </p>
+                              </div>
+
+                              {/* Right Margin */}
+                              <div className="space-y-1.5 p-2.5 rounded-xl bg-background border border-border/80 hover:border-primary/50 transition-colors">
+                                <div className="flex justify-between items-center text-[11px] font-bold text-foreground">
+                                  <span>Right Margin</span>
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min="-60"
+                                      max="350"
+                                      step="2"
+                                      value={sig.marginRight || 0}
+                                      onChange={(e) => handleUpdateDoctorSig(sigIndex, { marginRight: Number(e.target.value) })}
+                                      className="w-16 px-1.5 py-0.5 text-right font-mono text-[11px] rounded bg-muted/40 border border-border text-primary font-bold focus:border-primary outline-none"
+                                    />
+                                    <span className="text-[10px] text-muted-foreground">px</span>
+                                  </div>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="-60"
+                                  max="350"
+                                  step="2"
+                                  value={sig.marginRight || 0}
+                                  onChange={(e) => handleUpdateDoctorSig(sigIndex, { marginRight: Number(e.target.value) })}
+                                  className="w-full accent-primary cursor-pointer"
+                                />
+                                <p className="text-[9.5px] text-muted-foreground leading-tight">
+                                  Horizontal offset from right edge.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                })}
+
+                {/* Button to add another doctor signature */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleAddDoctorSig}
+                    className="w-full py-3.5 rounded-2xl border-2 border-dashed border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10 text-primary font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <PlusCircle className="h-4 w-4" />
+                    <span>+ Add Another Doctor / Pathologist Signature</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* TAB 3: BILLS LAYOUT */}
       {activeTab === "bills-layout" && (
@@ -2529,6 +3246,11 @@ function SettingsContent() {
       {/* TAB 4: MACHINE INTEGRATION & LIVE HUB */}
       {activeTab === "machine-integration" && (
         <MachineIntegrationTab />
+      )}
+
+      {/* TAB 5: COLLECTION CENTERS & B2B FRANCHISES */}
+      {activeTab === "collection-centers" && (
+        <CollectionCentersTab />
       )}
 
       {/* Add Signature Dialog Modal */}

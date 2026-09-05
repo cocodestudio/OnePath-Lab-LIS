@@ -10,7 +10,8 @@ import {
   ChevronDown, ChevronRight, PlusCircle, Edit2, Trash2, UserCheck, Building, Sparkles,
   Percent, DollarSign, Receipt, RefreshCw, X, Check,
   Mail, Shield, CreditCard, Building2, Calendar, CheckSquare, RotateCcw,
-  ClipboardList, Asterisk, Activity, Scale, Ruler, HeartPulse, ShieldCheck, Tag
+  ClipboardList, Asterisk, Activity, Scale, Ruler, HeartPulse, ShieldCheck, Tag, Clock,
+  Banknote, QrCode, Globe, Wallet
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -18,7 +19,7 @@ import {
 import {
   Dialog, DialogContent, DialogTitle
 } from "@/components/ui/dialog";
-import { fetchFromLaravel } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import {
   ALL_DESIGNATIONS,
   DEFAULT_INTAKE_FIELDS,
@@ -50,6 +51,7 @@ function RegisterPatientPage() {
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
   const [existingReport, setExistingReport] = useState<any>(null);
   const [existingBill, setExistingBill] = useState<any>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
 
   // Dynamic Intake Field Rules State
   const [intakeFields, setIntakeFields] = useState<IntakeFieldConfig[]>(DEFAULT_INTAKE_FIELDS);
@@ -116,6 +118,20 @@ function RegisterPatientPage() {
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [labInfo, setLabInfo] = useState<any>(null);
   const registerPrintRef = useRef<HTMLDivElement>(null);
+
+  // Collection Center Specific Fields & PayU Gate
+  const [sampleBarcode, setSampleBarcode] = useState("");
+  const [collectionDateTime, setCollectionDateTime] = useState(() => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 16);
+  });
+  const [isApprovingPayment, setIsApprovingPayment] = useState(false);
+  const [isPayUModalOpen, setIsPayUModalOpen] = useState(false);
+  const [payULoading, setPayULoading] = useState(false);
+  const [selectedPaymentMode, setSelectedPaymentMode] = useState<"CASH" | "UPI" | "ONLINE" | "CARD" | "UNPAID">("UNPAID");
+  const [isUpdatingPaymentMode, setIsUpdatingPaymentMode] = useState(false);
+  const [paymentUpdateMessage, setPaymentUpdateMessage] = useState<string | null>(null);
 
   // Booking & Test Selection State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -206,6 +222,15 @@ function RegisterPatientPage() {
   };
 
   useEffect(() => {
+    const storedUser = getStoredUser();
+    if (storedUser) {
+      setCurrentUserRole(storedUser.role || "STAFF");
+      if (storedUser.role === "COLLECTION_CENTER" && storedUser.name) {
+        setCollectedAtSelect(storedUser.name);
+        setCollectedBySelect(storedUser.name);
+      }
+    }
+
     const savedIntake = localStorage.getItem("lis_intake_fields");
     if (savedIntake) {
       try {
@@ -676,6 +701,8 @@ function RegisterPatientPage() {
       const assignedPatientCustomId = newPatient.customId || (newPatient as any).custom_id || "";
 
       setBookingSuccess(true);
+      setSelectedPaymentMode(computedStatus === "PAID" ? "CASH" : "UNPAID");
+      setPaymentUpdateMessage(null);
       setSuccessDetails({
         patientCustomId: assignedPatientCustomId,
         billCustomId: assignedBillCustomId,
@@ -712,10 +739,20 @@ function RegisterPatientPage() {
     setAgeDays("");
     setGender("Male");
     setPhone("");
-    setRefDoctorSelect("Self");
+    setEmail("");
     setAddress("");
+    setRefDoctorSelect("Self");
     setCollectedAtSelect("Main Lab");
     setCollectedBySelect("Self / Lab Staff");
+    setAadhaarNo("");
+    setHfrId("");
+    setUhid("");
+    setInsuranceNo("");
+    setTpa("");
+    setPassportNumber("");
+    setCorporateName("");
+    setCorporatePlan("");
+    setGovPanel("");
     setRegistering(false);
     setRegisterError(null);
     setNewPatient(null);
@@ -726,6 +763,105 @@ function RegisterPatientPage() {
     setBookingSuccess(false);
     setSuccessDetails(null);
     setIsPrintModalOpen(false);
+    setSampleBarcode("");
+    setSelectedPaymentMode("UNPAID");
+    setPaymentUpdateMessage(null);
+  };
+
+  const handleApproveCashPayment = async () => {
+    if (!successDetails?.billId) return;
+    try {
+      setIsApprovingPayment(true);
+      await fetchFromLaravel(`/bills/${successDetails.billId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          status: "PAID",
+          paid_amount: successDetails.total,
+        }),
+      });
+      setSuccessDetails((prev: any) => ({
+        ...prev,
+        balanceDue: 0,
+        paidAmount: prev.total,
+        paymentStatus: "PAID",
+      }));
+    } catch (err: any) {
+      console.error("Payment approval error:", err);
+    } finally {
+      setIsApprovingPayment(false);
+    }
+  };
+
+  const handleApplyPaymentMode = async (mode: "CASH" | "UPI" | "ONLINE" | "CARD" | "UNPAID") => {
+    setSelectedPaymentMode(mode);
+    if (!successDetails?.billId) return;
+
+    try {
+      setIsUpdatingPaymentMode(true);
+      setPaymentUpdateMessage(null);
+      const isPaid = mode !== "UNPAID";
+      const paidAmount = isPaid ? successDetails.total : 0;
+      const balanceDue = isPaid ? 0 : successDetails.total;
+      const status = isPaid ? "PAID" : "UNPAID";
+
+      await fetchFromLaravel(`/bills/${successDetails.billId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          status,
+          paid_amount: paidAmount,
+          payment_mode: mode,
+        }),
+      });
+
+      setSuccessDetails((prev: any) => ({
+        ...prev,
+        paidAmount,
+        balanceDue,
+        paymentStatus: status,
+        paymentMode: mode,
+      }));
+
+      setPaymentUpdateMessage(
+        isPaid
+          ? `Payment mode set to ${mode} and verified as PAID.`
+          : `Payment status set to UNPAID. Patient report download will require PayU payment on portal.`
+      );
+      setTimeout(() => setPaymentUpdateMessage(null), 4000);
+    } catch (err: any) {
+      console.error("Error updating payment mode:", err);
+    } finally {
+      setIsUpdatingPaymentMode(false);
+    }
+  };
+
+  const handlePayUSuccess = async () => {
+    if (!successDetails?.billId) return;
+    try {
+      setPayULoading(true);
+      await fetchFromLaravel(`/bills/${successDetails.billId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          status: "PAID",
+          paid_amount: successDetails.total,
+          payment_mode: "ONLINE_PAYU",
+        }),
+      });
+      setSuccessDetails((prev: any) => ({
+        ...prev,
+        balanceDue: 0,
+        paidAmount: prev.total,
+        paymentStatus: "PAID",
+        paymentMode: "ONLINE_PAYU",
+      }));
+      setSelectedPaymentMode("ONLINE");
+      setIsPayUModalOpen(false);
+      setPaymentUpdateMessage("Online PayU transaction verified & settled!");
+      setTimeout(() => setPaymentUpdateMessage(null), 4000);
+    } catch (err: any) {
+      console.error("PayU settlement error:", err);
+    } finally {
+      setPayULoading(false);
+    }
   };
 
   // Grouping & Filtering Tests
@@ -1228,6 +1364,45 @@ function RegisterPatientPage() {
                           <span>Manage Staff</span>
                         </button>
                       </div>
+                    )}
+
+                    {/* Collection Center Specific: Vial Barcode & Collection Time */}
+                    {currentUserRole === "COLLECTION_CENTER" && (
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider flex items-center justify-between">
+                            <span>Vial Barcode / Sample ID</span>
+                            <span className="text-[10px] text-primary font-mono font-bold">SCANNER ON</span>
+                          </label>
+                          <div className="relative">
+                            <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
+                            <input
+                              type="text"
+                              className="w-full pl-10 pr-4 h-11 bg-background border-2 border-primary/40 focus:border-primary rounded-xl text-sm placeholder:text-muted-foreground/50 focus:ring-2 focus:ring-primary/20 outline-none text-foreground font-mono font-bold transition-all shadow-2xs"
+                              placeholder="Scan or enter barcode"
+                              value={sampleBarcode}
+                              onChange={(e) => setSampleBarcode(e.target.value)}
+                              disabled={registering || (!!newPatient && !isEditMode)}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                            Collection Date & Time
+                          </label>
+                          <div className="relative">
+                            <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
+                            <input
+                              type="datetime-local"
+                              className="w-full pl-10 pr-4 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-xs font-semibold focus:border-zinc-900 dark:focus:border-white focus:ring-1 outline-none text-foreground transition-all shadow-2xs"
+                              value={collectionDateTime}
+                              onChange={(e) => setCollectionDateTime(e.target.value)}
+                              disabled={registering || (!!newPatient && !isEditMode)}
+                            />
+                          </div>
+                        </div>
+                      </>
                     )}
 
                   </div>
@@ -1841,24 +2016,43 @@ function RegisterPatientPage() {
                     <ArrowRight className="h-4 w-4 text-primary group-hover:translate-x-0.5 transition-transform" />
                   </button>
 
-                  {/* Action 2: Enter Diagnostic Results */}
-                  <Link href={`/dashboard/reports/${successDetails?.reportId}/edit`} className="block">
+                  {/* Action 2: Enter Diagnostic Results (Admin/Tech) OR Register Next Sample (Collection Center) */}
+                  {currentUserRole === "COLLECTION_CENTER" ? (
                     <button
                       type="button"
+                      onClick={handleResetFlow}
                       className="w-full p-3.5 rounded-xl gradient-primary text-primary-foreground transition-all flex items-center justify-between group shadow-md hover:-translate-y-0.5 cursor-pointer ring-inset-top"
                     >
                       <div className="flex items-center gap-3 text-left">
                         <div className="h-10 w-10 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                          <FileText className="h-5 w-5" />
+                          <PlusCircle className="h-5 w-5" />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-white">Enter Test Results</p>
-                          <p className="text-[10px] text-white/80">Input test values & authorize report</p>
+                          <p className="text-xs font-bold text-white">Register Next Sample</p>
+                          <p className="text-[10px] text-white/80">Intake next patient for testing</p>
                         </div>
                       </div>
                       <ArrowRight className="h-4 w-4 text-white group-hover:translate-x-0.5 transition-transform" />
                     </button>
-                  </Link>
+                  ) : (
+                    <Link href={`/dashboard/reports/${successDetails?.reportId}/edit`} className="block">
+                      <button
+                        type="button"
+                        className="w-full p-3.5 rounded-xl gradient-primary text-primary-foreground transition-all flex items-center justify-between group shadow-md hover:-translate-y-0.5 cursor-pointer ring-inset-top"
+                      >
+                        <div className="flex items-center gap-3 text-left">
+                          <div className="h-10 w-10 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                            <FileText className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-white">Enter Test Results</p>
+                            <p className="text-[10px] text-white/80">Input test values & authorize report</p>
+                          </div>
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-white group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+                    </Link>
+                  )}
                 </div>
               </div>
 
@@ -1885,6 +2079,193 @@ function RegisterPatientPage() {
             </div>
 
           </div>
+
+          {/* Full-Width Payment Gateway & Settlement Selector */}
+          <div className="bg-card border border-border/90 rounded-2xl p-6 shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground shadow-sm">
+                  <CreditCard className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-base font-bold text-foreground">
+                    Payment Gateway
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Select payment method for this invoice. Click any mode to select or change status at any time.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground font-semibold">Payment Status:</span>
+                <span className={`text-xs font-extrabold px-3 py-1 rounded-full ${
+                  (successDetails?.balanceDue || 0) <= 0
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                    : "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                }`}>
+                  {(successDetails?.balanceDue || 0) <= 0 ? "PAID FULL (Cleared)" : `₹${(successDetails?.balanceDue || 0).toFixed(2)} UNPAID (Due)`}
+                </span>
+              </div>
+            </div>
+
+            {/* Dynamic Status / Notification Message */}
+            {paymentUpdateMessage && (
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2 animate-fade-in">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                <span>{paymentUpdateMessage}</span>
+              </div>
+            )}
+
+            {/* Grid of 5 Selectable Payment Options */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              {/* Option 1: Cash */}
+              <button
+                type="button"
+                onClick={() => handleApplyPaymentMode("CASH")}
+                disabled={isUpdatingPaymentMode}
+                className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
+                  selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-9 w-9 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <Banknote className="h-5 w-5" />
+                  </div>
+                  {selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0 && (
+                    <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                      <Check className="h-3 w-3" />
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <p className="font-bold text-xs text-foreground">Cash</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Physical cash at counter</p>
+                </div>
+              </button>
+
+              {/* Option 2: Online (PayU) */}
+              <button
+                type="button"
+                onClick={() => handleApplyPaymentMode("ONLINE")}
+                disabled={isUpdatingPaymentMode}
+                className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
+                  selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-9 w-9 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                    <Globe className="h-5 w-5" />
+                  </div>
+                  {selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0 && (
+                    <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                      <Check className="h-3 w-3" />
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <p className="font-bold text-xs text-foreground">Online (PayU)</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">PayU gateway modal / link</p>
+                </div>
+              </button>
+
+              {/* Option 3: UPI */}
+              <button
+                type="button"
+                onClick={() => handleApplyPaymentMode("UPI")}
+                disabled={isUpdatingPaymentMode}
+                className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
+                  selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-9 w-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                    <QrCode className="h-5 w-5" />
+                  </div>
+                  {selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0 && (
+                    <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                      <Check className="h-3 w-3" />
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <p className="font-bold text-xs text-foreground">UPI</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">GPay, PhonePe, Paytm QR</p>
+                </div>
+              </button>
+
+              {/* Option 4: Debit / Credit Card */}
+              <button
+                type="button"
+                onClick={() => handleApplyPaymentMode("CARD")}
+                disabled={isUpdatingPaymentMode}
+                className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
+                  selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-9 w-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                    <CreditCard className="h-5 w-5" />
+                  </div>
+                  {selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0 && (
+                    <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                      <Check className="h-3 w-3" />
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <p className="font-bold text-xs text-foreground">Debit / Credit Card</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Card swipe / POS terminal</p>
+                </div>
+              </button>
+
+              {/* Option 5: Unpaid / Pay Later */}
+              <button
+                type="button"
+                onClick={() => handleApplyPaymentMode("UNPAID")}
+                disabled={isUpdatingPaymentMode}
+                className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
+                  (successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID"
+                    ? "border-rose-500/50 bg-rose-500/5 ring-2 ring-rose-500/20"
+                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="h-9 w-9 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                    <Clock className="h-5 w-5" />
+                  </div>
+                  {((successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID") && (
+                    <span className="h-5 w-5 rounded-full bg-rose-500 text-white flex items-center justify-center text-[10px] font-bold">
+                      !
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3">
+                  <p className="font-bold text-xs text-foreground">Pay Later (Unpaid)</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Report download locked</p>
+                </div>
+              </button>
+            </div>
+
+            {/* Bottom Helper Bar */}
+            <div className="p-3.5 rounded-xl bg-muted/40 border border-border/70 flex items-center gap-2 text-xs">
+              <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
+              <span className="text-muted-foreground">
+                {(successDetails?.balanceDue || 0) <= 0
+                  ? `Payment of ₹${(successDetails?.total || 0).toFixed(2)} is approved and cleared. Report download is unlocked.`
+                  : `₹${(successDetails?.balanceDue || 0).toFixed(2)} is currently marked as Unpaid. Click any payment mode above to clear payment.`}
+              </span>
+            </div>
+          </div>
+
         </div>
       )}
 
@@ -2603,6 +2984,58 @@ function RegisterPatientPage() {
                     <span>Save Intake Rules</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* PayU Payment Gateway Modal */}
+      <Dialog open={isPayUModalOpen} onOpenChange={setIsPayUModalOpen}>
+        <DialogContent className="max-w-md bg-card border border-border/80 rounded-2xl p-6 shadow-2xl">
+          <DialogTitle className="font-display font-bold text-foreground flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-primary" />
+            <span>PayU Instant Collection Gate</span>
+          </DialogTitle>
+          <div className="space-y-4 pt-2">
+            <div className="p-4 rounded-xl bg-muted/40 border border-border/80 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Patient:</span>
+                <span className="font-bold text-foreground">{successDetails?.patientName}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Bill ID:</span>
+                <span className="font-mono font-bold text-foreground">{successDetails?.billCustomId}</span>
+              </div>
+              <div className="flex justify-between text-sm font-bold border-t border-border/60 pt-2">
+                <span>Amount to Collect:</span>
+                <span className="text-primary font-mono text-base font-extrabold">₹{(successDetails?.balanceDue || 0).toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/20 space-y-2 text-center">
+              <p className="text-xs font-bold text-foreground">PayU Sub-Merchant Settlement</p>
+              <p className="text-[11px] text-muted-foreground">
+                Payment settles directly into this center's registered bank account. UPI QR, GPay, PhonePe, Cards & NetBanking supported.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsPayUModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-border text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handlePayUSuccess}
+                disabled={payULoading}
+                className="px-5 py-2 rounded-xl gradient-primary text-primary-foreground text-xs font-bold shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                {payULoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                <span>Authorize & Clear via PayU</span>
               </button>
             </div>
           </div>

@@ -8,8 +8,7 @@ import {
 } from "lucide-react";
 import { ReportSheet } from "@/components/report-sheet";
 import { getCleanLetterheadUrl } from "@/lib/api-client";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
+import { useReactToPrint } from "react-to-print";
 
 export default function PublicReportVerificationPage() {
   const params = useParams();
@@ -232,7 +231,12 @@ export default function PublicReportVerificationPage() {
         printFooterHeight: lab.print_footer_height ?? lab.printFooterHeight ?? 95,
         printMarginLeft: lab.print_margin_left ?? lab.printMarginLeft ?? 32,
         printMarginRight: lab.print_margin_right ?? lab.printMarginRight ?? 32,
-      }
+        printWithLetterhead: lab.print_with_letterhead ?? lab.printWithLetterhead ?? (bg ? true : false),
+        report_settings: lab.report_settings || lab.reportSettings,
+        reportSettings: lab.report_settings || lab.reportSettings,
+      },
+      report_settings: lab.report_settings || lab.reportSettings,
+      reportSettings: lab.report_settings || lab.reportSettings,
     };
   }, [report, patient, lab, letterheadBase64]);
 
@@ -244,86 +248,21 @@ export default function PublicReportVerificationPage() {
       footerHeight: lab.print_footer_height ?? lab.printFooterHeight ?? 95,
       marginLeft: lab.print_margin_left ?? lab.printMarginLeft ?? 32,
       marginRight: lab.print_margin_right ?? lab.printMarginRight ?? 32,
-      printWithLetterhead: true,
+      printWithLetterhead: lab.print_with_letterhead ?? lab.printWithLetterhead ?? (bg ? true : false),
     };
   }, [lab, letterheadBase64]);
 
-  // Direct High-Resolution Exact PDF Download (100% Identical to Print Preview with Letterhead)
-  const handleDownloadPdf = async () => {
-    if (!printRef.current || isDownloading) return;
-    setIsDownloading(true);
+  // Native Vector PDF Download (Approach 1: Zero overlap, 100% Vector Quality)
+  const patientName = (patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+  const code = report?.custom_id || report?.customId || reportId;
 
-    try {
-      const pageEls = printRef.current.querySelectorAll<HTMLElement>(".report-print-page");
-      if (!pageEls || pageEls.length === 0) {
-        throw new Error("No report pages found to generate PDF.");
-      }
+  const handleNativePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: `Report_${patientName}_${code}`,
+  });
 
-      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
-      const pdfW = pdf.internal.pageSize.getWidth();  // 595.28 pt
-      const pdfH = pdf.internal.pageSize.getHeight(); // 841.89 pt
-
-      for (let i = 0; i < pageEls.length; i++) {
-        if (i > 0) pdf.addPage("a4", "portrait");
-
-        const canvas = await html2canvas(pageEls[i], {
-          scale: 2,           // 2x → 1588×2246px ultra-crisp resolution
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: "#ffffff",
-          logging: false,
-          width: 794,
-          height: 1123,
-          windowWidth: 794,
-          windowHeight: 1123,
-          imageTimeout: 25000,
-          onclone: (_doc, clonedEl) => {
-            // 1. Reset scale and positioning on the cloned page
-            clonedEl.style.transform = "none";
-            clonedEl.style.width = "794px";
-            clonedEl.style.height = "1123px";
-            clonedEl.style.position = "relative";
-            clonedEl.style.top = "0";
-            clonedEl.style.left = "0";
-            clonedEl.style.margin = "0";
-            clonedEl.style.overflow = "hidden";
-
-            // 2. Unconstrain parent card wrapper
-            if (clonedEl.parentElement) {
-              clonedEl.parentElement.style.width = "794px";
-              clonedEl.parentElement.style.height = "1123px";
-              clonedEl.parentElement.style.transform = "none";
-              clonedEl.parentElement.style.overflow = "visible";
-            }
-
-            // 3. Ensure letterhead background image is explicitly visible & positioned
-            const letterheadImg = clonedEl.querySelector<HTMLImageElement>(".letterhead-bg-img");
-            if (letterheadImg) {
-              letterheadImg.style.position = "absolute";
-              letterheadImg.style.inset = "0";
-              letterheadImg.style.width = "100%";
-              letterheadImg.style.height = "100%";
-              letterheadImg.style.display = "block";
-              letterheadImg.style.opacity = "1";
-              letterheadImg.style.zIndex = "0";
-            }
-          },
-        });
-
-        const imgData = canvas.toDataURL("image/jpeg", 0.96);
-        pdf.addImage(imgData, "JPEG", 0, 0, pdfW, pdfH, `page-${i}`, "FAST");
-      }
-
-      const patientName = (patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
-      const code = report?.custom_id || report?.customId || reportId;
-      const filename = `Report_${patientName}_${code}.pdf`;
-      pdf.save(filename);
-    } catch (err: any) {
-      console.error("PDF generation error:", err);
-      alert("PDF download failed. Please try again in a moment.");
-    } finally {
-      setIsDownloading(false);
-    }
+  const handleDownloadPdf = () => {
+    handleNativePrint();
   };
 
   const handleWhatsAppShare = () => {

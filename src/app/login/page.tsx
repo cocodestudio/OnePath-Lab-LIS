@@ -4,12 +4,13 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle, Lock, Mail, Loader2, FlaskConical, ShieldCheck,
-  Eye, EyeOff, ArrowRight, Microscope, Activity, Beaker,
+  Eye, EyeOff, ArrowRight, Microscope, Activity, Beaker, Building2
 } from "lucide-react";
 import { getAuthBaseUrl } from "@/lib/api-client";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [loginType, setLoginType] = useState<"ADMIN" | "COLLECTION_CENTER">("ADMIN");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -28,7 +29,7 @@ export default function LoginPage() {
       const res = await fetch(loginURL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: email.trim(), password, login_type: loginType }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -115,9 +116,43 @@ export default function LoginPage() {
               <span className="font-display text-xl font-semibold text-foreground tracking-tight">OnePath Lab</span>
             </div>
 
-            <div className="mb-8">
-              <h2 className="font-display text-[2rem] font-normal text-foreground leading-tight">Welcome back</h2>
-              <p className="text-sm text-muted-foreground mt-1.5">Sign in to your laboratory workspace</p>
+            <div className="mb-6">
+              <h2 className="font-display text-[2rem] font-normal text-foreground leading-tight">
+                {loginType === "ADMIN" ? "Welcome back" : "Collection Terminal"}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1.5">
+                {loginType === "ADMIN"
+                  ? "Sign in to your laboratory workspace"
+                  : "Sign in to your remote sample collection point"}
+              </p>
+            </div>
+
+            {/* Role Switcher Pill Tab */}
+            <div className="p-1 bg-muted/60 rounded-xl border border-border/80 grid grid-cols-2 gap-1 mb-6">
+              <button
+                type="button"
+                onClick={() => { setLoginType("ADMIN"); setError(null); }}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  loginType === "ADMIN"
+                    ? "bg-card text-foreground shadow-xs font-extrabold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <ShieldCheck className={`h-3.5 w-3.5 ${loginType === "ADMIN" ? "text-primary" : ""}`} />
+                <span>Lab Admin / Main</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setLoginType("COLLECTION_CENTER"); setError(null); }}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  loginType === "COLLECTION_CENTER"
+                    ? "bg-card text-foreground shadow-xs font-extrabold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Building2 className={`h-3.5 w-3.5 ${loginType === "COLLECTION_CENTER" ? "text-primary" : ""}`} />
+                <span>Collection Center</span>
+              </button>
             </div>
 
             {error && (
@@ -129,12 +164,15 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <label htmlFor="email" className="text-[13px] font-semibold text-foreground/80">Email address</label>
+                <label htmlFor="email" className="text-[13px] font-semibold text-foreground/80">
+                  {loginType === "ADMIN" ? "Email address" : "Staff User ID (Email)"}
+                </label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50 pointer-events-none" />
                   <input
                     id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                    disabled={loading} required placeholder="pathologist@lab.org"
+                    disabled={loading} required
+                    placeholder={loginType === "ADMIN" ? "pathologist@lab.org" : "center.branch@onepathlab.com"}
                     className="flex h-11 w-full rounded-lg border border-border bg-card/60 pl-10 pr-4 text-sm placeholder:text-muted-foreground/40 transition-all focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 focus:bg-card hover:border-border"
                   />
                 </div>
