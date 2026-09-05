@@ -3,7 +3,7 @@ import { FileText } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { getCleanLetterheadUrl } from "@/lib/api-client";
 import { BarcodeSVG } from "@/components/barcode-svg";
-import { normalizeReportSettings, type ReportLayoutSettings, defaultReportLayoutSettings, resolveSignatureUrl } from "@/lib/report-settings";
+import { normalizeReportSettings, type ReportLayoutSettings, defaultReportLayoutSettings, resolveSignatureUrl, type DoctorSignatureConfig } from "@/lib/report-settings";
 import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 
 interface Test { 
@@ -272,6 +272,108 @@ function getTestPriority(mainTestName: string, category?: string): number {
 
   // 7. General / Others
   return 70;
+}
+
+export function renderDoctorSignature(
+  sig: DoctorSignatureConfig,
+  globalShowSignatureOnly: boolean,
+  defaultAlign: "left" | "right" | "center" = "left"
+) {
+  const align = sig.alignment || defaultAlign;
+  const resolvedUrl = resolveSignatureUrl(sig.imageUrl);
+  const vertOffset = (sig.marginTop || 0) - (sig.marginBottom || 0);
+  const horizOffset = (sig.marginLeft || 0) - (sig.marginRight || 0);
+  const isImageOnly = Boolean(globalShowSignatureOnly || sig.showSignatureOnly);
+
+  return (
+    <div 
+      style={{
+        position: "relative",
+        marginTop: `${vertOffset}px`,
+        left: `${horizOffset}px`,
+        textAlign: align,
+      }}
+    >
+      {resolvedUrl ? (
+        <div 
+          className="inline-block"
+          style={{
+            width: `${sig.width || 130}px`,
+            marginBottom: "2px",
+          }}
+        >
+          <img
+            src={resolvedUrl}
+            alt={sig.name || "Doctor Signature"}
+            style={{
+              width: "100%",
+              height: "auto",
+              maxHeight: "75px",
+              objectFit: "contain",
+              display: "block",
+              marginLeft: align === "center" ? "auto" : (align === "right" ? "auto" : "0"),
+              marginRight: align === "center" ? "auto" : (align === "right" ? "0" : "auto"),
+            }}
+          />
+        </div>
+      ) : (
+        <div className={`w-32 border-b border-dashed border-zinc-400 mb-1 ${align === "right" ? "ml-auto" : align === "center" ? "mx-auto" : "mr-auto"}`} />
+      )}
+
+      {!isImageOnly && (
+        <>
+          <p className="font-bold text-zinc-900 leading-tight text-[10px]">
+            {sig.name}
+          </p>
+          <p className="text-[8.5px] text-zinc-600 leading-tight">
+            {sig.designation}
+          </p>
+          {sig.registrationNo && (
+            <p className="text-[7.5px] text-zinc-400 font-mono leading-tight">
+              {sig.registrationNo}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+export function renderSignaturesGrid(
+  signatureRows: Array<[DoctorSignatureConfig, DoctorSignatureConfig | undefined]>,
+  enabledSignatures: DoctorSignatureConfig[],
+  globalShowSignatureOnly: boolean
+) {
+  if (enabledSignatures.length === 0) return null;
+
+  if (enabledSignatures.length === 1 && signatureRows[0]?.[0]) {
+    const singleSig = signatureRows[0][0];
+    const align = singleSig.alignment || "right";
+    return (
+      <div 
+        className={`flex px-2 text-[10px] ${
+          align === "left" ? "justify-start" : align === "center" ? "justify-center" : "justify-end"
+        }`}
+      >
+        {renderDoctorSignature(singleSig, globalShowSignatureOnly, align)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-2 space-y-4">
+      {signatureRows.map((pair, rowIdx) => {
+        const leftSig = pair[0];
+        const rightSig = pair[1];
+        return (
+          <div key={rowIdx} className="flex items-start justify-between px-2 text-[10px]">
+            {leftSig ? renderDoctorSignature(leftSig, globalShowSignatureOnly, "left") : <div />}
+            {rightSig ? renderDoctorSignature(rightSig, globalShowSignatureOnly, "right") : <div />}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export function buildReportBlocks(
@@ -867,215 +969,50 @@ export function buildReportBlocks(
     signatureRows.push([enabledSignatures[i], enabledSignatures[i + 1]]);
   }
 
-  blocks.push({
-    key: "report-signatures-footer",
-    node: (
-      <div 
-        className="mt-4 pt-2 text-zinc-700 select-none"
-        style={{ 
-          fontFamily: 'Arial, "Segoe UI", Roboto, sans-serif',
-          pageBreakInside: 'avoid' 
-        }}
-      >
+  const printOnEveryPage = Boolean(
+    reportSettings.signatureSettings?.printOnEveryPage || reportSettings.signaturePrintOnEveryPage
+  );
+  const globalShowSignatureOnly = Boolean(
+    reportSettings.signatureSettings?.showSignatureOnly || reportSettings.showSignatureOnly
+  );
+
+  if (printOnEveryPage) {
+    // If printing signatures on every page, push only the end of report line into blocks flow
+    blocks.push({
+      key: "report-end-of-report-line",
+      node: (
         <div 
-          className="text-center font-bold text-zinc-400 uppercase tracking-widest pb-3"
-          style={{ fontSize: `${endConf.fontSize || 9}px` }}
+          className="mt-3 pt-2 text-center font-bold text-zinc-400 uppercase tracking-widest pb-1 select-none"
+          style={{ fontSize: `${endConf.fontSize || 9}px`, pageBreakInside: 'avoid' }}
         >
           {endConf.text || "*** END OF REPORT ***"}
         </div>
-
-        {/* Dynamic Multi-Doctor Signatures Grid (2 per row: Left & Right) */}
-        {enabledSignatures.length > 0 && (
-          <div className="pt-2 space-y-4">
-            {signatureRows.map((pair, rowIdx) => {
-              const leftSig = pair[0];
-              const rightSig = pair[1];
-
-              // If only 1 signature in total, respect its alignment
-              if (enabledSignatures.length === 1 && leftSig) {
-                const align = leftSig.alignment || "right";
-                const resolvedUrl = resolveSignatureUrl(leftSig.imageUrl);
-                const vertOffset = (leftSig.marginTop || 0) - (leftSig.marginBottom || 0);
-                const horizOffset = (leftSig.marginLeft || 0) - (leftSig.marginRight || 0);
-
-                return (
-                  <div 
-                    key={rowIdx} 
-                    className={`flex px-2 text-[10px] ${
-                      align === "left" ? "justify-start" : align === "center" ? "justify-center" : "justify-end"
-                    }`}
-                  >
-                    <div 
-                      style={{
-                        position: "relative",
-                        marginTop: `${vertOffset}px`,
-                        left: `${horizOffset}px`,
-                        textAlign: align,
-                      }}
-                    >
-                      {resolvedUrl ? (
-                        <div 
-                          className="inline-block"
-                          style={{
-                            width: `${leftSig.width || 130}px`,
-                            marginBottom: "2px",
-                          }}
-                        >
-                          <img
-                            src={resolvedUrl}
-                            alt={leftSig.name || "Doctor Signature"}
-                            style={{
-                              width: "100%",
-                              height: "auto",
-                              maxHeight: "75px",
-                              objectFit: "contain",
-                              display: "block",
-                              marginLeft: align === "center" ? "auto" : (align === "right" ? "auto" : "0"),
-                              marginRight: align === "center" ? "auto" : (align === "right" ? "0" : "auto"),
-                            }}
-                          />
-                        </div>
-                      ) : (
-                        <div className={`w-32 border-b border-dashed border-zinc-400 mb-1 ${align === "right" ? "ml-auto" : align === "center" ? "mx-auto" : "mr-auto"}`} />
-                      )}
-
-                      <p className="font-bold text-zinc-900 leading-tight text-[10px]">
-                        {leftSig.name}
-                      </p>
-                      <p className="text-[8.5px] text-zinc-600 leading-tight">
-                        {leftSig.designation}
-                      </p>
-                      {leftSig.registrationNo && (
-                        <p className="text-[7.5px] text-zinc-400 font-mono leading-tight">
-                          {leftSig.registrationNo}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-
-              return (
-                <div key={rowIdx} className="flex items-start justify-between px-2 text-[10px]">
-                  {/* Left Signature */}
-                  {leftSig ? (() => {
-                    const resolvedUrl = resolveSignatureUrl(leftSig.imageUrl);
-                    const align = leftSig.alignment || "left";
-                    const vertOffset = (leftSig.marginTop || 0) - (leftSig.marginBottom || 0);
-                    const horizOffset = (leftSig.marginLeft || 0) - (leftSig.marginRight || 0);
-                    return (
-                      <div 
-                        style={{
-                          position: "relative",
-                          marginTop: `${vertOffset}px`,
-                          left: `${horizOffset}px`,
-                          textAlign: align,
-                        }}
-                      >
-                        {resolvedUrl ? (
-                          <div 
-                            className="inline-block"
-                            style={{
-                              width: `${leftSig.width || 130}px`,
-                              marginBottom: "2px",
-                            }}
-                          >
-                            <img
-                              src={resolvedUrl}
-                              alt={leftSig.name || "Doctor Signature"}
-                              style={{
-                                width: "100%",
-                                height: "auto",
-                                maxHeight: "75px",
-                                objectFit: "contain",
-                                display: "block",
-                                marginLeft: align === "center" ? "auto" : (align === "right" ? "auto" : "0"),
-                                marginRight: align === "center" ? "auto" : (align === "right" ? "0" : "auto"),
-                              }}
-                            />
-                          </div>
-                        ) : (
-                          <div className={`w-32 border-b border-dashed border-zinc-400 mb-1 ${align === "right" ? "ml-auto" : align === "center" ? "mx-auto" : "mr-auto"}`} />
-                        )}
-
-                        <p className="font-bold text-zinc-900 leading-tight text-[10px]">
-                          {leftSig.name}
-                        </p>
-                        <p className="text-[8.5px] text-zinc-600 leading-tight">
-                          {leftSig.designation}
-                        </p>
-                        {leftSig.registrationNo && (
-                          <p className="text-[7.5px] text-zinc-400 font-mono leading-tight">
-                            {leftSig.registrationNo}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })() : <div />}
-
-                  {/* Right Signature */}
-                  {rightSig ? (() => {
-                    const resolvedUrl = resolveSignatureUrl(rightSig.imageUrl);
-                    const align = rightSig.alignment || "right";
-                    const vertOffset = (rightSig.marginTop || 0) - (rightSig.marginBottom || 0);
-                    const horizOffset = (rightSig.marginLeft || 0) - (rightSig.marginRight || 0);
-                    return (
-                      <div 
-                        style={{
-                          position: "relative",
-                          marginTop: `${vertOffset}px`,
-                          left: `${horizOffset}px`,
-                          textAlign: align,
-                        }}
-                      >
-                        {resolvedUrl ? (
-                          <div 
-                            className="inline-block"
-                            style={{
-                              width: `${rightSig.width || 130}px`,
-                              marginBottom: "2px",
-                            }}
-                          >
-                            <img
-                              src={resolvedUrl}
-                              alt={rightSig.name || "Doctor Signature"}
-                              style={{
-                                width: "100%",
-                                height: "auto",
-                                maxHeight: "75px",
-                                objectFit: "contain",
-                                display: "block",
-                                marginLeft: align === "center" ? "auto" : (align === "right" ? "auto" : "0"),
-                                marginRight: align === "center" ? "auto" : (align === "right" ? "0" : "auto"),
-                              }}
-                            />
-                          </div>
-                        ) : (
-                          <div className={`w-32 border-b border-dashed border-zinc-400 mb-1 ${align === "right" ? "ml-auto" : align === "center" ? "mx-auto" : "mr-auto"}`} />
-                        )}
-
-                        <p className="font-bold text-zinc-900 leading-tight text-[10px]">
-                          {rightSig.name}
-                        </p>
-                        <p className="text-[8.5px] text-zinc-600 leading-tight">
-                          {rightSig.designation}
-                        </p>
-                        {rightSig.registrationNo && (
-                          <p className="text-[7.5px] text-zinc-400 font-mono leading-tight">
-                            {rightSig.registrationNo}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })() : <div />}
-                </div>
-              );
-            })}
+      ),
+    });
+  } else {
+    // When unticked (default), signatures appear only on the last page at the end of report
+    blocks.push({
+      key: "report-signatures-footer",
+      node: (
+        <div 
+          className="mt-4 pt-2 text-zinc-700 select-none"
+          style={{ 
+            fontFamily: 'Arial, "Segoe UI", Roboto, sans-serif',
+            pageBreakInside: 'avoid' 
+          }}
+        >
+          <div 
+            className="text-center font-bold text-zinc-400 uppercase tracking-widest pb-3"
+            style={{ fontSize: `${endConf.fontSize || 9}px` }}
+          >
+            {endConf.text || "*** END OF REPORT ***"}
           </div>
-        )}
-      </div>
-    )
-  });
+
+          {enabledSignatures.length > 0 && renderSignaturesGrid(signatureRows, enabledSignatures, globalShowSignatureOnly)}
+        </div>
+      )
+    });
+  }
 
   return blocks;
 }
@@ -1124,39 +1061,69 @@ export const PaginatedReportPreview = React.forwardRef<
 
   const contentWidth = A4_W - effectiveSettings.marginLeft - effectiveSettings.marginRight;
   const usableH = A4_H - effectiveSettings.headerHeight - effectiveSettings.footerHeight;
-  const effectiveUsableH = usableH - (hidePatientBlock ? 0 : patientH);
   const bgImage = effectiveSettings.bgImage || null;
 
-  // Measure block heights at natural (unscaled) content width
-  React.useLayoutEffect(() => {
-    const next = blocks.map((_, i) => measureRefs.current[i]?.offsetHeight ?? 0);
-    setHeights(next);
-    if (patientMeasureRef.current) setPatientH(patientMeasureRef.current.offsetHeight);
-    const t = setTimeout(() => {
-      setHeights(blocks.map((_, i) => measureRefs.current[i]?.offsetHeight ?? 0));
-      if (patientMeasureRef.current) setPatientH(patientMeasureRef.current.offsetHeight);
-    }, 60);
-    return () => clearTimeout(t);
-  }, [blocks, contentWidth]);
-
-  // Extract enabled signatures to compute max user margin for smart pagination
-  const enabledSignaturesList = React.useMemo(() => {
+  // Extract report settings and enabled signatures
+  const reportSettings = React.useMemo(() => {
     const lab = (report.lab || {}) as any;
-    const reportSettings = normalizeReportSettings(
+    return normalizeReportSettings(
       lab.report_settings || lab.reportSettings || (report as any).report_settings || (report as any).reportSettings
     );
+  }, [report]);
+
+  const enabledSignaturesList = React.useMemo(() => {
     const sigs = Array.isArray(reportSettings.doctorSignatures) && reportSettings.doctorSignatures.length > 0
       ? reportSettings.doctorSignatures
       : (reportSettings.doctorSignature ? [reportSettings.doctorSignature] : []);
     return sigs.filter((s: any) => s.enabled);
-  }, [report]);
+  }, [reportSettings]);
+
+  const printOnEveryPage = Boolean(
+    reportSettings.signatureSettings?.printOnEveryPage || reportSettings.signaturePrintOnEveryPage
+  );
+  const globalShowSignatureOnly = Boolean(
+    reportSettings.signatureSettings?.showSignatureOnly || reportSettings.showSignatureOnly
+  );
+
+  const signatureRows = React.useMemo(() => {
+    const rows: Array<[typeof enabledSignaturesList[0], typeof enabledSignaturesList[0] | undefined]> = [];
+    for (let i = 0; i < enabledSignaturesList.length; i += 2) {
+      rows.push([enabledSignaturesList[i], enabledSignaturesList[i + 1]]);
+    }
+    return rows;
+  }, [enabledSignaturesList]);
+
+  const sigMeasureRef = React.useRef<HTMLDivElement | null>(null);
+  const [sigH, setSigH] = React.useState<number>(85);
 
   const maxUserMarginTop = React.useMemo(() => {
     if (!enabledSignaturesList.length) return 0;
     return Math.max(0, ...enabledSignaturesList.map((s: any) => Number(s.marginTop || 0)));
   }, [enabledSignaturesList]);
 
+  // Measure block heights at natural (unscaled) content width
+  React.useLayoutEffect(() => {
+    const next = blocks.map((_, i) => measureRefs.current[i]?.offsetHeight ?? 0);
+    setHeights(next);
+    if (patientMeasureRef.current) setPatientH(patientMeasureRef.current.offsetHeight);
+    if (sigMeasureRef.current) {
+      const mh = sigMeasureRef.current.offsetHeight;
+      if (mh > 0) setSigH(mh);
+    }
+    const t = setTimeout(() => {
+      setHeights(blocks.map((_, i) => measureRefs.current[i]?.offsetHeight ?? 0));
+      if (patientMeasureRef.current) setPatientH(patientMeasureRef.current.offsetHeight);
+      if (sigMeasureRef.current) {
+        const mh = sigMeasureRef.current.offsetHeight;
+        if (mh > 0) setSigH(mh);
+      }
+    }, 60);
+    return () => clearTimeout(t);
+  }, [blocks, contentWidth]);
+
   // Pack blocks into pages with Patient Block room on every page
+  const effectiveUsableH = usableH - (hidePatientBlock ? 0 : patientH) - (printOnEveryPage && enabledSignaturesList.length > 0 ? sigH : 0);
+
   const pages = React.useMemo(() => {
     if (heights.length !== blocks.length) return [blocks.map((_, i) => i)];
     const result: number[][] = [];
@@ -1261,6 +1228,11 @@ export const PaginatedReportPreview = React.forwardRef<
             {b.node}
           </div>
         ))}
+        {printOnEveryPage && enabledSignaturesList.length > 0 && (
+          <div ref={sigMeasureRef} className="text-zinc-900 pt-2">
+            {renderSignaturesGrid(signatureRows, enabledSignaturesList, globalShowSignatureOnly)}
+          </div>
+        )}
       </div>
 
       {/* Pages Container with Forwarded Ref */}
@@ -1310,7 +1282,7 @@ export const PaginatedReportPreview = React.forwardRef<
 
               {/* Content area */}
               <div
-                className="text-zinc-900"
+                className="text-zinc-900 flex flex-col justify-between"
                 style={{
                   position: "absolute",
                   top: effectiveSettings.headerHeight,
@@ -1322,10 +1294,19 @@ export const PaginatedReportPreview = React.forwardRef<
                   fontFamily: 'Arial, "Helvetica Neue", Helvetica, "Segoe UI", Roboto, sans-serif',
                 }}
               >
-                {!hidePatientBlock && <PatientInfoBlock report={report} />}
-                {pageBlockIdxs.map((bi) => (
-                  <div key={blocks[bi].key}>{blocks[bi].node}</div>
-                ))}
+                <div className="flex-1">
+                  {!hidePatientBlock && <PatientInfoBlock report={report} />}
+                  {pageBlockIdxs.map((bi) => (
+                    <div key={blocks[bi].key}>{blocks[bi].node}</div>
+                  ))}
+                </div>
+
+                {/* If printOnEveryPage is true, render signatures at the bottom of EVERY page */}
+                {printOnEveryPage && enabledSignaturesList.length > 0 && (
+                  <div className="mt-auto pt-2 shrink-0 select-none" style={{ pageBreakInside: 'avoid' }}>
+                    {renderSignaturesGrid(signatureRows, enabledSignaturesList, globalShowSignatureOnly)}
+                  </div>
+                )}
               </div>
             </div>
           </div>

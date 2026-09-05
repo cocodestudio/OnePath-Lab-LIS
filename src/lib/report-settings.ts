@@ -130,6 +130,7 @@ export interface DoctorSignatureConfig {
   marginBottom: number;
   marginLeft: number;
   marginRight: number;
+  showSignatureOnly?: boolean;
 }
 
 export function resolveSignatureUrl(url: string | null | undefined): string | null {
@@ -221,6 +222,12 @@ export interface ReportLayoutSettings {
   };
   doctorSignature: DoctorSignatureConfig;
   doctorSignatures: DoctorSignatureConfig[];
+  signatureSettings: {
+    printOnEveryPage: boolean;
+    showSignatureOnly: boolean;
+  };
+  signaturePrintOnEveryPage?: boolean;
+  showSignatureOnly?: boolean;
 }
 
 export const defaultReportLayoutSettings: ReportLayoutSettings = {
@@ -333,8 +340,15 @@ export const defaultReportLayoutSettings: ReportLayoutSettings = {
       marginBottom: 0,
       marginLeft: 0,
       marginRight: 0,
+      showSignatureOnly: false,
     }
   ],
+  signatureSettings: {
+    printOnEveryPage: false,
+    showSignatureOnly: false,
+  },
+  signaturePrintOnEveryPage: false,
+  showSignatureOnly: false,
 };
 
 export function normalizeReportSettings(raw: any): ReportLayoutSettings {
@@ -353,6 +367,7 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
     endingLine: { ...defaultReportLayoutSettings.endingLine },
     doctorSignature: { ...defaultReportLayoutSettings.doctorSignature },
     doctorSignatures: defaultReportLayoutSettings.doctorSignatures.map(s => ({ ...s })),
+    signatureSettings: { ...defaultReportLayoutSettings.signatureSettings },
   };
 
   if (raw.defaultDesignation || raw.default_designation) {
@@ -458,6 +473,9 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
       marginBottom: typeof rawSig.marginBottom === 'number' ? rawSig.marginBottom : (typeof rawSig.margin_bottom === 'number' ? rawSig.margin_bottom : 0),
       marginLeft: typeof rawSig.marginLeft === 'number' ? rawSig.marginLeft : (typeof rawSig.margin_left === 'number' ? rawSig.margin_left : 0),
       marginRight: typeof rawSig.marginRight === 'number' ? rawSig.marginRight : (typeof rawSig.margin_right === 'number' ? rawSig.margin_right : 0),
+      showSignatureOnly: rawSig.showSignatureOnly !== undefined 
+        ? !!rawSig.showSignatureOnly 
+        : (rawSig.show_signature_only !== undefined ? !!rawSig.show_signature_only : false),
     };
   };
 
@@ -470,6 +488,26 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
     res.doctorSignature = single;
     res.doctorSignatures = [single];
   }
+
+  const rawSigSettings = raw.signatureSettings || raw.signature_settings || {};
+  const printOnEveryPage = rawSigSettings.printOnEveryPage !== undefined
+    ? !!rawSigSettings.printOnEveryPage
+    : (raw.signaturePrintOnEveryPage !== undefined
+        ? !!raw.signaturePrintOnEveryPage
+        : (raw.signature_print_on_every_page !== undefined ? !!raw.signature_print_on_every_page : false));
+
+  const showSignatureOnly = rawSigSettings.showSignatureOnly !== undefined
+    ? !!rawSigSettings.showSignatureOnly
+    : (raw.showSignatureOnly !== undefined
+        ? !!raw.showSignatureOnly
+        : (raw.show_signature_only !== undefined ? !!raw.show_signature_only : false));
+
+  res.signatureSettings = {
+    printOnEveryPage,
+    showSignatureOnly,
+  };
+  res.signaturePrintOnEveryPage = printOnEveryPage;
+  res.showSignatureOnly = showSignatureOnly;
 
   return res;
 }

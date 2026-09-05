@@ -2222,6 +2222,74 @@ function SettingsContent() {
                 </button>
               </div>
 
+              {/* Signature Display & Printing Rules */}
+              <div className="p-4 rounded-2xl bg-muted/30 border border-border/80 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Sliders className="h-4 w-4 text-primary" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                    Signature Printing & Display Options
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  {/* Option 1: Print on every page */}
+                  <label className="flex items-start gap-3 p-3.5 rounded-xl border border-border/80 bg-background hover:bg-muted/40 cursor-pointer transition-all select-none group">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(layoutSettings.signatureSettings?.printOnEveryPage || layoutSettings.signaturePrintOnEveryPage)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setLayoutSettings(prev => ({
+                          ...prev,
+                          signatureSettings: {
+                            ...prev.signatureSettings,
+                            printOnEveryPage: checked,
+                          },
+                          signaturePrintOnEveryPage: checked,
+                        }));
+                      }}
+                      className="mt-0.5 h-4 w-4 rounded border-border text-primary accent-primary cursor-pointer shrink-0"
+                    />
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-foreground block group-hover:text-primary transition-colors">
+                        Signature Print on Every Page
+                      </span>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        When ticked, signatures appear at the bottom of <strong>every page</strong>. When unticked (default), signatures appear only on the <strong>last page</strong>.
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Option 2: Show signature image only */}
+                  <label className="flex items-start gap-3 p-3.5 rounded-xl border border-border/80 bg-background hover:bg-muted/40 cursor-pointer transition-all select-none group">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(layoutSettings.signatureSettings?.showSignatureOnly || layoutSettings.showSignatureOnly)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setLayoutSettings(prev => ({
+                          ...prev,
+                          signatureSettings: {
+                            ...prev.signatureSettings,
+                            showSignatureOnly: checked,
+                          },
+                          showSignatureOnly: checked,
+                        }));
+                      }}
+                      className="mt-0.5 h-4 w-4 rounded border-border text-primary accent-primary cursor-pointer shrink-0"
+                    />
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-foreground block group-hover:text-primary transition-colors">
+                        Show Signature Image Only
+                      </span>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        When ticked, only the <strong>signature image</strong> is printed on reports. Doctor name, degree/designation, and council registration number are hidden.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
               {/* List of Doctor Signatures */}
               <div className="space-y-6">
                 {(layoutSettings.doctorSignatures && layoutSettings.doctorSignatures.length > 0 ? layoutSettings.doctorSignatures : [layoutSettings.doctorSignature]).map((sig, sigIndex) => {
@@ -2251,7 +2319,17 @@ function SettingsContent() {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <label className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-background hover:bg-muted/40 cursor-pointer text-xs font-bold select-none" title="Only display signature image for this doctor (hide printed name & degree)">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(sig.showSignatureOnly)}
+                              onChange={(e) => handleUpdateDoctorSig(sigIndex, { showSignatureOnly: e.target.checked })}
+                              className="h-3.5 w-3.5 rounded border-border text-primary accent-primary cursor-pointer"
+                            />
+                            <span>Image Only</span>
+                          </label>
+
                           <label className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-border bg-background hover:bg-muted/40 cursor-pointer text-xs font-bold select-none">
                             <input
                               type="checkbox"
