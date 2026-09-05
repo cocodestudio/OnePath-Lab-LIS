@@ -42,8 +42,9 @@ export function SmoothScrolling({ children }: { children: ReactNode }) {
     document.body.scrollTop = 0;
   }, [pathname]);
 
-  // On mobile or before mount: skip Lenis entirely — native iOS/Android scroll is smoother
-  if (!mounted || isMobile) {
+  // On mobile, before mount, or inside dashboard (which has its own dedicated scroller): skip root Lenis
+  const isDashboard = Boolean(pathname?.startsWith("/dashboard"));
+  if (!mounted || isMobile || isDashboard) {
     return (
       <>
         <RouteScrollReset />

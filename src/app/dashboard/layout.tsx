@@ -1,6 +1,7 @@
 import Sidebar from "./sidebar-client";
 import Navbar from "./navbar";
 import SubscriptionGate from "@/components/subscription-gate";
+import { DashboardScroller } from "@/components/dashboard-scroller";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -8,9 +9,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Navbar />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto max-w-[1500px] px-4 sm:px-6 lg:px-8 py-7">{children}</div>
-        </main>
+        <DashboardScroller>
+          {children}
+        </DashboardScroller>
       </div>
       <SubscriptionGate />
     </div>
