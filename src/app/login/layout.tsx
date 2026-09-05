@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   description:
     "Secure login to OnePath Lab Information System. Access patient registration, test authoring, analyzer interfacing, billing, and report dispatch.",
   alternates: {
-    canonical: "https://app.onepathlab.com/login",
+    canonical: "https://lis.onepathlab.com/login",
   },
 };
 

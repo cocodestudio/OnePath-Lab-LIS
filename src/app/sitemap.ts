@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://app.onepathlab.com'
+  const baseUrl = 'https://lis.onepathlab.com'
   const currentDate = new Date()
 
   return [

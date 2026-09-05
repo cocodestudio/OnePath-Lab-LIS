@@ -4,4 +4,4 @@ Allow: /login
 Disallow: /dashboard/
 Disallow: /api/
 
-Sitemap: https://app.onepathlab.com/sitemap.xml
+Sitemap: https://lis.onepathlab.com/sitemap.xml

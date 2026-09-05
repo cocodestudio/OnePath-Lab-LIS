@@ -177,7 +177,7 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
 
   const baseUrl = typeof window !== "undefined" && window.location.origin
     ? window.location.origin
-    : "https://app.onepathlab.com";
+    : "https://lis.onepathlab.com";
   const reportIdentifier = report.id || report.customId || "";
   const qrValue = `${baseUrl}/r/${reportIdentifier}`;
 

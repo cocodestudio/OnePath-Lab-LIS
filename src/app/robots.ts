@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: ['/', '/login'],
       disallow: ['/dashboard/', '/api/'],
     },
-    sitemap: 'https://app.onepathlab.com/sitemap.xml',
+    sitemap: 'https://lis.onepathlab.com/sitemap.xml',
   }
 }

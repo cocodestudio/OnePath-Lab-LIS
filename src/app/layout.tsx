@@ -20,7 +20,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://app.onepathlab.com"),
+  metadataBase: new URL("https://lis.onepathlab.com"),
   title: {
     default: "OnePath Lab LIS — #1 AI-Powered Pathology Laboratory Information System",
     template: "%s | OnePath Lab LIS",
@@ -62,13 +62,13 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    canonical: "https://app.onepathlab.com",
+    canonical: "https://lis.onepathlab.com",
   },
   openGraph: {
     title: "OnePath Lab LIS — #1 AI-Powered Pathology Laboratory Information System",
     description:
       "Enterprise Cloud LIS for pathology and diagnostic centers. Automated analyzer interfacing, NABL compliance, digital signatures, and WhatsApp reports.",
-    url: "https://app.onepathlab.com",
+    url: "https://lis.onepathlab.com",
     siteName: "OnePath Lab LIS",
     locale: "en_IN",
     type: "website",
@@ -99,9 +99,9 @@ const jsonLd = {
   "@graph": [
     {
       "@type": "SoftwareApplication",
-      "@id": "https://app.onepathlab.com/#software",
+      "@id": "https://lis.onepathlab.com/#software",
       name: "OnePath Lab LIS",
-      url: "https://app.onepathlab.com",
+      url: "https://lis.onepathlab.com",
       applicationCategory: "HealthApplication, BusinessApplication",
       operatingSystem: "Web-based, Cloud, Windows, macOS, Linux, iOS, Android",
       softwareVersion: "3.4.0",
@@ -128,9 +128,9 @@ const jsonLd = {
     },
     {
       "@type": "MedicalOrganization",
-      "@id": "https://app.onepathlab.com/#organization",
+      "@id": "https://lis.onepathlab.com/#organization",
       name: "OnePath Lab Diagnostics & LIS",
-      url: "https://app.onepathlab.com",
+      url: "https://lis.onepathlab.com",
       logo: "https://onepathlab.com/logo.png",
       description:
         "Enterprise-grade Laboratory Information System (LIS) and diagnostic reporting software.",

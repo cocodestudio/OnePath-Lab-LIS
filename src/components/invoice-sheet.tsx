@@ -270,7 +270,7 @@ export const InvoiceSheet = React.forwardRef<
             <div className="shrink-0 flex flex-col items-center justify-center border-l border-zinc-200 pl-2.5 min-w-[65px]">
               <div className="bg-white p-0.5 rounded border border-zinc-300 shadow-2xs">
                 <QRCodeSVG
-                  value={invoice.reportId ? `https://app.onepathlab.com/r/${invoice.reportId}` : `https://app.onepathlab.com`}
+                  value={invoice.reportId ? `https://lis.onepathlab.com/r/${invoice.reportId}` : `https://lis.onepathlab.com`}
                   size={46}
                   level="M"
                   includeMargin={false}
