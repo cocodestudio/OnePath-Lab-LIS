@@ -90,12 +90,14 @@ export default function DashboardOverviewPage() {
     loadDashboardData();
   }, []);
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (forceRefresh = false) => {
     try {
-      setLoading(true);
+      if (forceRefresh || (!stats.totalPatients && !recentReports.length)) {
+        setLoading(true);
+      }
       const [analytics, reports] = await Promise.all([
-        fetchFromLaravel("/analytics"),
-        fetchFromLaravel("/reports"),
+        fetchFromLaravel("/analytics", { skipCache: forceRefresh }),
+        fetchFromLaravel("/reports", { skipCache: forceRefresh }),
       ]);
 
       const totReports = analytics?.totalReports ?? 0;
@@ -172,7 +174,7 @@ export default function DashboardOverviewPage() {
           <p className="text-sm text-muted-foreground mt-1">Here's what's happening today in your laboratory.</p>
         </div>
         <div className="flex gap-2.5">
-          <button onClick={loadDashboardData}
+          <button onClick={() => loadDashboardData(true)}
             className="flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-foreground text-xs font-semibold hover:bg-accent hover:text-accent-foreground transition-all cursor-pointer">
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </button>

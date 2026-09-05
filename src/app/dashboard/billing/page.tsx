@@ -159,11 +159,14 @@ export default function BillingPage() {
     fetchAvailableTests();
   }, []);
 
-  const fetchBills = async () => {
+  const fetchBills = async (forceRefresh?: boolean | any) => {
+    const isForce = forceRefresh === true;
     try {
-      setLoading(true);
+      if (isForce || bills.length === 0) {
+        setLoading(true);
+      }
       const [data, labRes] = await Promise.all([
-        fetchFromLaravel("/bills"),
+        fetchFromLaravel("/bills", { skipCache: isForce }),
         fetchFromLaravel("/lab").catch(() => null),
       ]);
       const billsList = Array.isArray(data) ? data : (data?.data || []);
@@ -171,7 +174,7 @@ export default function BillingPage() {
       if (labRes) setLabData(labRes);
     } catch (err) {
       console.error("Error fetching bills:", err);
-      setBills([]);
+      if (bills.length === 0) setBills([]);
     } finally {
       setLoading(false);
     }
@@ -396,7 +399,7 @@ export default function BillingPage() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={fetchBills}
+            onClick={() => fetchBills(true)}
             disabled={loading}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border/90 bg-card hover:bg-accent text-xs font-semibold text-foreground transition-all shadow-sm cursor-pointer"
           >

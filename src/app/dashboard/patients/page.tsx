@@ -146,15 +146,18 @@ export default function PatientsPage() {
     } catch (e) {}
   }, []);
 
-  const fetchPatients = async () => {
+  const fetchPatients = async (forceRefresh?: boolean | any) => {
+    const isForce = forceRefresh === true;
     try {
-      setLoading(true);
-      const data = await fetchFromLaravel("/patients");
+      if (isForce || patients.length === 0) {
+        setLoading(true);
+      }
+      const data = await fetchFromLaravel("/patients", { skipCache: isForce });
       const list = Array.isArray(data) ? data : (data?.data || []);
       setPatients(list);
     } catch (err) {
       console.error("Failed to fetch patients:", err);
-      setPatients([]);
+      if (patients.length === 0) setPatients([]);
     } finally {
       setLoading(false);
     }

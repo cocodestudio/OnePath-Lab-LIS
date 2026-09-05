@@ -257,10 +257,13 @@ export default function TestMasterPage() {
       .catch(() => {});
   }, []);
 
-  const fetchTests = async () => {
+  const fetchTests = async (forceRefresh?: boolean | any) => {
+    const isForce = forceRefresh === true;
     try {
-      setLoading(true);
-      const data = await fetchFromLaravel("/tests");
+      if (isForce || tests.length === 0) {
+        setLoading(true);
+      }
+      const data = await fetchFromLaravel("/tests", { skipCache: isForce });
       setTests(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed to fetch tests:", err);

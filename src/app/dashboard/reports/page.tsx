@@ -66,15 +66,18 @@ export default function ReportsListPage() {
     fetchReports();
   }, []);
 
-  const fetchReports = async () => {
+  const fetchReports = async (forceRefresh?: boolean | any) => {
+    const isForce = forceRefresh === true;
     try {
-      setLoading(true);
-      const data = await fetchFromLaravel("/reports");
+      if (isForce || reports.length === 0) {
+        setLoading(true);
+      }
+      const data = await fetchFromLaravel("/reports", { skipCache: isForce });
       const list = Array.isArray(data) ? data : (data?.data || []);
       setReports(list);
     } catch (err) {
       console.error("Error fetching reports:", err);
-      setReports([]);
+      if (reports.length === 0) setReports([]);
     } finally {
       setLoading(false);
     }

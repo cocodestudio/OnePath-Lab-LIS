@@ -20,10 +20,13 @@ export default function TodaySamplesPage() {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (forceRefresh?: boolean | any) => {
+    const isForce = forceRefresh === true;
     try {
-      setLoading(true);
-      const res = await fetchFromLaravel("/reports").catch(() => []);
+      if (isForce || reports.length === 0) {
+        setLoading(true);
+      }
+      const res = await fetchFromLaravel("/reports", { skipCache: isForce }).catch(() => []);
       const repList = Array.isArray(res) ? res : (res?.data || []);
       setReports(repList);
     } catch (err) {
