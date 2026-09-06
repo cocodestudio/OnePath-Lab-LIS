@@ -1,12 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import Link from "next/link";
 import {
-  Search, RefreshCw, IndianRupee, Tag, Check, Filter,
-  ChevronLeft, ChevronRight, Edit3, ArrowUpDown, ShieldCheck,
-  Building2, Layers, AlertCircle, Printer, Sparkles, X, CheckCircle2,
-  Lock, Percent
+  Search, RefreshCw, IndianRupee, Filter,
+  ChevronLeft, ChevronRight, Edit3, ArrowUpDown,
+  Layers, X, CheckCircle2, Percent, Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,10 +24,18 @@ interface RateTest {
   price?: number;
   b2b_price?: number;
   b2bPrice?: number;
+  b2b_price_high?: number;
+  b2bPriceHigh?: number;
+  b2b_price_medium?: number;
+  b2bPriceMedium?: number;
+  b2b_price_low?: number;
+  b2bPriceLow?: number;
   type?: string;
   method?: string;
   sort_order?: number;
 }
+
+type TierFilter = "ALL" | "LOW" | "MEDIUM" | "HIGH";
 
 export default function RateListPage() {
   const toast = useToast();
@@ -40,7 +46,8 @@ export default function RateListPage() {
   // Search & Filter
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("ALL");
-  const [sortField, setSortField] = useState<"name" | "price" | "b2bPrice">("name");
+  const [selectedTier, setSelectedTier] = useState<TierFilter>("ALL");
+  const [sortField, setSortField] = useState<"name" | "price" | "b2bLow" | "b2bMed" | "b2bHigh">("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   // Pagination
@@ -50,7 +57,9 @@ export default function RateListPage() {
   // Admin Edit Modal
   const [editingTest, setEditingTest] = useState<RateTest | null>(null);
   const [editMrp, setEditMrp] = useState<string>("");
-  const [editB2b, setEditB2b] = useState<string>("");
+  const [editB2bLow, setEditB2bLow] = useState<string>("");
+  const [editB2bMed, setEditB2bMed] = useState<string>("");
+  const [editB2bHigh, setEditB2bHigh] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -107,9 +116,15 @@ export default function RateListPage() {
       } else if (sortField === "price") {
         valA = Number(a.price || 0);
         valB = Number(b.price || 0);
-      } else if (sortField === "b2bPrice") {
-        valA = Number(a.b2b_price ?? a.b2bPrice ?? 0);
-        valB = Number(b.b2b_price ?? b.b2bPrice ?? 0);
+      } else if (sortField === "b2bLow") {
+        valA = Number(a.b2b_price_low ?? a.b2bPriceLow ?? 0);
+        valB = Number(b.b2b_price_low ?? b.b2bPriceLow ?? 0);
+      } else if (sortField === "b2bMed") {
+        valA = Number(a.b2b_price_medium ?? a.b2bPriceMedium ?? a.b2b_price ?? a.b2bPrice ?? 0);
+        valB = Number(b.b2b_price_medium ?? b.b2bPriceMedium ?? b.b2b_price ?? b.b2bPrice ?? 0);
+      } else if (sortField === "b2bHigh") {
+        valA = Number(a.b2b_price_high ?? a.b2bPriceHigh ?? 0);
+        valB = Number(b.b2b_price_high ?? b.b2bPriceHigh ?? 0);
       }
       if (valA < valB) return sortOrder === "asc" ? -1 : 1;
       if (valA > valB) return sortOrder === "asc" ? 1 : -1;
@@ -127,58 +142,57 @@ export default function RateListPage() {
     return filteredTests.slice(start, start + pageSize);
   }, [filteredTests, currentPage, pageSize]);
 
-  // Overall Stats
-  const testsWithB2B = useMemo(() => {
-    return tests.filter((t) => {
-      const b2b = Number(t.b2b_price ?? t.b2bPrice ?? 0);
-      return b2b > 0;
-    }).length;
-  }, [tests]);
-
-  const avgDiscount = useMemo(() => {
-    let totalDisc = 0;
-    let count = 0;
-    tests.forEach((t) => {
-      const mrp = Number(t.price || 0);
-      const b2b = Number(t.b2b_price ?? t.b2bPrice ?? 0);
-      if (mrp > 0 && b2b > 0 && mrp >= b2b) {
-        totalDisc += ((mrp - b2b) / mrp) * 100;
-        count++;
-      }
-    });
-    return count > 0 ? Math.round(totalDisc / count) : 0;
-  }, [tests]);
-
   // Open Edit Modal
   const handleOpenEdit = (test: RateTest) => {
     if (!isAdmin) return;
     setEditingTest(test);
     setEditMrp((test.price ?? 0).toString());
-    const existingB2b = test.b2b_price ?? test.b2bPrice;
-    setEditB2b(existingB2b !== undefined && existingB2b !== null ? existingB2b.toString() : "");
+
+    // Low
+    const low = test.b2b_price_low ?? test.b2bPriceLow;
+    setEditB2bLow(low !== undefined && low !== null ? low.toString() : "");
+
+    // Medium (fall back to b2b_price if medium not explicitly set)
+    const med = test.b2b_price_medium ?? test.b2bPriceMedium ?? test.b2b_price ?? test.b2bPrice;
+    setEditB2bMed(med !== undefined && med !== null ? med.toString() : "");
+
+    // High
+    const high = test.b2b_price_high ?? test.b2bPriceHigh;
+    setEditB2bHigh(high !== undefined && high !== null ? high.toString() : "");
   };
 
-  // Quick Preset Handlers
-  const handleApplyPreset = (percentOfMrp: number) => {
+  // 1-Click Multi-Tier Presets (sets Low, Medium, High at once)
+  const handleApplyMultiPreset = (lowPct: number, medPct: number, highPct: number) => {
     const mrpNum = parseFloat(editMrp) || 0;
     if (mrpNum <= 0) return;
-    const calc = Math.round((mrpNum * percentOfMrp) / 100);
-    setEditB2b(calc.toString());
+    setEditB2bLow(Math.round((mrpNum * lowPct) / 100).toString());
+    setEditB2bMed(Math.round((mrpNum * medPct) / 100).toString());
+    setEditB2bHigh(Math.round((mrpNum * highPct) / 100).toString());
   };
 
   // Save Rate Update (Admin only)
   const handleSaveRate = async () => {
     if (!editingTest) return;
     const mrpNum = parseFloat(editMrp);
-    const b2bNum = editB2b.trim() === "" ? null : parseFloat(editB2b);
+    const lowNum = editB2bLow.trim() === "" ? null : parseFloat(editB2bLow);
+    const medNum = editB2bMed.trim() === "" ? null : parseFloat(editB2bMed);
+    const highNum = editB2bHigh.trim() === "" ? null : parseFloat(editB2bHigh);
 
     if (isNaN(mrpNum) || mrpNum < 0) {
       toast.error("Invalid MRP", "Please enter a valid MRP price greater than or equal to 0.");
       return;
     }
 
-    if (b2bNum !== null && (isNaN(b2bNum) || b2bNum < 0)) {
-      toast.error("Invalid B2B Price", "B2B rate must be a valid non-negative number.");
+    if (lowNum !== null && (isNaN(lowNum) || lowNum < 0)) {
+      toast.error("Invalid Low Rate", "Low tier rate must be a non-negative number.");
+      return;
+    }
+    if (medNum !== null && (isNaN(medNum) || medNum < 0)) {
+      toast.error("Invalid Medium Rate", "Medium tier rate must be a non-negative number.");
+      return;
+    }
+    if (highNum !== null && (isNaN(highNum) || highNum < 0)) {
+      toast.error("Invalid High Rate", "High tier rate must be a non-negative number.");
       return;
     }
 
@@ -189,8 +203,14 @@ export default function RateListPage() {
         method: "PUT",
         body: JSON.stringify({
           price: mrpNum,
-          b2b_price: b2bNum,
-          b2bPrice: b2bNum,
+          b2b_price: medNum,
+          b2bPrice: medNum,
+          b2b_price_low: lowNum,
+          b2bPriceLow: lowNum,
+          b2b_price_medium: medNum,
+          b2bPriceMedium: medNum,
+          b2b_price_high: highNum,
+          b2bPriceHigh: highNum,
         }),
       });
 
@@ -198,7 +218,18 @@ export default function RateListPage() {
       setTests((prev) =>
         prev.map((t) =>
           t.id === editingTest.id
-            ? { ...t, price: mrpNum, b2b_price: b2bNum ?? undefined, b2bPrice: b2bNum ?? undefined }
+            ? {
+                ...t,
+                price: mrpNum,
+                b2b_price: medNum ?? undefined,
+                b2bPrice: medNum ?? undefined,
+                b2b_price_low: lowNum ?? undefined,
+                b2bPriceLow: lowNum ?? undefined,
+                b2b_price_medium: medNum ?? undefined,
+                b2bPriceMedium: medNum ?? undefined,
+                b2b_price_high: highNum ?? undefined,
+                b2bPriceHigh: highNum ?? undefined,
+              }
             : t
         )
       );
@@ -213,10 +244,6 @@ export default function RateListPage() {
     }
   };
 
-  const handlePrintTariff = () => {
-    window.print();
-  };
-
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       {/* ── Page Header (Clean, No Card) ── */}
@@ -229,6 +256,11 @@ export default function RateListPage() {
               {totalItems} Tests
             </span>
           </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {isB2B
+              ? "Official wholesale diagnostic tariffs categorized by Low, Medium, and High partner tiers."
+              : "Manage retail MRP and configure High, Medium, and Low B2B wholesale rates across your catalogue."}
+          </p>
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0">
@@ -245,43 +277,59 @@ export default function RateListPage() {
         </div>
       </div>
 
-      {/* ── Stat Highlights (Admin only) ── */}
-      {!isB2B && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-4 rounded-xl bg-card border border-border/80 shadow-xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-muted-foreground uppercase">Total Catalogue Tests</p>
-              <p className="text-2xl font-extrabold text-foreground font-mono mt-0.5">{tests.length}</p>
-            </div>
-            <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-              <Layers className="h-5 w-5" />
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl bg-card border border-border/80 shadow-xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-muted-foreground uppercase">Tests with B2B Rates</p>
-              <p className="text-2xl font-extrabold text-purple-600 dark:text-purple-400 font-mono mt-0.5">{testsWithB2B}</p>
-            </div>
-            <div className="h-10 w-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-              <Building2 className="h-5 w-5" />
-            </div>
-          </div>
-
-          <div className="p-4 rounded-xl bg-card border border-border/80 shadow-xs flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold text-muted-foreground uppercase">Avg. Wholesale Margin</p>
-              <p className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">{avgDiscount}%</p>
-            </div>
-            <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <Percent className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Controls Deck (Search, Category Filter, Page Size) ── */}
+      {/* ── Tier Switcher & Filter Controls ── */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 print:hidden">
+        {/* Tier Selector Pills */}
+        <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border/80 shrink-0">
+          <button
+            type="button"
+            onClick={() => setSelectedTier("ALL")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              selectedTier === "ALL"
+                ? "bg-card text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            All 3 Tiers
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedTier("LOW")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              selectedTier === "LOW"
+                ? "bg-emerald-500 text-white shadow-xs"
+                : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+            }`}
+          >
+            <span className="h-2 w-2 rounded-full bg-emerald-400 inline-block" />
+            <span>Low Tier</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedTier("MEDIUM")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              selectedTier === "MEDIUM"
+                ? "bg-blue-600 text-white shadow-xs"
+                : "text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
+            }`}
+          >
+            <span className="h-2 w-2 rounded-full bg-blue-400 inline-block" />
+            <span>Medium Tier</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedTier("HIGH")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              selectedTier === "HIGH"
+                ? "bg-purple-600 text-white shadow-xs"
+                : "text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
+            }`}
+          >
+            <span className="h-2 w-2 rounded-full bg-purple-400 inline-block" />
+            <span>High Tier</span>
+          </button>
+        </div>
+
         {/* Search */}
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -302,17 +350,17 @@ export default function RateListPage() {
           )}
         </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full custom-scrollbar">
+        {/* Category Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full custom-scrollbar">
           <span className="text-[11px] font-bold text-muted-foreground flex items-center gap-1 shrink-0">
             <Filter className="h-3 w-3" /> Category:
           </span>
-          {categories.slice(0, 7).map((cat) => (
+          {categories.slice(0, 6).map((cat) => (
             <button
               key={cat}
               type="button"
               onClick={() => { setSelectedCategory(cat); setCurrentPage(1); }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
                 selectedCategory === cat
                   ? "bg-primary text-primary-foreground shadow-xs"
                   : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -347,47 +395,100 @@ export default function RateListPage() {
             <table className="w-full text-xs text-left border-collapse">
               <thead>
                 <tr className="border-b border-border/80 bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
-                  <th className="py-3.5 px-5 w-16">#</th>
-                  <th className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground" onClick={() => {
-                    if (sortField === "name") setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-                    else { setSortField("name"); setSortOrder("asc"); }
-                  }}>
+                  <th className="py-3.5 px-5 w-14">#</th>
+                  <th
+                    className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground"
+                    onClick={() => {
+                      if (sortField === "name") setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                      else { setSortField("name"); setSortOrder("asc"); }
+                    }}
+                  >
                     <div className="flex items-center gap-1.5">
                       <span>Test Investigation</span>
                       <ArrowUpDown className="h-3 w-3" />
                     </div>
                   </th>
-                  <th className="py-3.5 px-4">Category</th>
-                  <th className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground text-right" onClick={() => {
-                    if (sortField === "price") setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-                    else { setSortField("price"); setSortOrder("asc"); }
-                  }}>
+                  <th className="py-3.5 px-3">Category</th>
+                  <th
+                    className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground text-right"
+                    onClick={() => {
+                      if (sortField === "price") setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                      else { setSortField("price"); setSortOrder("asc"); }
+                    }}
+                  >
                     <div className="flex items-center justify-end gap-1.5">
-                      <span>MRP Rate (₹)</span>
+                      <span>MRP (₹)</span>
                       <ArrowUpDown className="h-3 w-3" />
                     </div>
                   </th>
-                  <th className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground text-right" onClick={() => {
-                    if (sortField === "b2bPrice") setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-                    else { setSortField("b2bPrice"); setSortOrder("asc"); }
-                  }}>
-                    <div className="flex items-center justify-end gap-1.5">
-                      <span className="text-purple-600 dark:text-purple-400 font-extrabold">B2B Rate (₹)</span>
-                      <ArrowUpDown className="h-3 w-3" />
-                    </div>
-                  </th>
-                  <th className="py-3.5 px-4 text-center">B2B Margin %</th>
+
+                  {/* Dynamic Tier Columns depending on selectedTier */}
+                  {(selectedTier === "ALL" || selectedTier === "LOW") && (
+                    <th
+                      className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground text-right"
+                      onClick={() => {
+                        if (sortField === "b2bLow") setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                        else { setSortField("b2bLow"); setSortOrder("asc"); }
+                      }}
+                    >
+                      <div className="flex items-center justify-end gap-1.5 text-emerald-600 dark:text-emerald-400 font-extrabold">
+                        <span>Low Tier (₹)</span>
+                        <ArrowUpDown className="h-3 w-3" />
+                      </div>
+                    </th>
+                  )}
+
+                  {(selectedTier === "ALL" || selectedTier === "MEDIUM") && (
+                    <th
+                      className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground text-right"
+                      onClick={() => {
+                        if (sortField === "b2bMed") setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                        else { setSortField("b2bMed"); setSortOrder("asc"); }
+                      }}
+                    >
+                      <div className="flex items-center justify-end gap-1.5 text-blue-600 dark:text-blue-400 font-extrabold">
+                        <span>Medium Tier (₹)</span>
+                        <ArrowUpDown className="h-3 w-3" />
+                      </div>
+                    </th>
+                  )}
+
+                  {(selectedTier === "ALL" || selectedTier === "HIGH") && (
+                    <th
+                      className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground text-right"
+                      onClick={() => {
+                        if (sortField === "b2bHigh") setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                        else { setSortField("b2bHigh"); setSortOrder("asc"); }
+                      }}
+                    >
+                      <div className="flex items-center justify-end gap-1.5 text-purple-600 dark:text-purple-400 font-extrabold">
+                        <span>High Tier (₹)</span>
+                        <ArrowUpDown className="h-3 w-3" />
+                      </div>
+                    </th>
+                  )}
+
+                  {selectedTier !== "ALL" && (
+                    <th className="py-3.5 px-4 text-center">Discount %</th>
+                  )}
+
                   {isAdmin && <th className="py-3.5 px-5 text-right print:hidden">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
                 {paginatedRows.map((t, idx) => {
                   const mrp = Number(t.price || 0);
-                  const b2b = Number(t.b2b_price ?? t.b2bPrice ?? 0);
-                  const hasB2B = b2b > 0;
-                  const discountPct = mrp > 0 && b2b > 0 && mrp >= b2b
-                    ? Math.round(((mrp - b2b) / mrp) * 100)
-                    : null;
+                  const low = Number(t.b2b_price_low ?? t.b2bPriceLow ?? 0);
+                  const med = Number(t.b2b_price_medium ?? t.b2bPriceMedium ?? t.b2b_price ?? t.b2bPrice ?? 0);
+                  const high = Number(t.b2b_price_high ?? t.b2bPriceHigh ?? 0);
+
+                  const activeTierPrice =
+                    selectedTier === "LOW" ? low : selectedTier === "MEDIUM" ? med : high;
+                  const activeDiscount =
+                    mrp > 0 && activeTierPrice > 0 && mrp >= activeTierPrice
+                      ? Math.round(((mrp - activeTierPrice) / mrp) * 100)
+                      : null;
+
                   const rowNumber = (currentPage - 1) * pageSize + idx + 1;
 
                   return (
@@ -399,25 +500,23 @@ export default function RateListPage() {
 
                       {/* Test Name & Code */}
                       <td className="py-4 px-4">
-                        <div className="flex items-start gap-2">
-                          <div>
-                            <p className="font-bold text-foreground text-[13px]">{t.name}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="font-mono text-[10px] text-muted-foreground">
-                                {t.test_code || t.testCode || "TEST-AUTO"}
+                        <div>
+                          <p className="font-bold text-foreground text-[13px]">{t.name}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono text-[10px] text-muted-foreground">
+                              {t.test_code || t.testCode || "TEST-AUTO"}
+                            </span>
+                            {t.method && (
+                              <span className="text-[10px] text-muted-foreground/80 italic">
+                                · {t.method}
                               </span>
-                              {t.method && (
-                                <span className="text-[10px] text-muted-foreground/80 italic">
-                                  · {t.method}
-                                </span>
-                              )}
-                            </div>
+                            )}
                           </div>
                         </div>
                       </td>
 
                       {/* Category Badge */}
-                      <td className="py-4 px-4">
+                      <td className="py-4 px-3">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-muted text-muted-foreground border border-border">
                           {t.category || "General"}
                         </span>
@@ -428,29 +527,57 @@ export default function RateListPage() {
                         ₹{mrp.toLocaleString("en-IN")}
                       </td>
 
-                      {/* B2B Price */}
-                      <td className="py-4 px-4 text-right">
-                        {hasB2B ? (
-                          <span className="font-mono font-extrabold text-sm text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 inline-block">
-                            ₹{b2b.toLocaleString("en-IN")}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground italic">
-                            {isB2B ? "Standard MRP" : "Not Set"}
-                          </span>
-                        )}
-                      </td>
+                      {/* Low Tier Column */}
+                      {(selectedTier === "ALL" || selectedTier === "LOW") && (
+                        <td className="py-4 px-4 text-right">
+                          {low > 0 ? (
+                            <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20 inline-block">
+                              ₹{low.toLocaleString("en-IN")}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                      )}
 
-                      {/* B2B Margin */}
-                      <td className="py-4 px-4 text-center">
-                        {discountPct !== null ? (
-                          <span className="inline-flex items-center gap-1 font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                            {discountPct}% Off
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
-                        )}
-                      </td>
+                      {/* Medium Tier Column */}
+                      {(selectedTier === "ALL" || selectedTier === "MEDIUM") && (
+                        <td className="py-4 px-4 text-right">
+                          {med > 0 ? (
+                            <span className="font-mono font-bold text-xs text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-1 rounded-md border border-blue-500/20 inline-block">
+                              ₹{med.toLocaleString("en-IN")}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* High Tier Column */}
+                      {(selectedTier === "ALL" || selectedTier === "HIGH") && (
+                        <td className="py-4 px-4 text-right">
+                          {high > 0 ? (
+                            <span className="font-mono font-bold text-xs text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-1 rounded-md border border-purple-500/20 inline-block">
+                              ₹{high.toLocaleString("en-IN")}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* Single Tier Discount % */}
+                      {selectedTier !== "ALL" && (
+                        <td className="py-4 px-4 text-center">
+                          {activeDiscount !== null ? (
+                            <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
+                              {activeDiscount}% Off
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                      )}
 
                       {/* Admin Action */}
                       {isAdmin && (
@@ -462,7 +589,7 @@ export default function RateListPage() {
                             className="h-8 px-2.5 rounded-lg text-primary hover:bg-primary/10 font-bold text-xs cursor-pointer inline-flex items-center gap-1"
                           >
                             <Edit3 className="h-3.5 w-3.5" />
-                            <span>Edit Rate</span>
+                            <span>Edit Rates</span>
                           </Button>
                         </td>
                       )}
@@ -519,13 +646,13 @@ export default function RateListPage() {
         </div>
       </div>
 
-      {/* ── Admin Edit Rate Dialog ── */}
+      {/* ── Admin Edit Multi-Tier Rates Dialog ── */}
       <Dialog open={!!editingTest} onOpenChange={(open) => { if (!open) setEditingTest(null); }}>
-        <DialogContent className="sm:max-w-md bg-card border-border p-6 rounded-2xl shadow-elevated">
+        <DialogContent className="sm:max-w-lg bg-card border-border p-6 rounded-2xl shadow-elevated">
           <DialogHeader>
             <div className="flex items-center gap-2 mb-1">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20">
-                Rate Configuration
+                Multi-Tier B2B Pricing
               </span>
               <span className="font-mono text-xs text-muted-foreground">
                 {editingTest?.test_code || editingTest?.testCode || "TEST"}
@@ -535,7 +662,7 @@ export default function RateListPage() {
               {editingTest?.name}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Set patient retail MRP and contracted B2B wholesale rate for this diagnostic test.
+              Set standard patient MRP and separate B2B wholesale rates for Low, Medium, and High partner tiers.
             </DialogDescription>
           </DialogHeader>
 
@@ -560,55 +687,112 @@ export default function RateListPage() {
               </div>
             </div>
 
-            {/* B2B Price Input */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-purple-600 dark:text-purple-400 flex items-center justify-between">
-                <span>B2B Partner Wholesale Rate (₹)</span>
-                <span className="text-[10px] text-purple-600/80">Contracted Rate</span>
-              </label>
-              <div className="relative">
-                <IndianRupee className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-purple-500" />
-                <Input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={editB2b}
-                  onChange={(e) => setEditB2b(e.target.value)}
-                  placeholder="e.g. 200 (Leave empty for standard MRP)"
-                  className="pl-10 font-mono font-bold text-sm h-11 rounded-xl border-purple-500/40 focus:border-purple-500"
-                />
-              </div>
-            </div>
-
-            {/* Quick B2B Margin Preset Chips */}
-            <div className="space-y-1.5 pt-1">
-              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                Quick Wholesale Presets (% of MRP):
-              </p>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {[30, 40, 50, 60].map((pct) => (
-                  <button
-                    key={pct}
-                    type="button"
-                    onClick={() => handleApplyPreset(pct)}
-                    className="px-2.5 py-1 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-xs font-mono font-bold border border-border transition-colors cursor-pointer"
-                  >
-                    {pct}% of MRP
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Margin Calculation Preview */}
-            {parseFloat(editMrp) > 0 && parseFloat(editB2b) > 0 && (
-              <div className="p-3 rounded-xl bg-muted/60 border border-border/80 flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Partner Discount / Margin:</span>
-                <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
-                  {Math.round(((parseFloat(editMrp) - parseFloat(editB2b)) / parseFloat(editMrp)) * 100)}% Discount
-                  (₹{(parseFloat(editMrp) - parseFloat(editB2b)).toFixed(0)} savings)
+            {/* 1-Click Multi-Tier Presets */}
+            <div className="p-3 bg-muted/40 border border-border/80 rounded-xl space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                <span className="flex items-center gap-1">
+                  <Sparkles className="h-3 w-3 text-primary" /> 1-Click Multi-Tier Presets (% of MRP):
                 </span>
               </div>
-            )}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleApplyMultiPreset(30, 40, 50)}
+                  className="px-2.5 py-1 rounded-lg bg-card hover:bg-muted text-xs font-mono font-bold border border-border text-foreground transition-colors cursor-pointer"
+                >
+                  30% · 40% · 50%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyMultiPreset(35, 45, 55)}
+                  className="px-2.5 py-1 rounded-lg bg-card hover:bg-muted text-xs font-mono font-bold border border-border text-foreground transition-colors cursor-pointer"
+                >
+                  35% · 45% · 55%
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyMultiPreset(40, 50, 60)}
+                  className="px-2.5 py-1 rounded-lg bg-card hover:bg-muted text-xs font-mono font-bold border border-border text-foreground transition-colors cursor-pointer"
+                >
+                  40% · 50% · 60%
+                </button>
+              </div>
+            </div>
+
+            {/* Three Tiers Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Low Tier */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-between">
+                  <span>🟢 Low Tier (₹)</span>
+                </label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-emerald-500" />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={editB2bLow}
+                    onChange={(e) => setEditB2bLow(e.target.value)}
+                    placeholder="e.g. 150"
+                    className="pl-8 font-mono font-bold text-xs h-10 rounded-xl border-emerald-500/40 focus:border-emerald-500"
+                  />
+                </div>
+                {parseFloat(editMrp) > 0 && parseFloat(editB2bLow) > 0 && (
+                  <p className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                    {Math.round(((parseFloat(editMrp) - parseFloat(editB2bLow)) / parseFloat(editMrp)) * 100)}% discount
+                  </p>
+                )}
+              </div>
+
+              {/* Medium Tier */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center justify-between">
+                  <span>🔵 Medium Tier (₹)</span>
+                </label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-blue-500" />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={editB2bMed}
+                    onChange={(e) => setEditB2bMed(e.target.value)}
+                    placeholder="e.g. 200"
+                    className="pl-8 font-mono font-bold text-xs h-10 rounded-xl border-blue-500/40 focus:border-blue-500"
+                  />
+                </div>
+                {parseFloat(editMrp) > 0 && parseFloat(editB2bMed) > 0 && (
+                  <p className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400">
+                    {Math.round(((parseFloat(editMrp) - parseFloat(editB2bMed)) / parseFloat(editMrp)) * 100)}% discount
+                  </p>
+                )}
+              </div>
+
+              {/* High Tier */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-purple-600 dark:text-purple-400 flex items-center justify-between">
+                  <span>🟣 High Tier (₹)</span>
+                </label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-purple-500" />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={editB2bHigh}
+                    onChange={(e) => setEditB2bHigh(e.target.value)}
+                    placeholder="e.g. 250"
+                    className="pl-8 font-mono font-bold text-xs h-10 rounded-xl border-purple-500/40 focus:border-purple-500"
+                  />
+                </div>
+                {parseFloat(editMrp) > 0 && parseFloat(editB2bHigh) > 0 && (
+                  <p className="text-[10px] font-mono font-bold text-purple-600 dark:text-purple-400">
+                    {Math.round(((parseFloat(editMrp) - parseFloat(editB2bHigh)) / parseFloat(editMrp)) * 100)}% discount
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
@@ -627,7 +811,7 @@ export default function RateListPage() {
               disabled={saving}
               className="rounded-xl gradient-primary text-primary-foreground font-bold text-xs ring-inset-top"
             >
-              {saving ? "Saving..." : "Save Rates"}
+              {saving ? "Saving..." : "Save Tier Rates"}
             </Button>
           </DialogFooter>
         </DialogContent>
