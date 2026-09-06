@@ -80,8 +80,10 @@ export default function DashboardOverviewPage() {
   const [chartData, setChartData] = useState<ChartItem[]>([]);
   const [recentReports, setRecentReports] = useState<RecentReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     const u = getStoredUser();
     setUser(u);
     if (u?.role === "COLLECTION_CENTER") {
@@ -242,9 +244,9 @@ export default function DashboardOverviewPage() {
             </div>
             <span className="text-[11px] font-medium px-3 py-1.5 rounded-lg bg-muted/60 text-muted-foreground border border-border/60">Weekly</span>
           </div>
-          <div className="h-56">
-            {formattedChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+          <div className="h-56 min-w-0">
+            {isMounted && formattedChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
                 <BarChart data={formattedChartData} margin={{ top: 4, right: 0, left: -24, bottom: 0 }}>
                   <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" />
                   <YAxis fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" allowDecimals={false} />
@@ -343,10 +345,10 @@ export default function DashboardOverviewPage() {
         <div className="col-span-12 lg:col-span-4 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col">
           <h3 className="font-display text-lg font-semibold text-foreground">Report Status</h3>
           <p className="text-xs text-muted-foreground mb-4">Completion overview</p>
-          <div className="relative flex-1 flex items-center justify-center min-h-[150px]">
-            {stats.totalReports > 0 ? (
+          <div className="relative flex-1 flex items-center justify-center min-h-[150px] min-w-0">
+            {isMounted && stats.totalReports > 0 ? (
               <>
-                <ResponsiveContainer width="100%" height={150} minWidth={0} minHeight={0}>
+                <ResponsiveContainer width="100%" height={150} minWidth={0} minHeight={0} debounce={50}>
                   <PieChart>
                     <Pie data={pieData} cx="50%" cy="50%" innerRadius={48} outerRadius={66} paddingAngle={3} dataKey="value" strokeWidth={0}>
                       {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}

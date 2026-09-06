@@ -236,7 +236,7 @@ export function CollectionCenterOverview({ user }: Props) {
           </div>
 
           <div className="h-[250px] w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
               <BarChart data={weeklyIntakeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <XAxis
                   dataKey="day"
@@ -291,7 +291,7 @@ export function CollectionCenterOverview({ user }: Props) {
             {/* Donut 1: Processing Stages */}
             <div className="flex flex-col items-center text-center">
               <div className="h-[130px] w-[130px] relative">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
                   <PieChart>
                     <Pie
                       data={stagePieData}
@@ -319,7 +319,7 @@ export function CollectionCenterOverview({ user }: Props) {
             {/* Donut 2: Payment Clearance Ratio */}
             <div className="flex flex-col items-center text-center">
               <div className="h-[130px] w-[130px] relative">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
                   <PieChart>
                     <Pie
                       data={paymentPieData}
