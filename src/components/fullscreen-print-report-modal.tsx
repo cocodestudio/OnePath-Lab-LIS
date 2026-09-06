@@ -130,6 +130,7 @@ export function FullscreenPrintReportModal({
     }
   }, [open, report, mainTests]);
 
+
   // ── Print Settings ────────────────────────────────────
   // Margins & heights ALWAYS come from saved lab settings.
   // Only bgImage toggles on/off based on printWithHeaderFooter.
@@ -221,6 +222,20 @@ export function FullscreenPrintReportModal({
     },
   });
 
+  // ── Intercept Ctrl+P / Cmd+P to trigger Clean Report Print ──
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P")) {
+        e.preventDefault();
+        e.stopPropagation();
+        handlePrint();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [open, handlePrint]);
+
   // ── Native Vector PDF Download (Approach 1: Zero overlap, 100% Vector Quality) ──
   const handleDownloadPdf = async (_withLetterhead: boolean) => {
     if (!printRef.current || !activeReportData) {
@@ -260,7 +275,7 @@ export function FullscreenPrintReportModal({
           {/* ═══════════════════════════════════════════════════════════════
               1. LEFT SIDEBAR: Tests List (~260px)
           ═══════════════════════════════════════════════════════════════ */}
-          <div className="w-full lg:w-[260px] bg-card border-r border-border/80 flex flex-col shrink-0 overflow-hidden">
+          <div className="w-full lg:w-[260px] bg-card border-r border-border/80 flex flex-col shrink-0 overflow-hidden print:hidden">
             <div className="p-4 border-b border-border/80 bg-muted/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-primary" />
@@ -317,9 +332,9 @@ export function FullscreenPrintReportModal({
           {/* ═══════════════════════════════════════════════════════════════
               2. CENTER PANEL: Live Canvas Viewport
           ═══════════════════════════════════════════════════════════════ */}
-          <div className="flex-1 flex flex-col bg-zinc-900/95 dark:bg-zinc-950 overflow-hidden relative">
+          <div className="flex-1 flex flex-col bg-zinc-900/95 dark:bg-zinc-950 overflow-hidden relative print:bg-white print:overflow-visible print:p-0">
             {/* Top Toolbar */}
-            <div className="h-12 bg-zinc-800/90 border-b border-zinc-700/80 px-4 flex items-center justify-between text-zinc-200 shrink-0">
+            <div className="h-12 bg-zinc-800/90 border-b border-zinc-700/80 px-4 flex items-center justify-between text-zinc-200 shrink-0 print:hidden">
               <div className="flex items-center gap-3">
                 <span className="text-xs font-bold text-zinc-200 font-mono">
                   {report.patient?.name || "Patient Report"}
@@ -403,7 +418,7 @@ export function FullscreenPrintReportModal({
           {/* ═══════════════════════════════════════════════════════════════
               3. RIGHT SIDEBAR: Settings & Actions (~320px)
           ═══════════════════════════════════════════════════════════════ */}
-          <div className="w-full lg:w-[320px] bg-card border-l border-border/80 flex flex-col shrink-0 overflow-hidden">
+          <div className="w-full lg:w-[320px] bg-card border-l border-border/80 flex flex-col shrink-0 overflow-hidden print:hidden">
             <div className="p-4 border-b border-border/80 bg-muted/20 flex items-center justify-between">
               <h3 className="font-bold text-sm text-foreground">Settings</h3>
               <button
@@ -516,7 +531,19 @@ export function FullscreenPrintReportModal({
             </div>
 
             {/* Bottom Actions Footer */}
-            <div className="p-4 border-t border-border/80 bg-muted/20">
+            <div className="p-4 border-t border-border/80 bg-muted/20 space-y-2.5">
+              <Button
+                type="button"
+                onClick={() => handlePrint()}
+                className="w-full h-11 gap-2 font-extrabold text-sm bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer shadow-md rounded-xl transition-all"
+              >
+                <Printer className="h-4 w-4" />
+                <span>Print Report</span>
+                <span className="text-[10.5px] bg-primary-foreground/20 px-2 py-0.5 rounded-md font-mono font-medium tracking-tight">
+                  Ctrl+P
+                </span>
+              </Button>
+
               <Button
                 type="button"
                 onClick={handleWhatsApp}

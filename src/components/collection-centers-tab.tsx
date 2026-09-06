@@ -16,6 +16,8 @@ interface CollectionCenter {
   phone?: string;
   status: "active" | "suspended";
   role?: "COLLECTION_CENTER" | "B2B" | string;
+  rate_tier?: "HIGH" | "MEDIUM" | "LOW" | string;
+  rateTier?: "HIGH" | "MEDIUM" | "LOW" | string;
   created_at?: string;
   createdAt?: string;
   updated_at?: string;
@@ -42,6 +44,7 @@ export function CollectionCentersTab() {
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState<"active" | "suspended">("active");
   const [role, setRole] = useState<"COLLECTION_CENTER" | "B2B">("B2B");
+  const [rateTier, setRateTier] = useState<"HIGH" | "MEDIUM" | "LOW">("HIGH");
   const [showPassword, setShowPassword] = useState(false);
 
   // Edit Form State
@@ -50,6 +53,7 @@ export function CollectionCentersTab() {
   const [editPhone, setEditPhone] = useState("");
   const [editStatus, setEditStatus] = useState<"active" | "suspended">("active");
   const [editRole, setEditRole] = useState<"COLLECTION_CENTER" | "B2B">("B2B");
+  const [editRateTier, setEditRateTier] = useState<"HIGH" | "MEDIUM" | "LOW">("HIGH");
   const [editPassword, setEditPassword] = useState("");
   const [showEditPassword, setShowEditPassword] = useState(false);
 
@@ -105,6 +109,7 @@ export function CollectionCentersTab() {
           phone: phone.trim(),
           status,
           role,
+          rate_tier: rateTier,
         }),
       });
 
@@ -118,6 +123,7 @@ export function CollectionCentersTab() {
       setPhone("");
       setStatus("active");
       setRole("B2B");
+      setRateTier("HIGH");
       setShowPassword(false);
       setViewMode("LIST");
       loadCenters();
@@ -134,6 +140,8 @@ export function CollectionCentersTab() {
     setEditPhone(c.phone || "");
     setEditStatus(c.status || "active");
     setEditRole((c.role as any) === "B2B" ? "B2B" : "COLLECTION_CENTER");
+    const rawTier = c.rate_tier || c.rateTier || "HIGH";
+    setEditRateTier(rawTier.toUpperCase() === "LOW" ? "LOW" : rawTier.toUpperCase() === "MEDIUM" ? "MEDIUM" : "HIGH");
     setEditPassword("");
     setShowEditPassword(false);
     setViewMode("EDIT");
@@ -150,6 +158,7 @@ export function CollectionCentersTab() {
         phone: editPhone.trim(),
         status: editStatus,
         role: editRole,
+        rate_tier: editRateTier,
       };
       if (editPassword) {
         payload.password = editPassword;
@@ -335,6 +344,27 @@ export function CollectionCentersTab() {
                     <option value="suspended">Suspended (Access temporarily blocked)</option>
                   </select>
                 </div>
+
+                {role === "B2B" && (
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                      <span>Assigned Rate Tier</span>
+                      <span className="text-[10.5px] text-purple-600 dark:text-purple-400 font-bold">Confidential Tariff</span>
+                    </label>
+                    <select
+                      value={rateTier}
+                      onChange={(e) => setRateTier(e.target.value as "HIGH" | "MEDIUM" | "LOW")}
+                      className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none transition-colors cursor-pointer"
+                    >
+                      <option value="HIGH">High Tier Rate List (Default wholesale rate)</option>
+                      <option value="MEDIUM">Medium Tier Rate List (Moderate concession rate)</option>
+                      <option value="LOW">Low Tier Rate List (Lowest wholesale concession)</option>
+                    </select>
+                    <p className="text-[11px] text-muted-foreground">
+                      This partner will only see and be charged their assigned tier rates in their B2B portal.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Card 2: Security & Login Credentials */}
@@ -505,6 +535,27 @@ export function CollectionCentersTab() {
                     <option value="suspended">Suspended (Access blocked)</option>
                   </select>
                 </div>
+
+                {editRole === "B2B" && (
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                      <span>Assigned Rate Tier</span>
+                      <span className="text-[10.5px] text-purple-600 dark:text-purple-400 font-bold">Confidential Tariff</span>
+                    </label>
+                    <select
+                      value={editRateTier}
+                      onChange={(e) => setEditRateTier(e.target.value as "HIGH" | "MEDIUM" | "LOW")}
+                      className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none transition-colors cursor-pointer"
+                    >
+                      <option value="HIGH">High Tier Rate List (Default wholesale rate)</option>
+                      <option value="MEDIUM">Medium Tier Rate List (Moderate concession rate)</option>
+                      <option value="LOW">Low Tier Rate List (Lowest wholesale concession)</option>
+                    </select>
+                    <p className="text-[11px] text-muted-foreground">
+                      This partner will strictly see ONLY their assigned tier's rates in their B2B portal.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Card 2: Login & Password Reset */}
@@ -714,6 +765,7 @@ export function CollectionCentersTab() {
                     <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
                       <th className="py-3 px-5">Organization / Partner</th>
                       <th className="py-3 px-4">Role / Access</th>
+                      <th className="py-3 px-4">Rate Tier</th>
                       <th className="py-3 px-4">Login User ID (Email)</th>
                       <th className="py-3 px-4">Phone</th>
                       <th className="py-3 px-4">Status</th>
@@ -761,6 +813,39 @@ export function CollectionCentersTab() {
                                 <Building2 className="h-3 w-3" />
                                 <span>Collection Center</span>
                               </span>
+                            )}
+                          </td>
+
+                          {/* Rate Tier Badge */}
+                          <td className="py-4 px-4">
+                            {isB2B ? (
+                              (() => {
+                                const t = (c.rate_tier || c.rateTier || "HIGH").toUpperCase();
+                                if (t === "LOW") {
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                      <span>Low Tier</span>
+                                    </span>
+                                  );
+                                }
+                                if (t === "MEDIUM") {
+                                  return (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                      <span>Medium Tier</span>
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
+                                    <span>High Tier</span>
+                                  </span>
+                                );
+                              })()
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground italic">—</span>
                             )}
                           </td>
 

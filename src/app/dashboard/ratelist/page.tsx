@@ -4,7 +4,8 @@ import React, { useState, useEffect, useMemo } from "react";
 import {
   Search, RefreshCw, IndianRupee, Filter,
   ChevronLeft, ChevronRight, Edit3, ArrowUpDown,
-  Layers, X, CheckCircle2, Percent, Sparkles
+  Layers, X, CheckCircle2, Percent, Sparkles,
+  Briefcase, Building2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,16 @@ interface RateTest {
   sort_order?: number;
 }
 
+interface B2BPartner {
+  id: string | number;
+  name: string;
+  email: string;
+  phone?: string;
+  role?: string;
+  rate_tier?: string;
+  rateTier?: string;
+}
+
 type TierFilter = "ALL" | "LOW" | "MEDIUM" | "HIGH";
 
 export default function RateListPage() {
@@ -42,6 +53,11 @@ export default function RateListPage() {
   const [loading, setLoading] = useState(true);
   const [tests, setTests] = useState<RateTest[]>([]);
   const [user, setUser] = useState<any>(null);
+
+  // B2B Partner Selection (Admin only)
+  const [partners, setPartners] = useState<B2BPartner[]>([]);
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string>("ALL");
+  const [updatingPartnerTier, setUpdatingPartnerTier] = useState(false);
 
   // Search & Filter
   const [search, setSearch] = useState("");
@@ -63,8 +79,20 @@ export default function RateListPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setUser(getStoredUser());
+    const u = getStoredUser();
+    setUser(u);
     loadTests();
+
+    // If Admin/Staff, load B2B partner accounts
+    if (u?.role !== "B2B") {
+      fetchFromLaravel("/collection-centers")
+        .then((data) => {
+          const list = Array.isArray(data) ? data : (data?.data || []);
+          const b2bList = list.filter((c: any) => c.role === "B2B");
+          setPartners(b2bList);
+        })
+        .catch(() => {});
+    }
   }, []);
 
   const isB2B = user?.role === "B2B";
@@ -244,6 +272,32 @@ export default function RateListPage() {
     }
   };
 
+  const selectedPartner = useMemo(
+    () => partners.find((p) => p.id.toString() === selectedPartnerId),
+    [partners, selectedPartnerId]
+  );
+  const activePartnerTier = (selectedPartner?.rate_tier || selectedPartner?.rateTier || "HIGH").toUpperCase() as "HIGH" | "MEDIUM" | "LOW";
+
+  const handleUpdatePartnerTier = async (partnerId: string | number, newTier: "HIGH" | "MEDIUM" | "LOW") => {
+    setUpdatingPartnerTier(true);
+    try {
+      await fetchFromLaravel(`/collection-centers/${partnerId}`, {
+        method: "PUT",
+        body: JSON.stringify({ rate_tier: newTier }),
+      });
+      setPartners((prev) =>
+        prev.map((p) =>
+          p.id === partnerId ? { ...p, rate_tier: newTier, rateTier: newTier } : p
+        )
+      );
+      toast.success("Rate Tier Updated", `Assigned ${newTier} Tier to ${selectedPartner?.name || "partner"}.`);
+    } catch (err: any) {
+      toast.error("Update Failed", err.message || "Failed to update partner rate tier.");
+    } finally {
+      setUpdatingPartnerTier(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       {/* ── Page Header (Clean, No Card) ── */}
@@ -258,7 +312,7 @@ export default function RateListPage() {
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             {isB2B
-              ? "Official wholesale diagnostic tariffs categorized by Low, Medium, and High partner tiers."
+              ? "Official wholesale diagnostic tariffs assigned to your registered partner terminal."
               : "Manage retail MRP and configure High, Medium, and Low B2B wholesale rates across your catalogue."}
           </p>
         </div>
@@ -277,58 +331,154 @@ export default function RateListPage() {
         </div>
       </div>
 
+      {/* ── Admin Only: B2B Partner Rate Tier Management Bar ── */}
+      {isAdmin && partners.length > 0 && (
+        <div className="bg-card border border-border/80 p-4 rounded-2xl shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 print:hidden">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+              <Briefcase className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-foreground">B2B Partner Tariff Assignment</p>
+              <p className="text-[11px] text-muted-foreground">Select a B2B partner center to assign their rate tier or inspect what they see.</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Partner Dropdown */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-muted-foreground">Partner:</span>
+              <select
+                value={selectedPartnerId}
+                onChange={(e) => setSelectedPartnerId(e.target.value)}
+                className="px-3 py-1.5 rounded-xl bg-muted/40 border border-border text-xs font-bold text-foreground outline-none focus:border-primary cursor-pointer max-w-[240px]"
+              >
+                <option value="ALL">All Partners (Master View)</option>
+                {partners.map((p) => {
+                  const t = (p.rate_tier || p.rateTier || "HIGH").toUpperCase();
+                  return (
+                    <option key={p.id} value={p.id.toString()}>
+                      {p.name} ({t} Tier)
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* 1-Click Tier Switcher when a partner is selected */}
+            {selectedPartner && (
+              <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border/80">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase px-1.5">Assign Tier:</span>
+                {(["HIGH", "MEDIUM", "LOW"] as const).map((tierKey) => {
+                  const isCurrent = activePartnerTier === tierKey;
+                  return (
+                    <button
+                      key={tierKey}
+                      type="button"
+                      disabled={updatingPartnerTier}
+                      onClick={() => handleUpdatePartnerTier(selectedPartner.id, tierKey)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        isCurrent
+                          ? tierKey === "HIGH"
+                            ? "bg-purple-600 text-white shadow-xs"
+                            : tierKey === "MEDIUM"
+                            ? "bg-blue-600 text-white shadow-xs"
+                            : "bg-emerald-600 text-white shadow-xs"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {tierKey === "HIGH" ? "High" : tierKey === "MEDIUM" ? "Medium" : "Low"}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Tier Switcher & Filter Controls ── */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 print:hidden">
-        {/* Tier Selector Pills */}
-        <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border/80 shrink-0">
-          <button
-            type="button"
-            onClick={() => setSelectedTier("ALL")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              selectedTier === "ALL"
-                ? "bg-card text-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            All 3 Tiers
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedTier("LOW")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              selectedTier === "LOW"
-                ? "bg-emerald-500 text-white shadow-xs"
-                : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
-            }`}
-          >
-            <span className="h-2 w-2 rounded-full bg-emerald-400 inline-block" />
-            <span>Low Tier</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedTier("MEDIUM")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              selectedTier === "MEDIUM"
-                ? "bg-blue-600 text-white shadow-xs"
-                : "text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
-            }`}
-          >
-            <span className="h-2 w-2 rounded-full bg-blue-400 inline-block" />
-            <span>Medium Tier</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedTier("HIGH")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              selectedTier === "HIGH"
-                ? "bg-purple-600 text-white shadow-xs"
-                : "text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
-            }`}
-          >
-            <span className="h-2 w-2 rounded-full bg-purple-400 inline-block" />
-            <span>High Tier</span>
-          </button>
-        </div>
+        {/* Admin: Master 3-Tier Selector Pills (only when All Partners is selected) */}
+        {isAdmin && selectedPartnerId === "ALL" && (
+          <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border/80 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSelectedTier("ALL")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                selectedTier === "ALL"
+                  ? "bg-card text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              All 3 Tiers
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedTier("LOW")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                selectedTier === "LOW"
+                  ? "bg-emerald-500 text-white shadow-xs"
+                  : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+              }`}
+            >
+              <span className="h-2 w-2 rounded-full bg-emerald-400 inline-block" />
+              <span>Low Tier</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedTier("MEDIUM")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                selectedTier === "MEDIUM"
+                  ? "bg-blue-600 text-white shadow-xs"
+                  : "text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
+              }`}
+            >
+              <span className="h-2 w-2 rounded-full bg-blue-400 inline-block" />
+              <span>Medium Tier</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedTier("HIGH")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                selectedTier === "HIGH"
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
+              }`}
+            >
+              <span className="h-2 w-2 rounded-full bg-purple-400 inline-block" />
+              <span>High Tier</span>
+            </button>
+          </div>
+        )}
+
+        {/* Admin: Specific Partner Active Banner */}
+        {isAdmin && selectedPartner && (
+          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-muted/40 border border-border shrink-0">
+            <Briefcase className="h-4 w-4 text-primary" />
+            <span className="text-xs font-bold text-foreground">Showing Tariff for:</span>
+            <span className="text-xs font-extrabold text-primary">{selectedPartner.name}</span>
+            <span
+              className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                activePartnerTier === "HIGH"
+                  ? "bg-purple-500/10 text-purple-600"
+                  : activePartnerTier === "MEDIUM"
+                  ? "bg-blue-500/10 text-blue-600"
+                  : "bg-emerald-500/10 text-emerald-600"
+              }`}
+            >
+              {activePartnerTier} Tier Rate
+            </span>
+          </div>
+        )}
+
+        {/* B2B Partner Login: Confidential Wholesale Tariff Badge */}
+        {isB2B && (
+          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-primary/10 border border-primary/20 text-primary shrink-0">
+            <Sparkles className="h-4 w-4" />
+            <span className="text-xs font-bold">Wholesale Diagnostic Tariff</span>
+          </div>
+        )}
 
         {/* Search */}
         <div className="relative flex-1 max-w-md">
@@ -422,8 +572,22 @@ export default function RateListPage() {
                     </div>
                   </th>
 
-                  {/* Dynamic Tier Columns depending on selectedTier */}
-                  {(selectedTier === "ALL" || selectedTier === "LOW") && (
+                  {/* 1. B2B Client Portal: ONLY single Wholesale Rate column */}
+                  {isB2B && (
+                    <th className="py-3.5 px-4 text-right font-extrabold text-primary">
+                      <span>B2B Wholesale Rate (₹)</span>
+                    </th>
+                  )}
+
+                  {/* 2. Admin viewing a specific B2B Partner */}
+                  {isAdmin && selectedPartner && (
+                    <th className="py-3.5 px-4 text-right font-extrabold text-purple-600 dark:text-purple-400">
+                      <span>{selectedPartner.name}'s Rate ({activePartnerTier}) (₹)</span>
+                    </th>
+                  )}
+
+                  {/* 3. Admin Master View: Dynamic 3 Tier Columns */}
+                  {isAdmin && !selectedPartner && (selectedTier === "ALL" || selectedTier === "LOW") && (
                     <th
                       className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground text-right"
                       onClick={() => {
@@ -438,7 +602,7 @@ export default function RateListPage() {
                     </th>
                   )}
 
-                  {(selectedTier === "ALL" || selectedTier === "MEDIUM") && (
+                  {isAdmin && !selectedPartner && (selectedTier === "ALL" || selectedTier === "MEDIUM") && (
                     <th
                       className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground text-right"
                       onClick={() => {
@@ -453,7 +617,7 @@ export default function RateListPage() {
                     </th>
                   )}
 
-                  {(selectedTier === "ALL" || selectedTier === "HIGH") && (
+                  {isAdmin && !selectedPartner && (selectedTier === "ALL" || selectedTier === "HIGH") && (
                     <th
                       className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground text-right"
                       onClick={() => {
@@ -468,7 +632,8 @@ export default function RateListPage() {
                     </th>
                   )}
 
-                  {selectedTier !== "ALL" && (
+                  {/* Discount Column (always for B2B or single partner view or single tier view) */}
+                  {(isB2B || selectedPartner || selectedTier !== "ALL") && (
                     <th className="py-3.5 px-4 text-center">Discount %</th>
                   )}
 
@@ -481,12 +646,19 @@ export default function RateListPage() {
                   const low = Number(t.b2b_price_low ?? t.b2bPriceLow ?? 0);
                   const med = Number(t.b2b_price_medium ?? t.b2bPriceMedium ?? t.b2b_price ?? t.b2bPrice ?? 0);
                   const high = Number(t.b2b_price_high ?? t.b2bPriceHigh ?? 0);
+                  const b2bOnlyPrice = Number(t.b2b_price ?? t.b2bPrice ?? mrp);
 
-                  const activeTierPrice =
-                    selectedTier === "LOW" ? low : selectedTier === "MEDIUM" ? med : high;
+                  // Partner or single-tier calculation
+                  let effectiveRate = b2bOnlyPrice;
+                  if (isAdmin && selectedPartner) {
+                    effectiveRate = activePartnerTier === "LOW" ? (low > 0 ? low : mrp) : activePartnerTier === "MEDIUM" ? (med > 0 ? med : mrp) : (high > 0 ? high : mrp);
+                  } else if (isAdmin && selectedTier !== "ALL") {
+                    effectiveRate = selectedTier === "LOW" ? low : selectedTier === "MEDIUM" ? med : high;
+                  }
+
                   const activeDiscount =
-                    mrp > 0 && activeTierPrice > 0 && mrp >= activeTierPrice
-                      ? Math.round(((mrp - activeTierPrice) / mrp) * 100)
+                    mrp > 0 && effectiveRate > 0 && mrp >= effectiveRate
+                      ? Math.round(((mrp - effectiveRate) / mrp) * 100)
                       : null;
 
                   const rowNumber = (currentPage - 1) * pageSize + idx + 1;
@@ -527,8 +699,42 @@ export default function RateListPage() {
                         ₹{mrp.toLocaleString("en-IN")}
                       </td>
 
-                      {/* Low Tier Column */}
-                      {(selectedTier === "ALL" || selectedTier === "LOW") && (
+                      {/* 1. B2B Client Wholesale Rate */}
+                      {isB2B && (
+                        <td className="py-4 px-4 text-right">
+                          {b2bOnlyPrice > 0 ? (
+                            <span className="font-mono font-bold text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md border border-primary/20 inline-block">
+                              ₹{b2bOnlyPrice.toLocaleString("en-IN")}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* 2. Admin Viewing Specific Partner */}
+                      {isAdmin && selectedPartner && (
+                        <td className="py-4 px-4 text-right">
+                          {effectiveRate > 0 ? (
+                            <span
+                              className={`font-mono font-bold text-xs px-2.5 py-1 rounded-md border inline-block ${
+                                activePartnerTier === "HIGH"
+                                  ? "text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20"
+                                  : activePartnerTier === "MEDIUM"
+                                  ? "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20"
+                                  : "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                              }`}
+                            >
+                              ₹{effectiveRate.toLocaleString("en-IN")}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </td>
+                      )}
+
+                      {/* 3. Admin Master View: Low Tier Column */}
+                      {isAdmin && !selectedPartner && (selectedTier === "ALL" || selectedTier === "LOW") && (
                         <td className="py-4 px-4 text-right">
                           {low > 0 ? (
                             <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20 inline-block">
@@ -540,8 +746,8 @@ export default function RateListPage() {
                         </td>
                       )}
 
-                      {/* Medium Tier Column */}
-                      {(selectedTier === "ALL" || selectedTier === "MEDIUM") && (
+                      {/* 3. Admin Master View: Medium Tier Column */}
+                      {isAdmin && !selectedPartner && (selectedTier === "ALL" || selectedTier === "MEDIUM") && (
                         <td className="py-4 px-4 text-right">
                           {med > 0 ? (
                             <span className="font-mono font-bold text-xs text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-1 rounded-md border border-blue-500/20 inline-block">
@@ -553,8 +759,8 @@ export default function RateListPage() {
                         </td>
                       )}
 
-                      {/* High Tier Column */}
-                      {(selectedTier === "ALL" || selectedTier === "HIGH") && (
+                      {/* 3. Admin Master View: High Tier Column */}
+                      {isAdmin && !selectedPartner && (selectedTier === "ALL" || selectedTier === "HIGH") && (
                         <td className="py-4 px-4 text-right">
                           {high > 0 ? (
                             <span className="font-mono font-bold text-xs text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-1 rounded-md border border-purple-500/20 inline-block">
@@ -566,8 +772,8 @@ export default function RateListPage() {
                         </td>
                       )}
 
-                      {/* Single Tier Discount % */}
-                      {selectedTier !== "ALL" && (
+                      {/* Discount % Column */}
+                      {(isB2B || selectedPartner || selectedTier !== "ALL") && (
                         <td className="py-4 px-4 text-center">
                           {activeDiscount !== null ? (
                             <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
