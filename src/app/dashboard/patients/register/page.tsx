@@ -225,7 +225,7 @@ function RegisterPatientPage() {
     const storedUser = getStoredUser();
     if (storedUser) {
       setCurrentUserRole(storedUser.role || "STAFF");
-      if (storedUser.role === "COLLECTION_CENTER" && storedUser.name) {
+      if ((storedUser.role === "COLLECTION_CENTER" || storedUser.role === "B2B") && storedUser.name) {
         setCollectedAtSelect(storedUser.name);
         setCollectedBySelect(storedUser.name);
       }
@@ -353,6 +353,7 @@ function RegisterPatientPage() {
           setOwnerName(patientData.owner_name || patientData.ownerName || "");
           setBreed(patientData.breed || "");
           setSpecies(patientData.species || "");
+          setSampleBarcode(patientData.vial_barcode || patientData.vialBarcode || patientData.meta?.vial_barcode || "");
 
           const patObj: Patient = {
             id: patientData.id,
@@ -570,6 +571,8 @@ function RegisterPatientPage() {
             pincode: pincode.trim() || null,
             collected_at: `${collectedAtSelect} (${collectedBySelect})`,
             collected_by: collectedBySelect || null,
+            vial_barcode: sampleBarcode.trim() || null,
+            vialBarcode: sampleBarcode.trim() || null,
             aadhaar_no: aadhaarNo.trim() || null,
             insurance_no: insuranceNo.trim() || null,
             tpa: tpa.trim() || null,
@@ -605,6 +608,8 @@ function RegisterPatientPage() {
             pincode: pincode.trim() || null,
             collectedAt: `${collectedAtSelect} (${collectedBySelect})`,
             collectedBy: collectedBySelect || null,
+            vialBarcode: sampleBarcode.trim() || null,
+            vial_barcode: sampleBarcode.trim() || null,
             aadhaarNo: aadhaarNo.trim() || null,
             insuranceNo: insuranceNo.trim() || null,
             tpa: tpa.trim() || null,
@@ -1366,8 +1371,8 @@ function RegisterPatientPage() {
                       </div>
                     )}
 
-                    {/* Collection Center Specific: Vial Barcode & Collection Time */}
-                    {currentUserRole === "COLLECTION_CENTER" && (
+                    {/* Collection Center & B2B: Vial Barcode & Collection Time */}
+                    {(currentUserRole === "COLLECTION_CENTER" || currentUserRole === "B2B" || isFieldEnabled("vialBarcode")) && (
                       <>
                         <div className="space-y-1.5">
                           <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider flex items-center justify-between">
@@ -2016,8 +2021,8 @@ function RegisterPatientPage() {
                     <ArrowRight className="h-4 w-4 text-primary group-hover:translate-x-0.5 transition-transform" />
                   </button>
 
-                  {/* Action 2: Enter Diagnostic Results (Admin/Tech) OR Register Next Sample (Collection Center) */}
-                  {currentUserRole === "COLLECTION_CENTER" ? (
+                  {/* Action 2: Enter Diagnostic Results (Admin/Tech) OR Register Next Sample (Collection Center / B2B) */}
+                  {(currentUserRole === "COLLECTION_CENTER" || currentUserRole === "B2B") ? (
                     <button
                       type="button"
                       onClick={handleResetFlow}

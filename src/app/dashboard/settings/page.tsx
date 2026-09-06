@@ -999,9 +999,10 @@ function SettingsContent() {
                   ? "bg-background text-primary shadow-xs font-extrabold"
                   : "text-muted-foreground hover:text-foreground"
               }`}
+              title="Role-Based Access Control: B2B Partners & Collection Centers"
             >
               <Building2 className="h-3.5 w-3.5" />
-              <span>Collection Centers</span>
+              <span>RBAC</span>
             </button>
           </div>
         </div>

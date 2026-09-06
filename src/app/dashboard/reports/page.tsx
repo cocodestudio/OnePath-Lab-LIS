@@ -45,7 +45,9 @@ export default function ReportsListPage() {
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [filterDate, setFilterDate] = useState(() => new Date().toISOString().split("T")[0]);
 
+  const isB2B = currentUser?.role === "B2B";
   const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER";
+  const isPartnerOrCC = isCollectionCenter || isB2B;
 
   const shiftDate = (days: number) => {
     const base = filterDate ? new Date(filterDate) : new Date();
@@ -85,7 +87,7 @@ export default function ReportsListPage() {
 
   const triggerPrint = async (rep: any) => {
     const isFinal = rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED";
-    if (isCollectionCenter && !isFinal) {
+    if (isPartnerOrCC && !isFinal) {
       toast({
         variant: "info",
         title: "Report Not Finalized",
@@ -361,7 +363,7 @@ export default function ReportsListPage() {
                       </td>
                       <td className="px-6 py-3.5 text-right">
                         <div className="flex flex-col items-end gap-1.5 min-w-[125px]">
-                          {!isCollectionCenter && (
+                          {!isPartnerOrCC && (
                             <Link href={`/dashboard/reports/${rep.id}/edit`} className="w-full">
                               <Button size="sm" className="h-8 gap-1.5 w-full font-bold text-xs">
                                 <Edit3 className="h-3.5 w-3.5" /> Enter Results
@@ -370,14 +372,14 @@ export default function ReportsListPage() {
                           )}
                           <Button 
                             type="button"
-                            variant={isCollectionCenter ? "default" : "outline"} 
+                            variant={isPartnerOrCC ? "default" : "outline"} 
                             size="sm" 
                             onClick={() => triggerPrint(rep)} 
                             disabled={printingId === rep.id}
                             className={`h-8 gap-1.5 w-full font-bold text-xs rounded-xl cursor-pointer ${
-                              isCollectionCenter ? "gradient-primary text-primary-foreground shadow-xs ring-inset-top" : "border border-border/80 hover:bg-muted text-foreground"
+                              isPartnerOrCC ? "gradient-primary text-primary-foreground shadow-xs ring-inset-top" : "border border-border/80 hover:bg-muted text-foreground"
                             }`}
-                            title={isCollectionCenter && !(rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED") ? "Report abhi admin side se final nahi hui hai" : "Print report"}
+                            title={isPartnerOrCC && !(rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED") ? "Report is awaiting final approval from central lab" : "Print report"}
                           >
                             {printingId === rep.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
                             <span>Print Report</span>

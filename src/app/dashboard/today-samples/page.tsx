@@ -16,9 +16,34 @@ export default function TodaySamplesPage() {
   const [stageFilter, setStageFilter] = useState<"ALL" | "COLLECTED" | "TRANSIT" | "READY" | "PAID" | "DUE">("ALL");
   const [copiedBarcode, setCopiedBarcode] = useState<string | null>(null);
 
+  const [currentUserRole, setCurrentUserRole] = useState<string>("");
+
   useEffect(() => {
+    try {
+      const uStr = localStorage.getItem("lis_user");
+      if (uStr) {
+        const u = JSON.parse(uStr);
+        setCurrentUserRole(u.role || "");
+      }
+    } catch (e) {}
     loadData();
   }, []);
+
+  const isDateToday = (dateStr?: string) => {
+    if (!dateStr) return false;
+    const safeStr = dateStr.includes(" ") && !dateStr.includes("T") ? dateStr.replace(" ", "T") : dateStr;
+    const d = new Date(safeStr);
+    if (isNaN(d.getTime())) {
+      const todayStr = new Date().toISOString().split("T")[0];
+      return dateStr.startsWith(todayStr);
+    }
+    const now = new Date();
+    return (
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear()
+    );
+  };
 
   const loadData = async (forceRefresh?: boolean | any) => {
     const isForce = forceRefresh === true;
@@ -28,7 +53,18 @@ export default function TodaySamplesPage() {
       }
       const res = await fetchFromLaravel("/reports", { skipCache: isForce }).catch(() => []);
       const repList = Array.isArray(res) ? res : (res?.data || []);
-      setReports(repList);
+      
+      let role = currentUserRole;
+      if (!role && typeof window !== "undefined") {
+        try {
+          role = JSON.parse(localStorage.getItem("lis_user") || "{}")?.role || "";
+        } catch (e) {}
+      }
+      const isPartner = role === "COLLECTION_CENTER" || role === "B2B";
+      const finalReports = isPartner
+        ? repList.filter((r: any) => isDateToday(r.created_at || r.createdAt || r.patient?.created_at || r.patient?.createdAt))
+        : repList;
+      setReports(finalReports);
     } catch (err) {
       console.error("Error loading today's samples:", err);
     } finally {

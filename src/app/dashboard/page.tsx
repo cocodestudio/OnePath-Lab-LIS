@@ -12,6 +12,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { CollectionCenterOverview } from "@/components/collection-center-overview";
+import { B2BOverview } from "@/components/b2b-overview";
 import { DashboardShimmer } from "@/components/dashboard-shimmer";
 
 interface Stats {
@@ -86,7 +87,7 @@ export default function DashboardOverviewPage() {
     setIsMounted(true);
     const u = getStoredUser();
     setUser(u);
-    if (u?.role === "COLLECTION_CENTER") {
+    if (u?.role === "COLLECTION_CENTER" || u?.role === "B2B") {
       setLoading(false);
       return;
     }
@@ -142,6 +143,10 @@ export default function DashboardOverviewPage() {
 
   if (user?.role === "COLLECTION_CENTER") {
     return <CollectionCenterOverview user={user} />;
+  }
+
+  if (user?.role === "B2B") {
+    return <B2BOverview user={user} />;
   }
 
   const completionPct = stats.totalReports > 0 ? Math.round((stats.completedReports / stats.totalReports) * 100) : 0;

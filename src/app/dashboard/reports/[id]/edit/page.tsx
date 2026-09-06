@@ -13,7 +13,7 @@ import {
   FlaskConical, ArrowLeft, Loader2, CheckCircle2, AlertTriangle,
   User, AlertCircle, TrendingUp, History, ExternalLink, ClipboardList, Plus, Trash2,
   Search, ChevronDown, ChevronRight, FileText, Eye, Edit, Pencil, Building2, Phone, Calendar, Receipt, Printer,
-  MessageSquare, FileEdit, Sparkles, CheckCheck, Calculator, Zap, X, Check,
+  MessageSquare, FileEdit, Sparkles, CheckCheck, Calculator, Zap, X, Check, Save,
   Shield, Mail, MapPin, Stethoscope, BadgeCheck, CreditCard, Clock, Hash, Activity
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1292,7 +1292,7 @@ export default function ResultEntryPage() {
     }
   };
 
-  const handleSaveResults = async (targetStatus: "PENDING" | "FINAL" | "APPROVED" = "PENDING") => {
+  const handleSaveResults = async (targetStatus?: "PENDING" | "FINAL" | "APPROVED") => {
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -1312,11 +1312,13 @@ export default function ResultEntryPage() {
       };
     });
 
+    const resolvedStatus = targetStatus || report?.status || "PENDING";
+
     try {
       await fetchFromLaravel(`/reports/${reportId}`, {
         method: "PUT",
         body: JSON.stringify({
-          status: targetStatus,
+          status: resolvedStatus,
           results: payload,
           printedInterpretations,
           test_notes: testNotes,
@@ -1324,9 +1326,9 @@ export default function ResultEntryPage() {
         }),
       });
 
-      let successMsg = "Diagnostic results saved (Pending).";
-      if (targetStatus === "FINAL") successMsg = "Report results saved & marked as FINAL.";
-      if (targetStatus === "APPROVED") successMsg = "Report results saved & APPROVED.";
+      let successMsg = "Diagnostic results saved successfully.";
+      if (targetStatus === "FINAL" || resolvedStatus === "FINAL") successMsg = "Report results saved & marked as FINAL.";
+      if (targetStatus === "APPROVED" || resolvedStatus === "APPROVED") successMsg = "Report results saved & APPROVED.";
 
       setSuccess(successMsg);
       toast.success("Success", successMsg);
@@ -1514,11 +1516,11 @@ export default function ResultEntryPage() {
           {/* Prominent Save Results Button at Top Right */}
           <Button
             type="button"
-            onClick={() => handleSaveResults("PENDING")}
+            onClick={() => handleSaveResults()}
             disabled={saving}
             className="h-10 px-5 gap-2 font-bold shadow-sm cursor-pointer gradient-primary text-primary-foreground hover:-translate-y-px transition-all rounded-xl"
           >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             <span>{saving ? "Saving…" : "Save Results"}</span>
           </Button>
         </div>
@@ -2122,7 +2124,7 @@ export default function ResultEntryPage() {
           </div>
           </div>
 
-          {/* Sticky Bottom Action Footer with Save (Pending), Final, Save & Authorize, and Print Buttons */}
+          {/* Sticky Bottom Action Footer with Cancel, Print, Final, Approve, and Save Buttons */}
           <div className="sticky bottom-0 z-30 mt-auto bg-card/95 backdrop-blur-md border-t border-x border-border/90 rounded-t-2xl rounded-b-none p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_-8px_20px_rgba(0,0,0,0.3)] flex flex-col sm:flex-row items-center justify-between gap-3">
             <Link href="/dashboard/reports">
               <Button type="button" variant="outline" disabled={saving} className="cursor-pointer w-full sm:w-auto">
@@ -2155,9 +2157,20 @@ export default function ResultEntryPage() {
                 type="button"
                 onClick={() => handleSaveResults("APPROVED")}
                 disabled={saving}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 h-10 gap-2 cursor-pointer shadow-sm rounded-xl"
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                <span>{saving ? "Saving…" : "Approve"}</span>
+              </Button>
+
+              <Button
+                type="button"
+                onClick={() => handleSaveResults()}
+                disabled={saving}
                 className="gradient-primary text-primary-foreground font-bold px-5 h-10 gap-2 cursor-pointer shadow-sm rounded-xl"
               >
-                {saving ? (<><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>) : (<><CheckCircle2 className="h-4 w-4" /> Save & Authorize</>)}
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                <span>{saving ? "Saving…" : "Save"}</span>
               </Button>
             </div>
           </div>

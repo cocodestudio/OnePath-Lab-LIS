@@ -108,6 +108,7 @@ export const DEFAULT_INTAKE_FIELDS: IntakeFieldConfig[] = [
   { key: "corporatePlan", label: "Corporate Plan", orderingName: "Corporate Plan", category: "Identification & Documents", enabled: false, required: false, showOnReport: false },
   { key: "govPanel", label: "Government Panel", orderingName: "Government Panel", category: "Identification & Documents", enabled: false, required: false, showOnReport: false },
 
+  { key: "vialBarcode", label: "Vial Barcode / Sample ID", orderingName: "Barcode", category: "Logistics & Physical", enabled: true, required: false, showOnReport: true },
   { key: "height", label: "Patient Height", orderingName: "Height", category: "Logistics & Physical", enabled: false, required: false, showOnReport: false },
   { key: "weight", label: "Patient Weight", orderingName: "Weight", category: "Logistics & Physical", enabled: false, required: false, showOnReport: false },
 

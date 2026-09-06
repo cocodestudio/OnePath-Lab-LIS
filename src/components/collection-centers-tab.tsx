@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Building2, PlusCircle, RefreshCw, Trash2, KeyRound, Eye, EyeOff,
   Copy, Check, ShieldCheck, Phone, Mail, Calendar, AlertCircle,
   Loader2, Sparkles, MapPin, CheckCircle2, UserCheck, ArrowLeft,
-  X, Lock, Shield, Sliders
+  X, Lock, Shield, Sliders, Briefcase, Filter, Layers, Users
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 
@@ -15,7 +15,7 @@ interface CollectionCenter {
   email: string;
   phone?: string;
   status: "active" | "suspended";
-  role?: string;
+  role?: "COLLECTION_CENTER" | "B2B" | string;
   created_at?: string;
   createdAt?: string;
   updated_at?: string;
@@ -27,10 +27,13 @@ export function CollectionCentersTab() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
-  // In-Page View Mode: "LIST" | "ADD" | "EDIT" (NO dialog modals!)
+  // In-Page View Mode: "LIST" | "ADD" | "EDIT"
   const [viewMode, setViewMode] = useState<"LIST" | "ADD" | "EDIT">("LIST");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | number | null>(null);
+
+  // Filter: ALL | B2B | COLLECTION_CENTER
+  const [roleFilter, setRoleFilter] = useState<"ALL" | "B2B" | "COLLECTION_CENTER">("ALL");
 
   // Add Form State
   const [name, setName] = useState("");
@@ -38,6 +41,7 @@ export function CollectionCentersTab() {
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState<"active" | "suspended">("active");
+  const [role, setRole] = useState<"COLLECTION_CENTER" | "B2B">("B2B");
   const [showPassword, setShowPassword] = useState(false);
 
   // Edit Form State
@@ -45,6 +49,7 @@ export function CollectionCentersTab() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editStatus, setEditStatus] = useState<"active" | "suspended">("active");
+  const [editRole, setEditRole] = useState<"COLLECTION_CENTER" | "B2B">("B2B");
   const [editPassword, setEditPassword] = useState("");
   const [showEditPassword, setShowEditPassword] = useState(false);
 
@@ -69,8 +74,8 @@ export function CollectionCentersTab() {
       const list = Array.isArray(data) ? data : (data?.data || []);
       setCenters(list);
     } catch (err: any) {
-      console.error("Failed to load collection centers:", err);
-      setToast({ text: "Failed to load collection centers", type: "error" });
+      console.error("Failed to load accounts:", err);
+      setToast({ text: "Failed to load RBAC partner accounts", type: "error" });
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -99,21 +104,25 @@ export function CollectionCentersTab() {
           password,
           phone: phone.trim(),
           status,
+          role,
         }),
       });
 
-      setToast({ text: res?.message || "Collection Center created successfully!", type: "success" });
+      const roleLabel = role === "B2B" ? "B2B Partner" : "Collection Center";
+      setToast({ text: res?.message || `${roleLabel} created successfully!`, type: "success" });
+      
       // Reset form
       setName("");
       setEmail("");
       setPassword("");
       setPhone("");
       setStatus("active");
+      setRole("B2B");
       setShowPassword(false);
       setViewMode("LIST");
       loadCenters();
     } catch (err: any) {
-      setToast({ text: err?.message || "Error creating collection center", type: "error" });
+      setToast({ text: err?.message || "Error creating account", type: "error" });
     } finally {
       setIsSubmitting(false);
     }
@@ -124,6 +133,7 @@ export function CollectionCentersTab() {
     setEditName(c.name || "");
     setEditPhone(c.phone || "");
     setEditStatus(c.status || "active");
+    setEditRole((c.role as any) === "B2B" ? "B2B" : "COLLECTION_CENTER");
     setEditPassword("");
     setShowEditPassword(false);
     setViewMode("EDIT");
@@ -139,6 +149,7 @@ export function CollectionCentersTab() {
         name: editName.trim(),
         phone: editPhone.trim(),
         status: editStatus,
+        role: editRole,
       };
       if (editPassword) {
         payload.password = editPassword;
@@ -149,19 +160,20 @@ export function CollectionCentersTab() {
         body: JSON.stringify(payload),
       });
 
-      setToast({ text: res?.message || "Collection Center updated successfully", type: "success" });
+      const roleLabel = editRole === "B2B" ? "B2B Partner" : "Collection Center";
+      setToast({ text: res?.message || `${roleLabel} updated successfully`, type: "success" });
       setViewMode("LIST");
       setEditingCenter(null);
       loadCenters();
     } catch (err: any) {
-      setToast({ text: err?.message || "Error updating collection center", type: "error" });
+      setToast({ text: err?.message || "Error updating account details", type: "error" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDeleteCenter = async (id: string | number, name: string) => {
-    if (!window.confirm(`Are you sure you want to remove "${name}"? This center's staff will no longer be able to log in.`)) {
+    if (!window.confirm(`Are you sure you want to remove "${name}"? This user will no longer be able to log in.`)) {
       return;
     }
 
@@ -170,24 +182,38 @@ export function CollectionCentersTab() {
       await fetchFromLaravel(`/collection-centers/${id}`, {
         method: "DELETE",
       });
-      setToast({ text: "Collection center removed successfully", type: "success" });
+      setToast({ text: "Account removed successfully", type: "success" });
       setCenters((prev) => prev.filter((c) => c.id !== id));
     } catch (err: any) {
-      setToast({ text: err?.message || "Failed to remove collection center", type: "error" });
+      setToast({ text: err?.message || "Failed to remove account", type: "error" });
     } finally {
       setDeletingId(null);
     }
   };
 
   const copyCredentials = (c: CollectionCenter) => {
-    const text = `OnePath LIS Collection Center Login:\nURL: ${window.location.origin}/login\nUser ID / Email: ${c.email}\nStatus: ${c.status.toUpperCase()}`;
+    const isB2B = c.role === "B2B";
+    const roleLabel = isB2B ? "B2B Partner" : "Collection Center";
+    const tabName = isB2B ? "B2B" : "Collection Center";
+    const text = `OnePath LIS ${roleLabel} Login:\nURL: ${window.location.origin}/login\nSelect Tab: ${tabName}\nUser ID / Email: ${c.email}\nStatus: ${c.status.toUpperCase()}`;
     navigator.clipboard.writeText(text);
     setCopiedId(c.id);
     setTimeout(() => setCopiedId(null), 2500);
-    setToast({ text: `Login details for "${c.name}" copied to clipboard!`, type: "success" });
+    setToast({ text: `Login credentials for "${c.name}" copied!`, type: "success" });
   };
 
   const activeCount = centers.filter((c) => c.status === "active").length;
+  const b2bCount = centers.filter((c) => c.role === "B2B").length;
+  const ccCount = centers.filter((c) => c.role === "COLLECTION_CENTER" || !c.role).length;
+
+  const filteredCenters = useMemo(() => {
+    return centers.filter((c) => {
+      if (roleFilter === "ALL") return true;
+      if (roleFilter === "B2B") return c.role === "B2B";
+      if (roleFilter === "COLLECTION_CENTER") return c.role === "COLLECTION_CENTER" || !c.role;
+      return true;
+    });
+  }, [centers, roleFilter]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -206,7 +232,7 @@ export function CollectionCentersTab() {
       )}
 
       {/* ========================================================================= */}
-      {/* VIEW 1: FULL-WIDTH IN-PAGE "ADD COLLECTION CENTER" FORM (NO DIALOG MODAL) */}
+      {/* VIEW 1: FULL-WIDTH IN-PAGE "ADD PARTNER / USER" FORM                      */}
       {/* ========================================================================= */}
       {viewMode === "ADD" && (
         <div className="rounded-2xl bg-card border border-border/80 shadow-xs overflow-hidden animate-fade-in">
@@ -217,17 +243,17 @@ export function CollectionCentersTab() {
                 type="button"
                 onClick={() => setViewMode("LIST")}
                 className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
-                title="Back to Centers List"
+                title="Back to Accounts List"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
               <div>
                 <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-primary" />
-                  <span>Register New Collection Center</span>
+                  <Shield className="h-5 w-5 text-primary" />
+                  <span>Register New RBAC Account (B2B / Collection Center)</span>
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Create a dedicated terminal login for remote sample collection staff or hospital franchises.
+                  Create role-based login credentials for B2B client labs, doctors, clinics, or internal phlebotomy centers.
                 </p>
               </div>
             </div>
@@ -236,24 +262,53 @@ export function CollectionCentersTab() {
           {/* Full-width Form Body */}
           <form onSubmit={handleCreateCenter} className="p-6 sm:p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Card 1: Center Information */}
+              {/* Card 1: Account Information & Role Selection */}
               <div className="p-5 rounded-xl bg-muted/30 border border-border/70 space-y-4">
                 <div className="border-b border-border/60 pb-3">
                   <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-primary" />
-                    <span>Center & Contact Details</span>
+                    <span>Organization & Role Configuration</span>
                   </h4>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Name of the branch or franchise collection unit.</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Define entity identity and permission level.</p>
+                </div>
+
+                {/* Role Dropdown */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                    <span>Role / Access Type *</span>
+                    <span className="text-[10px] font-mono text-primary font-bold">RBAC PRIVILEGE</span>
+                  </label>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as "COLLECTION_CENTER" | "B2B")}
+                    className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-bold focus:border-primary outline-none transition-colors cursor-pointer text-foreground"
+                  >
+                    <option value="B2B">B2B Partner (Client Lab / Clinic / Doctor)</option>
+                    <option value="COLLECTION_CENTER">Collection Center (Phlebotomy Branch)</option>
+                  </select>
+                  <div className="p-2.5 rounded-lg bg-background border border-border/80 text-[11px] text-muted-foreground leading-relaxed">
+                    {role === "B2B" ? (
+                      <span className="text-purple-600 dark:text-purple-400 font-medium">
+                        ✦ <strong>B2B Partner:</strong> Access to patient sample booking, live diagnostic tracking, reports download, and dedicated B2B sales/margin revenue module.
+                      </span>
+                    ) : (
+                      <span className="text-blue-600 dark:text-blue-400 font-medium">
+                        ✦ <strong>Collection Center:</strong> Access to sample accessioning, phlebotomy tracking, and authorized patient report printing.
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground">Center / Franchise Name *</label>
+                  <label className="text-xs font-bold text-foreground">
+                    {role === "B2B" ? "B2B Lab / Clinic Name *" : "Collection Center Name *"}
+                  </label>
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Apex Diagnostic Center - North Branch"
+                    placeholder={role === "B2B" ? "e.g. Apex Diagnostics & Polyclinic" : "e.g. Metro Phlebotomy Hub - North"}
                     className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none transition-colors"
                   />
                 </div>
@@ -268,29 +323,41 @@ export function CollectionCentersTab() {
                     className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none transition-colors"
                   />
                 </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground">Operational Status</label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as "active" | "suspended")}
+                    className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none transition-colors cursor-pointer"
+                  >
+                    <option value="active">Active (Full terminal access granted)</option>
+                    <option value="suspended">Suspended (Access temporarily blocked)</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Card 2: Login Credentials */}
+              {/* Card 2: Security & Login Credentials */}
               <div className="p-5 rounded-xl bg-muted/30 border border-border/70 space-y-4">
                 <div className="border-b border-border/60 pb-3">
                   <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <KeyRound className="h-4 w-4 text-primary" />
-                    <span>Terminal Login Credentials</span>
+                    <span>Security & Login Credentials</span>
                   </h4>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Staff uses these credentials on the LIS Login page.</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">User will log in using these credentials.</p>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground">Staff Login User ID (Email) *</label>
+                  <label className="text-xs font-bold text-foreground">Login User ID (Email) *</label>
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="e.g. apex.north@onepathlab.com"
+                    placeholder="e.g. partner@apexdiagnostics.com"
                     className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none transition-colors"
                   />
-                  <p className="text-[11px] text-muted-foreground">This will be the unique login username for this collection center.</p>
+                  <p className="text-[11px] text-muted-foreground">Unique login username for this account.</p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -318,7 +385,7 @@ export function CollectionCentersTab() {
                 <div className="p-3 rounded-xl bg-primary/5 border border-primary/15 flex items-start gap-2.5">
                   <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                   <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Staff will select <strong className="text-foreground">"Collection Center"</strong> on the LIS login page and enter these credentials to start registering patient samples.
+                    User will select <strong className="text-foreground">"{role === "B2B" ? "B2B" : "Collection Center"}"</strong> tab on the LIS Login page and enter these credentials.
                   </p>
                 </div>
               </div>
@@ -339,16 +406,16 @@ export function CollectionCentersTab() {
                 className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                <span>Create Collection Center</span>
+                <span>Create {role === "B2B" ? "B2B Partner" : "Collection Center"}</span>
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* ========================================================================== */}
-      {/* VIEW 2: FULL-WIDTH IN-PAGE "EDIT COLLECTION CENTER" FORM (NO DIALOG MODAL) */}
-      {/* ========================================================================== */}
+      {/* ========================================================================= */}
+      {/* VIEW 2: FULL-WIDTH IN-PAGE "EDIT PARTNER / USER" FORM                      */}
+      {/* ========================================================================= */}
       {viewMode === "EDIT" && editingCenter && (
         <div className="rounded-2xl bg-card border border-border/80 shadow-xs overflow-hidden animate-fade-in">
           {/* Header with Back Button */}
@@ -358,17 +425,17 @@ export function CollectionCentersTab() {
                 type="button"
                 onClick={() => { setViewMode("LIST"); setEditingCenter(null); }}
                 className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
-                title="Back to Centers List"
+                title="Back to Accounts List"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
               <div>
                 <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                   <KeyRound className="h-5 w-5 text-primary" />
-                  <span>Edit Collection Center: {editingCenter.name}</span>
+                  <span>Edit Account: {editingCenter.name}</span>
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Update branch contact information or reset staff password.
+                  Update role permissions, contact information, or reset password.
                 </p>
               </div>
             </div>
@@ -385,17 +452,29 @@ export function CollectionCentersTab() {
           {/* Full-width Form Body */}
           <form onSubmit={handleUpdateCenter} className="p-6 sm:p-8 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Card 1: Details */}
+              {/* Card 1: Details & Role */}
               <div className="p-5 rounded-xl bg-muted/30 border border-border/70 space-y-4">
                 <div className="border-b border-border/60 pb-3">
                   <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-primary" />
-                    <span>Center Information</span>
+                    <span>Account & Role Details</span>
                   </h4>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground">Center Name *</label>
+                  <label className="text-xs font-bold text-foreground">Role / Access Level *</label>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as "COLLECTION_CENTER" | "B2B")}
+                    className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-bold focus:border-primary outline-none transition-colors cursor-pointer text-foreground"
+                  >
+                    <option value="B2B">B2B Partner (Client Lab / Clinic / Doctor)</option>
+                    <option value="COLLECTION_CENTER">Collection Center (Phlebotomy Branch)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground">Organization / Partner Name *</label>
                   <input
                     type="text"
                     required
@@ -416,7 +495,7 @@ export function CollectionCentersTab() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground">Terminal Operational Status</label>
+                  <label className="text-xs font-bold text-foreground">Operational Status</label>
                   <select
                     value={editStatus}
                     onChange={(e) => setEditStatus(e.target.value as "active" | "suspended")}
@@ -494,19 +573,39 @@ export function CollectionCentersTab() {
       )}
 
       {/* ========================================================================= */}
-      {/* VIEW 3: MAIN LIST VIEW (ONLY ONE PROMINENT "+ ADD CENTER" BUTTON)          */}
+      {/* VIEW 3: MAIN LIST VIEW (METRICS, FILTER TABS & ACCOUNTS TABLE)            */}
       {/* ========================================================================= */}
       {viewMode === "LIST" && (
         <>
-          {/* Clean Metric Stats Cards (No redundant button inside!) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Metric Stats Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <ShieldCheck className="h-6 w-6" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total RBAC Accounts</p>
+                <p className="text-2xl font-extrabold text-foreground tracking-tight mt-0.5">{centers.length}</p>
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                <Briefcase className="h-6 w-6" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">B2B Partner Labs</p>
+                <p className="text-2xl font-extrabold text-purple-600 dark:text-purple-400 tracking-tight mt-0.5">{b2bCount}</p>
+              </div>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
                 <Building2 className="h-6 w-6" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total Collection Centers</p>
-                <p className="text-2xl font-extrabold text-foreground tracking-tight mt-0.5">{centers.length}</p>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Collection Centers</p>
+                <p className="text-2xl font-extrabold text-blue-600 dark:text-blue-400 tracking-tight mt-0.5">{ccCount}</p>
               </div>
             </div>
 
@@ -523,39 +622,69 @@ export function CollectionCentersTab() {
 
           {/* Main Container */}
           <div className="rounded-2xl bg-card border border-border/80 shadow-xs overflow-hidden">
-            {/* Table Header: EXACTLY ONE "ADD COLLECTION CENTER" BUTTON */}
-            <div className="p-5 border-b border-border/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/20">
+            {/* Table Header: Title, Filter Pills, and Add Button */}
+            <div className="p-5 border-b border-border/70 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-muted/20">
               <div>
                 <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <span>Collection Centers & Staff Terminals</span>
+                  <span>RBAC & Partner Hub</span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary">
-                    {centers.length} Centers
+                    {filteredCenters.length} Accounts
                   </span>
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Remote collection centers and hospital franchises can log in using their credentials to register patient samples.
+                  Manage role-based logins for B2B client diagnostic centers, clinics, and phlebotomy collection branches.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Filter Pills */}
+                <div className="p-1 bg-background rounded-xl border border-border flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setRoleFilter("ALL")}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      roleFilter === "ALL" ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    All ({centers.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRoleFilter("B2B")}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      roleFilter === "B2B" ? "bg-purple-600 text-white shadow-xs" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    B2B ({b2bCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRoleFilter("COLLECTION_CENTER")}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      roleFilter === "COLLECTION_CENTER" ? "bg-blue-600 text-white shadow-xs" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Collection Centers ({ccCount})
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={handleRefresh}
                   disabled={isRefreshing}
                   className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shadow-xs cursor-pointer"
-                  title="Refresh Center List"
+                  title="Refresh Accounts"
                 >
                   <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
                 </button>
 
-                {/* THE ONLY ONE "ADD COLLECTION CENTER" BUTTON */}
                 <button
                   type="button"
                   onClick={() => setViewMode("ADD")}
                   className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
                 >
                   <PlusCircle className="h-4 w-4" />
-                  <span>Add Collection Center</span>
+                  <span>Add Partner / Terminal</span>
                 </button>
               </div>
             </div>
@@ -564,57 +693,78 @@ export function CollectionCentersTab() {
             {loading ? (
               <div className="py-20 flex flex-col items-center justify-center gap-3 text-muted-foreground">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-xs font-semibold">Loading collection centers...</p>
+                <p className="text-xs font-semibold">Loading RBAC partner accounts...</p>
               </div>
-            ) : centers.length === 0 ? (
+            ) : filteredCenters.length === 0 ? (
               /* Empty State */
               <div className="py-16 px-6 text-center flex flex-col items-center justify-center">
                 <div className="w-16 h-16 rounded-2xl bg-muted/60 border border-border/80 flex items-center justify-center text-muted-foreground mb-4">
-                  <Building2 className="h-8 w-8 text-primary/70" />
+                  <Shield className="h-8 w-8 text-primary/70" />
                 </div>
-                <h4 className="text-base font-bold text-foreground">No Collection Centers Added Yet</h4>
+                <h4 className="text-base font-bold text-foreground">No Accounts Found</h4>
                 <p className="text-xs text-muted-foreground max-w-md mt-1.5 leading-relaxed">
-                  Click the <strong>"Add Collection Center"</strong> button above to create login credentials for your satellite collection points or franchise clinics.
+                  Click the <strong>"Add Partner / Terminal"</strong> button above to register B2B client labs or branch collection centers.
                 </p>
               </div>
             ) : (
-              /* Table of Centers */
+              /* Table of Accounts */
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
-                      <th className="py-3 px-5">Center / Franchise Name</th>
+                      <th className="py-3 px-5">Organization / Partner</th>
+                      <th className="py-3 px-4">Role / Access</th>
                       <th className="py-3 px-4">Login User ID (Email)</th>
-                      <th className="py-3 px-4">Contact Phone</th>
-                      <th className="py-3 px-4">Terminal Status</th>
-                      <th className="py-3 px-4">Created Date</th>
+                      <th className="py-3 px-4">Phone</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Registered Date</th>
                       <th className="py-3 px-5 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60 text-xs font-medium">
-                    {centers.map((c) => {
+                    {filteredCenters.map((c) => {
                       const createdDate = c.created_at || c.createdAt;
                       const dateStr = createdDate
                         ? new Date(createdDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
                         : "—";
                       const isActive = c.status === "active";
+                      const isB2B = c.role === "B2B";
 
                       return (
                         <tr key={c.id} className="hover:bg-muted/30 transition-colors group">
+                          {/* Name */}
                           <td className="py-4 px-5">
                             <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold text-xs">
-                                <Building2 className="h-4 w-4" />
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs ${
+                                isB2B ? "bg-purple-500/10 text-purple-600 dark:text-purple-400" : "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                              }`}>
+                                {isB2B ? <Briefcase className="h-4 w-4" /> : <Building2 className="h-4 w-4" />}
                               </div>
                               <div>
                                 <p className="font-bold text-foreground text-sm leading-tight">{c.name}</p>
                                 <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
-                                  <MapPin className="h-3 w-3" /> Branch / Client Terminal
+                                  <MapPin className="h-3 w-3" /> {isB2B ? "B2B Client Lab / Partner" : "Phlebotomy Collection Point"}
                                 </span>
                               </div>
                             </div>
                           </td>
 
+                          {/* Role Badge */}
+                          <td className="py-4 px-4">
+                            {isB2B ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                                <Briefcase className="h-3 w-3" />
+                                <span>B2B Partner</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                <Building2 className="h-3 w-3" />
+                                <span>Collection Center</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* User ID / Email */}
                           <td className="py-4 px-4">
                             <div className="flex items-center gap-2">
                               <span className="font-mono text-xs bg-muted/60 px-2.5 py-1 rounded-lg border border-border/80 text-foreground font-semibold">
@@ -635,6 +785,7 @@ export function CollectionCentersTab() {
                             </div>
                           </td>
 
+                          {/* Phone */}
                           <td className="py-4 px-4 text-foreground font-medium">
                             {c.phone ? (
                               <span className="inline-flex items-center gap-1.5">
@@ -645,6 +796,7 @@ export function CollectionCentersTab() {
                             )}
                           </td>
 
+                          {/* Status */}
                           <td className="py-4 px-4">
                             <span
                               className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${
@@ -654,37 +806,36 @@ export function CollectionCentersTab() {
                               }`}
                             >
                               <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-500" : "bg-amber-500"}`} />
-                              {isActive ? "Active Terminal" : "Suspended"}
+                              <span>{isActive ? "Active" : "Suspended"}</span>
                             </span>
                           </td>
 
-                          <td className="py-4 px-4 text-muted-foreground text-[11px]">
-                            <span className="inline-flex items-center gap-1">
-                              <Calendar className="h-3 w-3" /> {dateStr}
-                            </span>
+                          {/* Registered Date */}
+                          <td className="py-4 px-4 text-muted-foreground">
+                            {dateStr}
                           </td>
 
+                          {/* Actions */}
                           <td className="py-4 px-5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 type="button"
                                 onClick={() => openEditView(c)}
-                                className="p-1.5 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                                title="Edit Center / Change Password"
+                                className="px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-bold text-foreground hover:bg-muted/70 transition-colors shadow-2xs cursor-pointer inline-flex items-center gap-1"
                               >
-                                <KeyRound className="h-4 w-4" />
+                                <span>Edit</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteCenter(c.id, c.name)}
                                 disabled={deletingId === c.id}
-                                className="p-1.5 rounded-lg border border-border bg-card text-destructive/80 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                                title="Remove Center"
+                                className="p-1.5 rounded-lg border border-border/80 bg-card text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+                                title="Remove Account"
                               >
                                 {deletingId === c.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-destructive" />
                                 ) : (
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 )}
                               </button>
                             </div>

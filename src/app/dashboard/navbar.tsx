@@ -53,6 +53,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const [user, setUser] = useState<any>(null);
+  const isB2B = user?.role === "B2B";
   const isCollectionCenter = user?.role === "COLLECTION_CENTER";
 
   // Global search state
@@ -409,7 +410,7 @@ export default function Navbar() {
                         {searchResults.reports.map((r: any) => (
                           <Link
                             key={r.id}
-                            href={isCollectionCenter ? `/dashboard/reports` : `/dashboard/reports/${r.id}/edit`}
+                            href={(isCollectionCenter || isB2B) ? `/dashboard/reports` : `/dashboard/reports/${r.id}/edit`}
                             onClick={() => setIsSearchOpen(false)}
                             className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted/60 transition-colors text-xs"
                           >
@@ -427,7 +428,7 @@ export default function Navbar() {
                               </p>
                             </div>
                             <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">
-                              {isCollectionCenter ? "View Reports →" : "Enter Results →"}
+                              {(isCollectionCenter || isB2B) ? "View Reports →" : "Enter Results →"}
                             </span>
                           </Link>
                         ))}
@@ -733,15 +734,17 @@ export default function Navbar() {
                 </Link>
               </DropdownMenuItem>
 
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/dashboard/account/lab"
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium text-foreground hover:bg-muted cursor-pointer transition-colors"
-                >
-                  <FlaskConical className="h-4 w-4 text-muted-foreground" />
-                  <span>Lab account</span>
-                </Link>
-              </DropdownMenuItem>
+              {!isB2B && !isCollectionCenter && (
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/dashboard/account/lab"
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl font-medium text-foreground hover:bg-muted cursor-pointer transition-colors"
+                  >
+                    <FlaskConical className="h-4 w-4 text-muted-foreground" />
+                    <span>Lab account</span>
+                  </Link>
+                </DropdownMenuItem>
+              )}
 
               <DropdownMenuItem asChild>
                 <Link

@@ -6,13 +6,13 @@ import { useRouter } from "next/navigation";
 import {
   AlertCircle, Lock, Mail, Loader2, FlaskConical, ShieldCheck,
   Eye, EyeOff, ArrowRight, Microscope, Activity, Building2,
-  Sparkles, CheckCircle2, X
+  Sparkles, CheckCircle2, X, Briefcase
 } from "lucide-react";
 import { getAuthBaseUrl } from "@/lib/api-client";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [loginType, setLoginType] = useState<"ADMIN" | "COLLECTION_CENTER">("ADMIN");
+  const [loginType, setLoginType] = useState<"ADMIN" | "COLLECTION_CENTER" | "B2B">("ADMIN");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -258,33 +258,46 @@ export default function LoginPage() {
               <p className="text-sm sm:text-[15px] text-slate-600 leading-relaxed">
                 {loginType === "ADMIN"
                   ? "Enter your laboratory credentials to access your diagnostic terminal."
+                  : loginType === "B2B"
+                  ? "Enter your B2B partner credentials to access partner services and revenue."
                   : "Enter branch credentials for phlebotomy sample accessioning."}
               </p>
             </div>
 
             {/* Terminal / Center Switcher Pill Tabs (Spacious & Modern) */}
-            <div className="p-1.5 bg-white/90 backdrop-blur-xs rounded-2xl border border-slate-200/90 shadow-2xs grid grid-cols-2 gap-1.5">
+            <div className="p-1.5 bg-white/90 backdrop-blur-xs rounded-2xl border border-slate-200/90 shadow-2xs grid grid-cols-3 gap-1.5">
               <button
                 type="button"
                 onClick={() => { setLoginType("ADMIN"); setError(null); }}
-                className={`h-11 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${loginType === "ADMIN"
+                className={`h-11 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${loginType === "ADMIN"
                   ? "bg-slate-900 text-white shadow-xs font-extrabold"
                   : "text-slate-600 hover:text-slate-900"
                   }`}
               >
-                <FlaskConical className={`h-4 w-4 transition-colors ${loginType === "ADMIN" ? "text-emerald-400" : ""}`} />
-                <span>Admin</span>
+                <FlaskConical className={`h-4 w-4 shrink-0 transition-colors ${loginType === "ADMIN" ? "text-emerald-400" : ""}`} />
+                <span className="truncate">Admin</span>
               </button>
               <button
                 type="button"
                 onClick={() => { setLoginType("COLLECTION_CENTER"); setError(null); }}
-                className={`h-11 py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${loginType === "COLLECTION_CENTER"
+                className={`h-11 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${loginType === "COLLECTION_CENTER"
                   ? "bg-slate-900 text-white shadow-xs font-extrabold"
                   : "text-slate-600 hover:text-slate-900"
                   }`}
               >
-                <Building2 className={`h-4 w-4 transition-colors ${loginType === "COLLECTION_CENTER" ? "text-emerald-400" : ""}`} />
-                <span>Collection Center</span>
+                <Building2 className={`h-4 w-4 shrink-0 transition-colors ${loginType === "COLLECTION_CENTER" ? "text-emerald-400" : ""}`} />
+                <span className="truncate">Collection</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setLoginType("B2B"); setError(null); }}
+                className={`h-11 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${loginType === "B2B"
+                  ? "bg-slate-900 text-white shadow-xs font-extrabold"
+                  : "text-slate-600 hover:text-slate-900"
+                  }`}
+              >
+                <Briefcase className={`h-4 w-4 shrink-0 transition-colors ${loginType === "B2B" ? "text-emerald-400" : ""}`} />
+                <span className="truncate">B2B Partner</span>
               </button>
             </div>
 
@@ -301,7 +314,7 @@ export default function LoginPage() {
               {/* Email Field */}
               <div className="space-y-1.5">
                 <label htmlFor="email" className="text-xs sm:text-sm font-bold text-slate-800">
-                  {loginType === "ADMIN" ? "User ID / Email" : "Branch Email ID"}
+                  {loginType === "ADMIN" ? "User ID / Email" : loginType === "B2B" ? "B2B Partner Email" : "Branch Email ID"}
                 </label>
                 <div className="relative group">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-slate-400 group-focus-within:text-emerald-700 transition-colors pointer-events-none" />
@@ -312,7 +325,7 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={loading}
                     required
-                    placeholder={loginType === "ADMIN" ? "pathologist@onepathlab.com" : "center@onepathlab.com"}
+                    placeholder={loginType === "ADMIN" ? "pathologist@onepathlab.com" : loginType === "B2B" ? "partner@b2blab.com" : "center@onepathlab.com"}
                     className="flex h-12 sm:h-[50px] w-full rounded-xl border border-slate-200/90 bg-white/90 backdrop-blur-xs pl-11 pr-4 text-sm font-medium text-slate-900 placeholder:text-slate-400 shadow-2xs transition-all focus:outline-none focus:bg-white focus:border-emerald-600 focus:ring-3 focus:ring-emerald-500/15 hover:border-slate-300"
                   />
                 </div>

@@ -14,7 +14,7 @@ import {
 import {
   Search, UserPlus, User, Eye, Edit2, Trash2, Loader2, AlertCircle, Users, X,
   MapPin, Phone, Stethoscope, Building, UserCheck, CheckCircle2, RefreshCw,
-  ChevronLeft, ChevronRight, Calendar
+  ChevronLeft, ChevronRight, Calendar, Tag
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -30,6 +30,9 @@ interface Patient {
   age: number;
   gender: string;
   phone: string;
+  vial_barcode?: string | null;
+  vialBarcode?: string | null;
+  meta?: any;
   email?: string | null;
   ref_doctor?: string;
   refDoctor?: string;
@@ -79,6 +82,16 @@ export default function PatientsPage() {
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    try {
+      const uStr = localStorage.getItem("lis_user");
+      if (uStr) setCurrentUser(JSON.parse(uStr));
+    } catch (e) {}
+  }, []);
+
+  const isB2B = currentUser?.role === "B2B";
 
   const setPreset = (preset: "today" | "yesterday" | "all") => {
     if (preset === "all") { setFilterDate(""); return; }
@@ -382,7 +395,7 @@ export default function PatientsPage() {
                 <tr className="border-b border-border/80 bg-muted/30 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
                   <th className="px-5 py-3.5">Patient Details</th>
                   <th className="px-5 py-3.5">PID / ID</th>
-                  <th className="px-5 py-3.5">Contact</th>
+                  <th className="px-5 py-3.5">{isB2B ? "Barcode" : "Contact"}</th>
                   <th className="px-5 py-3.5">Referred By</th>
                   <th className="px-5 py-3.5">Collection Point</th>
                   <th className="px-5 py-3.5">Registered</th>
@@ -419,7 +432,14 @@ export default function PatientsPage() {
                         {patId}
                       </td>
                       <td className="px-5 py-3.5 text-foreground font-mono">
-                        {patPhone}
+                        {isB2B ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/20 text-xs">
+                            <Tag className="h-3 w-3" />
+                            {patient.vial_barcode || patient.vialBarcode || patient.meta?.vial_barcode || "—"}
+                          </span>
+                        ) : (
+                          patPhone
+                        )}
                       </td>
                       <td className="px-5 py-3.5 text-foreground font-medium">
                         Dr. {patRef}
@@ -557,8 +577,12 @@ export default function PatientsPage() {
                     <p className="font-bold text-foreground mt-0.5">{viewPatient.age} Yrs · {viewPatient.gender}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Phone Number</p>
-                    <p className="font-mono font-bold text-foreground mt-0.5">{viewPatient.phone || "—"}</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{isB2B ? "Vial Barcode" : "Phone Number"}</p>
+                    <p className="font-mono font-bold text-foreground mt-0.5">
+                      {isB2B
+                        ? (viewPatient.vial_barcode || viewPatient.vialBarcode || viewPatient.meta?.vial_barcode || "—")
+                        : (viewPatient.phone || "—")}
+                    </p>
                   </div>
                 </div>
               </div>
