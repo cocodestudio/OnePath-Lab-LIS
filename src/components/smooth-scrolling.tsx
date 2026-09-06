@@ -15,7 +15,9 @@ function RouteScrollReset() {
     document.body.scrollTop = 0;
 
     if (lenis) {
-      lenis.scrollTo(0, { immediate: true });
+      try {
+        lenis.scrollTo(0, { immediate: true });
+      } catch {}
     }
   }, [pathname, lenis]);
 

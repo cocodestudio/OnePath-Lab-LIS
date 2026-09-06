@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Plus, Edit2, Trash2, FlaskConical, AlertTriangle,
-  Loader2, ChevronDown, ChevronRight, ChevronUp,
+  Loader2, ChevronDown, ChevronRight, ChevronUp, ChevronLeft,
   FileText, ArrowLeft, Sliders, Check, GripVertical,
   Calendar, Sparkles, CornerDownRight, Eye, X
 } from "lucide-react";
@@ -95,6 +95,19 @@ const QUICK_OPTION_PRESETS: { title: string; desc: string; options: string[] }[]
   }
 ];
 
+function getPaginationRange(current: number, total: number): (number | string)[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, "...", total];
+  }
+  if (current >= total - 3) {
+    return [1, "...", total - 4, total - 3, total - 2, total - 1, total];
+  }
+  return [1, "...", current - 1, current, current + 1, "...", total];
+}
+
 export interface AgeRangeBand {
   id: string;
   stageName: string;
@@ -176,6 +189,8 @@ export default function TestMasterPage() {
   const [deleteTarget, setDeleteTarget] = useState<Test | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Main Test Form State
   const [name, setName] = useState("");
@@ -1040,15 +1055,29 @@ export default function TestMasterPage() {
     }
   };
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, selectedCategory, pageSize]);
+
   const filteredTests = useMemo(() => {
+    const q = (search || "").trim().toLowerCase();
     return tests.filter(t => {
-      const matchQuery = t.name.toLowerCase().includes(search.toLowerCase()) ||
-        (t.testCode && t.testCode.toLowerCase().includes(search.toLowerCase())) ||
-        (t.subTests && t.subTests.some(s => s.name.toLowerCase().includes(search.toLowerCase())));
-      const matchCat = selectedCategory === "ALL" || t.category.toLowerCase() === selectedCategory.toLowerCase();
+      const nameMatch = !q || (t.name || "").toLowerCase().includes(q);
+      const codeMatch = !q || Boolean(t.testCode && t.testCode.toLowerCase().includes(q));
+      const subMatch = !q || Boolean(t.subTests && t.subTests.some(s => (s.name || "").toLowerCase().includes(q)));
+      const matchQuery = nameMatch || codeMatch || subMatch;
+
+      const testCat = (t.category || "").trim().toLowerCase();
+      const matchCat = selectedCategory === "ALL" || testCat === selectedCategory.toLowerCase();
       return matchQuery && matchCat;
     });
   }, [tests, search, selectedCategory]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTests.length / pageSize));
+  const paginatedTests = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredTests.slice(start, start + pageSize);
+  }, [filteredTests, currentPage, pageSize]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-fade-in">
@@ -1128,7 +1157,8 @@ export default function TestMasterPage() {
         </div>
       ) : (
         <div className="bg-card border border-border/90 rounded-xl shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-muted/50 text-[11px] font-bold text-muted-foreground uppercase border-b border-border/80">
                 <tr>
@@ -1142,7 +1172,7 @@ export default function TestMasterPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {filteredTests.map(test => {
+                {paginatedTests.map(test => {
                   const hasSub = test.subTests && test.subTests.length > 0;
                   const isExpanded = !!expandedRows[test.id];
 
@@ -1181,7 +1211,7 @@ export default function TestMasterPage() {
                           {hasSub ? `${test.subTests!.length} Parameters` : "Single Field"}
                         </td>
                         <td className="py-3.5 px-4 font-mono font-bold text-foreground">
-                          ₹{test.price.toFixed(0)}
+                          ₹{Number(test.price || 0).toFixed(0)}
                         </td>
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
@@ -1251,6 +1281,195 @@ export default function TestMasterPage() {
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Cards View (Optimized for small screens) */}
+          <div className="block md:hidden divide-y divide-border/60">
+            {paginatedTests.map(test => {
+              const hasSub = test.subTests && test.subTests.length > 0;
+              const isExpanded = !!expandedRows[test.id];
+
+              return (
+                <div key={test.id} className="p-4 space-y-2.5 bg-card hover:bg-muted/10 transition-colors">
+                  {/* Top row: Name & Actions */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-0.5 flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-sm text-foreground break-words">{test.name}</span>
+                        {test.interpretation && (
+                          <span className="text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded font-bold shrink-0">
+                            📝 Interp
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                        <span className="font-mono text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
+                          {test.testCode || "—"}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-muted border border-border/80 text-foreground">
+                          {test.category}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleOpenSampleReport(test)}
+                        className="p-1.5 rounded-md border border-border/80 bg-background text-primary hover:bg-primary/10 transition-colors cursor-pointer shadow-xs"
+                        title="Live Preview"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenEditDialog(test)}
+                        className="p-1.5 rounded-md border border-border/80 bg-background text-foreground hover:bg-accent cursor-pointer shadow-xs"
+                        title="Edit test"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(test)}
+                        className="p-1.5 rounded-md border border-border/80 bg-background text-destructive hover:bg-destructive/10 cursor-pointer shadow-xs"
+                        title="Delete test"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Middle row: Price & Parameter count */}
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-border/40">
+                    <span className="text-muted-foreground">
+                      {hasSub ? `${test.subTests!.length} Parameters` : "Single Field"}
+                    </span>
+                    <span className="font-mono font-bold text-sm text-foreground">
+                      ₹{Number(test.price || 0).toFixed(0)}
+                    </span>
+                  </div>
+
+                  {/* Expand Sub-tests Button (Mobile) */}
+                  {hasSub && (
+                    <div>
+                      <button
+                        onClick={() => setExpandedRows(prev => ({ ...prev, [test.id]: !prev[test.id] }))}
+                        className="flex items-center justify-between w-full py-1.5 px-2.5 rounded-md bg-muted/40 hover:bg-muted/70 text-xs font-semibold text-muted-foreground transition-colors cursor-pointer"
+                      >
+                        <span>{isExpanded ? "Hide Parameters" : `View ${test.subTests!.length} Parameters`}</span>
+                        {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </button>
+
+                      {isExpanded && (
+                        <div className="mt-2 space-y-1.5 pl-1">
+                          {test.subTests!.map((sub, sIdx) => (
+                            <div key={sIdx} className="p-2 rounded border border-border/60 bg-background text-xs space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-foreground">{sub.name}</span>
+                                <span className="font-mono text-[10px] text-muted-foreground">{sub.unit || "No Unit"}</span>
+                              </div>
+                              <div className="text-[11px] text-muted-foreground">
+                                {sub.rangeType === "text" ? (
+                                  <span className="text-blue-600 dark:text-blue-400 font-mono">{sub.textRefRange || "Text"}</span>
+                                ) : sub.genderRefType === "GENDER_SPECIFIC" ? (
+                                  <span>M: {sub.refRangeMinMale || 0}-{sub.refRangeMaxMale || 0} | F: {sub.refRangeMinFemale || 0}-{sub.refRangeMaxFemale || 0}</span>
+                                ) : (
+                                  <span>Range: {sub.refRangeMin || 0} - {sub.refRangeMax || 0}</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="border-t border-border/80 px-4 py-3 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3 text-muted-foreground w-full sm:w-auto justify-between sm:justify-start">
+              <span>
+                Showing <strong className="text-foreground font-semibold">{filteredTests.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> to{" "}
+                <strong className="text-foreground font-semibold">
+                  {Math.min(currentPage * pageSize, filteredTests.length)}
+                </strong>{" "}
+                of <strong className="text-foreground font-semibold">{filteredTests.length}</strong> tests
+              </span>
+
+              <div className="flex items-center gap-1.5 ml-2">
+                <span className="text-[11px] text-muted-foreground hidden sm:inline">Per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="h-7 px-2 rounded-md bg-background border border-border text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  <option value={15}>15</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1 justify-center">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="px-2 py-1 rounded-md border border-border/80 bg-background text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted cursor-pointer transition-colors"
+                title="First Page"
+              >
+                «
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="p-1.5 rounded-md border border-border/80 bg-background text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted cursor-pointer transition-colors"
+                title="Previous Page"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+
+              {/* Page indicator buttons */}
+              <div className="flex items-center gap-1 mx-1">
+                {getPaginationRange(currentPage, totalPages).map((p, idx) =>
+                  p === "..." ? (
+                    <span key={`ellipsis-${idx}`} className="px-1 text-muted-foreground font-mono">
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setCurrentPage(p as number)}
+                      className={`h-7 min-w-[28px] px-2 rounded-md font-mono font-bold text-xs transition-colors cursor-pointer ${
+                        currentPage === p
+                          ? "bg-primary text-primary-foreground shadow-xs"
+                          : "border border-border/80 bg-background text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="p-1.5 rounded-md border border-border/80 bg-background text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted cursor-pointer transition-colors"
+                title="Next Page"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="px-2 py-1 rounded-md border border-border/80 bg-background text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted cursor-pointer transition-colors"
+                title="Last Page"
+              >
+                »
+              </button>
+            </div>
           </div>
         </div>
       )}
