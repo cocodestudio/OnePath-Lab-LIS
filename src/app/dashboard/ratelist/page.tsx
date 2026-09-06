@@ -88,7 +88,7 @@ export default function RateListPage() {
 
   // Filter & Sort
   const filteredTests = useMemo(() => {
-    let list = tests.filter((t) => {
+    const list = tests.filter((t) => {
       const q = search.toLowerCase();
       const code = (t.test_code || t.testCode || "").toLowerCase();
       const name = (t.name || "").toLowerCase();
