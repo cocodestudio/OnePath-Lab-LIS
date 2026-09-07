@@ -41,10 +41,15 @@ export async function downloadSubscriptionTaxInvoicePdf(invoice: SubscriptionInv
   const orderId = `OD${rawId.padStart(18, "0")}`;
   const invNumber = invoice.invoiceNumber || `FAH4X4${rawId.slice(0, 8)}000${rawId.slice(-3)}`;
 
-  const dateObj = invoice.invoiceDate ? new Date(invoice.invoiceDate) : new Date();
+  // If invoiceDate is date-only or 00:00:00, use createdAt to obtain the exact purchase time
+  const hasValidTime = (str?: string) => Boolean(str && !str.includes("00:00:00") && !str.endsWith("T00:00:00.000000Z") && !str.endsWith("T00:00:00Z"));
+  const rawDateStr = hasValidTime(invoice.invoiceDate)
+    ? invoice.invoiceDate
+    : (invoice.createdAt || invoice.created_at || invoice.invoiceDate);
+  const dateObj = rawDateStr ? new Date(rawDateStr) : new Date();
   const formattedDate = !isNaN(dateObj.getTime())
-    ? `${String(dateObj.getDate()).padStart(2, "0")}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${dateObj.getFullYear()}, ${dateObj.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}`
-    : "19-02-2026, 12:34 PM";
+    ? `${String(dateObj.getDate()).padStart(2, "0")}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${dateObj.getFullYear()}, ${dateObj.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}`
+    : "07-09-2026, 05:42 PM";
 
   const productTitle = isSixMonths
     ? "OnePathLab LIS Software - 6 Months Semi-Annual License Plan"
@@ -53,8 +58,8 @@ export async function downloadSubscriptionTaxInvoicePdf(invoice: SubscriptionInv
   const productDescription =
     "Complete Pathology Laboratory Information System (LIS) Software License with Unlimited Diagnostic Tests, Machine Interfacing & QR Patient Reports | SAC: 998314";
 
-  // Clean Scan-Friendly Text for QR Code (Displays Invoice details instantly upon camera scan)
-  const qrText = `TAX INVOICE: ${invNumber}\nORDER ID: ${orderId}\nPRODUCT: ${productTitle}\nTOTAL: INR ${total.toFixed(2)}\nDATE: ${formattedDate}\nSELLER: CoCode Studio\nGSTIN: 09EAMPA2104K3ZT\nSTATUS: PAID`;
+  // Clean Scan-Friendly Text for QR Code: strictly the Order ID text
+  const qrText = orderId;
 
   // 2. Generate Ultra-Crisp Base64 PNG QR Code
   let qrDataUrl = "";

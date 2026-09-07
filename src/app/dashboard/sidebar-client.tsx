@@ -9,7 +9,7 @@ import {
   FlaskConical, Settings, HelpCircle, LifeBuoy, Clock, TrendingUp,
   Briefcase, ChevronDown
 } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStoredUser, logout } from "@/lib/api-client";
 
 interface NavChild {
@@ -50,8 +50,21 @@ export default function Sidebar() {
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   useEffect(() => {
-    setUser(getStoredUser());
+    const update = () => setUser(getStoredUser());
+    update();
+    window.addEventListener("user-updated", update);
+    return () => window.removeEventListener("user-updated", update);
   }, []);
+
+  const labDisplayName =
+    user?.labName ||
+    user?.lab_name ||
+    user?.lab?.name ||
+    user?.lab?.centreName ||
+    user?.name ||
+    "Diagnostic Laboratory";
+
+  const userAvatar = user?.avatarUrl || user?.avatar_url || (user as any)?.avatar || user?.lab?.logoUrl || user?.lab?.logo_url;
 
   const handleToggle = (itemName: string) => {
     const isCurrentlyOpen = Boolean(expandedItems[itemName]) || hoveredItem === itemName;
@@ -240,12 +253,13 @@ export default function Sidebar() {
       <div className="p-3.5 space-y-2.5 border-t border-border/60">
         <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/40 border border-border/50">
           <Avatar className="h-9 w-9 shrink-0">
+            {userAvatar && <AvatarImage src={userAvatar} alt={labDisplayName} className="object-cover" />}
             <AvatarFallback className="gradient-primary text-primary-foreground text-[11px] font-bold">
-              {getInitials(user?.name || "")}
+              {labDisplayName.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-foreground truncate">{user?.name}</p>
+            <p className="text-[13px] font-semibold text-foreground truncate" title={labDisplayName}>{labDisplayName}</p>
             <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground truncate">
               {isB2B ? "B2B Partner Lab" : isCollectionCenter ? "Collection Center" : (user?.role || "Staff")}
             </p>

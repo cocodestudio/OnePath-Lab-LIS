@@ -5,9 +5,10 @@ import Link from "next/link";
 import {
   User, Shield, Smartphone, KeyRound, Lock, CheckCircle2,
   AlertCircle, Loader2, Camera, Edit3, X, Check, Laptop,
-  Globe, LogOut, ArrowRight, RefreshCw, Eye, EyeOff, Mail
+  Globe, LogOut, ArrowRight, RefreshCw, Eye, EyeOff, Mail,
+  Building2
 } from "lucide-react";
-import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser, updateStoredUser } from "@/lib/api-client";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog";
@@ -29,6 +30,7 @@ interface UserProfile {
 function ProfileContent() {
   const [activeTab, setActiveTab] = useState<"PROFILE" | "SESSIONS">("PROFILE");
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [labData, setLabData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Edit states
@@ -59,8 +61,12 @@ function ProfileContent() {
   const loadProfile = async () => {
     try {
       setLoading(true);
-      const data = await fetchFromLaravel("/profile");
+      const [data, labRes] = await Promise.all([
+        fetchFromLaravel("/profile"),
+        fetchFromLaravel("/lab").catch(() => null),
+      ]);
       setProfile(data);
+      if (labRes) setLabData(labRes);
       setEditName(data.name || "");
       setEditPhone(data.phone || "");
     } catch (err) {
@@ -93,10 +99,9 @@ function ProfileContent() {
 
       if (res && res.user) {
         setProfile(res.user);
-        // Also update stored local user
+        updateStoredUser(res.user);
         if (typeof window !== "undefined") {
-          const current = getStoredUser() || {};
-          localStorage.setItem("user", JSON.stringify({ ...current, ...payload }));
+          window.dispatchEvent(new Event("user-updated"));
         }
       }
       setEditingField(null);
@@ -179,9 +184,14 @@ function ProfileContent() {
             body: JSON.stringify({ avatar_url: base64 }),
           });
           setProfile(prev => prev ? ({ ...prev, avatarUrl: base64, avatar_url: base64 }) : null);
+          updateStoredUser({ avatarUrl: base64, avatar_url: base64 });
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("user-updated"));
+          }
           showToast("Profile photo updated!");
         } catch (err) {
           console.error("Failed to upload avatar:", err);
+          showToast("Failed to upload photo. Please try again.", "error");
         }
       };
       reader.readAsDataURL(file);
@@ -197,7 +207,8 @@ function ProfileContent() {
     );
   }
 
-  const avatar = profile?.avatarUrl || profile?.avatar_url;
+  const avatar = profile?.avatarUrl || profile?.avatar_url || (profile as any)?.avatar || labData?.logoUrl || labData?.logo_url;
+  const labName = labData?.centreName || labData?.centre_name || labData?.name || profile?.labName || profile?.lab_name || (profile as any)?.lab?.name || (profile as any)?.lab?.centreName || "Diagnostic Laboratory";
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-16 animate-fade-in">
@@ -249,7 +260,13 @@ function ProfileContent() {
         <div className="bg-card border border-border/90 rounded-2xl p-5 sm:p-12 shadow-sm space-y-8 animate-fade-in max-w-2xl mx-auto">
           {/* Avatar & Title */}
           <div className="flex items-center justify-between">
-            <h1 className="font-display text-2xl font-bold text-foreground">My profile</h1>
+            <div>
+              <h1 className="font-display text-2xl font-bold text-foreground">My Profile</h1>
+              <p className="text-xs font-semibold text-primary mt-0.5 flex items-center gap-1.5">
+                <Building2 className="h-3.5 w-3.5" />
+                <span>{labName}</span>
+              </p>
+            </div>
             
             {/* Profile Avatar with Camera Upload Button */}
             <div className="relative group">
@@ -257,7 +274,7 @@ function ProfileContent() {
                 {avatar ? (
                   <img src={avatar} alt="Profile" className="h-full w-full object-cover" />
                 ) : (
-                  <span>{profile?.name?.slice(0, 2).toUpperCase() || "MA"}</span>
+                  <span>{labName ? labName.slice(0, 2).toUpperCase() : (profile?.name?.slice(0, 2).toUpperCase() || "MA")}</span>
                 )}
               </div>
               <label
@@ -278,6 +295,29 @@ function ProfileContent() {
           </div>
 
           <div className="space-y-6">
+            {/* Field 0: Diagnostic Laboratory Name */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-muted-foreground">Diagnostic Laboratory / Centre Name</label>
+                <Link
+                  href="/dashboard/account/lab?tab=centre"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                >
+                  <Building2 className="h-3 w-3" />
+                  <span>Manage in Lab Profile</span>
+                </Link>
+              </div>
+
+              <div className="h-11 px-4 rounded-xl bg-muted/50 border border-border/80 flex items-center justify-between text-sm font-bold text-foreground">
+                <div className="flex items-center gap-2.5 truncate">
+                  <Building2 className="h-4 w-4 text-primary shrink-0" />
+                  <span className="truncate">{labName}</span>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shrink-0">
+                  Registered Centre
+                </span>
+              </div>
+            </div>
             {/* Field 1: Name */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">

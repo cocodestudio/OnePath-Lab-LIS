@@ -7,14 +7,15 @@ import {
   CreditCard, MessageSquare, FileText, Building2, CheckCircle2,
   AlertCircle, Download, Printer, Shield, ArrowRight, Sparkles,
   Loader2, RefreshCw, Eye, Plus, Check, Info, Phone, Mail, MapPin,
-  Upload, Trash2, Calendar, Zap, Receipt, Activity, TrendingUp
+  Upload, Trash2, Calendar, Zap, Receipt, Activity, TrendingUp, Lock
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import {
-  Dialog, DialogContent, DialogTitle
+  Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter
 } from "@/components/ui/dialog";
 import { SubscriptionTaxInvoiceSheet, type SubscriptionInvoiceData } from "@/components/subscription-tax-invoice";
 import { downloadSubscriptionTaxInvoicePdf } from "@/lib/download-invoice-pdf";
+import { submitPayuForm } from "@/lib/payu";
 
 interface LabData {
   id: string;
@@ -44,6 +45,10 @@ interface LabData {
   extra_bills_count?: number;
   extraBillsCharge?: number;
   extra_bills_charge?: number;
+  yearlyExtraBills?: number;
+  yearly_extra_bills?: number;
+  yearlyExtraCharge?: number;
+  yearly_extra_charge?: number;
   smsCredits?: number;
   sms_credits?: number;
   smsFreeCredits?: number;
@@ -70,6 +75,8 @@ interface InvoiceItem {
   custom_id?: string;
   invoiceDate?: string;
   invoice_date?: string;
+  createdAt?: string;
+  created_at?: string;
   description: string;
   sacCode?: string;
   sac_code?: string;
@@ -89,10 +96,10 @@ interface InvoiceItem {
 }
 
 const VOLUME_TIERS = [
-  { id: "1_50", label: "1–50 Patients / day", subtitle: "Included FREE in base plan (0 extra charge)", limit: 50, rate: 0 },
-  { id: "51_200", label: "51–200 Patients / day", subtitle: "1–50 Free · 1 paisa (₹0.01) per bill beyond 50", limit: 200, rate: 0.01 },
-  { id: "201_500", label: "201–500 Patients / day", subtitle: "1–50 Free · 1 paisa (₹0.01) per bill beyond 50", limit: 500, rate: 0.01 },
-  { id: "500_PLUS", label: "500+ High Volume", subtitle: "1–50 Free · 1 paisa (₹0.01) per bill beyond 50", limit: 99999, rate: 0.01 },
+  { id: "1_50", label: "1–50 Patients / day", subtitle: "Included FREE in base plan (0 extra charge)", limit: 50, rate: 0, tag: "FREE", tagColor: "#16a34a", tagBg: "#dcfce7" },
+  { id: "51_200", label: "51–200 Patients / day", subtitle: "1–50 Free · 40 Paise (₹0.40) per bill beyond 50", limit: 200, rate: 0.40, tag: "+ Additional Charge", tagColor: "#d97706", tagBg: "#fffbeb" },
+  { id: "201_500", label: "201–500 Patients / day", subtitle: "1–50 Free · 40 Paise (₹0.40) per bill beyond 50", limit: 500, rate: 0.40, tag: "+ Additional Charge", tagColor: "#d97706", tagBg: "#fffbeb" },
+  { id: "500_PLUS", label: "500+ High Volume", subtitle: "1–50 Free · 40 Paise (₹0.40) per bill beyond 50", limit: 99999, rate: 0.40, tag: "+ Additional Charge", tagColor: "#d97706", tagBg: "#fffbeb" },
 ];
 
 function LabAccountContent() {
@@ -109,9 +116,17 @@ function LabAccountContent() {
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
 
   // Daily Patient Volume State
-  const [selectedVolumeTier, setSelectedVolumeTier] = useState("51_200");
+  const [selectedVolumeTier, setSelectedVolumeTier] = useState("1_50");
+  const [pendingVolumeTier, setPendingVolumeTier] = useState<string | null>(null);
+  const [showVolumeConfirmModal, setShowVolumeConfirmModal] = useState(false);
   const [updatingVolume, setUpdatingVolume] = useState(false);
   const [volumeSaved, setVolumeSaved] = useState(false);
+
+  // Payment & Settlement State
+  const [initiatingPayment, setInitiatingPayment] = useState<string | null>(null);
+  const [showYearlyUsageModal, setShowYearlyUsageModal] = useState(false);
+  const [paymentBanner, setPaymentBanner] = useState<{ title: string; message: string; type: "success" | "error" } | null>(null);
+  const [activePlanAlert, setActivePlanAlert] = useState<{ activePlan: string; expDate: string } | null>(null);
 
   // Centre Form State
   const [centreForm, setCentreForm] = useState({
@@ -136,6 +151,40 @@ function LabAccountContent() {
     else if (tabParam === "invoices") setActiveTab("INVOICES");
     else if (tabParam === "centre") setActiveTab("CENTRE");
     else setActiveTab("SUBSCRIPTION");
+
+    // Check PayU payment redirect params
+    const payment = searchParams.get("payment");
+    const usagePayment = searchParams.get("usage_payment");
+    const txnid = searchParams.get("txnid");
+    const msg = searchParams.get("msg");
+
+    if (payment === "success") {
+      setPaymentBanner({
+        title: "Subscription Activated Successfully!",
+        message: `Your payment was completed successfully via PayU (Ref #${txnid || "COMPLETED"}). Your laboratory features and reports are now fully active.`,
+        type: "success",
+      });
+      loadData();
+    } else if (payment === "failed") {
+      setPaymentBanner({
+        title: "Subscription Payment Failed",
+        message: msg ? decodeURIComponent(msg) : "The transaction could not be completed by PayU. Please try again.",
+        type: "error",
+      });
+    } else if (usagePayment === "success") {
+      setPaymentBanner({
+        title: "Yearly Usage Settlement Completed!",
+        message: `Your patient volume over-quota charges have been cleared to ₹0. Official GST Tax Invoice has been generated below.`,
+        type: "success",
+      });
+      loadData();
+    } else if (usagePayment === "failed") {
+      setPaymentBanner({
+        title: "Usage Settlement Payment Failed",
+        message: msg ? decodeURIComponent(msg) : "The transaction could not be completed. Please try again.",
+        type: "error",
+      });
+    }
   }, [searchParams]);
 
   useEffect(() => {
@@ -210,6 +259,21 @@ function LabAccountContent() {
     reader.readAsDataURL(file);
   };
 
+  // Trigger Volume Tier Selection with Confirmation Modal
+  const handleVolumeTierClick = (tierId: string) => {
+    if (tierId === selectedVolumeTier) return;
+    setPendingVolumeTier(tierId);
+    setShowVolumeConfirmModal(true);
+  };
+
+  // Confirmed Volume Tier Update
+  const handleConfirmVolumeTierChange = async () => {
+    if (!pendingVolumeTier) return;
+    const tierId = pendingVolumeTier;
+    setShowVolumeConfirmModal(false);
+    await handleSaveVolumeTier(tierId);
+  };
+
   // Update Daily Patient Volume Preference
   const handleSaveVolumeTier = async (tierId: string) => {
     setSelectedVolumeTier(tierId);
@@ -240,6 +304,66 @@ function LabAccountContent() {
     }
   };
 
+  // Initiate Subscription Payment with PayU
+  const handlePaySubscription = async (planType: "1year" | "6month") => {
+    if (!isCentreSaved) {
+      setActiveTab("CENTRE");
+      alert("Please complete and save your Diagnostic Centre details (Centre Name, Phone, and Address) under Centre & GST Profile first before purchasing a subscription plan.");
+      return;
+    }
+
+    try {
+      setInitiatingPayment(planType);
+      const res = await fetchFromLaravel("/payments/initiate-subscription", {
+        method: "POST",
+        body: JSON.stringify({
+          plan_type: planType,
+          lab_id: lab?.id,
+        }),
+      });
+
+      if (res && res.action_url && res.params) {
+        submitPayuForm(res.action_url, res.params);
+      } else {
+        alert(res?.error || res?.message || "Failed to initiate subscription payment session.");
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to initiate payment with PayU.");
+    } finally {
+      setInitiatingPayment(null);
+    }
+  };
+
+  // Initiate Yearly Usage Settlement Payment with PayU
+  const handlePayUsage = async () => {
+    if (!isCentreSaved) {
+      setActiveTab("CENTRE");
+      alert("Please complete and save your Diagnostic Centre details (Centre Name, Phone, and Address) under Centre & GST Profile first before paying usage settlements.");
+      return;
+    }
+
+    try {
+      setInitiatingPayment("usage");
+      const res = await fetchFromLaravel("/payments/initiate-usage", {
+        method: "POST",
+        body: JSON.stringify({
+          extra_bills: yearlyExtraBills,
+          lab_id: lab?.id,
+        }),
+      });
+
+      if (res && res.action_url && res.params) {
+        submitPayuForm(res.action_url, res.params);
+      } else {
+        alert(res?.error || res?.message || "Failed to initiate usage settlement payment.");
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to initiate usage payment with PayU.");
+    } finally {
+      setInitiatingPayment(null);
+    }
+  };
+
   const mapInvoiceToData = (inv: InvoiceItem): SubscriptionInvoiceData => {
     const pName = lab?.planName || lab?.plan_name || "OnePath Pathology LIS Pro";
     return {
@@ -247,6 +371,8 @@ function LabAccountContent() {
       customId: inv.customId || inv.custom_id,
       invoiceNumber: inv.customId || inv.custom_id ? `CCS/2026-27/${inv.customId || inv.custom_id}` : undefined,
       invoiceDate: inv.invoiceDate || inv.invoice_date || new Date().toISOString(),
+      createdAt: inv.createdAt || inv.created_at,
+      created_at: inv.created_at || inv.createdAt,
       planName: pName,
       planDuration: (inv.description?.includes("6-Month") || inv.description?.includes("6 Month") || inv.baseAmount === 2499) ? "6_MONTHS" : "1_YEAR",
       description: inv.description || `OnePath Pathology LIS Platform - ${pName} (Unlimited Tests & QR Reports)`,
@@ -291,6 +417,15 @@ function LabAccountContent() {
   // Generate Tax Invoice for the Current Active Plan (Only one single button)
   const handleGenerateInvoice = async () => {
     setInvoiceNotice(null);
+
+    if (!isCentreSaved) {
+      setActiveTab("CENTRE");
+      setInvoiceNotice({
+        type: "warning",
+        text: "Please complete and save your Diagnostic Centre details (Centre Name, Phone, and Address) under Centre & GST Profile first before generating a GST Tax Invoice.",
+      });
+      return;
+    }
 
     const isSixMonths = (lab?.planPeriod || "").toLowerCase().includes("6 month") || (lab?.planPrice === 2499);
     const planType = isSixMonths ? "6_MONTHS" : "1_YEAR";
@@ -445,10 +580,28 @@ function LabAccountContent() {
   const planExpires = lab?.planExpiresAt || lab?.plan_expires_at || "2027-07-27";
   const billLimit = (lab?.billLimit || lab?.bill_limit || 12000).toLocaleString();
 
-  // Daily Patient Volume & Extra Usage Calculations (1 paisa = ₹0.01 per bill)
+  // Check if Centre profile is saved
+  const isCentreSaved = Boolean(
+    (centreForm.centreName || lab?.centreName || lab?.centre_name || lab?.name) &&
+    (centreForm.phone || lab?.phone) &&
+    (centreForm.address || lab?.address)
+  );
+
+  // Active Plan & Expiry Logic
+  const planExpTime = planExpires ? new Date(planExpires).getTime() : 0;
+  const isExpired = !planExpires || isNaN(planExpTime) || Date.now() > planExpTime || planStatus.toLowerCase() === "expired" || planStatus.toLowerCase() === "suspended";
+  const isPaidPlanActive = !isExpired && (planStatus.toLowerCase() === "active" || planStatus.toLowerCase() === "paid");
+
+  const isCurrent1Year = (planName.toLowerCase().includes("1 year") || planPeriod.toLowerCase().includes("1 year") || planPeriod.toLowerCase().includes("365")) && !planName.toLowerCase().includes("trial");
+  const isCurrent6Month = (planName.toLowerCase().includes("6 month") || planPeriod.toLowerCase().includes("6 month") || planPeriod.toLowerCase().includes("180")) && !planName.toLowerCase().includes("trial");
+  const isCurrentTrial = planName.toLowerCase().includes("trial") || planPeriod.toLowerCase().includes("7");
+
+  // Daily Patient Volume & Extra Usage Calculations (40 paise = ₹0.40 per bill)
   const todayBills = lab?.todayBillsCount ?? lab?.today_bills_count ?? 8;
   const extraBills = Math.max(0, todayBills - 50);
-  const extraCharges = (extraBills * 0.01).toFixed(2);
+  const extraCharges = (extraBills * 0.40).toFixed(2);
+  const yearlyExtraBills = lab?.yearlyExtraBills ?? lab?.yearly_extra_bills ?? extraBills;
+  const yearlyExtraCharges = (yearlyExtraBills * 0.40).toFixed(2);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-16 animate-fade-in">
@@ -477,27 +630,77 @@ function LabAccountContent() {
         </div>
       </div>
 
+      {/* Payment Notification Banner */}
+      {paymentBanner && (
+        <div className={`p-4 rounded-2xl border flex items-start justify-between gap-3 animate-in fade-in slide-in-from-top-2 ${
+          paymentBanner.type === "success"
+            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200"
+            : "bg-rose-500/10 border-rose-500/30 text-rose-900 dark:text-rose-200"
+        }`}>
+          <div className="flex items-center gap-3">
+            {paymentBanner.type === "success" ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
+            )}
+            <div>
+              <h4 className="text-sm font-bold">{paymentBanner.title}</h4>
+              <p className="text-xs opacity-90 mt-0.5">{paymentBanner.message}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPaymentBanner(null)}
+            className="text-xs font-bold px-2 py-1 rounded-md hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Navigation Tabs */}
       <div className="flex items-center gap-6 border-b border-border text-sm font-semibold overflow-x-auto w-full scrollbar-none flex-nowrap">
         <button
-          onClick={() => setActiveTab("SUBSCRIPTION")}
-          className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
+          onClick={() => {
+            if (!isCentreSaved) {
+              setActiveTab("CENTRE");
+            } else {
+              setActiveTab("SUBSCRIPTION");
+            }
+          }}
+          className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap flex items-center gap-1.5 ${
             activeTab === "SUBSCRIPTION" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <span>Subscription &amp; Usage</span>
+          {!isCentreSaved && (
+            <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+              <Lock className="h-2.5 w-2.5" /> Locked
+            </span>
+          )}
           {activeTab === "SUBSCRIPTION" && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
           )}
         </button>
 
         <button
-          onClick={() => setActiveTab("INVOICES")}
-          className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
+          onClick={() => {
+            if (!isCentreSaved) {
+              setActiveTab("CENTRE");
+            } else {
+              setActiveTab("INVOICES");
+            }
+          }}
+          className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap flex items-center gap-1.5 ${
             activeTab === "INVOICES" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <span>GST Tax Invoices ({invoices.length})</span>
+          {!isCentreSaved && (
+            <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+              <Lock className="h-2.5 w-2.5" /> Locked
+            </span>
+          )}
           {activeTab === "INVOICES" && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
           )}
@@ -517,7 +720,27 @@ function LabAccountContent() {
       </div>
 
       {/* ================= TAB 1: SUBSCRIPTION DETAILS ================= */}
-      {activeTab === "SUBSCRIPTION" && (
+      {activeTab === "SUBSCRIPTION" && !isCentreSaved && (
+        <div className="p-8 sm:p-12 text-center rounded-2xl border-2 border-dashed border-amber-500/40 bg-amber-500/5 space-y-4 max-w-xl mx-auto my-8 animate-fade-in">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center mx-auto">
+            <Lock className="h-7 w-7" />
+          </div>
+          <h3 className="font-display text-xl font-bold text-foreground">Diagnostic Centre Profile Required</h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Please complete and save your Diagnostic Centre profile (Centre Name, Contact Phone, and Address) under the <strong>Centre &amp; GST Profile</strong> tab first. Your subscription plans, tax invoices, and daily patient quota will unlock immediately upon saving.
+          </p>
+          <button
+            type="button"
+            onClick={() => setActiveTab("CENTRE")}
+            className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer mt-2"
+          >
+            <span>Complete Centre Profile Now</span>
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {activeTab === "SUBSCRIPTION" && isCentreSaved && (
         <div className="space-y-6 animate-fade-in">
           {/* Active Plan Card */}
           <div className="bg-card border border-border/90 rounded-2xl p-6 sm:p-8 space-y-6 shadow-sm relative overflow-hidden">
@@ -559,7 +782,7 @@ function LabAccountContent() {
               </div>
             </div>
 
-            {/* Daily Patient Volume & Extra Usage Meter (1 paisa = ₹0.01 per bill) */}
+            {/* Daily Patient Volume & Extra Usage Meter (40 paise = ₹0.40 per bill) */}
             <div className="pt-6 border-t border-border/70 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
@@ -568,7 +791,7 @@ function LabAccountContent() {
                     <span>Daily Patient Volume &amp; Over-Limit Billing</span>
                   </h4>
                   <p className="text-xs text-muted-foreground">
-                    1–50 patients per day are included <strong>FREE</strong> in both plans. Bills beyond 50/day are billed at just <strong>1 paisa (₹0.01) per bill</strong>.
+                    1–50 patients per day are included <strong>FREE</strong> in both plans. Bills beyond 50/day are billed at <strong>40 paise (₹0.40) per bill</strong> and settled annually.
                   </p>
                 </div>
                 {volumeSaved && (
@@ -585,8 +808,8 @@ function LabAccountContent() {
                   return (
                     <div
                       key={tier.id}
-                      onClick={() => handleSaveVolumeTier(tier.id)}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-1 ${
+                      onClick={() => handleVolumeTierClick(tier.id)}
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-1.5 relative ${
                         isSelected
                           ? "bg-primary/5 border-primary shadow-xs ring-1 ring-primary/30"
                           : "bg-muted/20 border-border hover:border-primary/50"
@@ -599,33 +822,70 @@ function LabAccountContent() {
                         {isSelected && <CheckCircle2 className="h-4 w-4 text-primary" />}
                       </div>
                       <p className="text-[10px] text-muted-foreground">{tier.subtitle}</p>
+                      <div className="pt-0.5">
+                        <span
+                          className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider inline-block"
+                          style={{ color: tier.tagColor, backgroundColor: tier.tagBg }}
+                        >
+                          {tier.tag}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Live Daily Usage Tracker */}
-              <div className="p-4 bg-muted/40 rounded-xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
-                    <TrendingUp className="h-4 w-4" />
+              {/* Live Daily Usage Tracker & Yearly Overage */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Daily Usage Card */}
+                <div className="p-4 bg-muted/40 rounded-xl border border-border flex items-center justify-between gap-4 text-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
+                      <TrendingUp className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-foreground">Today's Patient Usage:</span>
+                      <p className="text-[11px] text-muted-foreground">
+                        <strong>{todayBills}</strong> bills created today · <strong>50 Free</strong> quota base
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-bold text-foreground">Today's Daily Patient Usage:</span>
-                    <p className="text-[11px] text-muted-foreground">
-                      <strong>{todayBills}</strong> bills created today · <strong>50 Free</strong> quota base
-                    </p>
+
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Today's Extra:</span>
+                    <p className="font-mono font-bold text-emerald-600">{extraBills} bills (₹{extraCharges})</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-6">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Over-Limit Bills:</span>
-                    <p className="font-mono font-bold text-foreground">{extraBills} bills</p>
+                {/* Yearly Cycle Settlement Card */}
+                <div className="p-4 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent rounded-xl border border-amber-500/30 flex items-center justify-between gap-4 text-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-700 dark:text-amber-400 shrink-0">
+                      <Receipt className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-foreground">Yearly Volume Over-Quota Due:</span>
+                      <p className="text-[11px] text-muted-foreground">
+                        Total <strong>{yearlyExtraBills}</strong> extra reports @ ₹0.40/report
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Extra Charges (@ 1 Paisa / ₹0.01):</span>
-                    <p className="font-mono font-bold text-emerald-600">₹{extraCharges}</p>
+
+                  <div className="flex items-center gap-2.5">
+                    <span className="font-mono font-black text-sm text-foreground">₹{yearlyExtraCharges}</span>
+                    <button
+                      type="button"
+                      onClick={() => handlePayUsage()}
+                      disabled={initiatingPayment === "usage" || Number(yearlyExtraCharges) <= 0}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs hover:opacity-95 transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      {initiatingPayment === "usage" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CreditCard className="h-3.5 w-3.5" />
+                      )}
+                      <span>Pay with PayU</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -641,127 +901,268 @@ function LabAccountContent() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* 1 Year Plan Card */}
-              <div className="p-6 rounded-2xl bg-card border-2 border-primary/50 shadow-md space-y-5 relative overflow-hidden">
-                <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wider">
-                  Most Popular
-                </div>
-                <div>
-                  <h4 className="font-display font-bold text-lg text-foreground">1 Year Pro Annual Plan</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">Complete Pathology LIS with Unlimited Tests &amp; QR Reports</p>
+              <div className={`p-6 rounded-2xl bg-card border-2 shadow-md space-y-5 relative overflow-hidden flex flex-col justify-between ${
+                isPaidPlanActive && isCurrent1Year ? "border-emerald-500 bg-emerald-500/5 ring-2 ring-emerald-500/20" : "border-primary/50"
+              }`}>
+                {isPaidPlanActive && isCurrent1Year ? (
+                  <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wider flex items-center gap-1">
+                    <Check className="h-3 w-3 stroke-[3]" /> Active Plan
+                  </div>
+                ) : (
+                  <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wider">
+                    Most Popular · Save 20%
+                  </div>
+                )}
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-display font-bold text-lg text-foreground flex items-center gap-1.5">
+                      <span>1 Year Enterprise Plan</span>
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">Complete Pathology LIS with Unlimited Tests &amp; QR Reports</p>
+                  </div>
+
+                  <div className="p-4 bg-muted/40 rounded-xl space-y-1.5 border border-border">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-3xl font-black text-foreground">₹5,899</span>
+                      <span className="text-xs text-muted-foreground font-semibold">/ 365 Days</span>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-border/60">
+                      <div className="flex justify-between">
+                        <span>Base Plan Fee:</span>
+                        <span className="font-mono font-semibold text-foreground">₹4,999.00</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>CGST @ 9%:</span>
+                        <span className="font-mono font-semibold text-foreground">₹449.91</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>SGST @ 9%:</span>
+                        <span className="font-mono font-semibold text-foreground">₹449.91</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-xs text-emerald-600 pt-1 border-t border-border/60">
+                        <span>Total Payable (incl. 18% GST):</span>
+                        <span className="font-mono font-black">₹5,899.00</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <ul className="space-y-2 text-xs text-slate-700 dark:text-slate-300">
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span><strong>12,000 Patient Bills</strong> &amp; Unlimited Tests</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span><strong>1–50 Daily Patients Free</strong> (Extra @ 40 paise / ₹0.40 per bill)</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span><strong>Machine Interfacing &amp; Barcode Scanner</strong> support</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span><strong>24/7 Priority WhatsApp &amp; Phone Support</strong></span>
+                    </li>
+                  </ul>
                 </div>
 
-                <div className="p-4 bg-muted/40 rounded-xl space-y-1.5 border border-border">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-2xl font-black text-foreground">₹4,999</span>
-                    <span className="text-xs text-muted-foreground font-semibold">/ year</span>
-                  </div>
-                  <div className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-border/60">
-                    <div className="flex justify-between">
-                      <span>Base Plan Fee:</span>
-                      <span className="font-mono font-semibold text-foreground">₹4,999.00</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>GST @ 18% (CGST 9% + SGST 9%):</span>
-                      <span className="font-mono font-semibold text-foreground">+ ₹899.82</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-xs text-emerald-600 pt-1 border-t border-border/60">
-                      <span>Total Renewal Value:</span>
-                      <span className="font-mono">₹5,899.00 (Inc. GST)</span>
-                    </div>
-                  </div>
+                <div className="pt-4 border-t border-border/60">
+                  {isPaidPlanActive && isCurrent1Year ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full py-3 px-4 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-xs border border-emerald-500/20 flex items-center justify-center gap-2 cursor-default"
+                    >
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <span>Active Plan (Expires {formatDate(planExpires)})</span>
+                    </button>
+                  ) : isPaidPlanActive && isCurrent6Month ? (
+                    <button
+                      type="button"
+                      onClick={() => setActivePlanAlert({ activePlan: "6 Months Professional Plan", expDate: formatDate(planExpires) })}
+                      className="w-full py-3 px-4 rounded-xl bg-muted/60 hover:bg-muted text-muted-foreground font-bold text-xs border border-border flex items-center justify-center gap-2 cursor-pointer transition-all"
+                    >
+                      <Lock className="h-4 w-4 text-amber-600" />
+                      <span>Switch to 1-Year Plan</span>
+                    </button>
+                  ) : isExpired && isCurrent1Year ? (
+                    <button
+                      type="button"
+                      onClick={() => handlePaySubscription("1year")}
+                      disabled={initiatingPayment === "1year"}
+                      className="w-full py-3 px-4 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {initiatingPayment === "1year" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                      <span>Renew 1-Year Plan (₹5,899 with GST)</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handlePaySubscription("1year")}
+                      disabled={initiatingPayment === "1year"}
+                      className="w-full py-3 px-4 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {initiatingPayment === "1year" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Zap className="h-4 w-4" />
+                      )}
+                      <span>Pay ₹5,899 with PayU (Instant 1-Year License)</span>
+                    </button>
+                  )}
                 </div>
-
-                <ul className="space-y-2 text-xs text-slate-700 dark:text-slate-300">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span><strong>12,000 Patient Bills</strong> &amp; Unlimited Tests</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span><strong>1–50 Daily Patients Free</strong> (Extra @ 1 paisa / ₹0.01 per bill)</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span><strong>LAN &amp; RS-232 Machine Integration</strong> included</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span><strong>24/7 Priority Support</strong>, Automated Backups &amp; Setup</span>
-                  </li>
-                </ul>
               </div>
 
               {/* 6 Months Plan Card */}
-              <div className="p-6 rounded-2xl bg-card border border-border shadow-xs space-y-5">
-                <div>
-                  <h4 className="font-display font-bold text-lg text-foreground">6 Months Semi-Annual Plan</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">Flexible 6-month license for pathology testing</p>
+              <div className={`p-6 rounded-2xl bg-card border shadow-xs space-y-5 flex flex-col justify-between relative overflow-hidden ${
+                isPaidPlanActive && isCurrent6Month ? "border-emerald-500 bg-emerald-500/5 ring-2 ring-emerald-500/20" : "border-border"
+              }`}>
+                {isPaidPlanActive && isCurrent6Month && (
+                  <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-wider flex items-center gap-1">
+                    <Check className="h-3 w-3 stroke-[3]" /> Active Plan
+                  </div>
+                )}
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-display font-bold text-lg text-foreground">6 Months Professional Plan</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">Flexible 6-month license for pathology testing</p>
+                  </div>
+
+                  <div className="p-4 bg-muted/40 rounded-xl space-y-1.5 border border-border">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-3xl font-black text-foreground">₹2,949</span>
+                      <span className="text-xs text-muted-foreground font-semibold">/ 180 Days</span>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-border/60">
+                      <div className="flex justify-between">
+                        <span>Base Plan Fee:</span>
+                        <span className="font-mono font-semibold text-foreground">₹2,499.00</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>CGST @ 9%:</span>
+                        <span className="font-mono font-semibold text-foreground">₹224.91</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>SGST @ 9%:</span>
+                        <span className="font-mono font-semibold text-foreground">₹224.91</span>
+                      </div>
+                      <div className="flex justify-between font-bold text-xs text-emerald-600 pt-1 border-t border-border/60">
+                        <span>Total Payable (incl. 18% GST):</span>
+                        <span className="font-mono font-black">₹2,949.00</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <ul className="space-y-2 text-xs text-slate-700 dark:text-slate-300">
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span><strong>6,000 Patient Bills</strong> &amp; All Test Panels</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span><strong>1–50 Daily Patients Free</strong> (Extra @ 40 paise / ₹0.40 per bill)</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span>QR Verification Portal &amp; PDF generation</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span>Multi-department pathology reporting</span>
+                    </li>
+                  </ul>
                 </div>
 
-                <div className="p-4 bg-muted/40 rounded-xl space-y-1.5 border border-border">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-2xl font-black text-foreground">₹2,499</span>
-                    <span className="text-xs text-muted-foreground font-semibold">/ 6 months</span>
-                  </div>
-                  <div className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-border/60">
-                    <div className="flex justify-between">
-                      <span>Base Plan Fee:</span>
-                      <span className="font-mono font-semibold text-foreground">₹2,499.00</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>GST @ 18% (CGST 9% + SGST 9%):</span>
-                      <span className="font-mono font-semibold text-foreground">+ ₹449.82</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-xs text-emerald-600 pt-1 border-t border-border/60">
-                      <span>Total Renewal Value:</span>
-                      <span className="font-mono">₹2,949.00 (Inc. GST)</span>
-                    </div>
-                  </div>
+                <div className="pt-4 border-t border-border/60">
+                  {isPaidPlanActive && isCurrent6Month ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full py-3 px-4 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-xs border border-emerald-500/20 flex items-center justify-center gap-2 cursor-default"
+                    >
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <span>Active Plan (Expires {formatDate(planExpires)})</span>
+                    </button>
+                  ) : isPaidPlanActive && isCurrent1Year ? (
+                    <button
+                      type="button"
+                      onClick={() => setActivePlanAlert({ activePlan: "1 Year Enterprise Plan", expDate: formatDate(planExpires) })}
+                      className="w-full py-3 px-4 rounded-xl bg-muted/60 hover:bg-muted text-muted-foreground font-bold text-xs border border-border flex items-center justify-center gap-2 cursor-pointer transition-all"
+                    >
+                      <Lock className="h-4 w-4 text-amber-600" />
+                      <span>Switch to 6-Months Plan</span>
+                    </button>
+                  ) : isExpired && isCurrent6Month ? (
+                    <button
+                      type="button"
+                      onClick={() => handlePaySubscription("6month")}
+                      disabled={initiatingPayment === "6month"}
+                      className="w-full py-3 px-4 rounded-xl bg-secondary text-secondary-foreground font-bold text-xs hover:bg-secondary/90 transition-all border border-border shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {initiatingPayment === "6month" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                      <span>Renew 6-Months Plan (₹2,949 with GST)</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handlePaySubscription("6month")}
+                      disabled={initiatingPayment === "6month"}
+                      className="w-full py-3 px-4 rounded-xl bg-secondary text-secondary-foreground font-bold text-xs hover:bg-secondary/90 transition-all border border-border shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {initiatingPayment === "6month" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CreditCard className="h-4 w-4" />
+                      )}
+                      <span>Pay ₹2,949 with PayU (Instant 6-Months License)</span>
+                    </button>
+                  )}
                 </div>
-
-                <ul className="space-y-2 text-xs text-slate-700 dark:text-slate-300">
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span><strong>6,000 Patient Bills</strong> &amp; All Test Panels</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span><strong>1–50 Daily Patients Free</strong> (Extra @ 1 paisa / ₹0.01 per bill)</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span>QR Verification Portal &amp; PDF generation</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                    <span>Multi-department pathology reporting</span>
-                  </li>
-                </ul>
               </div>
             </div>
           </div>
         </div>
       )}
 
+
       {/* ================= TAB 2: INVOICES ================= */}
-      {activeTab === "INVOICES" && (
+      {activeTab === "INVOICES" && !isCentreSaved && (
+        <div className="p-8 sm:p-12 text-center rounded-2xl border-2 border-dashed border-amber-500/40 bg-amber-500/5 space-y-4 max-w-xl mx-auto my-8 animate-fade-in">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center mx-auto">
+            <Lock className="h-7 w-7" />
+          </div>
+          <h3 className="font-display text-xl font-bold text-foreground">Diagnostic Centre Profile Required</h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            GST Tax Invoices cannot be generated or accessed until your Diagnostic Centre profile (Centre Name, Contact Phone, and Address) is filled and saved under the <strong>Centre &amp; GST Profile</strong> tab.
+          </p>
+          <button
+            type="button"
+            onClick={() => setActiveTab("CENTRE")}
+            className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer mt-2"
+          >
+            <span>Complete Centre Profile Now</span>
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {activeTab === "INVOICES" && isCentreSaved && (
         <div className="space-y-6 animate-fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h3 className="font-display text-lg font-bold text-foreground">Official GST Tax Invoices</h3>
               <p className="text-xs text-muted-foreground">
-                Official Flipkart-style GST tax invoices generated for your active OnePath LIS subscriptions.
+                Official GST tax invoices generated automatically for your OnePath LIS subscription and usage settlements.
               </p>
             </div>
-
-            <button
-              onClick={handleGenerateInvoice}
-              disabled={generatingInvoice}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm cursor-pointer disabled:opacity-50"
-            >
-              {generatingInvoice ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              <span>+ Generate Invoice</span>
-            </button>
           </div>
 
           {invoiceNotice && (
@@ -799,7 +1200,7 @@ function LabAccountContent() {
               <div className="py-16 text-center text-muted-foreground space-y-2">
                 <FileText className="h-10 w-10 mx-auto opacity-30" />
                 <p className="text-xs font-bold text-foreground">No invoices generated yet</p>
-                <p className="text-[11px]">Click "+ Generate Invoice" above to create an official tax invoice for your active plan.</p>
+                <p className="text-[11px]">Official GST tax invoices are automatically created upon successful payment.</p>
               </div>
             ) : (
               <div className="table-responsive-container">
@@ -807,7 +1208,7 @@ function LabAccountContent() {
                   <thead className="bg-muted/50 text-[11px] font-bold text-muted-foreground uppercase border-b border-border/80">
                     <tr>
                       <th className="py-3 px-4 font-bold">INVOICE NO.</th>
-                      <th className="py-3 px-4 font-bold">DATE</th>
+                      <th className="py-3 px-4 font-bold">DATE &amp; TIME</th>
                       <th className="py-3 px-4 font-bold">DESCRIPTION</th>
                       <th className="py-3 px-4 font-bold">SAC</th>
                       <th className="py-3 px-4 font-bold">TAXABLE (₹)</th>
@@ -819,7 +1220,11 @@ function LabAccountContent() {
                   <tbody className="divide-y divide-border/60">
                     {invoices.map((inv) => {
                       const invId = inv.customId || inv.custom_id || inv.id.slice(0, 8);
-                      const invDate = inv.invoiceDate || inv.invoice_date || new Date().toISOString();
+                      const hasValidTime = (str?: string) => Boolean(str && !str.includes("00:00:00") && !str.endsWith("T00:00:00.000000Z") && !str.endsWith("T00:00:00Z"));
+                      const rawDateStr = (hasValidTime(inv.invoiceDate || inv.invoice_date)
+                        ? (inv.invoiceDate || inv.invoice_date)
+                        : (inv.createdAt || inv.created_at || inv.invoiceDate || inv.invoice_date)) || new Date().toISOString();
+                      const invDateObj = new Date(rawDateStr);
                       const baseAmt = inv.baseAmount ?? inv.base_amount ?? 4999.00;
                       const cgstAmt = inv.cgstAmount ?? inv.cgst_amount ?? Math.round(baseAmt * 0.09 * 100) / 100;
                       const sgstAmt = inv.sgstAmount ?? inv.sgst_amount ?? Math.round(baseAmt * 0.09 * 100) / 100;
@@ -832,7 +1237,12 @@ function LabAccountContent() {
                             CCS/2026-27/{invId}
                           </td>
                           <td className="py-3.5 px-4 text-muted-foreground">
-                            {new Date(invDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                            <div className="font-semibold text-foreground">
+                              {invDateObj.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground font-mono">
+                              {invDateObj.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+                            </div>
                           </td>
                           <td className="py-3.5 px-4 font-medium text-foreground max-w-xs truncate">
                             {inv.description || "OnePath Pathology LIS Platform License"}
@@ -1072,6 +1482,124 @@ function LabAccountContent() {
               invoice={mapInvoiceToData(selectedInvoice)}
               onClose={() => setSelectedInvoice(null)}
             />
+          )}
+        </DialogContent>
+      </Dialog>
+      {/* ── Dialog: Confirm Volume Tier Change ── */}
+      <Dialog open={showVolumeConfirmModal} onOpenChange={setShowVolumeConfirmModal}>
+        <DialogContent className="max-w-md p-6 rounded-2xl border border-border bg-card shadow-2xl space-y-4">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+              <Activity className="h-5 w-5 text-primary" />
+              <span>Confirm Patient Volume Change</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              Please review your selected daily volume tier and per-report quota details.
+            </DialogDescription>
+          </DialogHeader>
+
+          {(() => {
+            const currentTier = VOLUME_TIERS.find(t => t.id === selectedVolumeTier) || VOLUME_TIERS[0];
+            const newTier = VOLUME_TIERS.find(t => t.id === pendingVolumeTier) || VOLUME_TIERS[0];
+
+            return (
+              <div className="space-y-4 text-xs">
+                <div className="p-3.5 bg-muted/40 rounded-xl border border-border space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground font-semibold">Current Volume Tier:</span>
+                    <span className="font-bold text-foreground">{currentTier.label}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-border/60 pt-2">
+                    <span className="text-muted-foreground font-semibold">New Selected Tier:</span>
+                    <span className="font-bold text-primary">{newTier.label}</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/25 rounded-xl space-y-1.5 text-amber-900 dark:text-amber-200">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <Info className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span>Daily Quota &amp; Pricing Details</span>
+                  </div>
+                  <p className="text-[11px] leading-relaxed">
+                    • <strong>1–50 patient reports per day</strong> are included completely <strong>FREE</strong> in your base plan.
+                  </p>
+                  <p className="text-[11px] leading-relaxed">
+                    • Every patient report generated beyond your daily quota is calculated at <strong>40 paise (₹0.40) per bill</strong>.
+                  </p>
+                  <p className="text-[11px] leading-relaxed">
+                    • Over-quota usage is accumulated and settled annually via PayU payment gateway with official GST invoice.
+                  </p>
+                </div>
+
+                <DialogFooter className="pt-2 flex flex-row items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowVolumeConfirmModal(false)}
+                    className="px-4 py-2 rounded-xl border border-border bg-background text-xs font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmVolumeTierChange}
+                    disabled={updatingVolume}
+                    className="px-5 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    {updatingVolume ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                    <span>Confirm &amp; Update Tier</span>
+                  </button>
+                </DialogFooter>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Active Plan Alert ── */}
+      <Dialog open={!!activePlanAlert} onOpenChange={() => setActivePlanAlert(null)}>
+        <DialogContent className="max-w-md p-6 rounded-2xl border border-border bg-card shadow-2xl space-y-4">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-amber-600 dark:text-amber-500">
+              <Lock className="h-5 w-5" />
+              <span>Active Subscription Plan</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              You already have an active subscription running for your laboratory.
+            </DialogDescription>
+          </DialogHeader>
+
+          {activePlanAlert && (
+            <div className="space-y-4 text-xs">
+              <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2 text-amber-900 dark:text-amber-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground font-semibold">Currently Active Plan:</span>
+                  <span className="font-bold text-foreground">{activePlanAlert.activePlan}</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-amber-500/20 pt-2">
+                  <span className="text-muted-foreground font-semibold">Valid Till:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">{activePlanAlert.expDate}</span>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-muted/40 rounded-xl border border-border text-[11px] leading-relaxed text-muted-foreground space-y-1">
+                <p>
+                  • A plan switch or new plan purchase is not allowed while a valid subscription is active.
+                </p>
+                <p>
+                  • Once your current plan reaches its expiry date, you will be able to renew or switch to any other plan immediately.
+                </p>
+              </div>
+
+              <DialogFooter className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setActivePlanAlert(null)}
+                  className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all cursor-pointer"
+                >
+                  Understood
+                </button>
+              </DialogFooter>
+            </div>
           )}
         </DialogContent>
       </Dialog>

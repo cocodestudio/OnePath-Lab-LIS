@@ -13,6 +13,8 @@ export interface SubscriptionInvoiceData {
   orderId?: string;
   invoiceDate?: string;
   orderDate?: string;
+  createdAt?: string;
+  created_at?: string;
   planName: string;
   planDuration?: "1_YEAR" | "6_MONTHS" | string;
   description?: string;
@@ -85,11 +87,16 @@ export function SubscriptionTaxInvoiceSheet({
   const orderId = invoice.orderId || `OD${rawId.padStart(18, "0")}`;
   const invNumber = invoice.invoiceNumber || `FAH4X4${rawId.slice(0, 8)}000${rawId.slice(-3)}`;
 
-  // Formatting Dates (e.g. 19-02-2026, 12:34 PM)
-  const dateObj = invoice.invoiceDate ? new Date(invoice.invoiceDate) : new Date();
+  // Formatting Dates (e.g. 07-09-2026, 05:42 PM)
+  // If invoiceDate is date-only or 00:00:00, use createdAt to obtain the exact purchase time
+  const hasValidTime = (str?: string) => Boolean(str && !str.includes("00:00:00") && !str.endsWith("T00:00:00.000000Z") && !str.endsWith("T00:00:00Z"));
+  const rawDateStr = hasValidTime(invoice.invoiceDate)
+    ? invoice.invoiceDate
+    : (invoice.createdAt || invoice.created_at || invoice.invoiceDate);
+  const dateObj = rawDateStr ? new Date(rawDateStr) : new Date();
   const formattedDate = !isNaN(dateObj.getTime())
-    ? `${String(dateObj.getDate()).padStart(2, "0")}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${dateObj.getFullYear()}, ${dateObj.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })}`
-    : "19-02-2026, 12:34 PM";
+    ? `${String(dateObj.getDate()).padStart(2, "0")}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${dateObj.getFullYear()}, ${dateObj.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}`
+    : "07-09-2026, 05:42 PM";
 
   const isSixMonths =
     invoice.planDuration === "6_MONTHS" ||
@@ -112,7 +119,8 @@ export function SubscriptionTaxInvoiceSheet({
     downloadSubscriptionTaxInvoicePdf(invoice);
   };
 
-  const qrData = `TAX INVOICE: ${invNumber}\nORDER ID: ${orderId}\nPRODUCT: ${productTitle}\nTOTAL: INR ${total.toFixed(2)}\nDATE: ${formattedDate}\nSELLER: CoCode Studio\nGSTIN: 09EAMPA2104K3ZT\nSTATUS: PAID`;
+  // QR Code contains strictly the Order ID in plain text as requested
+  const qrData = orderId;
 
   return (
     <div className="flex flex-col bg-card rounded-2xl overflow-hidden shadow-2xl border border-border">

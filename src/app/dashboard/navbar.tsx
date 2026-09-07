@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useTheme } from "@/components/theme-provider";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
@@ -86,7 +86,17 @@ export default function Navbar() {
       fetchNotifications();
       fetchLabAndSales();
     }, 30000);
-    return () => clearInterval(interval);
+
+    const handleUserUpdate = () => {
+      setUser(getStoredUser());
+      fetchLabAndSales();
+    };
+    window.addEventListener("user-updated", handleUserUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("user-updated", handleUserUpdate);
+    };
   }, []);
 
   const fetchLabAndSales = async () => {
@@ -110,6 +120,19 @@ export default function Navbar() {
   };
 
   const actualLabId = labData?.customId || labData?.custom_id || (user as any)?.lab?.custom_id || (user as any)?.lab?.customId || (user as any)?.lab_id || "47116602";
+
+  const labDisplayName =
+    labData?.centreName ||
+    labData?.centre_name ||
+    labData?.name ||
+    user?.labName ||
+    user?.lab_name ||
+    user?.lab?.name ||
+    user?.lab?.centreName ||
+    user?.name ||
+    "Diagnostic Laboratory";
+
+  const userAvatar = user?.avatarUrl || user?.avatar_url || (user as any)?.avatar || labData?.logoUrl || labData?.logo_url;
 
   const handleCopyLabId = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -665,24 +688,30 @@ export default function Navbar() {
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2 rounded-xl pl-1 pr-2 py-1 outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 cursor-pointer">
             <Avatar className="h-8 w-8">
+              {userAvatar && <AvatarImage src={userAvatar} alt={labDisplayName} className="object-cover" />}
               <AvatarFallback className="gradient-primary text-primary-foreground text-[11px] font-bold">
-                {user?.name ? user.name.slice(0, 2).toUpperCase() : initials}
+                {labDisplayName ? labDisplayName.slice(0, 2).toUpperCase() : initials}
               </AvatarFallback>
             </Avatar>
-            <span className="hidden lg:block text-left leading-none">
-              <span className="block text-[13px] font-semibold text-foreground">{user?.name || name}</span>
+            <span className="hidden lg:block text-left leading-none max-w-[170px]">
+              <span className="block text-[13px] font-semibold text-foreground truncate">{labDisplayName}</span>
               <span className="block text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">{role}</span>
             </span>
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60 hidden lg:block" />
           </DropdownMenuTrigger>
 
           <DropdownMenuContent align="end" className="w-[calc(100vw-1.5rem)] max-w-[288px] sm:w-72 p-0 rounded-2xl shadow-2xl border-border/90 bg-card overflow-hidden">
-            {/* Header: Name + Account owner badge */}
-            <div className="p-4 pb-3 space-y-1.5 bg-background">
+            {/* Header: Lab Name + Account owner badge */}
+            <div className="p-4 pb-3 space-y-1 bg-background">
               <div className="flex items-center justify-between gap-2">
-                <h4 className="font-display font-bold text-sm text-foreground truncate">
-                  {user?.name || "Moh Abuzar"}
-                </h4>
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-display font-bold text-sm text-foreground truncate" title={labDisplayName}>
+                    {labDisplayName}
+                  </h4>
+                  {user?.name && user.name !== labDisplayName && (
+                    <p className="text-[11px] text-muted-foreground truncate">{user.name}</p>
+                  )}
+                </div>
                 <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-600 text-white shadow-xs">
                   Account owner
                 </span>

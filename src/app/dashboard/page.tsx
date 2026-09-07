@@ -83,10 +83,15 @@ export default function DashboardOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
 
+  const [labInfo, setLabInfo] = useState<any>(null);
+
   useEffect(() => {
     setIsMounted(true);
     const u = getStoredUser();
     setUser(u);
+    fetchFromLaravel("/lab").then((res) => {
+      if (res) setLabInfo(res);
+    }).catch(() => {});
     if (u?.role === "COLLECTION_CENTER" || u?.role === "B2B") {
       setLoading(false);
       return;
@@ -162,6 +167,17 @@ export default function DashboardOverviewPage() {
     { name: "Pending", value: stats.pendingReports, color: "hsl(36 72% 50%)" },
   ];
 
+  const labDisplayName =
+    labInfo?.centreName ||
+    labInfo?.centre_name ||
+    labInfo?.name ||
+    user?.labName ||
+    user?.lab_name ||
+    user?.lab?.name ||
+    user?.lab?.centreName ||
+    user?.name ||
+    "Diagnostic Laboratory";
+
   return (
     <div className="space-y-7 animate-fade-in">
       {/* Header */}
@@ -169,7 +185,7 @@ export default function DashboardOverviewPage() {
         <div>
           <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.2em] mb-1.5">Overview</p>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
-            Welcome back, {user?.name?.split(" ")[0] || "Doctor"}
+            Welcome back, {labDisplayName}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Here's what's happening today in your laboratory.</p>
         </div>
