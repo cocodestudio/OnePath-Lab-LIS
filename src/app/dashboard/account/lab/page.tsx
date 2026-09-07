@@ -478,10 +478,10 @@ function LabAccountContent() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-6 border-b border-border text-sm font-semibold">
+      <div className="flex items-center gap-6 border-b border-border text-sm font-semibold overflow-x-auto w-full scrollbar-none flex-nowrap">
         <button
           onClick={() => setActiveTab("SUBSCRIPTION")}
-          className={`pb-3 relative transition-colors cursor-pointer ${
+          className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === "SUBSCRIPTION" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -493,7 +493,7 @@ function LabAccountContent() {
 
         <button
           onClick={() => setActiveTab("INVOICES")}
-          className={`pb-3 relative transition-colors cursor-pointer ${
+          className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === "INVOICES" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -505,7 +505,7 @@ function LabAccountContent() {
 
         <button
           onClick={() => setActiveTab("CENTRE")}
-          className={`pb-3 relative transition-colors cursor-pointer ${
+          className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === "CENTRE" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
@@ -802,8 +802,8 @@ function LabAccountContent() {
                 <p className="text-[11px]">Click "+ Generate Invoice" above to create an official tax invoice for your active plan.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+              <div className="table-responsive-container">
+                <table className="w-full text-left text-xs min-w-[760px]">
                   <thead className="bg-muted/50 text-[11px] font-bold text-muted-foreground uppercase border-b border-border/80">
                     <tr>
                       <th className="py-3 px-4 font-bold">INVOICE NO.</th>
@@ -1065,7 +1065,7 @@ function LabAccountContent() {
 
       {/* ── Dialog: Optional Modal if needed ── */}
       <Dialog open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
-        <DialogContent className="max-w-4xl w-full p-0 gap-0 overflow-hidden rounded-2xl bg-transparent border-0 shadow-2xl">
+        <DialogContent className="w-[96vw] max-w-4xl p-0 gap-0 overflow-auto sheet-pan-canvas rounded-2xl bg-transparent border-0 shadow-2xl">
           <DialogTitle className="sr-only">GST Tax Invoice</DialogTitle>
           {selectedInvoice && (
             <SubscriptionTaxInvoiceSheet

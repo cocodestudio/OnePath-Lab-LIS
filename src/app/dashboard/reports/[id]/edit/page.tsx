@@ -14,7 +14,7 @@ import {
   User, AlertCircle, TrendingUp, History, ExternalLink, ClipboardList, Plus, Trash2,
   Search, ChevronDown, ChevronRight, FileText, Eye, Edit, Pencil, Building2, Phone, Calendar, Receipt, Printer,
   MessageSquare, FileEdit, Sparkles, CheckCheck, Calculator, Zap, X, Check, Save,
-  Shield, Mail, MapPin, Stethoscope, BadgeCheck, CreditCard, Clock, Hash, Activity
+  Shield, Mail, MapPin, Stethoscope, BadgeCheck, CreditCard, Clock, Hash, Activity, Boxes
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { TipTapEditor } from "@/components/tiptap-editor";
 import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
 import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
+import { getReportPackage } from "@/lib/packages";
 
 // Clinical Categorized Predefined Units
 const CATEGORIZED_UNITS: Record<string, string[]> = {
@@ -97,6 +98,8 @@ interface Report {
   created_at?: string;
   patientId: string;
   patient_id?: string;
+  packageName?: string | null;
+  package_name?: string | null;
   patient: {
     id?: string;
     name: string;
@@ -811,6 +814,21 @@ export default function ResultEntryPage() {
     return computeAutomatedFormulas(values, report).calculatedIds;
   }, [values, report]);
 
+  // Resolved Package Name (from backend report, meta, or localStorage mapping)
+  const activePackageName = useMemo(() => {
+    if (!report) return null;
+    return (
+      report.packageName ||
+      report.package_name ||
+      (report as any).meta?.packageName ||
+      (report as any).meta?.package_name ||
+      getReportPackage(report.id) ||
+      getReportPackage(report.customId) ||
+      getReportPackage(report.patient?.customId) ||
+      null
+    );
+  }, [report]);
+
   // Edit Reference Range Modal State
   const [isRangeModalOpen, setIsRangeModalOpen] = useState(false);
   const [editingRangeTest, setEditingRangeTest] = useState<Test | null>(null);
@@ -1491,12 +1509,12 @@ export default function ResultEntryPage() {
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* Top Header Bar with Save Results on the Right */}
-        <div className="flex items-center justify-between gap-4 border-b border-border/80 pb-4 mb-6">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-border/80 pb-4 mb-6">
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
               size="sm"
-              className="h-9 gap-1.5 cursor-pointer"
+              className="h-9 gap-1.5 cursor-pointer shrink-0"
               onClick={() => {
                 if (typeof window !== "undefined" && window.history.length > 1) {
                   router.back();
@@ -1507,9 +1525,9 @@ export default function ResultEntryPage() {
             >
               <ArrowLeft className="h-3.5 w-3.5" /> Back
             </Button>
-            <div>
-              <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">Enter Results</h1>
-              <p className="text-xs text-muted-foreground mt-0.5">Enter laboratory parameters, remarks, and clinical findings below.</p>
+            <div className="min-w-0">
+              <h1 className="font-display text-xl sm:text-2xl font-semibold tracking-tight text-foreground truncate">Enter Results</h1>
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Enter laboratory parameters, remarks, and clinical findings below.</p>
             </div>
           </div>
 
@@ -1518,7 +1536,7 @@ export default function ResultEntryPage() {
             type="button"
             onClick={() => handleSaveResults()}
             disabled={saving}
-            className="h-10 px-5 gap-2 font-bold shadow-sm cursor-pointer gradient-primary text-primary-foreground hover:-translate-y-px transition-all rounded-xl"
+            className="h-10 px-5 gap-2 font-bold shadow-sm cursor-pointer gradient-primary text-primary-foreground hover:-translate-y-px transition-all rounded-xl w-full sm:w-auto"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             <span>{saving ? "Saving…" : "Save Results"}</span>
@@ -1537,6 +1555,12 @@ export default function ResultEntryPage() {
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-muted text-muted-foreground uppercase">
                   {report.patient.gender}, {report.patient.age}y
                 </span>
+                {activePackageName && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                    <Boxes className="h-3 w-3" />
+                    <span>Package: {activePackageName}</span>
+                  </span>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
                 <span className="font-mono text-primary bg-accent px-1.5 py-0.5 rounded font-bold">{report.patient.customId}</span>
@@ -1579,13 +1603,13 @@ export default function ResultEntryPage() {
           )}
 
           {/* Add Additional Test Bar */}
-          <div className="flex items-center gap-3 bg-card p-4 rounded-xl border border-border/70 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-card p-4 rounded-xl border border-border/70 shadow-sm">
             <div className="bg-primary/10 p-2 rounded-lg text-primary shrink-0"><Plus className="w-5 h-5" /></div>
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-foreground">Add Additional Test</h3>
               <p className="text-xs text-muted-foreground">Select a test from the catalog to append to this patient report.</p>
             </div>
-            <div className="w-[240px]">
+            <div className="w-full sm:w-[240px]">
               <Button type="button" onClick={() => setIsTestModalOpen(true)} disabled={modifyingTest} className="w-full cursor-pointer font-bold text-xs">
                 Browse Test Catalog
               </Button>
@@ -1636,8 +1660,8 @@ export default function ResultEntryPage() {
                   </div>
 
                   {/* Parameters Table */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                  <div className="table-responsive-container">
+                    <table className="w-full min-w-[700px] text-left border-collapse">
                       {!allCustomEditor && (
                         <thead>
                           <tr className="bg-muted/15 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground border-b border-border/60">
@@ -2125,21 +2149,21 @@ export default function ResultEntryPage() {
           </div>
 
           {/* Sticky Bottom Action Footer with Cancel, Print, Final, Approve, and Save Buttons */}
-          <div className="sticky bottom-0 z-30 mt-auto bg-card/95 backdrop-blur-md border-t border-x border-border/90 rounded-t-2xl rounded-b-none p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_-8px_20px_rgba(0,0,0,0.3)] flex flex-col sm:flex-row items-center justify-between gap-3">
-            <Link href="/dashboard/reports">
-              <Button type="button" variant="outline" disabled={saving} className="cursor-pointer w-full sm:w-auto">
+          <div className="sticky bottom-0 z-30 mt-auto bg-card/95 backdrop-blur-md border-t border-x border-border/90 rounded-t-2xl rounded-b-none p-3 sm:p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_-8px_20px_rgba(0,0,0,0.3)] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 safe-pb">
+            <Link href="/dashboard/reports" className="w-full sm:w-auto">
+              <Button type="button" variant="outline" disabled={saving} className="cursor-pointer w-full sm:w-auto h-9 sm:h-10 text-xs font-semibold">
                 Cancel
               </Button>
             </Link>
 
-            <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto justify-end">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsPrintModalOpen(true)}
-                className="h-10 px-4 gap-2 font-bold cursor-pointer border-border/90 hover:bg-muted text-foreground"
+                className="h-9 sm:h-10 px-3 sm:px-4 gap-1.5 font-bold cursor-pointer border-border/90 hover:bg-muted text-foreground text-xs"
               >
-                <Printer className="h-4 w-4 text-primary" />
+                <Printer className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-primary" />
                 <span>Print Report</span>
               </Button>
 
@@ -2147,9 +2171,9 @@ export default function ResultEntryPage() {
                 type="button"
                 onClick={() => handleSaveResults("FINAL")}
                 disabled={saving}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 h-10 gap-2 cursor-pointer shadow-sm rounded-xl"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs"
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
                 <span>Final</span>
               </Button>
 
@@ -2157,9 +2181,9 @@ export default function ResultEntryPage() {
                 type="button"
                 onClick={() => handleSaveResults("APPROVED")}
                 disabled={saving}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 h-10 gap-2 cursor-pointer shadow-sm rounded-xl"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs"
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
                 <span>{saving ? "Saving…" : "Approve"}</span>
               </Button>
 
@@ -2167,9 +2191,9 @@ export default function ResultEntryPage() {
                 type="button"
                 onClick={() => handleSaveResults()}
                 disabled={saving}
-                className="gradient-primary text-primary-foreground font-bold px-5 h-10 gap-2 cursor-pointer shadow-sm rounded-xl"
+                className="gradient-primary text-primary-foreground font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs"
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
                 <span>{saving ? "Saving…" : "Save"}</span>
               </Button>
             </div>
@@ -2888,7 +2912,7 @@ export default function ResultEntryPage() {
       <FullscreenPrintReportModal
         open={isPrintModalOpen}
         onOpenChange={setIsPrintModalOpen}
-        report={report}
+        report={activePackageName && report ? { ...report, packageName: activePackageName } : report}
         enteredValues={values}
         abnormalOverrides={abnormalOverrides}
         paramRemarks={paramRemarks}

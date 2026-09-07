@@ -34,6 +34,7 @@ const navigation: NavItem[] = [
     icon: FlaskConical,
     children: [
       { name: "Tests", href: "/dashboard/tests" },
+      { name: "Packages", href: "/dashboard/tests/packages" },
       { name: "Rate List", href: "/dashboard/ratelist" },
     ],
   },
@@ -45,28 +46,22 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
-    "Tests": true,
-    "Finance & Rates": true,
-  });
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   useEffect(() => {
     setUser(getStoredUser());
   }, []);
 
-  useEffect(() => {
-    if (pathname.startsWith("/dashboard/tests") || pathname.startsWith("/dashboard/ratelist")) {
-      setExpandedItems((prev) => ({ ...prev, "Tests": true }));
+  const handleToggle = (itemName: string) => {
+    const isCurrentlyOpen = Boolean(expandedItems[itemName]) || hoveredItem === itemName;
+    if (isCurrentlyOpen) {
+      setExpandedItems((prev) => ({ ...prev, [itemName]: false }));
+      setHoveredItem(null);
+    } else {
+      setExpandedItems((prev) => ({ ...prev, [itemName]: true }));
     }
-    if (
-      pathname.startsWith("/dashboard/billing") ||
-      pathname.startsWith("/dashboard/revenue") ||
-      pathname.startsWith("/dashboard/ratelist")
-    ) {
-      setExpandedItems((prev) => ({ ...prev, "Finance & Rates": true }));
-    }
-  }, [pathname]);
+  };
 
   const getInitials = (name: string) =>
     name ? name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) : "US";
@@ -112,7 +107,7 @@ export default function Sidebar() {
   const visibleNav = isB2B ? b2bNav : isCollectionCenter ? collectionNav : navigation;
 
   const content = (
-    <aside className="flex h-full w-[256px] flex-col bg-card border-r border-border/70">
+    <aside className="flex h-full w-[256px] max-w-[85vw] flex-col bg-card border-r border-border/70">
       {/* Brand */}
       <div className="flex h-[68px] items-center gap-3 px-6 shrink-0 border-b border-border/60">
         <div className="relative h-8 w-8 shrink-0">
@@ -144,7 +139,7 @@ export default function Sidebar() {
         {visibleNav.map((item) => {
           if (item.children) {
             const isChildActive = item.children.some((c) => isActive(c.href));
-            const isExpanded = (expandedItems[item.name] ?? false) || hoveredItem === item.name || isChildActive;
+            const isExpanded = Boolean(expandedItems[item.name]) || hoveredItem === item.name;
 
             return (
               <div
@@ -155,12 +150,7 @@ export default function Sidebar() {
               >
                 <button
                   type="button"
-                  onClick={() =>
-                    setExpandedItems((prev) => ({
-                      ...prev,
-                      [item.name]: !prev[item.name],
-                    }))
-                  }
+                  onClick={() => handleToggle(item.name)}
                   className={`group w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-200 cursor-pointer ${
                     isChildActive
                       ? "bg-accent/70 text-foreground font-semibold"
@@ -176,38 +166,46 @@ export default function Sidebar() {
                     <span>{item.name}</span>
                   </div>
                   <ChevronDown
-                    className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${
-                      isExpanded ? "rotate-180 text-foreground" : ""
+                    className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ease-in-out ${
+                      isExpanded ? "rotate-180 text-foreground" : "rotate-0"
                     }`}
                   />
                 </button>
 
-                {isExpanded && (
-                  <div className="pl-4 pr-1 space-y-1 border-l-2 border-border/70 ml-5 py-1">
-                    {item.children.map((child) => {
-                      const childActive = isActive(child.href);
-                      return (
-                        <Link
-                          key={child.name}
-                          href={child.href}
-                          onClick={() => setIsOpen(false)}
-                          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12.5px] font-medium transition-colors ${
-                            childActive
-                              ? "bg-primary/10 text-primary font-bold"
-                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                          }`}
-                        >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              childActive ? "bg-primary" : "bg-muted-foreground/40"
+                <div
+                  className={`grid transition-all duration-300 ease-in-out ${
+                    isExpanded
+                      ? "grid-rows-[1fr] opacity-100"
+                      : "grid-rows-[0fr] opacity-0 pointer-events-none"
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="pl-4 pr-1 space-y-1 border-l-2 border-border/70 ml-5 py-1">
+                      {item.children.map((child) => {
+                        const childActive = isActive(child.href);
+                        return (
+                          <Link
+                            key={child.name}
+                            href={child.href}
+                            onClick={() => setIsOpen(false)}
+                            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12.5px] font-medium transition-colors ${
+                              childActive
+                                ? "bg-primary/10 text-primary font-bold"
+                                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                             }`}
-                          />
-                          <span>{child.name}</span>
-                        </Link>
-                      );
-                    })}
+                          >
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full transition-colors ${
+                                childActive ? "bg-primary" : "bg-muted-foreground/40"
+                              }`}
+                            />
+                            <span>{child.name}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             );
           }
@@ -268,10 +266,10 @@ export default function Sidebar() {
     <>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 p-2.5 rounded-lg bg-card border border-border text-foreground md:hidden shadow-elevated"
+        className="fixed top-3.5 left-3.5 z-50 h-10 w-10 flex items-center justify-center rounded-xl bg-card/95 backdrop-blur-md border border-border/90 text-foreground md:hidden shadow-elevated transition-all active:scale-95 cursor-pointer"
         aria-label="Toggle Menu"
       >
-        {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+        {isOpen ? <X className="h-5 w-5 text-destructive" /> : <Menu className="h-5 w-5" />}
       </button>
 
       {isOpen && (

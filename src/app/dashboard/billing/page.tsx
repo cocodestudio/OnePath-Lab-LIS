@@ -7,8 +7,9 @@ import {
   Loader2, ArrowRight, ChevronLeft, ChevronRight, FileDown, TrendingUp,
   Wallet, X, FileText, Printer, CheckCircle, Clock, AlertCircle, RefreshCw,
   Phone, Eye, Download, Sparkles, Plus, Trash2, PlusCircle, Check, Stethoscope,
-  Building2, BadgeCheck
+  Building2, BadgeCheck, Boxes
 } from "lucide-react";
+import { getStoredPackages, type LabPackage } from "@/lib/packages";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog";
@@ -33,6 +34,9 @@ interface Test {
   name: string;
   price: number;
   category?: string;
+  code?: string;
+  testCode?: string;
+  test_code?: string;
   parent_id?: string | null;
   parentId?: string | null;
   parent?: any;
@@ -143,6 +147,8 @@ export default function BillingPage() {
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [billTests, setBillTests] = useState<Test[]>([]);
   const [testSearchInput, setTestSearchInput] = useState("");
+  const [billingItemMode, setBillingItemMode] = useState<"TESTS" | "PACKAGES">("TESTS");
+  const [availablePackages, setAvailablePackages] = useState<LabPackage[]>([]);
   const [isAddingTest, setIsAddingTest] = useState(false);
   const [discountVal, setDiscountVal] = useState("0");
   const [paidAmountVal, setPaidAmountVal] = useState("0");
@@ -151,12 +157,16 @@ export default function BillingPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
+  const isB2B = currentUserRole === "B2B";
 
   useEffect(() => {
     const user = getStoredUser();
     if (user?.role) setCurrentUserRole(user.role);
     fetchBills();
     fetchAvailableTests();
+    try {
+      setAvailablePackages(getStoredPackages());
+    } catch (e) {}
   }, []);
 
   const fetchBills = async (forceRefresh?: boolean | any) => {
@@ -220,9 +230,9 @@ export default function BillingPage() {
     });
 
     setBillTests(currentTests);
-    setDiscountVal(bill.discount?.toString() || "0");
-    setPaidAmountVal(bill.paid_amount ? bill.paid_amount.toString() : "0");
-    setPaymentStatus(bill.status || "UNPAID");
+    setDiscountVal(isB2B ? "0" : (bill.discount?.toString() || "0"));
+    setPaidAmountVal(isB2B ? "0" : (bill.paid_amount ? bill.paid_amount.toString() : "0"));
+    setPaymentStatus(isB2B ? "UNPAID" : (bill.status || "UNPAID"));
     setError(null);
     setSuccess(null);
     setIsAddingTest(false);
@@ -242,15 +252,49 @@ export default function BillingPage() {
     setTestSearchInput("");
   };
 
+  const handleAddPackageToBill = (pkg: LabPackage) => {
+    const newTests: Test[] = [];
+    (pkg.tests || []).forEach(pt => {
+      const matched = allRawTests.find(
+        at => at.id === pt.id ||
+              (pt.code && (at.code || "").toLowerCase() === (pt.code || "").toLowerCase()) ||
+              ((at.name || "").toLowerCase().trim() === (pt.name || "").toLowerCase().trim())
+      );
+      const testToAdd: Test = matched ? {
+        id: matched.id,
+        name: matched.name,
+        category: matched.category || pt.category || "Pathology",
+        price: matched.price || pt.price || 0,
+        code: matched.code || pt.code,
+      } : {
+        id: pt.id,
+        name: pt.name,
+        category: pt.category || "Pathology",
+        price: pt.price || 0,
+        code: pt.code,
+      };
+
+      if (!billTests.some(bt => bt.id === testToAdd.id)) {
+        newTests.push(testToAdd);
+      }
+    });
+    if (newTests.length > 0) {
+      setBillTests(prev => [...prev, ...newTests]);
+    }
+    setIsAddingTest(false);
+    setTestSearchInput("");
+  };
+
   // Recalculate totals dynamically inside edit dialog
   const editSubtotal = billTests.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
-  const editDiscount = Math.min(editSubtotal, Math.max(0, parseFloat(discountVal) || 0));
+  const editDiscount = isB2B ? 0 : Math.min(editSubtotal, Math.max(0, parseFloat(discountVal) || 0));
   const editNetTotal = Math.max(0, editSubtotal - editDiscount);
-  const editPaid = Math.max(0, parseFloat(paidAmountVal) || 0);
-  const isFullyPaid = editNetTotal > 0 && editPaid >= editNetTotal;
+  const editPaid = isB2B ? 0 : Math.max(0, parseFloat(paidAmountVal) || 0);
+  const isFullyPaid = !isB2B && editNetTotal > 0 && editPaid >= editNetTotal;
 
   // Toggle or auto-fill full cash payment
   const handleTogglePaidFull = (forcePaid?: boolean) => {
+    if (isB2B) return;
     const shouldBePaid = forcePaid !== undefined ? forcePaid : !isFullyPaid;
     if (shouldBePaid) {
       setPaidAmountVal(editNetTotal.toFixed(2));
@@ -265,6 +309,7 @@ export default function BillingPage() {
 
   // Quick mark paid directly from table row
   const handleQuickMarkPaid = async (bill: Bill) => {
+    if (isB2B) return;
     const netTotal = Math.max(0, (Number(bill.total) || 0) - (Number(bill.discount) || 0));
     try {
       setUpdatingBillId(bill.id);
@@ -291,11 +336,14 @@ export default function BillingPage() {
     setSuccess(null);
 
     try {
+      const finalPaid = isB2B ? 0 : editPaid;
+      const finalStatus = isB2B ? "UNPAID" : (finalPaid >= editNetTotal ? "PAID" : (finalPaid > 0 ? "PARTIAL" : "UNPAID"));
+
       const payload: any = {
-        discount: editDiscount,
+        discount: isB2B ? 0 : editDiscount,
         total: editNetTotal,
-        paid_amount: editPaid,
-        status: editPaid >= editNetTotal ? "PAID" : (editPaid > 0 ? "PARTIAL" : "UNPAID"),
+        paid_amount: finalPaid,
+        status: finalStatus,
       };
 
       if (billTests.length > 0) {
@@ -371,10 +419,22 @@ export default function BillingPage() {
     setCurrentPage(1);
   }, [search, statusFilter, filterDate]);
 
-  const filteredAvailableTests = availableMainTests.filter(t =>
-    t.name.toLowerCase().includes(testSearchInput.toLowerCase()) ||
-    (t.category && t.category.toLowerCase().includes(testSearchInput.toLowerCase()))
-  );
+  const filteredAvailableTests = availableMainTests.filter(t => {
+    const q = testSearchInput.toLowerCase().trim();
+    if (!q) return true;
+    const name = (t.name || "").toLowerCase();
+    const code = ((t as any).code || (t as any).testCode || (t as any).test_code || (t as any).id || "").toLowerCase();
+    const cat = (t.category || "").toLowerCase();
+    return name.includes(q) || code.includes(q) || cat.includes(q);
+  });
+
+  const filteredAvailablePackages = useMemo(() => {
+    const q = testSearchInput.toLowerCase().trim();
+    if (!q) return availablePackages;
+    return availablePackages.filter(p =>
+      p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
+    );
+  }, [availablePackages, testSearchInput]);
 
   const invoiceMainItems = useMemo(() => {
     return getMainBillItems(selectedBillForInvoice, allTestsMap);
@@ -555,8 +615,8 @@ export default function BillingPage() {
 
       {/* Invoices List Table */}
       <div className="bg-card border border-border/80 rounded-xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse">
+        <div className="table-responsive-container">
+          <table className="w-full min-w-[820px] text-xs text-left border-collapse">
             <thead>
               <tr className="border-b border-border/80 bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-3 px-4">Invoice / Date</th>
@@ -646,7 +706,7 @@ export default function BillingPage() {
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {bill.status !== "PAID" && (
+                          {!isB2B && bill.status !== "PAID" && (
                             <button
                               type="button"
                               disabled={updatingBillId === bill.id}
@@ -723,25 +783,25 @@ export default function BillingPage() {
 
       {/* 1. High-End Horizontal Landscape Printable Medical Invoice Modal */}
       <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
-        <DialogContent className="max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl print:max-h-none print:max-w-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0">
+        <DialogContent className="max-w-4xl w-[96vw] sm:w-full max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl print:max-h-none print:max-w-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0">
           <DialogTitle className="sr-only">Medical Invoice Preview</DialogTitle>
 
           {/* Modal Top Header */}
-          <div className="flex items-center justify-between px-7 py-4 border-b border-border/80 bg-card shrink-0 print:hidden">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-4 sm:px-7 py-3 sm:py-4 border-b border-border/80 bg-card shrink-0 gap-3 print:hidden">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shadow-xs">
+              <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                 <Receipt className="h-5 w-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-display text-base font-bold text-foreground">
+                  <h3 className="font-display text-sm sm:text-base font-bold text-foreground truncate">
                     Tax Invoice Preview
                   </h3>
                   <span className="font-mono bg-primary/15 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase">
                     {selectedBillForInvoice?.custom_id}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
                   Patient: <strong className="text-foreground">{selectedBillForInvoice?.patient?.name}</strong> · PID: <span className="font-mono">{selectedBillForInvoice?.patient?.custom_id}</span>
                 </p>
               </div>
@@ -750,7 +810,7 @@ export default function BillingPage() {
             <div className="flex items-center gap-2.5">
               <button
                 onClick={handlePrintWindow}
-                className="gradient-primary text-primary-foreground font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-sm hover:-translate-y-px transition-all cursor-pointer mr-6"
+                className="gradient-primary text-primary-foreground font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-sm hover:-translate-y-px transition-all cursor-pointer w-full sm:w-auto mr-0 sm:mr-6"
               >
                 <Printer className="h-3.5 w-3.5" />
                 <span>Print / Download PDF</span>
@@ -759,7 +819,7 @@ export default function BillingPage() {
           </div>
 
           {/* Printable Invoice Sheet Body (Rendered via Unified InvoiceSheet Engine) */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-zinc-100 dark:bg-zinc-900/60 flex justify-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">
+          <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 bg-zinc-100 dark:bg-zinc-900/60 flex justify-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">
             {selectedBillForInvoice && (
               <div ref={invoicePrintRef} className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 bg-white max-w-full print:shadow-none print:ring-0 print:border-none print:p-0 print:m-0 print:w-full">
                 <InvoiceSheet
@@ -871,50 +931,98 @@ export default function BillingPage() {
                   </button>
                 </div>
 
-                {/* Add Test Search Bar */}
+                {/* Add Test / Package Search Bar */}
                 {isAddingTest && (
                   <div className="p-4 rounded-xl border border-primary/40 bg-accent/30 space-y-3 animate-fade-in shadow-sm">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                      <input
-                        type="text"
-                        autoFocus
-                        placeholder="Search main test name (e.g. CBC, Lipid Profile, LFT, Thyroid)…"
-                        value={testSearchInput}
-                        onChange={(e) => setTestSearchInput(e.target.value)}
-                        className="w-full pl-9 pr-3 h-9 bg-background border border-border rounded-lg text-xs outline-none focus:border-primary font-medium"
-                      />
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder={
+                            billingItemMode === "TESTS"
+                              ? "Search test by name or test code (e.g. CBC, LFT, Lipid, KFT)…"
+                              : "Search package by name or package code (e.g. Full Body, Cardiac)…"
+                          }
+                          value={testSearchInput}
+                          onChange={(e) => setTestSearchInput(e.target.value)}
+                          className="w-full pl-9 pr-3 h-9 bg-background border border-border rounded-lg text-xs outline-none focus:border-primary font-medium"
+                        />
+                      </div>
+                      <select
+                        value={billingItemMode}
+                        onChange={(e) => {
+                          setBillingItemMode(e.target.value as "TESTS" | "PACKAGES");
+                          setTestSearchInput("");
+                        }}
+                        className="h-9 px-3 rounded-lg bg-background border border-border text-xs font-bold text-foreground focus:border-primary outline-none cursor-pointer shrink-0"
+                      >
+                        <option value="TESTS">Tests</option>
+                        <option value="PACKAGES">Packages</option>
+                      </select>
                     </div>
+
                     <div className="max-h-48 overflow-y-auto space-y-1 divide-y divide-border/40 custom-scrollbar pr-1">
-                      {filteredAvailableTests.length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-4">No matching diagnostic tests available.</p>
-                      ) : (
-                        filteredAvailableTests.map(t => {
-                          const isAlreadyAdded = billTests.some(bt => bt.id === t.id);
-                          return (
-                            <div key={t.id} className="pt-2 first:pt-0 flex items-center justify-between text-xs py-1.5 px-2 hover:bg-card rounded-lg transition-colors">
+                      {billingItemMode === "PACKAGES" ? (
+                        filteredAvailablePackages.length === 0 ? (
+                          <p className="text-xs text-muted-foreground text-center py-4">No matching diagnostic packages available.</p>
+                        ) : (
+                          filteredAvailablePackages.map(pkg => (
+                            <div key={pkg.id} className="pt-2 first:pt-0 flex items-center justify-between text-xs py-1.5 px-2 hover:bg-card rounded-lg transition-colors">
                               <div>
-                                <span className="font-bold text-foreground">{t.name}</span>
-                                <span className="text-[10px] text-muted-foreground ml-2">({t.category || "General"})</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-foreground">{pkg.name}</span>
+                                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">{pkg.code}</span>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">
+                                  Includes {pkg.tests?.length || 0} investigations
+                                </p>
                               </div>
                               <div className="flex items-center gap-3">
-                                <span className="font-mono font-bold text-foreground">₹{Number(t.price || 0).toFixed(0)}</span>
+                                <span className="font-mono font-bold text-primary">₹{pkg.price.toFixed(0)}</span>
                                 <button
                                   type="button"
-                                  disabled={isAlreadyAdded}
-                                  onClick={() => handleAddTestToBill(t)}
-                                  className={`px-2.5 py-1 rounded-md font-bold text-[10px] transition-colors cursor-pointer ${
-                                    isAlreadyAdded
-                                      ? "bg-muted text-muted-foreground cursor-not-allowed"
-                                      : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs"
-                                  }`}
+                                  onClick={() => handleAddPackageToBill(pkg)}
+                                  className="px-2.5 py-1 rounded-md font-bold text-[10px] bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs transition-colors cursor-pointer"
                                 >
-                                  {isAlreadyAdded ? "Added" : "+ Add Panel"}
+                                  + Add Package
                                 </button>
                               </div>
                             </div>
-                          );
-                        })
+                          ))
+                        )
+                      ) : (
+                        filteredAvailableTests.length === 0 ? (
+                          <p className="text-xs text-muted-foreground text-center py-4">No matching diagnostic tests available.</p>
+                        ) : (
+                          filteredAvailableTests.map(t => {
+                            const isAlreadyAdded = billTests.some(bt => bt.id === t.id);
+                            return (
+                              <div key={t.id} className="pt-2 first:pt-0 flex items-center justify-between text-xs py-1.5 px-2 hover:bg-card rounded-lg transition-colors">
+                                <div>
+                                  <span className="font-bold text-foreground">{t.name}</span>
+                                  <span className="text-[10px] text-muted-foreground ml-2">({t.category || "General"})</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-mono font-bold text-foreground">₹{Number(t.price || 0).toFixed(0)}</span>
+                                  <button
+                                    type="button"
+                                    disabled={isAlreadyAdded}
+                                    onClick={() => handleAddTestToBill(t)}
+                                    className={`px-2.5 py-1 rounded-md font-bold text-[10px] transition-colors cursor-pointer ${
+                                      isAlreadyAdded
+                                        ? "bg-muted text-muted-foreground cursor-not-allowed"
+                                        : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs"
+                                    }`}
+                                  >
+                                    {isAlreadyAdded ? "Added" : "+ Add Panel"}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )
                       )}
                     </div>
                   </div>
@@ -977,46 +1085,56 @@ export default function BillingPage() {
                   </div>
 
                   {/* Cash Payment One-Click Toggle Card */}
-                  <div className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
-                    isFullyPaid 
-                      ? "bg-emerald-500/10 border-emerald-500/30" 
-                      : "bg-amber-500/10 border-amber-500/30"
-                  }`}>
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                        isFullyPaid ? "bg-emerald-600 text-white" : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
-                      }`}>
-                        {isFullyPaid ? <CheckCircle2 className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-bold text-xs text-foreground truncate">
-                          {isFullyPaid ? "Paid in Full (Cash / Cleared)" : "Pending Balance"}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground truncate">
-                          {isFullyPaid ? "Zero dues remaining on bill" : "Click to mark 100% Cash Paid"}
-                        </p>
+                  {isB2B ? (
+                    <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-center gap-2.5">
+                      <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                      <div>
+                        <p className="font-bold text-xs text-foreground">B2B Settlement Status: UNPAID</p>
+                        <p className="text-[10px] text-muted-foreground">Invoice payment is cleared upon central laboratory settlement.</p>
                       </div>
                     </div>
+                  ) : (
+                    <div className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                      isFullyPaid 
+                        ? "bg-emerald-500/10 border-emerald-500/30" 
+                        : "bg-amber-500/10 border-amber-500/30"
+                    }`}>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                          isFullyPaid ? "bg-emerald-600 text-white" : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                        }`}>
+                          {isFullyPaid ? <CheckCircle2 className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-xs text-foreground truncate">
+                            {isFullyPaid ? "Paid in Full (Cash / Cleared)" : "Pending Balance"}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {isFullyPaid ? "Zero dues remaining on bill" : "Click to mark 100% Cash Paid"}
+                          </p>
+                        </div>
+                      </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleTogglePaidFull()}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs ${
-                        isFullyPaid
-                          ? "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border"
-                          : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
-                      }`}
-                    >
-                      {isFullyPaid ? (
-                        <span>Reset Unpaid</span>
-                      ) : (
-                        <>
-                          <Check className="h-3.5 w-3.5" />
-                          <span>Mark Paid (Cash)</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => handleTogglePaidFull()}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs ${
+                          isFullyPaid
+                            ? "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border"
+                            : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                        }`}
+                      >
+                        {isFullyPaid ? (
+                          <span>Reset Unpaid</span>
+                        ) : (
+                          <>
+                            <Check className="h-3.5 w-3.5" />
+                            <span>Mark Paid (Cash)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
 
                   <div className="space-y-3">
                     {/* Gross Subtotal */}
@@ -1026,19 +1144,21 @@ export default function BillingPage() {
                     </div>
 
                     {/* Discount Concession */}
-                    <div className="flex justify-between items-center text-xs p-2.5 rounded-xl bg-muted/40">
-                      <span className="text-destructive font-semibold">Discount Concession (₹)</span>
-                      <div className="w-28">
-                        <input
-                          type="number"
-                          min="0"
-                          max={editSubtotal}
-                          value={discountVal}
-                          onChange={(e) => setDiscountVal(e.target.value)}
-                          className="w-full font-mono font-bold text-xs text-right text-destructive bg-background px-2.5 py-1.5 rounded-lg border border-border outline-none focus:border-destructive"
-                        />
+                    {!isB2B && (
+                      <div className="flex justify-between items-center text-xs p-2.5 rounded-xl bg-muted/40">
+                        <span className="text-destructive font-semibold">Discount Concession (₹)</span>
+                        <div className="w-28">
+                          <input
+                            type="number"
+                            min="0"
+                            max={editSubtotal}
+                            value={discountVal}
+                            onChange={(e) => setDiscountVal(e.target.value)}
+                            className="w-full font-mono font-bold text-xs text-right text-destructive bg-background px-2.5 py-1.5 rounded-lg border border-border outline-none focus:border-destructive"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Net Total Payable */}
                     <div className="flex justify-between items-center text-xs p-3 rounded-xl bg-primary/10 border border-primary/20">
@@ -1050,7 +1170,7 @@ export default function BillingPage() {
                     <div className="flex justify-between items-center text-xs p-2.5 rounded-xl bg-muted/40">
                       <div className="flex items-center gap-2">
                         <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Amount Paid (₹)</span>
-                        {!isFullyPaid && editNetTotal > 0 && (
+                        {!isB2B && !isFullyPaid && editNetTotal > 0 && (
                           <button
                             type="button"
                             onClick={() => handleTogglePaidFull(true)}
@@ -1062,17 +1182,23 @@ export default function BillingPage() {
                         )}
                       </div>
                       <div className="w-28">
-                        <input
-                          type="number"
-                          min="0"
-                          value={paidAmountVal}
-                          onChange={(e) => {
-                            setPaidAmountVal(e.target.value);
-                            const val = parseFloat(e.target.value) || 0;
-                            setPaymentStatus(val >= editNetTotal ? "PAID" : (val > 0 ? "PARTIAL" : "UNPAID"));
-                          }}
-                          className="w-full font-mono font-bold text-xs text-right text-emerald-600 dark:text-emerald-400 bg-background px-2.5 py-1.5 rounded-lg border border-border outline-none focus:border-emerald-500"
-                        />
+                        {isB2B ? (
+                          <span className="font-mono font-bold text-xs text-muted-foreground block text-right px-2.5 py-1.5">
+                            ₹0.00
+                          </span>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            value={paidAmountVal}
+                            onChange={(e) => {
+                              setPaidAmountVal(e.target.value);
+                              const val = parseFloat(e.target.value) || 0;
+                              setPaymentStatus(val >= editNetTotal ? "PAID" : (val > 0 ? "PARTIAL" : "UNPAID"));
+                            }}
+                            className="w-full font-mono font-bold text-xs text-right text-emerald-600 dark:text-emerald-400 bg-background px-2.5 py-1.5 rounded-lg border border-border outline-none focus:border-emerald-500"
+                          />
+                        )}
                       </div>
                     </div>
 

@@ -108,7 +108,7 @@ export function DashboardScroller({ children }: { children: React.ReactNode }) {
     >
       <div
         ref={contentRef}
-        className="mx-auto max-w-[1500px] px-4 sm:px-6 lg:px-8 py-7 min-h-full"
+        className="mx-auto max-w-[1500px] px-3 sm:px-6 lg:px-8 py-4 sm:py-7 min-h-full safe-pb"
       >
         {children}
       </div>

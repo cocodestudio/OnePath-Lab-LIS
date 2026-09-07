@@ -18,7 +18,7 @@ import { InvoiceSheet, type InvoiceData } from "@/components/invoice-sheet";
 import { MachineIntegrationTab } from "@/components/machine-integration-tab";
 import { CollectionCentersTab } from "@/components/collection-centers-tab";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
+import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import {
   ALL_DESIGNATIONS,
   ALL_ORDERING_FIELDS,
@@ -58,6 +58,10 @@ function getDummyReportWithSettings(layoutSettings: ReportLayoutSettings, printS
     status: "COMPLETED",
     createdAt: new Date().toISOString(),
     reportDate: new Date().toISOString(),
+    healthPackage: {
+      id: "pkg-01",
+      name: "Comprehensive Health Checkup",
+    },
     patient: {
       name: "Rajesh Kumar",
       age: 42,
@@ -129,6 +133,7 @@ function getDummyReportWithSettings(layoutSettings: ReportLayoutSettings, printS
           refRangeMin: 1.5,
           refRangeMax: 4.5,
           method: "Impedance Method",
+          interpretation: "<p>Mild thrombocytopenia observed. Advised clinical correlation and peripheral smear review if indicated.</p>",
         },
       },
       {
@@ -261,6 +266,12 @@ function SettingsContent() {
   const [showWithLetterheadPreview, setShowWithLetterheadPreview] = useState(true);
   const [activePreset, setActivePreset] = useState<"standard" | "compact" | "preprinted" | "custom">("standard");
   const [previewScale, setPreviewScale] = useState<number>(0.55);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 640) {
+      setPreviewScale(0.38);
+    }
+  }, []);
 
   // New Signature Modal state
   const [isSigModalOpen, setIsSigModalOpen] = useState(false);
@@ -750,6 +761,13 @@ function SettingsContent() {
       };
       setSettings(saved);
 
+      // Invalidate API cache so all open pages/reports immediately get fresh lab settings
+      clearApiCache();
+      try {
+        localStorage.setItem("lis_cached_report_settings", JSON.stringify(layoutSettings));
+        window.dispatchEvent(new Event("lis_settings_updated"));
+      } catch {}
+
       setToast({ text: "All Lab, Report & Bill settings saved permanently!", type: "success" });
       setTimeout(() => setToast(null), 4000);
     } catch (e: any) {
@@ -942,11 +960,11 @@ function SettingsContent() {
           </p>
 
           {/* Top Sub-Navigation Tabs */}
-          <div className="flex items-center gap-2 mt-3 bg-muted/60 p-1 rounded-xl w-fit border border-border/60">
+          <div className="flex items-center gap-2 mt-3 bg-muted/60 p-1 rounded-xl w-full sm:w-fit overflow-x-auto border border-border/60 scrollbar-none">
             <button
               type="button"
               onClick={() => setActiveTab("letterhead")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 activeTab === "letterhead"
                   ? "bg-background text-primary shadow-xs font-extrabold"
                   : "text-muted-foreground hover:text-foreground"
@@ -958,7 +976,7 @@ function SettingsContent() {
             <button
               type="button"
               onClick={() => setActiveTab("report-layout")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 activeTab === "report-layout"
                   ? "bg-background text-primary shadow-xs font-extrabold"
                   : "text-muted-foreground hover:text-foreground"
@@ -970,7 +988,7 @@ function SettingsContent() {
             <button
               type="button"
               onClick={() => setActiveTab("bills-layout")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 activeTab === "bills-layout"
                   ? "bg-background text-primary shadow-xs font-extrabold"
                   : "text-muted-foreground hover:text-foreground"
@@ -982,7 +1000,7 @@ function SettingsContent() {
             <button
               type="button"
               onClick={() => setActiveTab("machine-integration")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 activeTab === "machine-integration"
                   ? "bg-background text-primary shadow-xs font-extrabold"
                   : "text-muted-foreground hover:text-foreground"
@@ -994,7 +1012,7 @@ function SettingsContent() {
             <button
               type="button"
               onClick={() => setActiveTab("collection-centers")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 activeTab === "collection-centers"
                   ? "bg-background text-primary shadow-xs font-extrabold"
                   : "text-muted-foreground hover:text-foreground"
@@ -1008,7 +1026,7 @@ function SettingsContent() {
         </div>
 
         {activeTab !== "machine-integration" && activeTab !== "collection-centers" && (
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
             <Dialog>
               <DialogTrigger asChild>
                 <button
@@ -1019,17 +1037,68 @@ function SettingsContent() {
                   <span>Full Preview</span>
                 </button>
               </DialogTrigger>
-              <DialogContent className="max-w-5xl h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border/80 shadow-2xl">
-                <DialogHeader className="px-6 py-4 border-b border-border/80 bg-card shrink-0">
-                  <DialogTitle className="font-display font-bold text-foreground flex items-center justify-between">
+              <DialogContent className="w-[96vw] max-w-5xl h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border/80 shadow-2xl">
+                <DialogHeader className="px-4 sm:px-6 py-3 border-b border-border/80 bg-card shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <DialogTitle className="font-display font-bold text-foreground flex items-center gap-2 text-sm sm:text-base">
                     <span>{activeTab === "bills-layout" ? "Diagnostic Bill / Receipt Preview" : "Diagnostic Report Print Layout Preview"}</span>
-                    <span className="text-xs text-muted-foreground font-normal">
-                      {activeTab === "bills-layout" ? "Includes dynamic UPI, GST & custom ordering" : "Includes dynamic barcode & custom styling"}
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-primary/10 text-primary font-bold hidden sm:inline">
+                      Live A4 ({Math.round(previewScale * 100)}%)
                     </span>
                   </DialogTitle>
+                  <div className="flex items-center gap-2 pr-6">
+                    {activeTab !== "bills-layout" && settings.bgImage && (
+                      <button
+                        type="button"
+                        onClick={() => setShowWithLetterheadPreview(!showWithLetterheadPreview)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                          showWithLetterheadPreview
+                            ? "bg-primary/10 border-primary text-primary"
+                            : "bg-muted border-border text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {showWithLetterheadPreview ? "Letterhead: ON" : "Letterhead: OFF"}
+                      </button>
+                    )}
+                    <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 border border-border/60">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewScale(prev => Math.max(0.35, prev - 0.05))}
+                        className="p-1 hover:bg-card rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        title="Zoom Out"
+                      >
+                        <ZoomOut className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewScale(0.65)}
+                        className="p-1 hover:bg-card rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        title="Reset Zoom"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewScale(prev => Math.min(1.0, prev + 0.05))}
+                        className="p-1 hover:bg-card rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        title="Zoom In"
+                      >
+                        <ZoomIn className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 </DialogHeader>
-                <div className="flex-1 overflow-y-auto bg-muted/50 p-4 sm:p-8 flex justify-center">
-                  <div className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 w-[794px] bg-white">
+                <div className="flex-1 overflow-auto sheet-pan-canvas bg-muted/50 p-2 sm:p-8 flex justify-center items-start">
+                  <div 
+                    style={{
+                      transform: `scale(${previewScale})`,
+                      transformOrigin: "top center",
+                      width: "794px",
+                      marginBottom: `-${1123 * (1 - previewScale)}px`,
+                      marginRight: `-${794 * (1 - previewScale) / 2}px`,
+                      marginLeft: `-${794 * (1 - previewScale) / 2}px`,
+                    }}
+                    className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 w-[794px] bg-white transition-transform duration-200"
+                  >
                     {activeTab === "bills-layout" ? (
                       <InvoiceSheet invoice={previewInvoiceData} settings={billSettings} />
                     ) : (
@@ -1358,7 +1427,7 @@ function SettingsContent() {
               </div>
             </div>
 
-            <div className="bg-muted/40 border border-border/80 rounded-2xl p-4 sm:p-6 flex justify-center overflow-x-auto min-h-[640px]">
+            <div className="bg-muted/40 border border-border/80 rounded-2xl p-2 sm:p-6 flex justify-center overflow-auto sheet-pan-canvas min-h-[640px]">
               <div
                 style={{
                   transform: `scale(${previewScale})`,
@@ -1974,6 +2043,87 @@ function SettingsContent() {
                   </label>
                 );
               })}
+            </div>
+
+            {/* Alignments Sub-grid */}
+            <div className="pt-4 border-t border-border/80 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Department Name Alignment */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-foreground">Department Alignment</label>
+                <div className="grid grid-cols-3 gap-1 bg-muted/50 p-1 rounded-xl border border-border">
+                  {(["Left", "Center", "Right"] as const).map((align) => {
+                    const current = layoutSettings.typography.departmentNameAlignment || "Center";
+                    const isSelected = current.toLowerCase() === align.toLowerCase();
+                    return (
+                      <button
+                        key={align}
+                        type="button"
+                        onClick={() => setLayoutSettings(prev => ({
+                          ...prev,
+                          typography: { ...prev.typography, departmentNameAlignment: align }
+                        }))}
+                        className={`py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          isSelected ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {align}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Test Name Alignment */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-foreground">Test Title Alignment</label>
+                <div className="grid grid-cols-2 gap-1 bg-muted/50 p-1 rounded-xl border border-border">
+                  {(["Left", "Middle"] as const).map((align) => {
+                    const current = layoutSettings.typography.testNameAlignment || "Left";
+                    const isSelected = current.toLowerCase() === align.toLowerCase();
+                    return (
+                      <button
+                        key={align}
+                        type="button"
+                        onClick={() => setLayoutSettings(prev => ({
+                          ...prev,
+                          typography: { ...prev.typography, testNameAlignment: align }
+                        }))}
+                        className={`py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          isSelected ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {align === "Middle" ? "Center" : "Left"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Row Vertical Alignment */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-foreground">Row Vertical Alignment</label>
+                <div className="grid grid-cols-2 gap-1 bg-muted/50 p-1 rounded-xl border border-border">
+                  {(["Middle", "Top"] as const).map((align) => {
+                    const current = layoutSettings.typography.rowAlignment || "Middle";
+                    const isSelected = current.toLowerCase() === align.toLowerCase();
+                    return (
+                      <button
+                        key={align}
+                        type="button"
+                        onClick={() => setLayoutSettings(prev => ({
+                          ...prev,
+                          typography: { ...prev.typography, rowAlignment: align }
+                        }))}
+                        className={`py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                          isSelected ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {align}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -2756,6 +2906,62 @@ function SettingsContent() {
                 </div>
               </div>
             </div>
+
+            {/* SECTION 8: END OF REPORT TEXT */}
+            <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
+              <div className="border-b border-border/80 pb-3">
+                <h2 className="font-display text-base font-bold text-foreground flex items-center gap-2">
+                  <Asterisk className="h-4 w-4 text-primary" />
+                  <span>End of Report Footer Text</span>
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Customize the closing line text and font size displayed at the end of report findings.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2 space-y-1.5">
+                  <label className="text-xs font-bold text-foreground">Closing Text</label>
+                  <input
+                    type="text"
+                    value={layoutSettings.endingLine?.text ?? "*** End Of Report ***"}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setLayoutSettings(prev => ({
+                        ...prev,
+                        endingLine: {
+                          ...(prev.endingLine || { fontSize: 10 }),
+                          text: val,
+                        },
+                      }));
+                    }}
+                    placeholder="*** End Of Report ***"
+                    className="w-full px-3.5 py-2 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground">Font Size (px)</label>
+                  <input
+                    type="number"
+                    min="7"
+                    max="18"
+                    value={layoutSettings.endingLine?.fontSize ?? 10}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setLayoutSettings(prev => ({
+                        ...prev,
+                        endingLine: {
+                          ...(prev.endingLine || { text: "*** End Of Report ***" }),
+                          fontSize: val,
+                        },
+                      }));
+                    }}
+                    className="w-full px-3.5 py-2 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -3283,7 +3489,7 @@ function SettingsContent() {
               </div>
             </div>
 
-            <div className="bg-muted/40 border border-border/80 rounded-2xl p-4 sm:p-6 flex justify-center overflow-x-auto min-h-[640px]">
+            <div className="bg-muted/40 border border-border/80 rounded-2xl p-2 sm:p-6 flex justify-center overflow-auto sheet-pan-canvas min-h-[640px]">
               <div
                 style={{
                   transform: `scale(${previewScale})`,

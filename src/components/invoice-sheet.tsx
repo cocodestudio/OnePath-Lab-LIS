@@ -62,8 +62,8 @@ export interface InvoiceData {
 
 export const InvoiceSheet = React.forwardRef<
   HTMLDivElement,
-  { invoice: InvoiceData; settings?: BillLayoutSettings }
->(({ invoice, settings: propSettings }, ref) => {
+  { invoice: InvoiceData; settings?: BillLayoutSettings; scale?: number }
+>(({ invoice, settings: propSettings, scale }, ref) => {
   const lab = (invoice.lab || {}) as any;
   const billSettings = propSettings || normalizeBillSettings(lab.bill_settings || lab.billSettings);
   const patient = (invoice.patient || {}) as any;
@@ -192,6 +192,8 @@ export const InvoiceSheet = React.forwardRef<
           paddingRight: `${billSettings.margins.right || 20}px`,
           paddingTop: "16px",
           paddingBottom: "16px",
+          transform: scale ? `scale(${scale})` : undefined,
+          transformOrigin: scale ? "top center" : undefined,
         }}
       >
       {/* ── 1. HEADER SECTION (BANNER OR TEXT BRANDING) ── */}

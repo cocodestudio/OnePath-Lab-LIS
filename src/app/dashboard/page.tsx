@@ -305,12 +305,12 @@ export default function DashboardOverviewPage() {
               View all <ArrowUpRight className="h-3 w-3" />
             </Link>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
+          <div className="table-responsive-container">
+            <table className="w-full min-w-[580px] text-left">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/30">
                   {["Patient ID", "Name", "Test Type", "Status", ""].map((h) => (
-                    <th key={h} className="px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-4 sm:px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>

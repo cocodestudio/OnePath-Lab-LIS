@@ -180,10 +180,10 @@ export interface ReportLayoutSettings {
     leftAlignSubParameters: boolean;
     boldMultiTypeParameter: boolean;
     properCaseTestNames: boolean;
-    departmentNameAlignment: "Left" | "Middle";
-    testNameAlignment: "Left" | "Middle";
+    departmentNameAlignment: "Left" | "Middle" | "Center" | "Right";
+    testNameAlignment: "Left" | "Middle" | "Center";
     testBodyImageAlignment: "Left" | "Center" | "Right";
-    rowAlignment: "Top" | "Center";
+    rowAlignment: "Top" | "Center" | "Middle";
   };
   spacing: {
     department: number;

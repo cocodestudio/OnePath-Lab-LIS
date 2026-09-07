@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  Search, RefreshCw, IndianRupee, Filter,
+  Search, RefreshCw, IndianRupee,
   ChevronLeft, ChevronRight, Edit3, ArrowUpDown,
   Layers, X, CheckCircle2, Percent, Sparkles,
   Briefcase, Building2
@@ -61,7 +61,6 @@ export default function RateListPage() {
 
   // Search & Filter
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [selectedTier, setSelectedTier] = useState<TierFilter>("ALL");
   const [sortField, setSortField] = useState<"name" | "price" | "b2bLow" | "b2bMed" | "b2bHigh">("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -112,16 +111,6 @@ export default function RateListPage() {
     }
   };
 
-  // Distinct categories
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    tests.forEach((t) => {
-      if (t.category && t.category.trim() !== "") {
-        set.add(t.category.trim());
-      }
-    });
-    return ["ALL", ...Array.from(set).sort()];
-  }, [tests]);
 
   // Filter & Sort
   const filteredTests = useMemo(() => {
@@ -129,10 +118,7 @@ export default function RateListPage() {
       const q = search.toLowerCase();
       const code = (t.test_code || t.testCode || "").toLowerCase();
       const name = (t.name || "").toLowerCase();
-      const cat = (t.category || "").toLowerCase();
-      const matchesQuery = !search || code.includes(q) || name.includes(q) || cat.includes(q);
-      const matchesCategory = selectedCategory === "ALL" || t.category === selectedCategory;
-      return matchesQuery && matchesCategory;
+      return !search || code.includes(q) || name.includes(q);
     });
 
     list.sort((a, b) => {
@@ -160,7 +146,7 @@ export default function RateListPage() {
     });
 
     return list;
-  }, [tests, search, selectedCategory, sortField, sortOrder]);
+  }, [tests, search, sortField, sortOrder]);
 
   // Pagination slice
   const totalItems = filteredTests.length;
@@ -303,21 +289,28 @@ export default function RateListPage() {
       {/* ── Page Header (Clean, No Card) ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 print:hidden">
         <div>
-          <h1 className="font-display text-2xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
-            <IndianRupee className="h-6 w-6 text-primary" />
-            <span>Rate List</span>
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground font-mono">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="font-display text-2xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
+              <IndianRupee className="h-6 w-6 text-primary" />
+              <span>{isB2B ? "Wholesale Rate List" : "Rate List"}</span>
+            </h1>
+            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-mono">
               {totalItems} Tests
             </span>
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
+            {isB2B && user?.name && (
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/80">
+                {user.name}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
             {isB2B
               ? "Official wholesale diagnostic tariffs assigned to your registered partner terminal."
               : "Manage retail MRP and configure High, Medium, and Low B2B wholesale rates across your catalogue."}
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
           <button
             type="button"
             onClick={() => loadTests(true)}
@@ -401,11 +394,11 @@ export default function RateListPage() {
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 print:hidden">
         {/* Admin: Master 3-Tier Selector Pills (only when All Partners is selected) */}
         {isAdmin && selectedPartnerId === "ALL" && (
-          <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border/80 shrink-0">
+          <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border/80 shrink-0 overflow-x-auto max-w-full">
             <button
               type="button"
               onClick={() => setSelectedTier("ALL")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                 selectedTier === "ALL"
                   ? "bg-card text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -416,7 +409,7 @@ export default function RateListPage() {
             <button
               type="button"
               onClick={() => setSelectedTier("LOW")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 selectedTier === "LOW"
                   ? "bg-emerald-500 text-white shadow-xs"
                   : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
@@ -428,7 +421,7 @@ export default function RateListPage() {
             <button
               type="button"
               onClick={() => setSelectedTier("MEDIUM")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 selectedTier === "MEDIUM"
                   ? "bg-blue-600 text-white shadow-xs"
                   : "text-blue-600 dark:text-blue-400 hover:bg-blue-500/10"
@@ -440,7 +433,7 @@ export default function RateListPage() {
             <button
               type="button"
               onClick={() => setSelectedTier("HIGH")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 selectedTier === "HIGH"
                   ? "bg-purple-600 text-white shadow-xs"
                   : "text-purple-600 dark:text-purple-400 hover:bg-purple-500/10"
@@ -474,20 +467,20 @@ export default function RateListPage() {
 
         {/* B2B Partner Login: Confidential Wholesale Tariff Badge */}
         {isB2B && (
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-primary/10 border border-primary/20 text-primary shrink-0">
+          <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary/10 border border-primary/20 text-primary shrink-0">
             <Sparkles className="h-4 w-4" />
-            <span className="text-xs font-bold">Wholesale Diagnostic Tariff</span>
+            <span className="text-xs font-bold">Wholesale Tariff</span>
           </div>
         )}
 
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
+        {/* Search Bar - Clean, spacious, beautifully visible */}
+        <div className="relative flex-1 sm:max-w-md sm:ml-auto">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-            placeholder="Search test by name, code or category..."
-            className="pl-10 h-10 rounded-xl bg-card border-border/80 text-xs font-medium"
+            placeholder="Search test by name or test code..."
+            className="pl-10 pr-9 h-10 rounded-xl bg-card border-border/80 text-xs font-medium w-full shadow-2xs focus:ring-1 focus:ring-primary"
           />
           {search && (
             <button
@@ -499,32 +492,11 @@ export default function RateListPage() {
             </button>
           )}
         </div>
-
-        {/* Category Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full custom-scrollbar">
-          <span className="text-[11px] font-bold text-muted-foreground flex items-center gap-1 shrink-0">
-            <Filter className="h-3 w-3" /> Category:
-          </span>
-          {categories.slice(0, 6).map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => { setSelectedCategory(cat); setCurrentPage(1); }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
-                selectedCategory === cat
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* ── Table Card ── */}
       <div className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-responsive-container">
           {loading ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-10 w-full" />
@@ -542,12 +514,12 @@ export default function RateListPage() {
               </p>
             </div>
           ) : (
-            <table className="w-full text-xs text-left border-collapse">
+            <table className={`w-full text-xs text-left border-collapse ${isB2B ? "min-w-[500px]" : "min-w-[760px]"}`}>
               <thead>
                 <tr className="border-b border-border/80 bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
-                  <th className="py-3.5 px-5 w-14">#</th>
+                  <th className="py-3.5 px-3 sm:px-5 w-12 sm:w-14">#</th>
                   <th
-                    className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground"
+                    className="py-3.5 px-3 sm:px-4 cursor-pointer select-none hover:text-foreground"
                     onClick={() => {
                       if (sortField === "name") setSortOrder(sortOrder === "asc" ? "desc" : "asc");
                       else { setSortField("name"); setSortOrder("asc"); }
@@ -558,9 +530,10 @@ export default function RateListPage() {
                       <ArrowUpDown className="h-3 w-3" />
                     </div>
                   </th>
-                  <th className="py-3.5 px-3">Category</th>
+
+
                   <th
-                    className="py-3.5 px-4 cursor-pointer select-none hover:text-foreground text-right"
+                    className="py-3.5 px-3 sm:px-4 cursor-pointer select-none hover:text-foreground text-right"
                     onClick={() => {
                       if (sortField === "price") setSortOrder(sortOrder === "asc" ? "desc" : "asc");
                       else { setSortField("price"); setSortOrder("asc"); }
@@ -574,7 +547,7 @@ export default function RateListPage() {
 
                   {/* 1. B2B Client Portal: ONLY single Wholesale Rate column */}
                   {isB2B && (
-                    <th className="py-3.5 px-4 text-right font-extrabold text-primary">
+                    <th className="py-3.5 px-3 sm:px-4 text-right font-extrabold text-primary">
                       <span>B2B Wholesale Rate (₹)</span>
                     </th>
                   )}
@@ -632,9 +605,11 @@ export default function RateListPage() {
                     </th>
                   )}
 
-                  {/* Discount Column (always for B2B or single partner view or single tier view) */}
+                  {/* Discount / Margin Column */}
                   {(isB2B || selectedPartner || selectedTier !== "ALL") && (
-                    <th className="py-3.5 px-4 text-center">Discount %</th>
+                    <th className="py-3.5 px-3 sm:px-4 text-center">
+                      {isB2B ? "Wholesale Margin" : "Discount %"}
+                    </th>
                   )}
 
                   {isAdmin && <th className="py-3.5 px-5 text-right print:hidden">Action</th>}
@@ -666,16 +641,16 @@ export default function RateListPage() {
                   return (
                     <tr key={t.id || idx} className="hover:bg-muted/20 transition-colors">
                       {/* # Number */}
-                      <td className="py-4 px-5 text-muted-foreground font-mono text-[11px]">
+                      <td className="py-3.5 sm:py-4 px-3 sm:px-5 text-muted-foreground font-mono text-[11px]">
                         {rowNumber}
                       </td>
 
                       {/* Test Name & Code */}
-                      <td className="py-4 px-4">
+                      <td className="py-3.5 sm:py-4 px-3 sm:px-4">
                         <div>
                           <p className="font-bold text-foreground text-[13px]">{t.name}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="font-mono text-[10px] text-muted-foreground">
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className="font-mono text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded border border-border/60">
                               {t.test_code || t.testCode || "TEST-AUTO"}
                             </span>
                             {t.method && (
@@ -687,23 +662,17 @@ export default function RateListPage() {
                         </div>
                       </td>
 
-                      {/* Category Badge */}
-                      <td className="py-4 px-3">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-muted text-muted-foreground border border-border">
-                          {t.category || "General"}
-                        </span>
-                      </td>
 
                       {/* MRP */}
-                      <td className="py-4 px-4 text-right font-mono font-bold text-foreground text-sm">
+                      <td className="py-3.5 sm:py-4 px-3 sm:px-4 text-right font-mono font-bold text-foreground text-sm">
                         ₹{mrp.toLocaleString("en-IN")}
                       </td>
 
                       {/* 1. B2B Client Wholesale Rate */}
                       {isB2B && (
-                        <td className="py-4 px-4 text-right">
+                        <td className="py-3.5 sm:py-4 px-3 sm:px-4 text-right">
                           {b2bOnlyPrice > 0 ? (
-                            <span className="font-mono font-bold text-xs text-primary bg-primary/10 px-2.5 py-1 rounded-md border border-primary/20 inline-block">
+                            <span className="font-mono font-extrabold text-xs sm:text-sm text-primary bg-primary/10 px-2.5 sm:px-3 py-1 rounded-lg border border-primary/20 inline-block shadow-2xs">
                               ₹{b2bOnlyPrice.toLocaleString("en-IN")}
                             </span>
                           ) : (
@@ -719,7 +688,7 @@ export default function RateListPage() {
                             <span
                               className={`font-mono font-bold text-xs px-2.5 py-1 rounded-md border inline-block ${
                                 activePartnerTier === "HIGH"
-                                  ? "text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20"
+                                   ? "text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20"
                                   : activePartnerTier === "MEDIUM"
                                   ? "text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20"
                                   : "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
@@ -772,12 +741,12 @@ export default function RateListPage() {
                         </td>
                       )}
 
-                      {/* Discount % Column */}
+                      {/* Discount / Margin % Column */}
                       {(isB2B || selectedPartner || selectedTier !== "ALL") && (
-                        <td className="py-4 px-4 text-center">
-                          {activeDiscount !== null ? (
-                            <span className="font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400">
-                              {activeDiscount}% Off
+                        <td className="py-3.5 sm:py-4 px-3 sm:px-4 text-center">
+                          {activeDiscount !== null && activeDiscount > 0 ? (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              {activeDiscount}% {isB2B ? "Margin" : "Off"}
                             </span>
                           ) : (
                             <span className="text-muted-foreground text-xs">—</span>
@@ -808,43 +777,46 @@ export default function RateListPage() {
         </div>
 
         {/* ── Pagination Footer ── */}
-        <div className="p-4 border-t border-border/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-muted-foreground print:hidden">
-          <div className="flex items-center gap-2">
+        <div className="p-4 border-t border-border/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground print:hidden">
+          <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-start">
             <span>Showing</span>
             <select
               value={pageSize}
               onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-              className="bg-muted border border-border rounded-lg px-2 py-1 text-xs font-bold text-foreground outline-none cursor-pointer"
+              className="bg-muted border border-border rounded-lg px-2.5 py-1 text-xs font-bold text-foreground outline-none cursor-pointer"
             >
               <option value={10}>10</option>
               <option value={15}>15</option>
               <option value={25}>25</option>
               <option value={50}>50</option>
+              <option value={100}>100</option>
             </select>
             <span>of {totalItems} total tests</span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="font-medium">
+          <div className="flex items-center gap-3">
+            <span className="font-medium text-[11px] sm:text-xs">
               Page {currentPage} of {totalPages}
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <Button
                 variant="outline"
-                size="icon"
+                size="sm"
                 disabled={currentPage <= 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="h-8 w-8 rounded-lg cursor-pointer"
+                className="h-8 px-2.5 rounded-lg cursor-pointer flex items-center gap-1 text-xs font-semibold"
               >
                 <ChevronLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">Previous</span>
               </Button>
               <Button
                 variant="outline"
-                size="icon"
+                size="sm"
                 disabled={currentPage >= totalPages}
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                className="h-8 w-8 rounded-lg cursor-pointer"
+                className="h-8 px-2.5 rounded-lg cursor-pointer flex items-center gap-1 text-xs font-semibold"
               >
+                <span className="hidden sm:inline">Next</span>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>

@@ -5,6 +5,7 @@ import { getCleanLetterheadUrl } from "@/lib/api-client";
 import { BarcodeSVG } from "@/components/barcode-svg";
 import { normalizeReportSettings, type ReportLayoutSettings, defaultReportLayoutSettings, resolveSignatureUrl, type DoctorSignatureConfig } from "@/lib/report-settings";
 import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
+import { getReportPackage } from "@/lib/packages";
 
 interface Test { 
   id: string; name: string; category: string; price: number; unit: string; 
@@ -85,6 +86,10 @@ export interface ReportSheetData {
   printedInterpretations?: string | null;
   testNotes?: Record<string, { notes?: string; remarks?: string; advices?: string }> | string | null;
   test_notes?: Record<string, { notes?: string; remarks?: string; advices?: string }> | string | null;
+  packageName?: string | null;
+  package_name?: string | null;
+  healthPackage?: { id?: string | number; name?: string } | null;
+  health_package?: { id?: string | number; name?: string } | null;
 }
 
 export const A4_W = 794;
@@ -109,8 +114,12 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
   const hasRefDoctor = Boolean(patient.refDoctor && patient.refDoctor.trim() !== "" && patient.refDoctor.trim() !== "—" && patient.refDoctor.trim() !== "N/A" && patient.refDoctor.trim() !== "null");
   const doctorName = hasRefDoctor ? (patient.refDoctor?.startsWith("Dr") ? patient.refDoctor : `Dr. ${patient.refDoctor}`) : "Self";
 
+  const packageName = (report as any).packageName || (report as any).package_name || (report as any).meta?.packageName || (report as any).meta?.package_name || getReportPackage(report.id) || getReportPackage(report.customId) || getReportPackage(patient.customId);
+
   const allMap: Record<string, { label: string; value: React.ReactNode }> = {
     "Name": { label: "Patient Name:", value: <span className="font-extrabold text-[11.5px] text-black uppercase">{patient.name || "—"}</span> },
+    "Package": { label: "Package:", value: <span className="font-extrabold text-[11px] text-zinc-900">{packageName || "—"}</span> },
+    "Package Name": { label: "Package:", value: <span className="font-extrabold text-[11px] text-zinc-900">{packageName || "—"}</span> },
     "Age/Gender": { 
       label: "Age / Gender:", 
       value: (
@@ -164,12 +173,24 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
     "Weight": { label: "Weight:", value: <span>{patient.weight ? `${patient.weight} kg` : "—"}</span> },
   };
 
+  const intakeMap = new Map<string, boolean>();
+  if (Array.isArray(reportSettings.intakeFields)) {
+    reportSettings.intakeFields.forEach((f) => {
+      if (f.orderingName) intakeMap.set(f.orderingName, f.showOnReport);
+      if (f.label) intakeMap.set(f.label, f.showOnReport);
+      if (f.key) intakeMap.set(f.key, f.showOnReport);
+    });
+  }
+
   const activeOrder = reportSettings.patientDetailsOrder && reportSettings.patientDetailsOrder.length > 0
     ? reportSettings.patientDetailsOrder
     : ["Name", "Patient ID", "Age/Gender", "Report ID", "Phone No.", "Referred By", "Address", "Report Date"];
 
   const items: { label: string; value: React.ReactNode }[] = [];
   activeOrder.forEach((key) => {
+    if (key === "Package" || key === "Package Name") return;
+    if (key === "Phone No." && reportSettings.fieldsToShow.phoneNumber === false) return;
+    if (intakeMap.has(key) && intakeMap.get(key) === false) return;
     if (allMap[key]) {
       items.push(allMap[key]);
     }
@@ -529,6 +550,15 @@ export function buildReportBlocks(
     }
   } catch (e) {}
 
+  const resolvedPackageName =
+    (report as any).packageName ||
+    (report as any).package_name ||
+    (report as any).meta?.packageName ||
+    (report as any).meta?.package_name ||
+    getReportPackage(report.id) ||
+    getReportPackage(report.customId) ||
+    (report.patient?.customId ? getReportPackage(report.patient.customId) : "");
+
   // Render Tests by Department and Test Panels in Medical Priority Order
   const sortedCategories = Object.entries(groupedTests).sort(([catA], [catB]) => {
     const pA = getDepartmentPriority(catA);
@@ -537,16 +567,21 @@ export function buildReportBlocks(
     return catA.localeCompare(catB);
   });
 
-  sortedCategories.forEach(([category, mainTests]) => {
+  sortedCategories.forEach(([category, mainTests], catIdx) => {
     // 1. Department Header
     if (reportSettings.fieldsToShow.departmentName !== false) {
+      const alignVal = String(typo.departmentNameAlignment || "").toLowerCase();
+      const deptAlign = alignVal === "left" 
+        ? "text-left" 
+        : alignVal === "right" 
+          ? "text-right" 
+          : "text-center";
+
       blocks.push({
         key: `department-header-${category}`,
         node: (
           <div 
-            className={`font-extrabold text-zinc-900 uppercase tracking-widest pb-1 mb-1 border-b border-zinc-300 ${
-              typo.departmentNameAlignment === "Left" ? "text-left" : "text-center"
-            }`}
+            className={`font-extrabold text-zinc-900 uppercase tracking-widest pb-1 mb-1 border-b border-zinc-300 ${deptAlign}`}
             style={{ 
               fontFamily: 'Arial, Helvetica, sans-serif',
               fontSize: `${typo.departmentFontSize || 13}px`,
@@ -554,6 +589,21 @@ export function buildReportBlocks(
             }}
           >
             {category}
+          </div>
+        ),
+      });
+    }
+
+    // Health Package display directly under Department Header on the left
+    if (resolvedPackageName && catIdx === 0) {
+      blocks.push({
+        key: `package-header-${category}`,
+        node: (
+          <div className="text-left mb-1.5 mt-0.5 flex items-center gap-1.5 select-none">
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Health Package:</span>
+            <span className="font-extrabold text-[11px] text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-300">
+              {resolvedPackageName}
+            </span>
           </div>
         ),
       });
@@ -573,13 +623,19 @@ export function buildReportBlocks(
       const mainTestObj = firstTestObj.parent?.parent ? firstTestObj.parent.parent : (firstTestObj.parent ? firstTestObj.parent : firstTestObj);
       const allCustomEditor = itemsList.every(item => item.test.fieldType === "Custom Editor");
 
+      const testAlignVal = String(typo.testNameAlignment || "").toLowerCase();
+      const isTestNameCenter = testAlignVal === "middle" || testAlignVal === "center";
+      const formattedMainTestName = typo.properCaseTestNames
+        ? mainTestName.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.substring(1).toLowerCase())
+        : mainTestName;
+
       // 2. Test Panel Title Header (e.g. * COMPLETE BLOOD COUNT (CBC))
       blocks.push({
         key: `header-${category}-${mainTestName}`,
         node: (
           <div 
             className={`border-b border-zinc-800 pb-0.5 flex items-baseline ${
-              typo.testNameAlignment === "Middle" ? "justify-center" : "justify-between"
+              isTestNameCenter ? "justify-center relative" : "justify-between"
             }`}
             style={{ 
               fontFamily: 'Arial, Helvetica, sans-serif',
@@ -588,14 +644,14 @@ export function buildReportBlocks(
             }}
           >
             <span 
-              className="font-extrabold text-zinc-950 uppercase tracking-wide"
+              className={`font-extrabold text-zinc-950 tracking-wide ${typo.properCaseTestNames ? "capitalize" : "uppercase"}`}
               style={{ fontSize: `${typo.testNameFontSize || 12}px` }}
             >
-              * {mainTestName}
+              * {formattedMainTestName}
             </span>
             {reportSettings.fieldsToShow.testMethod && mainTestObj.method && (
               <span 
-                className="font-semibold italic ml-2"
+                className={`font-semibold italic ${isTestNameCenter ? "absolute right-0" : "ml-2"}`}
                 style={{ 
                   fontSize: `${typo.testMethodFontSize || 8}px`,
                   color: typo.testMethodColor || "#71717a",
@@ -924,6 +980,8 @@ export function buildReportBlocks(
       const hasInterpText = Boolean(interpContent && interpContent.trim() !== "" && interpContent !== "<p><br></p>");
 
       const isInterpEnabled = !opts?.hideInterpretation && hasInterpText && (
+        reportSettings.fieldsToShow.interpretation !== false
+      ) && (
         !hasExplicitInterpSetting ||
         printedInterps.length === 0 ||
         printedInterps.includes(mainTestObj.id) ||
@@ -950,6 +1008,19 @@ export function buildReportBlocks(
                 dangerouslySetInnerHTML={{ __html: interpContent || "" }} 
               />
             </div>
+          ),
+        });
+      }
+
+      // End of test divider line if removeLineAtEndOfTest is false
+      if (!typo.removeLineAtEndOfTest) {
+        blocks.push({
+          key: `endline-${category}-${mainTestName}`,
+          node: (
+            <div 
+              className="w-full my-1 border-b border-zinc-300"
+              style={{ pageBreakInside: 'avoid' }}
+            />
           ),
         });
       }

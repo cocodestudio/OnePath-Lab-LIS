@@ -246,7 +246,7 @@ function ProfileContent() {
 
       {/* ================= TAB 1: PROFILE ================= */}
       {activeTab === "PROFILE" && (
-        <div className="bg-card border border-border/90 rounded-2xl p-8 sm:p-12 shadow-sm space-y-8 animate-fade-in max-w-2xl mx-auto">
+        <div className="bg-card border border-border/90 rounded-2xl p-5 sm:p-12 shadow-sm space-y-8 animate-fade-in max-w-2xl mx-auto">
           {/* Avatar & Title */}
           <div className="flex items-center justify-between">
             <h1 className="font-display text-2xl font-bold text-foreground">My profile</h1>
@@ -456,7 +456,7 @@ function ProfileContent() {
 
       {/* Reset Password with OTP Modal */}
       <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
-        <DialogContent className="max-w-md w-full p-6 rounded-2xl bg-card border border-border/80 shadow-2xl">
+        <DialogContent className="w-[94vw] max-w-md p-5 sm:p-6 rounded-2xl bg-card border border-border/80 shadow-2xl">
           <DialogTitle className="font-display text-lg font-bold text-foreground flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-primary" />
             <span>Reset Account Password</span>

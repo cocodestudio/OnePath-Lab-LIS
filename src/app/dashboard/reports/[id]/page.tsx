@@ -27,14 +27,38 @@ export default function ReportDetailPage() {
 
   const [printSettings, setPrintSettings] = useState<PrintSettings>(defaultPrintSettings);
   const [showPrintOptions, setShowPrintOptions] = useState(false);
+  const [sheetScale, setSheetScale] = useState<number>(1);
+
+  useEffect(() => {
+    const updateScale = () => {
+      if (typeof window !== "undefined") {
+        if (window.innerWidth < 840) {
+          const targetScale = Math.min(1, (window.innerWidth - 32) / 826);
+          setSheetScale(Math.max(0.4, Number(targetScale.toFixed(2))));
+        } else {
+          setSheetScale(1);
+        }
+      }
+    };
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, []);
 
   useEffect(() => { 
     if (reportId) fetchReport(); 
     const handleFocus = () => {
       if (reportId) fetchReport();
     };
+    const handleSettingsUpdated = () => {
+      if (reportId) fetchReport();
+    };
     window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
+    window.addEventListener("lis_settings_updated", handleSettingsUpdated);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("lis_settings_updated", handleSettingsUpdated);
+    };
   }, [reportId]);
 
   const triggerPrint = () => {
@@ -44,7 +68,7 @@ export default function ReportDetailPage() {
   const fetchReport = async () => {
     try {
       setLoading(true);
-      const data = await fetchFromLaravel(`/reports/${reportId}`);
+      const data = await fetchFromLaravel(`/reports/${reportId}`, { skipCache: true });
       setReport({
         ...data,
         lab: data.lab ? {
@@ -100,14 +124,14 @@ export default function ReportDetailPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-12">
       {/* Control bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border/70 no-print shadow-card">
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
             size="icon"
-            className="h-9 w-9"
+            className="h-9 w-9 shrink-0 cursor-pointer"
             onClick={() => {
               if (typeof window !== "undefined" && window.history.length > 1) {
                 router.back();
@@ -118,20 +142,65 @@ export default function ReportDetailPage() {
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
-            <h2 className="font-display text-lg font-semibold text-foreground leading-tight">{report.patient.name}</h2>
-            <p className="text-xs text-muted-foreground">File {report.customId} · {report.status}</p>
+          <div className="min-w-0">
+            <h2 className="font-display text-base sm:text-lg font-semibold text-foreground leading-tight truncate">{report.patient.name}</h2>
+            <p className="text-xs text-muted-foreground truncate">File {report.customId} · {report.status}</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Link href={`/dashboard/reports/${report.id}/edit`}><Button variant="outline" size="sm" className="h-9"><Edit className="h-4 w-4" /> Edit Results</Button></Link>
-          <Button onClick={triggerPrint} size="sm" className="h-9"><Printer className="h-4 w-4" /> Print / PDF</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/dashboard/reports/${report.id}/edit`}>
+            <Button variant="outline" size="sm" className="h-9 gap-1.5 cursor-pointer text-xs font-semibold">
+              <Edit className="h-3.5 w-3.5" /> Edit Results
+            </Button>
+          </Link>
+          <Button onClick={triggerPrint} size="sm" className="h-9 gap-1.5 cursor-pointer gradient-primary text-primary-foreground text-xs font-bold shadow-xs">
+            <Printer className="h-3.5 w-3.5" /> Print / PDF
+          </Button>
         </div>
       </div>
 
-      {/* A4 sheet */}
-      <div className="bg-white border border-border/70 rounded-xl shadow-card p-2 overflow-x-auto flex justify-center">
-        {report && <ReportSheet ref={reportRef} report={report} settings={printSettings} />}
+      {/* Mobile Zoom & Fit Controls */}
+      <div className="flex items-center justify-between px-2 text-xs text-muted-foreground sm:hidden">
+        <span>Touch or drag to pan report sheet</span>
+        <div className="flex items-center gap-1.5 bg-card border border-border/80 px-2 py-1 rounded-lg">
+          <button
+            type="button"
+            onClick={() => setSheetScale((s) => Math.max(0.4, Number((s - 0.1).toFixed(1))))}
+            className="px-2 py-0.5 font-bold hover:text-foreground cursor-pointer"
+          >
+            -
+          </button>
+          <span className="font-mono font-bold text-foreground">{Math.round(sheetScale * 100)}%</span>
+          <button
+            type="button"
+            onClick={() => setSheetScale((s) => Math.min(1.5, Number((s + 0.1).toFixed(1))))}
+            className="px-2 py-0.5 font-bold hover:text-foreground cursor-pointer"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const targetScale = Math.min(1, (window.innerWidth - 32) / 826);
+              setSheetScale(Math.max(0.4, Number(targetScale.toFixed(2))));
+            }}
+            className="ml-1 px-2 py-0.5 text-[10px] font-bold bg-primary/10 text-primary rounded cursor-pointer"
+          >
+            Fit
+          </button>
+        </div>
+      </div>
+
+      {/* A4 sheet preview with 4-way pan and scaling */}
+      <div className="bg-white dark:bg-zinc-950 border border-border/70 rounded-xl shadow-card p-2 sm:p-4 overflow-auto sheet-pan-canvas flex justify-center custom-scrollbar">
+        {report && (
+          <ReportSheet
+            ref={reportRef}
+            report={report}
+            settings={printSettings}
+            scale={sheetScale}
+          />
+        )}
       </div>
 
       <PrintPreviewDialog 

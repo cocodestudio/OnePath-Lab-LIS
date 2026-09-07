@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, Suspense } from "react";
+import React, { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,7 +11,7 @@ import {
   Percent, DollarSign, Receipt, RefreshCw, X, Check,
   Mail, Shield, CreditCard, Building2, Calendar, CheckSquare, RotateCcw,
   ClipboardList, Asterisk, Activity, Scale, Ruler, HeartPulse, ShieldCheck, Tag, Clock,
-  Banknote, QrCode, Globe, Wallet
+  Banknote, QrCode, Globe, Wallet, Boxes
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -26,6 +26,7 @@ import {
   type IntakeFieldConfig,
   normalizeReportSettings
 } from "@/lib/report-settings";
+import { getStoredPackages, type LabPackage, saveReportPackage, resolvePackageTestIds } from "@/lib/packages";
 import { InvoiceSheet } from "@/components/invoice-sheet";
 import { printInvoiceElement } from "@/lib/print-invoice";
 
@@ -52,6 +53,7 @@ function RegisterPatientPage() {
   const [existingReport, setExistingReport] = useState<any>(null);
   const [existingBill, setExistingBill] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
+  const isB2B = currentUserRole === "B2B";
 
   // Dynamic Intake Field Rules State
   const [intakeFields, setIntakeFields] = useState<IntakeFieldConfig[]>(DEFAULT_INTAKE_FIELDS);
@@ -133,6 +135,11 @@ function RegisterPatientPage() {
   const [isUpdatingPaymentMode, setIsUpdatingPaymentMode] = useState(false);
   const [paymentUpdateMessage, setPaymentUpdateMessage] = useState<string | null>(null);
 
+  // Packages & Catalog Mode
+  const [catalogMode, setCatalogMode] = useState<"TESTS" | "PACKAGES">("TESTS");
+  const [availablePackages, setAvailablePackages] = useState<LabPackage[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<LabPackage | null>(null);
+
   // Booking & Test Selection State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newPatient, setNewPatient] = useState<Patient | null>(null);
@@ -164,6 +171,7 @@ function RegisterPatientPage() {
     patientAddress?: string;
     refDoctor?: string;
     collectedAt?: string;
+    packageName?: string | null;
     tests?: Array<{ id: string; name: string; category: string; price: number }>;
   } | null>(null);
 
@@ -281,6 +289,10 @@ function RegisterPatientPage() {
           }
         }
       } catch (err) { console.error("Error fetching lab defaults:", err); }
+
+      try {
+        setAvailablePackages(getStoredPackages());
+      } catch (e) {}
     })();
   }, []);
 
@@ -677,7 +689,8 @@ function RegisterPatientPage() {
     return list;
   });
 
-  const subtotal = selectedTestObjects.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
+  const rawSubtotal = selectedTestObjects.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
+  const subtotal = selectedPackage ? selectedPackage.price : rawSubtotal;
   const parsedDiscount = Math.min(subtotal, Math.max(0, parseFloat(discount) || 0));
   const grandTotal = Math.max(0, subtotal - parsedDiscount);
   const parsedPaid = Math.min(grandTotal, Math.max(0, parseFloat(paidAmount) || 0));
@@ -688,22 +701,53 @@ function RegisterPatientPage() {
     setBookingError(null);
     setBooking(true);
     try {
-      const computedStatus = parsedPaid >= grandTotal ? "PAID" : (parsedPaid > 0 ? "PARTIAL" : "UNPAID");
+      const computedPaid = isB2B ? 0 : parsedPaid;
+      const computedStatus = isB2B ? "UNPAID" : (computedPaid >= grandTotal ? "PAID" : (computedPaid > 0 ? "PARTIAL" : "UNPAID"));
+      const computedBalance = isB2B ? grandTotal : balanceDue;
+      const computedDiscount = isB2B ? 0 : parsedDiscount;
+
+      // Sanitize testIds: Only send valid UUIDs to PostgreSQL backend
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      let validTestIds = selectedTests.filter(id => uuidRegex.test(id));
+
+      if (validTestIds.length === 0 && selectedPackage) {
+        validTestIds = resolvePackageTestIds(selectedPackage, availableTests).filter(id => uuidRegex.test(id));
+      }
+      if (validTestIds.length === 0 && availableTests.length > 0) {
+        validTestIds = [availableTests[0].id];
+      }
+
+      if (validTestIds.length === 0) {
+        throw new Error("Please select at least one clinical investigation or diagnostic package.");
+      }
 
       const report = await fetchFromLaravel("/reports", {
         method: "POST",
         body: JSON.stringify({
           patientId: newPatient.id,
-          testIds: selectedTests,
+          testIds: validTestIds,
           total: grandTotal,
-          discount: parsedDiscount,
-          paidAmount: parsedPaid,
-          paymentStatus: computedStatus
+          discount: computedDiscount,
+          paidAmount: computedPaid,
+          paymentStatus: computedStatus,
+          packageName: selectedPackage?.name || null,
+          package_name: selectedPackage?.name || null,
         }),
       });
 
       const assignedBillCustomId = report.bill?.customId || report.bill?.custom_id || report.customId || report.custom_id || "INV-CONFIRMED";
       const assignedPatientCustomId = newPatient.customId || (newPatient as any).custom_id || "";
+
+      if (selectedPackage) {
+        saveReportPackage(report.id, selectedPackage.name, assignedBillCustomId);
+        if (assignedPatientCustomId) {
+          saveReportPackage(assignedPatientCustomId, selectedPackage.name);
+        }
+      }
+
+      const invoiceTests = selectedTestObjects.length > 0
+        ? selectedTestObjects.map(t => ({ id: t.id, name: t.name, category: t.category, price: Number(t.price) || 0 }))
+        : (selectedPackage?.tests || []).map((t: any) => ({ id: t.id, name: t.name, category: t.category || "General", price: Number(t.price) || 0 }));
 
       setBookingSuccess(true);
       setSelectedPaymentMode(computedStatus === "PAID" ? "CASH" : "UNPAID");
@@ -714,9 +758,9 @@ function RegisterPatientPage() {
         reportId: report.id,
         billId: report.bill?.id || report.id,
         total: grandTotal,
-        discount: parsedDiscount,
-        paidAmount: parsedPaid,
-        balanceDue: balanceDue,
+        discount: computedDiscount,
+        paidAmount: computedPaid,
+        balanceDue: computedBalance,
         patientName: newPatient.name,
         patientAge: newPatient.age,
         patientGender: newPatient.gender,
@@ -724,7 +768,8 @@ function RegisterPatientPage() {
         patientAddress: newPatient.address,
         refDoctor: newPatient.refDoctor,
         collectedAt: newPatient.collectedAt,
-        tests: selectedTestObjects.map(t => ({ id: t.id, name: t.name, category: t.category, price: Number(t.price) || 0 })),
+        packageName: selectedPackage?.name || null,
+        tests: invoiceTests,
       });
       setIsModalOpen(false);
     } catch (err: any) {
@@ -736,6 +781,8 @@ function RegisterPatientPage() {
   };
 
   const handleResetFlow = () => {
+    setSelectedPackage(null);
+    setCatalogMode("TESTS");
     setDesignation("Mr.");
     setFirstName("");
     setLastName("");
@@ -798,6 +845,7 @@ function RegisterPatientPage() {
   };
 
   const handleApplyPaymentMode = async (mode: "CASH" | "UPI" | "ONLINE" | "CARD" | "UNPAID") => {
+    if (isB2B) return;
     setSelectedPaymentMode(mode);
     if (!successDetails?.billId) return;
 
@@ -889,14 +937,43 @@ function RegisterPatientPage() {
     const filtered: Record<string, Test[]> = {};
     Object.entries(groupedTests).forEach(([category, tests]) => {
       if (activeCategory !== "ALL" && normalizeCat(category) !== normalizeCat(activeCategory)) return;
-      const matches = tests.filter((t) =>
-        !term || t.name.toLowerCase().includes(term) || (t.category && t.category.toLowerCase().includes(term))
-      );
+      const matches = tests.filter((t) => {
+        if (!term) return true;
+        const name = (t.name || "").toLowerCase();
+        const code = ((t as any).testCode || (t as any).code || (t as any).test_code || (t as any).id || "").toLowerCase();
+        const cat = (t.category || "").toLowerCase();
+        return name.includes(term) || code.includes(term) || cat.includes(term);
+      });
       if (matches.length > 0) filtered[category] = matches;
     });
     return filtered;
   };
   const filteredGroups = getFilteredGroupedTests();
+
+  const filteredPackagesForCatalog = useMemo(() => {
+    const term = testSearch.toLowerCase().trim();
+    if (!term) return availablePackages;
+    return availablePackages.filter(
+      (p) => p.name.toLowerCase().includes(term) || p.code.toLowerCase().includes(term)
+    );
+  }, [availablePackages, testSearch]);
+
+  const handleTogglePackage = (pkg: LabPackage) => {
+    if (selectedPackage?.id === pkg.id) {
+      const resolved = resolvePackageTestIds(pkg, availableTests);
+      setSelectedTests((prev) => prev.filter((id) => !resolved.includes(id)));
+      setSelectedPackage(null);
+    } else {
+      let baseTests = selectedTests;
+      if (selectedPackage) {
+        const prevResolved = resolvePackageTestIds(selectedPackage, availableTests);
+        baseTests = baseTests.filter((id) => !prevResolved.includes(id));
+      }
+      setSelectedPackage(pkg);
+      const newResolved = resolvePackageTestIds(pkg, availableTests);
+      setSelectedTests(Array.from(new Set([...baseTests, ...newResolved])));
+    }
+  };
 
   const steps = [
     { n: 1, label: "Patient Intake", done: true },
@@ -948,19 +1025,19 @@ function RegisterPatientPage() {
       {!bookingSuccess ? (
         <div className="space-y-6">
           {/* Stepper */}
-          <div className="flex items-center justify-between max-w-xl mx-auto px-4">
+          <div className="flex items-center justify-between max-w-xl mx-auto px-2 sm:px-4 overflow-x-auto py-1">
             {steps.map((s, i) => (
               <React.Fragment key={s.n}>
-                <div className="flex flex-col items-center gap-1.5">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
                     s.done ? "gradient-primary text-primary-foreground shadow-md ring-2 ring-primary/20" : "bg-muted text-muted-foreground border border-border/90"
                   }`}>
                     {s.done && s.n !== (newPatient && !bookingSuccess ? 2 : s.n) ? <CheckCircle2 className="h-4 w-4" /> : s.n}
                   </div>
-                  <span className={`text-[11px] font-bold ${s.done ? "text-primary" : "text-muted-foreground"}`}>{s.label}</span>
+                  <span className={`text-[10px] sm:text-[11px] font-bold whitespace-nowrap ${s.done ? "text-primary" : "text-muted-foreground"}`}>{s.label}</span>
                 </div>
                 {i < steps.length - 1 && (
-                  <div className={`flex-1 h-[2px] mx-3 mb-5 rounded transition-colors ${steps[i + 1].done ? "bg-primary" : "bg-border/90"}`} />
+                  <div className={`flex-1 min-w-[24px] sm:min-w-[40px] h-[2px] mx-2 sm:mx-3 mb-4 rounded transition-colors ${steps[i + 1].done ? "bg-primary" : "bg-border/90"}`} />
                 )}
               </React.Fragment>
             ))}
@@ -1938,6 +2015,16 @@ function RegisterPatientPage() {
                   </span>
                 </div>
 
+                {successDetails?.packageName && (
+                  <div className="mt-2.5 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-between text-xs">
+                    <span className="font-bold text-primary flex items-center gap-1.5">
+                      <Boxes className="h-3.5 w-3.5" />
+                      <span>Package:</span>
+                    </span>
+                    <span className="font-bold text-foreground truncate max-w-[180px]">{successDetails.packageName}</span>
+                  </div>
+                )}
+
                 {/* Tests List */}
                 <div className="pt-3 max-h-[140px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                   {successDetails?.tests && successDetails.tests.length > 0 ? (
@@ -2085,191 +2172,193 @@ function RegisterPatientPage() {
 
           </div>
 
-          {/* Full-Width Payment Gateway & Settlement Selector */}
-          <div className="bg-card border border-border/90 rounded-2xl p-6 shadow-xs space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground shadow-sm">
-                  <CreditCard className="h-5 w-5" />
+          {/* Payment Handling: Hidden for B2B Partners */}
+          {!isB2B && (
+            <div className="bg-card border border-border/90 rounded-2xl p-6 shadow-xs space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground shadow-sm">
+                    <CreditCard className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-foreground">
+                      Payment Gateway
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Select payment method for this invoice. Click any mode to select or change status at any time.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-display text-base font-bold text-foreground">
-                    Payment Gateway
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Select payment method for this invoice. Click any mode to select or change status at any time.
-                  </p>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground font-semibold">Payment Status:</span>
+                  <span className={`text-xs font-extrabold px-3 py-1 rounded-full ${
+                    (successDetails?.balanceDue || 0) <= 0
+                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                      : "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                  }`}>
+                    {(successDetails?.balanceDue || 0) <= 0 ? "PAID FULL (Cleared)" : `₹${(successDetails?.balanceDue || 0).toFixed(2)} UNPAID (Due)`}
+                  </span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground font-semibold">Payment Status:</span>
-                <span className={`text-xs font-extrabold px-3 py-1 rounded-full ${
-                  (successDetails?.balanceDue || 0) <= 0
-                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
-                    : "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
-                }`}>
-                  {(successDetails?.balanceDue || 0) <= 0 ? "PAID FULL (Cleared)" : `₹${(successDetails?.balanceDue || 0).toFixed(2)} UNPAID (Due)`}
+              {/* Dynamic Status / Notification Message */}
+              {paymentUpdateMessage && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2 animate-fade-in">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>{paymentUpdateMessage}</span>
+                </div>
+              )}
+
+              {/* Grid of 5 Selectable Payment Options */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                {/* Option 1: Cash */}
+                <button
+                  type="button"
+                  onClick={() => handleApplyPaymentMode("CASH")}
+                  disabled={isUpdatingPaymentMode}
+                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
+                    selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="h-9 w-9 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                      <Banknote className="h-5 w-5" />
+                    </div>
+                    {selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0 && (
+                      <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                        <Check className="h-3 w-3" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <p className="font-bold text-xs text-foreground">Cash</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Physical cash at counter</p>
+                  </div>
+                </button>
+
+                {/* Option 2: Online (PayU) */}
+                <button
+                  type="button"
+                  onClick={() => handleApplyPaymentMode("ONLINE")}
+                  disabled={isUpdatingPaymentMode}
+                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
+                    selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="h-9 w-9 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                      <Globe className="h-5 w-5" />
+                    </div>
+                    {selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0 && (
+                      <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                        <Check className="h-3 w-3" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <p className="font-bold text-xs text-foreground">Online (PayU)</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">PayU gateway modal / link</p>
+                  </div>
+                </button>
+
+                {/* Option 3: UPI */}
+                <button
+                  type="button"
+                  onClick={() => handleApplyPaymentMode("UPI")}
+                  disabled={isUpdatingPaymentMode}
+                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
+                    selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="h-9 w-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                      <QrCode className="h-5 w-5" />
+                    </div>
+                    {selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0 && (
+                      <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                        <Check className="h-3 w-3" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <p className="font-bold text-xs text-foreground">UPI</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">GPay, PhonePe, Paytm QR</p>
+                  </div>
+                </button>
+
+                {/* Option 4: Debit / Credit Card */}
+                <button
+                  type="button"
+                  onClick={() => handleApplyPaymentMode("CARD")}
+                  disabled={isUpdatingPaymentMode}
+                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
+                    selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="h-9 w-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                      <CreditCard className="h-5 w-5" />
+                    </div>
+                    {selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0 && (
+                      <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                        <Check className="h-3 w-3" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <p className="font-bold text-xs text-foreground">Debit / Credit Card</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Card swipe / POS terminal</p>
+                  </div>
+                </button>
+
+                {/* Option 5: Unpaid / Pay Later */}
+                <button
+                  type="button"
+                  onClick={() => handleApplyPaymentMode("UNPAID")}
+                  disabled={isUpdatingPaymentMode}
+                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
+                    (successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID"
+                      ? "border-rose-500/50 bg-rose-500/5 ring-2 ring-rose-500/20"
+                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="h-9 w-9 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                      <Clock className="h-5 w-5" />
+                    </div>
+                    {((successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID") && (
+                      <span className="h-5 w-5 rounded-full bg-rose-500 text-white flex items-center justify-center text-[10px] font-bold">
+                        !
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <p className="font-bold text-xs text-foreground">Pay Later (Unpaid)</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Report download locked</p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Bottom Helper Bar */}
+              <div className="p-3.5 rounded-xl bg-muted/40 border border-border/70 flex items-center gap-2 text-xs">
+                <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
+                <span className="text-muted-foreground">
+                  {(successDetails?.balanceDue || 0) <= 0
+                    ? `Payment of ₹${(successDetails?.total || 0).toFixed(2)} is approved and cleared. Report download is unlocked.`
+                    : `₹${(successDetails?.balanceDue || 0).toFixed(2)} is currently marked as Unpaid. Click any payment mode above to clear payment.`}
                 </span>
               </div>
             </div>
-
-            {/* Dynamic Status / Notification Message */}
-            {paymentUpdateMessage && (
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2 animate-fade-in">
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                <span>{paymentUpdateMessage}</span>
-              </div>
-            )}
-
-            {/* Grid of 5 Selectable Payment Options */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-              {/* Option 1: Cash */}
-              <button
-                type="button"
-                onClick={() => handleApplyPaymentMode("CASH")}
-                disabled={isUpdatingPaymentMode}
-                className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
-                  selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="h-9 w-9 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                    <Banknote className="h-5 w-5" />
-                  </div>
-                  {selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0 && (
-                    <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                      <Check className="h-3 w-3" />
-                    </span>
-                  )}
-                </div>
-                <div className="mt-3">
-                  <p className="font-bold text-xs text-foreground">Cash</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Physical cash at counter</p>
-                </div>
-              </button>
-
-              {/* Option 2: Online (PayU) */}
-              <button
-                type="button"
-                onClick={() => handleApplyPaymentMode("ONLINE")}
-                disabled={isUpdatingPaymentMode}
-                className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
-                  selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="h-9 w-9 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                    <Globe className="h-5 w-5" />
-                  </div>
-                  {selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0 && (
-                    <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                      <Check className="h-3 w-3" />
-                    </span>
-                  )}
-                </div>
-                <div className="mt-3">
-                  <p className="font-bold text-xs text-foreground">Online (PayU)</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">PayU gateway modal / link</p>
-                </div>
-              </button>
-
-              {/* Option 3: UPI */}
-              <button
-                type="button"
-                onClick={() => handleApplyPaymentMode("UPI")}
-                disabled={isUpdatingPaymentMode}
-                className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
-                  selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="h-9 w-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                    <QrCode className="h-5 w-5" />
-                  </div>
-                  {selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0 && (
-                    <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                      <Check className="h-3 w-3" />
-                    </span>
-                  )}
-                </div>
-                <div className="mt-3">
-                  <p className="font-bold text-xs text-foreground">UPI</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">GPay, PhonePe, Paytm QR</p>
-                </div>
-              </button>
-
-              {/* Option 4: Debit / Credit Card */}
-              <button
-                type="button"
-                onClick={() => handleApplyPaymentMode("CARD")}
-                disabled={isUpdatingPaymentMode}
-                className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
-                  selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="h-9 w-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                    <CreditCard className="h-5 w-5" />
-                  </div>
-                  {selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0 && (
-                    <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                      <Check className="h-3 w-3" />
-                    </span>
-                  )}
-                </div>
-                <div className="mt-3">
-                  <p className="font-bold text-xs text-foreground">Debit / Credit Card</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Card swipe / POS terminal</p>
-                </div>
-              </button>
-
-              {/* Option 5: Unpaid / Pay Later */}
-              <button
-                type="button"
-                onClick={() => handleApplyPaymentMode("UNPAID")}
-                disabled={isUpdatingPaymentMode}
-                className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
-                  (successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID"
-                    ? "border-rose-500/50 bg-rose-500/5 ring-2 ring-rose-500/20"
-                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="h-9 w-9 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
-                    <Clock className="h-5 w-5" />
-                  </div>
-                  {((successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID") && (
-                    <span className="h-5 w-5 rounded-full bg-rose-500 text-white flex items-center justify-center text-[10px] font-bold">
-                      !
-                    </span>
-                  )}
-                </div>
-                <div className="mt-3">
-                  <p className="font-bold text-xs text-foreground">Pay Later (Unpaid)</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Report download locked</p>
-                </div>
-              </button>
-            </div>
-
-            {/* Bottom Helper Bar */}
-            <div className="p-3.5 rounded-xl bg-muted/40 border border-border/70 flex items-center gap-2 text-xs">
-              <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
-              <span className="text-muted-foreground">
-                {(successDetails?.balanceDue || 0) <= 0
-                  ? `Payment of ₹${(successDetails?.total || 0).toFixed(2)} is approved and cleared. Report download is unlocked.`
-                  : `₹${(successDetails?.balanceDue || 0).toFixed(2)} is currently marked as Unpaid. Click any payment mode above to clear payment.`}
-              </span>
-            </div>
-          </div>
+          )}
 
         </div>
       )}
@@ -2301,49 +2390,163 @@ function RegisterPatientPage() {
             </div>
           )}
 
-          {/* Search & Category Chips */}
+          {/* Search, Mode Dropdown & Category Chips */}
           <div className="p-4 border-b border-border/80 shrink-0 space-y-3 bg-card/60">
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input
-                className="w-full pl-10 pr-4 py-2.5 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/60 focus:border-primary outline-none text-foreground font-medium"
-                placeholder="Search investigation name, profile, or category…"
-                value={testSearch}
-                onChange={(e) => setTestSearch(e.target.value)}
-              />
+            <div className="flex items-center gap-2.5">
+              <div className="relative flex-1">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  className="w-full pl-10 pr-4 py-2.5 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/60 focus:border-primary outline-none text-foreground font-medium shadow-2xs"
+                  placeholder={
+                    catalogMode === "TESTS"
+                      ? "Search test name or test code (e.g. CBC, LFT, KFT, Glucose)…"
+                      : "Search diagnostic package name or code (e.g. Full Body, Cardiac, PKG-101)…"
+                  }
+                  value={testSearch}
+                  onChange={(e) => setTestSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Mode Selector Dropdown on Right */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <select
+                  value={catalogMode}
+                  onChange={(e) => {
+                    setCatalogMode(e.target.value as "TESTS" | "PACKAGES");
+                    setTestSearch("");
+                  }}
+                  className="h-10 px-3.5 rounded-lg bg-background border border-border/90 text-xs font-bold text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer shadow-2xs"
+                >
+                  <option value="TESTS">Tests</option>
+                  <option value="PACKAGES">Packages</option>
+                </select>
+              </div>
             </div>
 
-            {/* Categories */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-              <button
-                onClick={() => setActiveCategory("ALL")}
-                className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 ${
-                  activeCategory === "ALL"
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "bg-muted text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                All Categories
-              </button>
-              {categories.map((cat) => (
+            {/* If Tests mode: show Category Chips */}
+            {catalogMode === "TESTS" ? (
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs custom-scrollbar">
                 <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 ${
-                    activeCategory === cat
+                  onClick={() => setActiveCategory("ALL")}
+                  className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${
+                    activeCategory === "ALL"
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "bg-muted text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {cat}
+                  All Categories
                 </button>
-              ))}
-            </div>
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${
+                      activeCategory === cat
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-xs py-0.5">
+                <div className="flex items-center gap-2">
+                  <Boxes className="h-4 w-4 text-primary" />
+                  <span className="font-bold text-foreground">Available Health Bundles & Packages</span>
+                </div>
+                {selectedPackage && (
+                  <div className="flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 rounded-full font-bold text-xs border border-primary/20">
+                    <span>Active: {selectedPackage.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedPackage) {
+                          const resolved = resolvePackageTestIds(selectedPackage, availableTests);
+                          setSelectedTests((prev) => prev.filter((id) => !resolved.includes(id)));
+                          setSelectedPackage(null);
+                        }
+                      }}
+                      className="text-xs hover:underline text-primary/80"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Tests Grid (3 Columns Landscape) */}
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 bg-background">
-            {Object.keys(filteredGroups).length === 0 ? (
+          {/* Catalog Body: Either Tests or Packages Grid */}
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 bg-background custom-scrollbar">
+            {catalogMode === "PACKAGES" ? (
+              filteredPackagesForCatalog.length === 0 ? (
+                <div className="text-center py-16 text-muted-foreground space-y-2">
+                  <Boxes className="h-10 w-10 mx-auto opacity-30 text-primary" />
+                  <p className="text-xs font-bold text-foreground">No diagnostic packages found.</p>
+                  <p className="text-[11px]">Check the spelling or configure new packages under Tests &gt; Packages.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                  {filteredPackagesForCatalog.map((pkg: LabPackage) => {
+                    const isSelected = selectedPackage?.id === pkg.id;
+                    const testCount = pkg.tests?.length || pkg.testIds?.length || 0;
+                    return (
+                      <div
+                        key={pkg.id}
+                        onClick={() => handleTogglePackage(pkg)}
+                        className={`p-4 rounded-xl border text-xs cursor-pointer select-none transition-all flex flex-col justify-between gap-3 shadow-2xs ${
+                          isSelected
+                            ? "bg-primary/10 border-primary ring-2 ring-primary/30 shadow-md"
+                            : "bg-card border-border/90 hover:border-primary/50 hover:shadow-xs"
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-1.5">
+                            <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                              {pkg.code}
+                            </span>
+                            <span className="font-mono text-sm font-extrabold text-primary">
+                              ₹{pkg.price.toFixed(2)}
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-foreground text-sm">{pkg.name}</h4>
+                          {pkg.description && (
+                            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
+                              {pkg.description}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="pt-2 border-t border-border/60">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-muted-foreground font-semibold">Includes {testCount} Investigations</span>
+                            <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+                              isSelected
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
+                            }`}>
+                              {isSelected ? "Selected" : "Select Package"}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {(pkg.tests || []).slice(0, 3).map((t: any, idx: number) => (
+                              <span key={idx} className="text-[9.5px] font-medium bg-muted/60 px-1.5 py-0.5 rounded text-foreground/80 truncate max-w-[110px]">
+                                {t.name}
+                              </span>
+                            ))}
+                            {testCount > 3 && (
+                              <span className="text-[9.5px] font-bold text-primary">+{testCount - 3} more</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : Object.keys(filteredGroups).length === 0 ? (
               <div className="text-center py-16 text-muted-foreground space-y-2">
                 <FlaskConical className="h-10 w-10 mx-auto opacity-30" />
                 <p className="text-xs font-bold text-foreground">No clinical investigations match your filter.</p>
@@ -2425,33 +2628,45 @@ function RegisterPatientPage() {
           {/* Pricing & Concession Bottom Bar */}
           <div className="border-t border-border/80 px-6 py-4 shrink-0 bg-muted/50 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Discount Concession (₹)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max={subtotal}
-                  placeholder="0"
-                  className="h-9 w-28 text-xs font-mono font-bold border border-border/90 rounded-lg px-2.5 bg-background text-foreground focus:border-primary outline-none"
-                  value={discount}
-                  onChange={(e) => setDiscount(e.target.value)}
-                  disabled={booking}
-                />
-              </div>
+              {!isB2B && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Discount Concession (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={subtotal}
+                    placeholder="0"
+                    className="h-9 w-28 text-xs font-mono font-bold border border-border/90 rounded-lg px-2.5 bg-background text-foreground focus:border-primary outline-none"
+                    value={discount}
+                    onChange={(e) => setDiscount(e.target.value)}
+                    disabled={booking}
+                  />
+                </div>
+              )}
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Advance Paid (₹)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max={grandTotal}
-                  placeholder="0"
-                  className="h-9 w-28 text-xs font-mono font-bold border border-border/90 rounded-lg px-2.5 bg-background text-foreground focus:border-primary outline-none"
-                  value={paidAmount}
-                  onChange={(e) => setPaidAmount(e.target.value)}
-                  disabled={booking}
-                />
-              </div>
+              {isB2B ? (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Settlement Status</label>
+                  <div className="h-9 px-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>UNPAID (Pending Central Lab Clearance)</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Advance Paid (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={grandTotal}
+                    placeholder="0"
+                    className="h-9 w-28 text-xs font-mono font-bold border border-border/90 rounded-lg px-2.5 bg-background text-foreground focus:border-primary outline-none"
+                    value={paidAmount}
+                    onChange={(e) => setPaidAmount(e.target.value)}
+                    disabled={booking}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-5 justify-between w-full sm:w-auto sm:justify-end">
@@ -2472,32 +2687,33 @@ function RegisterPatientPage() {
 
       {/* 2. Direct Medical Invoice Print Modal */}
       <Dialog open={isPrintModalOpen} onOpenChange={setIsPrintModalOpen}>
-        <DialogContent className="max-w-4xl w-full max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl print:max-h-none print:max-w-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0">
+        <DialogContent className="max-w-4xl w-[96vw] sm:w-full max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl print:max-h-none print:max-w-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0">
           <DialogTitle className="sr-only">Print Invoice</DialogTitle>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border/80 bg-card shrink-0 print:hidden">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg gradient-primary text-primary-foreground flex items-center justify-center">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border/80 bg-card shrink-0 print:hidden">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="h-9 w-9 rounded-lg gradient-primary text-primary-foreground flex items-center justify-center shrink-0">
                 <Printer className="h-5 w-5" />
               </div>
-              <div>
-                <h3 className="font-display text-base font-bold text-foreground">
+              <div className="min-w-0">
+                <h3 className="font-display text-sm sm:text-base font-bold text-foreground truncate">
                   Invoice {successDetails?.billCustomId}
                 </h3>
-                <p className="text-[11px] text-muted-foreground">
-                  Patient: <strong className="text-foreground">{successDetails?.patientName}</strong> ({successDetails?.patientCustomId})
+                <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate">
+                  Patient: <strong className="text-foreground">{successDetails?.patientName}</strong>
                 </p>
               </div>
             </div>
             <button
               onClick={() => printInvoiceElement(registerPrintRef.current, `Invoice_${successDetails?.billCustomId || "Receipt"}`)}
-              className="gradient-primary text-primary-foreground font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-sm hover:-translate-y-px transition-all cursor-pointer"
+              className="gradient-primary text-primary-foreground font-bold text-xs px-3 sm:px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-sm hover:-translate-y-px transition-all cursor-pointer shrink-0"
             >
               <Printer className="h-3.5 w-3.5" />
-              <span>Print / Download PDF</span>
+              <span className="hidden sm:inline">Print / Download PDF</span>
+              <span className="sm:hidden">Print</span>
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-zinc-100 dark:bg-zinc-900/60 flex justify-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">
+          <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 bg-zinc-100 dark:bg-zinc-900/60 flex justify-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">
             <div ref={registerPrintRef} className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 bg-white max-w-full print:shadow-none print:ring-0 print:border-none print:p-0 print:m-0 print:w-full">
               <InvoiceSheet
                 invoice={{

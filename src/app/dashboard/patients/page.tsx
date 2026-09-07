@@ -317,7 +317,7 @@ export default function PatientsPage() {
         </div>
 
         {/* Quick Date Filters */}
-        <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-1.5 shrink-0 w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setPreset("today")}
@@ -348,7 +348,7 @@ export default function PatientsPage() {
             All Time
           </button>
 
-          <div className="flex items-center gap-1 border border-border rounded-lg px-2 h-9 bg-background ml-1">
+          <div className="flex items-center gap-1 border border-border rounded-lg px-2 h-9 bg-background">
             <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <input
               type="date"
@@ -373,7 +373,7 @@ export default function PatientsPage() {
 
       {/* Patients Table Card */}
       <div className="bg-card border border-border/80 rounded-xl shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-responsive-container">
           {loading ? (
             <div className="p-8 space-y-4">
               <Skeleton className="h-8 w-full" />
@@ -390,12 +390,12 @@ export default function PatientsPage() {
               </p>
             </div>
           ) : (
-            <table className="w-full text-xs text-left border-collapse">
+            <table className="w-full min-w-[760px] text-xs text-left border-collapse">
               <thead>
                 <tr className="border-b border-border/80 bg-muted/30 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
                   <th className="px-5 py-3.5">Patient Details</th>
                   <th className="px-5 py-3.5">PID / ID</th>
-                  <th className="px-5 py-3.5">{isB2B ? "Barcode" : "Contact"}</th>
+                  <th className="px-5 py-3.5">Barcode</th>
                   <th className="px-5 py-3.5">Referred By</th>
                   <th className="px-5 py-3.5">Collection Point</th>
                   <th className="px-5 py-3.5">Registered</th>
@@ -408,7 +408,7 @@ export default function PatientsPage() {
                   const patName = patient.name;
                   const patGender = patient.gender || "Male";
                   const patAge = patient.age;
-                  const patPhone = patient.phone || "—";
+                  const patBarcode = patient.vial_barcode || patient.vialBarcode || patient.meta?.vial_barcode || patient.custom_id || patient.customId || "—";
                   const patRef = patient.ref_doctor || patient.refDoctor || "Self";
                   const patColl = patient.collected_at || patient.collectedAt || "Main Lab";
                   const regDate = patient.created_at || patient.createdAt;
@@ -432,14 +432,10 @@ export default function PatientsPage() {
                         {patId}
                       </td>
                       <td className="px-5 py-3.5 text-foreground font-mono">
-                        {isB2B ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold border border-purple-500/20 text-xs">
-                            <Tag className="h-3 w-3" />
-                            {patient.vial_barcode || patient.vialBarcode || patient.meta?.vial_barcode || "—"}
-                          </span>
-                        ) : (
-                          patPhone
-                        )}
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-bold border border-primary/20 text-xs">
+                          <Tag className="h-3 w-3" />
+                          {patBarcode}
+                        </span>
                       </td>
                       <td className="px-5 py-3.5 text-foreground font-medium">
                         Dr. {patRef}
@@ -561,7 +557,7 @@ export default function PatientsPage() {
                   <span>Demographics & Personal Details</span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 rounded-xl border border-border/70 bg-background/60">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 p-4 rounded-xl border border-border/70 bg-background/60">
                   <div>
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">Patient ID (PID)</p>
                     <p className="font-mono font-bold text-primary text-sm mt-0.5">{viewPatient.custom_id || viewPatient.customId}</p>
@@ -594,7 +590,7 @@ export default function PatientsPage() {
                   <span>Clinical Referral & Logistics</span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 p-4 rounded-xl border border-border/70 bg-background/60">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 p-4 rounded-xl border border-border/70 bg-background/60">
                   <div>
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">Referring Doctor</p>
                     <p className="font-bold text-foreground mt-0.5">Dr. {viewPatient.ref_doctor || viewPatient.refDoctor || "Self"}</p>

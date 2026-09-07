@@ -214,7 +214,7 @@ function SupportContent() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             {activeView !== "HUB" && (
               <button
                 onClick={() => setActiveView("HUB")}
@@ -881,12 +881,12 @@ function SupportContent() {
         <div className="space-y-5 animate-fade-in">
           {/* Filter Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-card/70 p-4 rounded-2xl border border-border/80 shadow-sm">
-            <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border text-xs">
+            <div className="flex items-center gap-1.5 bg-muted/60 p-1 rounded-xl border border-border text-xs overflow-x-auto w-full sm:w-fit scrollbar-none">
               {["ALL", "ISSUE", "FEEDBACK", "FEATURE_REQUEST", "GENERAL_SUPPORT"].map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setHistoryCategoryFilter(cat)}
-                  className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all ${
+                  className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all shrink-0 ${
                     historyCategoryFilter === cat
                       ? "bg-card text-primary shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
@@ -981,7 +981,7 @@ function SupportContent() {
 
       {/* Ticket Details & Discussion Modal */}
       <Dialog open={!!selectedTicket} onOpenChange={() => setSelectedTicket(null)}>
-        <DialogContent className="max-w-3xl w-full p-0 gap-0 overflow-hidden rounded-2xl bg-card border border-border/80 shadow-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl bg-card border border-border/80 shadow-2xl max-h-[92vh] flex flex-col">
           <DialogTitle className="sr-only">Support Ticket Details</DialogTitle>
           
           <div className="flex items-center justify-between px-6 py-4 border-b border-border/80 bg-card shrink-0">
@@ -999,7 +999,7 @@ function SupportContent() {
           </div>
 
           {selectedTicket && (
-            <div className="p-6 space-y-5 bg-card text-xs">
+            <div className="p-4 sm:p-6 space-y-5 bg-card text-xs overflow-y-auto">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-background/60 p-4 rounded-xl border border-border/70">
                 <div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase">Category</p>

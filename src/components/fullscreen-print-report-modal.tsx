@@ -17,6 +17,7 @@ import {
 } from "@/components/report-sheet";
 import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
+import { getReportPackage } from "@/lib/packages";
 
 interface FullscreenPrintReportModalProps {
   open: boolean;
@@ -88,6 +89,13 @@ export function FullscreenPrintReportModal({
   const [zoomScale, setZoomScale] = useState<number>(0.80);
   const [totalPages, setTotalPages] = useState(1);
   const [liveLab, setLiveLab] = useState<any>(null);
+  const [mobileTab, setMobileTab] = useState<"preview" | "tests" | "actions">("preview");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 640) {
+      setZoomScale(0.42);
+    }
+  }, []);
 
   // ── Extract distinct Main Tests ───────────────────────
   const mainTests = useMemo(() => {
@@ -109,7 +117,7 @@ export function FullscreenPrintReportModal({
   // ── Sync on modal open & Fetch Latest Lab Settings ────
   useEffect(() => {
     if (open) {
-      fetchFromLaravel("/lab")
+      fetchFromLaravel("/lab", { skipCache: true })
         .then((fresh) => {
           if (fresh) setLiveLab(fresh);
         })
@@ -166,8 +174,19 @@ export function FullscreenPrintReportModal({
         remarks: paramRemarks?.[item.id] ?? item.remarks,
       }));
 
+    const resolvedPackageName =
+      report.packageName ||
+      report.package_name ||
+      report.meta?.packageName ||
+      report.meta?.package_name ||
+      getReportPackage(report.id) ||
+      getReportPackage(report.customId) ||
+      getReportPackage(report.patient?.customId);
+
     return {
       ...report,
+      packageName: resolvedPackageName,
+      package_name: resolvedPackageName,
       lab: currentLab,
       reportDate: selectedDate.toISOString(),
       results: filteredResults,
@@ -269,13 +288,60 @@ export function FullscreenPrintReportModal({
       <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] max-h-[92vh] p-0 m-0 border border-border/80 rounded-3xl overflow-hidden flex flex-col bg-background shadow-2xl [&>button.absolute]:hidden">
         <DialogTitle className="sr-only">Print & Preview Report</DialogTitle>
 
+        {/* Mobile View Switcher Tabs (< lg) */}
+        <div className="flex lg:hidden items-center justify-between border-b border-border/80 bg-card p-2 gap-1 shrink-0 print:hidden">
+          <div className="flex items-center gap-1 flex-1">
+            <button
+              type="button"
+              onClick={() => setMobileTab("preview")}
+              className={`flex-1 py-1.5 px-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                mobileTab === "preview"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground bg-muted/40"
+              }`}
+            >
+              Canvas
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab("tests")}
+              className={`flex-1 py-1.5 px-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                mobileTab === "tests"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground bg-muted/40"
+              }`}
+            >
+              Tests ({selectedMainTestIds.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileTab("actions")}
+              className={`flex-1 py-1.5 px-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                mobileTab === "actions"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground bg-muted/40"
+              }`}
+            >
+              Settings
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer ml-1"
+            title="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
         {/* ── Main 3-Column Layout ─────────────────────────────────────── */}
         <div className="flex-1 flex flex-col lg:flex-row h-full overflow-hidden">
           
           {/* ═══════════════════════════════════════════════════════════════
               1. LEFT SIDEBAR: Tests List (~260px)
           ═══════════════════════════════════════════════════════════════ */}
-          <div className="w-full lg:w-[260px] bg-card border-r border-border/80 flex flex-col shrink-0 overflow-hidden print:hidden">
+          <div className={`w-full lg:w-[260px] bg-card border-r border-border/80 flex-col shrink-0 overflow-hidden print:hidden ${mobileTab === "tests" ? "flex flex-1" : "hidden lg:flex"}`}>
             <div className="p-4 border-b border-border/80 bg-muted/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-primary" />
@@ -332,7 +398,7 @@ export function FullscreenPrintReportModal({
           {/* ═══════════════════════════════════════════════════════════════
               2. CENTER PANEL: Live Canvas Viewport
           ═══════════════════════════════════════════════════════════════ */}
-          <div className="flex-1 flex flex-col bg-zinc-900/95 dark:bg-zinc-950 overflow-hidden relative print:bg-white print:overflow-visible print:p-0">
+          <div className={`flex-1 flex-col bg-zinc-900/95 dark:bg-zinc-950 overflow-hidden relative print:bg-white print:overflow-visible print:p-0 ${mobileTab === "preview" ? "flex" : "hidden lg:flex"}`}>
             {/* Top Toolbar */}
             <div className="h-12 bg-zinc-800/90 border-b border-zinc-700/80 px-4 flex items-center justify-between text-zinc-200 shrink-0 print:hidden">
               <div className="flex items-center gap-3">
@@ -401,7 +467,7 @@ export function FullscreenPrintReportModal({
             </div>
 
             {/* Live Center Sheet Viewport (Rendered with forwarded printRef!) */}
-            <div className="flex-1 overflow-y-auto overflow-x-auto p-4 sm:p-8 flex justify-center items-start custom-scrollbar">
+            <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 flex justify-center items-start custom-scrollbar">
               <div className="rounded-xl overflow-hidden shadow-2xl">
                 <PaginatedReportPreview
                   ref={printRef}
@@ -418,7 +484,7 @@ export function FullscreenPrintReportModal({
           {/* ═══════════════════════════════════════════════════════════════
               3. RIGHT SIDEBAR: Settings & Actions (~320px)
           ═══════════════════════════════════════════════════════════════ */}
-          <div className="w-full lg:w-[320px] bg-card border-l border-border/80 flex flex-col shrink-0 overflow-hidden print:hidden">
+          <div className={`w-full lg:w-[320px] bg-card border-l border-border/80 flex-col shrink-0 overflow-hidden print:hidden ${mobileTab === "actions" ? "flex flex-1" : "hidden lg:flex"}`}>
             <div className="p-4 border-b border-border/80 bg-muted/20 flex items-center justify-between">
               <h3 className="font-bold text-sm text-foreground">Settings</h3>
               <button

@@ -104,6 +104,9 @@ function autoInvalidateCache(endpoint: string) {
   }
   if (ep.includes("lab")) {
     clearApiCache("/lab");
+    clearApiCache("/reports");
+    clearApiCache("/bills");
+    clearApiCache("/today-sales");
   }
 }
 

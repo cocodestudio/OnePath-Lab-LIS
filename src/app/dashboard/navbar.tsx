@@ -285,10 +285,10 @@ export default function Navbar() {
     : (searchResults.patients.length > 0 || searchResults.reports.length > 0 || searchResults.bills.length > 0);
 
   return (
-    <header className="flex h-[68px] items-center justify-between px-4 sm:px-6 lg:px-8 glass border-b border-border/60 shrink-0 sticky top-0 z-30 gap-3 sm:gap-6">
+    <header className="flex h-[68px] items-center justify-between pl-16 pr-3 sm:px-6 lg:px-8 glass border-b border-border/60 shrink-0 sticky top-0 z-30 gap-2 sm:gap-6">
       
       {/* Left Navigation Buttons + Full Width Global Search Bar */}
-      <div className="flex items-center gap-2.5 flex-1 max-w-2xl" ref={searchContainerRef}>
+      <div className="flex items-center gap-2.5 flex-1 max-w-2xl min-w-0" ref={searchContainerRef}>
         
         {/* Smart History Back & Forward Buttons */}
         <div className="hidden sm:flex items-center gap-1 bg-card/80 p-1 rounded-xl border border-border/80 shadow-xs shrink-0">
@@ -313,9 +313,9 @@ export default function Navbar() {
         </div>
 
         {/* Global Live Search Bar */}
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-w-0">
           <div className="relative flex items-center">
-            <Search className="absolute left-3.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Search className="absolute left-3 sm:left-3.5 h-3.5 sm:h-4 w-3.5 sm:w-4 text-muted-foreground pointer-events-none" />
             <input
               ref={searchInputRef}
               type="text"
@@ -325,11 +325,11 @@ export default function Navbar() {
                 setIsSearchOpen(true);
               }}
               onFocus={() => setIsSearchOpen(true)}
-              placeholder="Search patients by name, phone, or test report ID... (Ctrl + K)"
-              className="w-full h-10 pl-10 pr-20 bg-background/90 hover:bg-background focus:bg-background border border-border/90 focus:border-primary rounded-xl text-xs sm:text-sm font-medium text-foreground outline-none transition-all shadow-xs placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-primary/15"
+              placeholder="Search patients, reports..."
+              className="w-full h-9 sm:h-10 pl-8 sm:pl-10 pr-7 sm:pr-20 bg-background/90 hover:bg-background focus:bg-background border border-border/90 focus:border-primary rounded-xl text-xs sm:text-sm font-medium text-foreground outline-none transition-all shadow-xs placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-primary/15 truncate"
             />
 
-            <div className="absolute right-2.5 flex items-center gap-1.5">
+            <div className="absolute right-2 sm:right-2.5 flex items-center gap-1.5">
               {searchQuery ? (
                 <button
                   type="button"
@@ -351,7 +351,7 @@ export default function Navbar() {
 
           {/* Search Dropdown Results Popover */}
           {isSearchOpen && searchQuery.trim().length > 0 && (
-            <div className="absolute left-0 right-0 top-12 bg-card border border-border/90 rounded-2xl shadow-2xl overflow-hidden z-50 animate-scale-in max-h-[440px] overflow-y-auto">
+            <div className="fixed inset-x-2 sm:absolute sm:inset-x-0 sm:left-0 sm:right-0 top-[72px] sm:top-12 bg-card border border-border/90 rounded-2xl shadow-2xl overflow-hidden z-50 animate-scale-in max-h-[70vh] sm:max-h-[440px] overflow-y-auto">
               
               {isSearching ? (
                 <div className="py-10 flex flex-col items-center justify-center text-muted-foreground gap-2">
@@ -553,7 +553,7 @@ export default function Navbar() {
             </button>
           </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" className="w-80 sm:w-96 p-0 rounded-2xl border-border/90 bg-card shadow-2xl overflow-hidden animate-scale-in">
+          <DropdownMenuContent align="end" className="w-[calc(100vw-1.5rem)] max-w-[360px] sm:w-96 p-0 rounded-2xl border-border/90 bg-card shadow-2xl overflow-hidden animate-scale-in">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-border/80 bg-muted/40">
               <div className="flex items-center gap-2">
@@ -676,7 +676,7 @@ export default function Navbar() {
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60 hidden lg:block" />
           </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" className="w-72 p-0 rounded-2xl shadow-2xl border-border/90 bg-card overflow-hidden">
+          <DropdownMenuContent align="end" className="w-[calc(100vw-1.5rem)] max-w-[288px] sm:w-72 p-0 rounded-2xl shadow-2xl border-border/90 bg-card overflow-hidden">
             {/* Header: Name + Account owner badge */}
             <div className="p-4 pb-3 space-y-1.5 bg-background">
               <div className="flex items-center justify-between gap-2">

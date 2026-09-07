@@ -1480,12 +1480,12 @@ export default function TestMasterPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-[95vw] h-[92vh] max-h-[94vh] p-0 gap-0 overflow-hidden rounded-2xl border border-border/90 bg-card shadow-2xl flex flex-col" hideClose>
           {/* Top Bar with Back Arrow & Actions (No redundant X cross icon) */}
-          <div className="h-16 border-b border-border/80 bg-card px-6 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-3">
+          <div className="min-h-16 py-2.5 sm:py-0 border-b border-border/80 bg-card px-3 sm:px-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
+            <div className="flex items-center gap-2.5 sm:gap-3">
               <button
                 type="button"
                 onClick={() => setDialogOpen(false)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border/80 bg-background text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg border border-border/80 bg-background text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs shrink-0"
               >
                 <ArrowLeft className="h-4 w-4 text-primary" />
                 <span>Back</span>
@@ -1493,10 +1493,10 @@ export default function TestMasterPage() {
 
               <div className="h-5 w-px bg-border/80 hidden sm:block" />
 
-              <div>
-                <DialogTitle className="font-display text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
-                  <span>{editingTest ? `Edit Test: ${editingTest.name}` : "Create Diagnostic Test Panel"}</span>
-                  <span className="px-2.5 py-0.5 rounded bg-primary/10 text-primary text-[11px] font-mono font-bold">
+              <div className="min-w-0">
+                <DialogTitle className="font-display text-sm sm:text-base font-bold text-foreground flex items-center gap-2 truncate">
+                  <span className="truncate">{editingTest ? `Edit Test: ${editingTest.name}` : "Create Diagnostic Test Panel"}</span>
+                  <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] sm:text-[11px] font-mono font-bold shrink-0">
                     {testCode || "NEW"}
                   </span>
                 </DialogTitle>
@@ -1506,31 +1506,31 @@ export default function TestMasterPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5 justify-end">
               <button
                 type="button"
                 onClick={handleOpenLivePreview}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors cursor-pointer shadow-xs"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[11px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors cursor-pointer shadow-xs"
                 title="Open live report layout preview and parameter manager"
               >
-                <Eye className="h-4 w-4 text-emerald-500" />
-                <span>Live Report Preview</span>
+                <Eye className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-emerald-500" />
+                <span>Live Preview</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setNotesModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-border/80 bg-background text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg border border-border/80 bg-background text-[11px] sm:text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs"
               >
-                <FileText className="h-4 w-4 text-blue-500" />
-                <span>Interpretation & Notes</span>
+                <FileText className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-blue-500" />
+                <span>Notes</span>
               </button>
 
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setDialogOpen(false)}
-                className="rounded-lg px-4 h-10 text-xs font-semibold cursor-pointer"
+                className="rounded-lg px-3 sm:px-4 h-8 sm:h-10 text-xs font-semibold cursor-pointer"
               >
                 Cancel
               </Button>
@@ -1539,9 +1539,9 @@ export default function TestMasterPage() {
                 type="button"
                 onClick={handleSaveTest}
                 disabled={saving}
-                className="rounded-lg px-6 h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                className="rounded-lg px-4 sm:px-6 h-8 sm:h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-md flex items-center gap-1.5 sm:gap-2 cursor-pointer disabled:opacity-50"
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {saving ? <Loader2 className="h-3.5 sm:h-4 w-3.5 sm:w-4 animate-spin" /> : <Check className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
                 <span>{editingTest ? "Save Changes" : "Create Test"}</span>
               </Button>
             </div>

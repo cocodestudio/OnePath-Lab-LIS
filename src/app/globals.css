@@ -385,3 +385,56 @@ html.lenis, html.lenis body {
 .lenis.lenis-scrolling iframe {
   pointer-events: none;
 }
+
+/* ════════════════════════════════════════════════════════════
+   Mobile & Cross-Device Responsive Utilities
+   ════════════════════════════════════════════════════════════ */
+
+/* Responsive Table Wrapper with Touch Momentum & Edge Indicators */
+.table-responsive-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.table-responsive-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-responsive-container::-webkit-scrollbar-track {
+  background: hsl(var(--muted) / 0.4);
+  border-radius: 9999px;
+}
+
+.table-responsive-container::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.35);
+  border-radius: 9999px;
+}
+
+.table-responsive-container::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.6);
+}
+
+/* 4-Way Drag & Touch-Pan Canvas for A4 Reports & Invoices */
+.sheet-pan-canvas {
+  touch-action: pan-x pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sheet-pan-canvas.is-draggable {
+  cursor: grab;
+}
+
+.sheet-pan-canvas.is-dragging {
+  cursor: grabbing;
+}
+
+/* Safe area insets for notched mobile devices */
+.safe-pb {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}

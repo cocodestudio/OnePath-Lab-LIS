@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Clock, FlaskConical, Search, PlusCircle, RefreshCw, CheckCircle2,
   Copy, Check, FileText, ArrowRight, ShieldCheck, IndianRupee,
-  Filter, AlertCircle, ChevronRight, User
+  Filter, AlertCircle, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight, User
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 
@@ -15,6 +15,10 @@ export default function TodaySamplesPage() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<"ALL" | "COLLECTED" | "TRANSIT" | "READY" | "PAID" | "DUE">("ALL");
   const [copiedBarcode, setCopiedBarcode] = useState<string | null>(null);
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   const [currentUserRole, setCurrentUserRole] = useState<string>("");
 
@@ -116,6 +120,20 @@ export default function TodaySamplesPage() {
       return true;
     });
   }, [reports, search, stageFilter]);
+
+  // Reset to first page whenever search query or stage filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, stageFilter]);
+
+  // Safe pagination calculations
+  const totalPages = Math.max(1, Math.ceil(filteredSamples.length / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const paginatedSamples = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredSamples.slice(start, start + pageSize);
+  }, [filteredSamples, safeCurrentPage, pageSize]);
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
@@ -255,8 +273,8 @@ export default function TodaySamplesPage() {
 
       {/* ── Samples Table ── */}
       <div className="rounded-2xl bg-card border border-border/80 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="table-responsive-container">
+          <table className="w-full min-w-[780px] text-left border-collapse">
             <thead>
               <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
                 <th className="py-3.5 px-5">Vial Barcode / ID</th>
@@ -287,7 +305,7 @@ export default function TodaySamplesPage() {
                   </td>
                 </tr>
               ) : (
-                filteredSamples.map((item: any, idx: number) => {
+                paginatedSamples.map((item: any, idx: number) => {
                   const sampleBarcode = item.custom_id || item.customId || `OP-${item.id.slice(0, 8)}`;
                   const p = item.patient || {};
                   const testsStr = item.tests || (Array.isArray(item.results) ? item.results.map((r: any) => r.test?.name).filter(Boolean).join(", ") : "Diagnostic Test Panel");
@@ -404,6 +422,113 @@ export default function TodaySamplesPage() {
             </tbody>
           </table>
         </div>
+
+        {/* ── Table Pagination Bar ── */}
+        {filteredSamples.length > 0 && (
+          <div className="px-6 py-3.5 border-t border-border/60 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <span>Showing</span>
+              <span className="font-bold text-foreground">
+                {(safeCurrentPage - 1) * pageSize + 1}
+              </span>
+              <span>to</span>
+              <span className="font-bold text-foreground">
+                {Math.min(safeCurrentPage * pageSize, filteredSamples.length)}
+              </span>
+              <span>of</span>
+              <span className="font-bold text-foreground">{filteredSamples.length}</span>
+              <span>samples</span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Rows per page selector */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground text-[11px]">Rows:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="h-8 px-2 rounded-lg bg-card border border-border text-xs font-bold text-foreground outline-none focus:border-primary cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+
+              {/* Page buttons */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={safeCurrentPage === 1}
+                  className="h-8 w-8 rounded-lg border border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors cursor-pointer"
+                  title="First Page"
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safeCurrentPage === 1}
+                  className="h-8 px-2.5 rounded-lg border border-border bg-card text-foreground font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  <span>Prev</span>
+                </button>
+
+                {/* Numbered Page Buttons */}
+                <div className="flex items-center gap-1 px-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum = i + 1;
+                    if (totalPages > 5 && safeCurrentPage > 3) {
+                      pageNum = safeCurrentPage - 2 + i;
+                      if (pageNum > totalPages) pageNum = totalPages - 4 + i;
+                    }
+                    if (pageNum < 1 || pageNum > totalPages) return null;
+
+                    return (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`h-8 w-8 rounded-lg font-bold transition-all text-xs cursor-pointer ${
+                          safeCurrentPage === pageNum
+                            ? "gradient-primary text-primary-foreground shadow-xs ring-1 ring-primary/30"
+                            : "border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  className="h-8 px-2.5 rounded-lg border border-border bg-card text-foreground font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <span>Next</span>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={safeCurrentPage === totalPages}
+                  className="h-8 w-8 rounded-lg border border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors cursor-pointer"
+                  title="Last Page"
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

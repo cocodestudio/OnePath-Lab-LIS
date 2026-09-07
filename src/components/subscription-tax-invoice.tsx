@@ -117,7 +117,7 @@ export function SubscriptionTaxInvoiceSheet({
   return (
     <div className="flex flex-col bg-card rounded-2xl overflow-hidden shadow-2xl border border-border">
       {/* ── Top Modal Action Toolbar (Hidden on print) ── */}
-      <div className="flex items-center justify-between p-3.5 px-6 bg-slate-900 text-white print:hidden">
+      <div className="flex items-center justify-between p-3.5 px-4 sm:px-6 bg-slate-900 text-white print:hidden flex-wrap gap-2">
         <div className="flex items-center gap-2.5">
           <div className="h-7 w-7 rounded-md bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
             ₹
@@ -154,10 +154,10 @@ export function SubscriptionTaxInvoiceSheet({
       </div>
 
       {/* ── Printable Flipkart Tax Invoice Sheet ── */}
-      <div className="overflow-x-auto p-4 sm:p-6 bg-slate-100 dark:bg-slate-950 flex justify-center">
+      <div className="overflow-auto sheet-pan-canvas p-2 sm:p-6 bg-slate-100 dark:bg-slate-950 flex justify-start sm:justify-center">
         <div
           ref={printRef}
-          className="flipkart-invoice-sheet w-[800px] min-h-[1050px] bg-white text-black p-8 sm:p-10 font-sans text-[10px] leading-[1.35] border border-slate-300"
+          className="flipkart-invoice-sheet w-[800px] shrink-0 min-h-[1050px] bg-white text-black p-6 sm:p-10 font-sans text-[10px] leading-[1.35] border border-slate-300"
           style={{ boxSizing: "border-box", color: "#000000", fontFamily: "Arial, Helvetica, sans-serif" }}
         >
           {/* ================= 1. HEADER SECTION (Flipkart Exact Header) ================= */}

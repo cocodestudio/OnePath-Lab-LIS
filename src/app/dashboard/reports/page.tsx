@@ -278,7 +278,7 @@ export default function ReportsListPage() {
 
       {/* Table */}
       <div className="bg-card border border-border/70 rounded-xl shadow-card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-responsive-container">
           {loading ? (
             <div className="flex flex-col gap-3 p-4">
               <Skeleton className="h-10 w-full rounded-md" />
@@ -294,7 +294,7 @@ export default function ReportsListPage() {
               <p className="text-xs text-muted-foreground/70">Try clearing filters or starting a new registration.</p>
             </div>
           ) : (
-            <table className="w-full text-left">
+            <table className="w-full min-w-[640px] text-left">
               <thead>
                 <tr className="bg-muted/30 border-b border-border/60">
                   {["Report ID", "Patient", "Received", "Tests", "Status", ""].map((h, i) => (

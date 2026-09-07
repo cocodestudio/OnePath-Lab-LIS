@@ -1,27 +1,29 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   TrendingUp, Calendar, DollarSign, IndianRupee, ArrowDownRight,
-  ArrowUpRight, Printer, Download, RefreshCw, FileText, CheckCircle2,
+  ArrowUpRight, Download, RefreshCw, FileText, CheckCircle2,
   Clock, AlertCircle, Filter, ChevronDown, Layers, Building2,
-  Percent, ArrowLeft, Search, Eye, Sparkles, X, ShieldCheck
+  Percent, ArrowLeft, Search, Eye, Sparkles, X, ShieldCheck,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from "lucide-react";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 
-type DateFilterType = "WEEKLY" | "MONTHLY" | "YEARLY" | "CUSTOM";
+type DateFilterType = "SPECIFIC_DATE" | "WEEKLY" | "MONTHLY" | "YEARLY" | "CUSTOM";
 
 export default function B2BRevenuePage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<any[]>([]);
+  const [tests, setTests] = useState<any[]>([]);
   const [labInfo, setLabInfo] = useState<any>(null);
 
   // Filters
   const [dateFilter, setDateFilter] = useState<DateFilterType>("MONTHLY");
+  const [specificDate, setSpecificDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [customStartDate, setCustomStartDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() - 30);
@@ -33,12 +35,9 @@ export default function B2BRevenuePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
-  // Statement / Tax Invoice Modal
-  const [showStatementModal, setShowStatementModal] = useState(false);
-  const printAreaRef = useRef<HTMLDivElement>(null);
-
-  // Configurable Wholesale Discount Margin (Standard B2B discount: 30% margin for partner, 70% wholesale cost)
-  const [marginPercent, setMarginPercent] = useState<number>(30);
+  // Pagination for Financial Ledger Table
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     const user = getStoredUser();
@@ -49,18 +48,104 @@ export default function B2BRevenuePage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [reportsRes, labRes] = await Promise.all([
+      const [reportsRes, labRes, testsRes] = await Promise.all([
         fetchFromLaravel("/reports").catch(() => []),
         fetchFromLaravel("/lab").catch(() => null),
+        fetchFromLaravel("/tests").catch(() => []),
       ]);
       const repList = Array.isArray(reportsRes) ? reportsRes : (reportsRes?.data || []);
       setReports(repList);
       if (labRes) setLabInfo(labRes);
+      const testList = Array.isArray(testsRes) ? testsRes : (testsRes?.data || []);
+      setTests(testList);
     } catch (err) {
       console.error("Failed to load revenue telemetry:", err);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Map tests for rapid lookup
+  const testsMap = useMemo(() => {
+    const map = new Map<string, any>();
+    tests.forEach((t: any) => {
+      if (t.id) map.set(t.id.toString(), t);
+      if (t.test_code) map.set(t.test_code.toLowerCase(), t);
+      if (t.name) map.set(t.name.toLowerCase(), t);
+    });
+    return map;
+  }, [tests]);
+
+  // Helper to compute test-level wholesale cost & partner margin based on admin's ratelist
+  const getTestFinancials = (t: any, partnerTier?: string) => {
+    const mrp = Number(t?.price || 0);
+    const low = Number(t?.b2b_price_low ?? t?.b2bPriceLow ?? 0);
+    const med = Number(t?.b2b_price_medium ?? t?.b2bPriceMedium ?? t?.b2b_price ?? t?.b2bPrice ?? 0);
+    const high = Number(t?.b2b_price_high ?? t?.b2bPriceHigh ?? 0);
+    const generalB2b = Number(t?.b2b_price ?? t?.b2bPrice ?? 0);
+
+    const tier = (partnerTier || "HIGH").toUpperCase();
+    let labRate = 0;
+    if (tier === "LOW" && low > 0) labRate = low;
+    else if (tier === "MEDIUM" && med > 0) labRate = med;
+    else if (tier === "HIGH" && high > 0) labRate = high;
+    else if (generalB2b > 0) labRate = generalB2b;
+    else if (med > 0) labRate = med;
+    else if (high > 0) labRate = high;
+    else if (low > 0) labRate = low;
+    else {
+      // Default standard lab wholesale margin if test not specifically priced in B2B tier
+      labRate = Math.round(mrp * (tier === "LOW" ? 0.5 : tier === "MEDIUM" ? 0.6 : 0.7));
+    }
+
+    labRate = Math.min(mrp, Math.max(0, labRate));
+    const b2bMargin = Math.max(0, mrp - labRate);
+
+    return { mrp, labRate, b2bMargin };
+  };
+
+  // Compute financial breakdown for a single report
+  const getReportBreakdown = (r: any) => {
+    const gross = Number(r.bill?.total || r.bill?.totalAmount || 0);
+    const paid = Number(r.bill?.paid_amount || r.bill?.paidAmount || 0);
+    const partnerTier = currentUser?.rate_tier || currentUser?.rateTier;
+
+    let calculatedLabCost = 0;
+    let calculatedTestMrp = 0;
+    let testCount = 0;
+
+    if (Array.isArray(r.results) && r.results.length > 0) {
+      r.results.forEach((res: any) => {
+        const testRef = res.test || (res.test_id ? testsMap.get(res.test_id.toString()) : null);
+        if (testRef) {
+          const tf = getTestFinancials(testRef, partnerTier);
+          calculatedLabCost += tf.labRate;
+          calculatedTestMrp += tf.mrp;
+          testCount++;
+        }
+      });
+    }
+
+    let labMargin = 0;
+    if (testCount > 0 && calculatedLabCost > 0) {
+      if (gross > 0 && calculatedTestMrp > 0) {
+        // Scale proportionally to the actual billed amount
+        labMargin = Math.round((calculatedLabCost / calculatedTestMrp) * gross);
+      } else {
+        labMargin = calculatedLabCost;
+      }
+    } else {
+      // Standard tier-based fallback set by admin in ratelist
+      const tier = (partnerTier || "HIGH").toUpperCase();
+      const ratio = tier === "LOW" ? 0.5 : tier === "MEDIUM" ? 0.6 : 0.7;
+      labMargin = Math.round(gross * ratio);
+    }
+
+    labMargin = Math.min(gross, Math.max(0, labMargin));
+    const b2bMargin = Math.max(0, gross - labMargin);
+    const due = Math.max(0, gross - paid);
+
+    return { gross, paid, labMargin, b2bMargin, due };
   };
 
   // Date filtering logic
@@ -70,9 +155,12 @@ export default function B2BRevenuePage() {
       const rawDate = r.created_at || r.createdAt;
       if (!rawDate) return false;
       const repDate = new Date(rawDate);
+      const repDateString = repDate.toISOString().split("T")[0];
 
       // Period filter
-      if (dateFilter === "WEEKLY") {
+      if (dateFilter === "SPECIFIC_DATE") {
+        if (specificDate && repDateString !== specificDate) return false;
+      } else if (dateFilter === "WEEKLY") {
         const weekAgo = new Date();
         weekAgo.setDate(now.getDate() - 7);
         if (repDate < weekAgo) return false;
@@ -111,43 +199,157 @@ export default function B2BRevenuePage() {
 
       return true;
     });
-  }, [reports, dateFilter, customStartDate, customEndDate, searchTerm, statusFilter]);
+  }, [reports, dateFilter, specificDate, customStartDate, customEndDate, searchTerm, statusFilter]);
 
-  // Aggregate Financial Calculations
-  const grossB2BVolume = useMemo(() => {
-    return filteredReports.reduce((sum, r) => sum + (Number(r.bill?.total || r.bill?.totalAmount) || 0), 0);
-  }, [filteredReports]);
+  // Reset pagination to page 1 on filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dateFilter, specificDate, customStartDate, customEndDate, searchTerm, statusFilter]);
 
-  const totalPaid = useMemo(() => {
-    return filteredReports.reduce((sum, r) => sum + (Number(r.bill?.paid_amount || r.bill?.paidAmount) || 0), 0);
-  }, [filteredReports]);
+  // Pagination slice
+  const totalItems = filteredReports.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const paginatedReports = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredReports.slice(startIndex, startIndex + pageSize);
+  }, [filteredReports, currentPage, pageSize]);
+
+  // Aggregate Financial Calculations using actual Admin Ratelist configuration
+  const { grossB2BVolume, totalLabMargin, totalB2BCentreMargin, totalPaid } = useMemo(() => {
+    let grossSum = 0;
+    let labSum = 0;
+    let b2bSum = 0;
+    let paidSum = 0;
+
+    filteredReports.forEach((r) => {
+      const fin = getReportBreakdown(r);
+      grossSum += fin.gross;
+      labSum += fin.labMargin;
+      b2bSum += fin.b2bMargin;
+      paidSum += fin.paid;
+    });
+
+    return {
+      grossB2BVolume: grossSum,
+      totalLabMargin: labSum,
+      totalB2BCentreMargin: b2bSum,
+      totalPaid: paidSum,
+    };
+  }, [filteredReports, testsMap, currentUser]);
 
   const totalDue = Math.max(0, grossB2BVolume - totalPaid);
 
-  // Wholesale vs Margin split
-  const partnerMarginTotal = Math.round((grossB2BVolume * marginPercent) / 100);
-  const wholesaleCostTotal = grossB2BVolume - partnerMarginTotal;
-
-  // Print Statement Handler
-  const handlePrintStatement = () => {
-    window.print();
-  };
-
   // Date range display string
   const periodLabel = useMemo(() => {
+    if (dateFilter === "SPECIFIC_DATE") {
+      return specificDate
+        ? new Date(specificDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+        : "Specific Date";
+    }
     if (dateFilter === "WEEKLY") return "Last 7 Days (Weekly)";
     if (dateFilter === "MONTHLY") return "Last 30 Days (Monthly)";
     if (dateFilter === "YEARLY") return "Past 1 Year (Annual)";
     return `${customStartDate || "Start"} to ${customEndDate || "End"}`;
-  }, [dateFilter, customStartDate, customEndDate]);
+  }, [dateFilter, specificDate, customStartDate, customEndDate]);
 
-  const invoiceNumber = useMemo(() => {
-    const d = new Date();
-    const yr = d.getFullYear();
-    const mo = String(d.getMonth() + 1).padStart(2, "0");
-    const suffix = String(filteredReports.length).padStart(4, "0");
-    return `B2B-INV-${yr}${mo}-${suffix}`;
-  }, [filteredReports.length]);
+  // Clean, professional CSV / Excel Table Export (Pure tabular format, without bill layout)
+  const handleDownloadB2BStatementCSV = () => {
+    if (filteredReports.length === 0) {
+      alert("No requisitions found for the selected period to generate statement.");
+      return;
+    }
+
+    // Helper to sanitize CSV cells
+    const escapeCsv = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const rows: string[] = [];
+
+    // Row 1: Clean, professional table headers
+    rows.push([
+      escapeCsv("S.No."),
+      escapeCsv("Requisition ID"),
+      escapeCsv("Date"),
+      escapeCsv("Patient Name"),
+      escapeCsv("Patient ID"),
+      escapeCsv("Phone Number"),
+      escapeCsv("Tests / Investigation"),
+      escapeCsv("Total MRP (INR)"),
+      escapeCsv("Advance / Paid (INR)"),
+      escapeCsv("Due / Unpaid (INR)"),
+      escapeCsv("Lab Margin (INR)"),
+      escapeCsv("B2B Centre Margin (INR)"),
+      escapeCsv("Payment Status"),
+      escapeCsv("Report Status"),
+    ].join(","));
+
+    // Itemized Rows
+    filteredReports.forEach((r, idx) => {
+      const fin = getReportBreakdown(r);
+      const repDate = r.created_at || r.createdAt
+        ? new Date(r.created_at || r.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+        : "N/A";
+      const patName = r.patient?.name || "Patient";
+      const patId = r.patient?.custom_id || r.patient?.customId || "N/A";
+      const patPhone = r.patient?.phone || "N/A";
+      const testsStr = Array.isArray(r.results)
+        ? r.results.map((res: any) => res.test?.name).filter(Boolean).join(" | ") || `${r.results.length} tests`
+        : "Standard Panel";
+      const isPaid = fin.paid >= fin.gross && fin.gross > 0;
+      const payStatus = isPaid ? "PAID" : fin.paid > 0 ? "PARTIAL" : "UNPAID";
+
+      rows.push([
+        escapeCsv(idx + 1),
+        escapeCsv(r.custom_id || r.customId || "REQ"),
+        escapeCsv(repDate),
+        escapeCsv(patName),
+        escapeCsv(patId),
+        escapeCsv(patPhone),
+        escapeCsv(testsStr),
+        escapeCsv(fin.gross.toFixed(2)),
+        escapeCsv(fin.paid.toFixed(2)),
+        escapeCsv(fin.due.toFixed(2)),
+        escapeCsv(fin.labMargin.toFixed(2)),
+        escapeCsv(fin.b2bMargin.toFixed(2)),
+        escapeCsv(payStatus),
+        escapeCsv(r.status || "PENDING"),
+      ].join(","));
+    });
+
+    // Summary Totals Row
+    rows.push([
+      escapeCsv("TOTAL"),
+      escapeCsv(""),
+      escapeCsv(""),
+      escapeCsv(`Total Patients: ${filteredReports.length}`),
+      escapeCsv(""),
+      escapeCsv(""),
+      escapeCsv(""),
+      escapeCsv(grossB2BVolume.toFixed(2)),
+      escapeCsv(totalPaid.toFixed(2)),
+      escapeCsv(totalDue.toFixed(2)),
+      escapeCsv(totalLabMargin.toFixed(2)),
+      escapeCsv(totalB2BCentreMargin.toFixed(2)),
+      escapeCsv(""),
+      escapeCsv(""),
+    ].join(","));
+
+    // Create UTF-8 BOM CSV File Blob
+    const csvContent = "\uFEFF" + rows.join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const dateSlug = periodLabel.replace(/[^a-zA-Z0-9]/g, "_");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `B2B_Statement_${dateSlug}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-7 animate-fade-in pb-16">
@@ -162,7 +364,7 @@ export default function B2BRevenuePage() {
             Revenue & Financial Analytics
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Real-time audit of B2B diagnostic volume, wholesale processing costs, and partner commission margins.
+            Audit of Total MRP volume, central lab wholesale margin, and partner B2B centre margins.
           </p>
         </div>
 
@@ -176,12 +378,14 @@ export default function B2BRevenuePage() {
             <span>Sync Ledger</span>
           </button>
 
+          {/* User Requested: "Generate B2B Statement" button with instant CSV/Excel download */}
           <Button
-            onClick={() => setShowStatementModal(true)}
+            onClick={handleDownloadB2BStatementCSV}
             className="h-10 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md gap-2 cursor-pointer hover:-translate-y-px active:scale-[0.98] transition-all"
+            title="Download formatted .csv file in Excel format for the selected period"
           >
-            <Printer className="h-4 w-4" />
-            <span>Generate B2B Statement / Tax Invoice</span>
+            <Download className="h-4 w-4" />
+            <span>Generate B2B Statement</span>
           </Button>
         </div>
       </div>
@@ -189,12 +393,23 @@ export default function B2BRevenuePage() {
       {/* ── Period Filter Selector Toolbar ── */}
       <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-2xs space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Quick Date Switcher Buttons */}
-          <div className="flex items-center gap-1.5 p-1 bg-muted/50 rounded-xl border border-border/60 self-start">
+          {/* Quick Date Switcher Buttons (Specific Date, Weekly, Monthly, Yearly, Custom) */}
+          <div className="flex items-center gap-1.5 p-1 bg-muted/50 rounded-xl border border-border/60 self-start flex-wrap">
+            <button
+              type="button"
+              onClick={() => setDateFilter("SPECIFIC_DATE")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                dateFilter === "SPECIFIC_DATE"
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Specific Date
+            </button>
             <button
               type="button"
               onClick={() => setDateFilter("WEEKLY")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 dateFilter === "WEEKLY"
                   ? "bg-purple-600 text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -205,7 +420,7 @@ export default function B2BRevenuePage() {
             <button
               type="button"
               onClick={() => setDateFilter("MONTHLY")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 dateFilter === "MONTHLY"
                   ? "bg-purple-600 text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -216,7 +431,7 @@ export default function B2BRevenuePage() {
             <button
               type="button"
               onClick={() => setDateFilter("YEARLY")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 dateFilter === "YEARLY"
                   ? "bg-purple-600 text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -227,7 +442,7 @@ export default function B2BRevenuePage() {
             <button
               type="button"
               onClick={() => setDateFilter("CUSTOM")}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 dateFilter === "CUSTOM"
                   ? "bg-purple-600 text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -236,25 +451,25 @@ export default function B2BRevenuePage() {
               Custom Date Range
             </button>
           </div>
-
-          {/* Partner Margin Share Rate Slider/Input */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground font-semibold">Partner Margin Share:</span>
-            <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-muted border border-border/70 font-bold">
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={marginPercent}
-                onChange={(e) => setMarginPercent(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
-                className="w-12 bg-transparent text-right font-mono font-bold text-foreground outline-none"
-              />
-              <span className="text-purple-600">%</span>
-            </div>
-          </div>
         </div>
 
-        {/* Custom Date Pickers (Shown when CUSTOM is selected) */}
+        {/* Specific Date Picker */}
+        {dateFilter === "SPECIFIC_DATE" && (
+          <div className="pt-2 border-t border-border/50 flex items-center gap-3 animate-fade-in text-xs">
+            <span className="text-muted-foreground font-medium">Select Specific Date:</span>
+            <input
+              type="date"
+              value={specificDate}
+              onChange={(e) => setSpecificDate(e.target.value)}
+              className="h-9 px-3 rounded-lg border border-border bg-background font-mono text-xs text-foreground focus:border-purple-600 outline-none"
+            />
+            <span className="text-muted-foreground text-[11px] italic">
+              {filteredReports.length} requisitions on this day
+            </span>
+          </div>
+        )}
+
+        {/* Custom Date Pickers */}
         {dateFilter === "CUSTOM" && (
           <div className="pt-2 border-t border-border/50 flex flex-wrap items-center gap-3 animate-fade-in text-xs">
             <div className="flex items-center gap-2">
@@ -284,10 +499,10 @@ export default function B2BRevenuePage() {
 
       {/* ── Financial KPI Stat Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Gross B2B Volume (MRP) */}
+        {/* Card 1: Total MRP */}
         <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Gross B2B Volume</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total MRP</span>
             <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 border border-purple-200/60 dark:border-purple-800/40 flex items-center justify-center">
               <IndianRupee className="h-5 w-5" />
             </div>
@@ -301,37 +516,37 @@ export default function B2BRevenuePage() {
           </div>
         </div>
 
-        {/* Card 2: Central Lab Wholesale Cost */}
+        {/* Card 2: Lab Margin */}
         <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Wholesale Lab Cost</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Lab Margin</span>
             <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 border border-blue-200/60 dark:border-blue-800/40 flex items-center justify-center">
               <Building2 className="h-5 w-5" />
             </div>
           </div>
           <p className="text-3xl font-extrabold text-foreground mt-3 tracking-tight">
-            ₹{wholesaleCostTotal.toLocaleString("en-IN")}
+            ₹{totalLabMargin.toLocaleString("en-IN")}
           </p>
           <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
-            <span>Wholesale Base Rate:</span>
-            <span className="font-bold text-blue-600">{100 - marginPercent}%</span>
+            <span>Payable to Central Lab</span>
+            <span className="font-bold text-blue-600">Wholesale Tariff</span>
           </div>
         </div>
 
-        {/* Card 3: Partner Net Margin */}
+        {/* Card 3: B2B Centre Margin */}
         <div className="bg-gradient-to-br from-purple-500/10 via-card to-card border border-purple-200 dark:border-purple-900/50 rounded-2xl p-5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300">Partner Margin Share</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300">B2B Centre Margin</span>
             <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
-              <Percent className="h-5 w-5" />
+              <TrendingUp className="h-5 w-5" />
             </div>
           </div>
           <p className="text-3xl font-extrabold text-purple-700 dark:text-purple-300 mt-3 tracking-tight">
-            ₹{partnerMarginTotal.toLocaleString("en-IN")}
+            ₹{totalB2BCentreMargin.toLocaleString("en-IN")}
           </p>
           <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
-            <span>Commission Margin:</span>
-            <span className="font-bold text-purple-600">{marginPercent}% Share</span>
+            <span>Centre Earnings</span>
+            <span className="font-bold text-purple-600">Retained Margin</span>
           </div>
         </div>
 
@@ -386,7 +601,7 @@ export default function B2BRevenuePage() {
         </div>
       </div>
 
-      {/* ── Requisition Ledger Table ── */}
+      {/* ── Requisition Ledger Table with Pagination ── */}
       <div className="bg-card border border-border/70 rounded-2xl shadow-2xs overflow-hidden">
         <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between">
           <div>
@@ -398,7 +613,7 @@ export default function B2BRevenuePage() {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="table-responsive-container">
           {filteredReports.length === 0 ? (
             <div className="py-16 text-center text-muted-foreground space-y-2">
               <FileText className="h-10 w-10 mx-auto opacity-30 text-purple-500" />
@@ -411,27 +626,24 @@ export default function B2BRevenuePage() {
               </button>
             </div>
           ) : (
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[840px] text-left text-xs">
               <thead>
                 <tr className="bg-muted/30 border-b border-border/60 text-muted-foreground">
                   <th className="px-6 py-3.5 font-semibold uppercase tracking-wider text-[10px]">Requisition ID</th>
                   <th className="px-6 py-3.5 font-semibold uppercase tracking-wider text-[10px]">Date</th>
                   <th className="px-6 py-3.5 font-semibold uppercase tracking-wider text-[10px]">Patient</th>
                   <th className="px-6 py-3.5 font-semibold uppercase tracking-wider text-[10px]">Tests</th>
-                  <th className="px-6 py-3.5 font-semibold uppercase tracking-wider text-[10px] text-right">Gross Total</th>
-                  <th className="px-6 py-3.5 font-semibold uppercase tracking-wider text-[10px] text-right">Wholesale Cost</th>
-                  <th className="px-6 py-3.5 font-semibold uppercase tracking-wider text-[10px] text-right">Partner Margin</th>
+                  <th className="px-6 py-3.5 font-semibold uppercase tracking-wider text-[10px] text-right">Total MRP</th>
+                  <th className="px-6 py-3.5 font-semibold uppercase tracking-wider text-[10px] text-right">Lab Margin</th>
+                  <th className="px-6 py-3.5 font-semibold uppercase tracking-wider text-[10px] text-right">B2B Centre Margin</th>
                   <th className="px-6 py-3.5 font-semibold uppercase tracking-wider text-[10px]">Payment</th>
                   <th className="px-6 py-3.5 font-semibold uppercase tracking-wider text-[10px]">Report Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {filteredReports.map((r) => {
-                  const gross = Number(r.bill?.total || r.bill?.totalAmount) || 0;
-                  const paid = Number(r.bill?.paid_amount || r.bill?.paidAmount) || 0;
-                  const margin = Math.round((gross * marginPercent) / 100);
-                  const wholesale = gross - margin;
-                  const isPaid = paid >= gross && gross > 0;
+                {paginatedReports.map((r) => {
+                  const fin = getReportBreakdown(r);
+                  const isPaid = fin.paid >= fin.gross && fin.gross > 0;
                   const isFinal = r.status === "FINAL" || r.status === "APPROVED" || r.status === "COMPLETED";
 
                   return (
@@ -452,23 +664,23 @@ export default function B2BRevenuePage() {
                         </span>
                       </td>
                       <td className="px-6 py-3.5 text-right font-mono font-bold text-foreground">
-                        ₹{gross.toLocaleString("en-IN")}
+                        ₹{fin.gross.toLocaleString("en-IN")}
                       </td>
                       <td className="px-6 py-3.5 text-right font-mono text-muted-foreground">
-                        ₹{wholesale.toLocaleString("en-IN")}
+                        ₹{fin.labMargin.toLocaleString("en-IN")}
                       </td>
                       <td className="px-6 py-3.5 text-right font-mono font-bold text-purple-600">
-                        ₹{margin.toLocaleString("en-IN")}
+                        ₹{fin.b2bMargin.toLocaleString("en-IN")}
                       </td>
                       <td className="px-6 py-3.5">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                           isPaid
                             ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                            : paid > 0
+                            : fin.paid > 0
                             ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
                             : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
                         }`}>
-                          {isPaid ? "Paid" : paid > 0 ? "Partial" : "Due"}
+                          {isPaid ? "Paid" : fin.paid > 0 ? "Partial" : "Due"}
                         </span>
                       </td>
                       <td className="px-6 py-3.5">
@@ -488,175 +700,112 @@ export default function B2BRevenuePage() {
             </table>
           )}
         </div>
-      </div>
 
-      {/* ── B2B Consolidated Statement & Tax Invoice Modal ── */}
-      {showStatementModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white text-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-8 animate-scale-in">
-            {/* Modal Control Header (Hidden when printing) */}
-            <div className="px-6 py-4 bg-slate-100 border-b border-slate-200 flex items-center justify-between print:hidden">
-              <div className="flex items-center gap-2">
-                <Printer className="h-5 w-5 text-purple-600" />
-                <h3 className="text-sm font-bold text-slate-900">B2B Partner Consolidated Statement & Tax Invoice</h3>
+        {/* ── Table Pagination Bar ── */}
+        {filteredReports.length > 0 && (
+          <div className="px-6 py-3.5 border-t border-border/60 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <span>Showing</span>
+              <span className="font-bold text-foreground">
+                {(currentPage - 1) * pageSize + 1}
+              </span>
+              <span>to</span>
+              <span className="font-bold text-foreground">
+                {Math.min(currentPage * pageSize, filteredReports.length)}
+              </span>
+              <span>of</span>
+              <span className="font-bold text-foreground">{filteredReports.length}</span>
+              <span>requisitions</span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Rows per page selector */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-muted-foreground text-[11px]">Rows:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="h-8 px-2 rounded-lg bg-card border border-border text-xs font-bold text-foreground outline-none focus:border-purple-600 cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handlePrintStatement}
-                  className="h-9 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm gap-1.5 cursor-pointer"
-                >
-                  <Printer className="h-4 w-4" />
-                  <span>Print / Save as PDF</span>
-                </Button>
+
+              {/* Page buttons */}
+              <div className="flex items-center gap-1">
                 <button
-                  onClick={() => setShowStatementModal(false)}
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition-colors"
+                  type="button"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="h-8 w-8 rounded-lg border border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors cursor-pointer"
+                  title="First Page"
                 >
-                  <X className="h-5 w-5" />
+                  <ChevronsLeft className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="h-8 px-2.5 rounded-lg border border-border bg-card text-foreground font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors cursor-pointer"
+                >
+                  Previous
+                </button>
+
+                {/* Numbered Page Buttons */}
+                <div className="flex items-center gap-1 px-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum = i + 1;
+                    if (totalPages > 5 && currentPage > 3) {
+                      pageNum = currentPage - 2 + i;
+                      if (pageNum > totalPages) pageNum = totalPages - 4 + i;
+                    }
+                    if (pageNum < 1 || pageNum > totalPages) return null;
+
+                    return (
+                      <button
+                        key={pageNum}
+                        type="button"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`h-8 w-8 rounded-lg font-bold transition-all text-xs cursor-pointer ${
+                          currentPage === pageNum
+                            ? "bg-purple-600 text-white shadow-xs"
+                            : "bg-card border border-border text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="h-8 px-2.5 rounded-lg border border-border bg-card text-foreground font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors cursor-pointer"
+                >
+                  Next
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage >= totalPages}
+                  className="h-8 w-8 rounded-lg border border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted transition-colors cursor-pointer"
+                  title="Last Page"
+                >
+                  <ChevronsRight className="h-4 w-4" />
                 </button>
               </div>
             </div>
-
-            {/* Printable A4 Sheet Body */}
-            <div ref={printAreaRef} className="p-8 sm:p-10 space-y-6 bg-white text-slate-900">
-              {/* Header: Reference Central Lab Info */}
-              <div className="flex flex-col sm:flex-row justify-between items-start gap-4 pb-6 border-b-2 border-slate-900">
-                <div>
-                  <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">
-                    {labInfo?.name || "OnePath Diagnostic Pathology Laboratory"}
-                  </h2>
-                  <p className="text-xs text-slate-600 mt-1 max-w-md">
-                    {labInfo?.address || "Medical District, Central Diagnostics Tower, New Delhi - 110001"}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 mt-2 font-mono">
-                    <span>Phone: {labInfo?.phone || "+91 98765 43210"}</span>
-                    <span>·</span>
-                    <span>Email: {labInfo?.email || "billing@onepathlab.com"}</span>
-                    {labInfo?.gstin && (
-                      <>
-                        <span>·</span>
-                        <span className="font-bold text-slate-900">GSTIN: {labInfo.gstin}</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="text-right sm:self-center shrink-0">
-                  <span className="inline-block px-3 py-1 bg-slate-900 text-white font-mono text-xs font-bold uppercase rounded-md tracking-wider">
-                    Tax Invoice / B2B Statement
-                  </span>
-                  <p className="font-mono text-xs font-bold text-slate-900 mt-1.5">{invoiceNumber}</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Date: {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</p>
-                </div>
-              </div>
-
-              {/* Bill To Partner & Billing Period Cards */}
-              <div className="grid grid-cols-2 gap-6 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Billed Partner Lab</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">{currentUser?.name || "B2B Partner Laboratory"}</p>
-                  <p className="text-slate-600 mt-0.5">Contact: {currentUser?.email || "partner@b2blab.com"}</p>
-                  <p className="text-slate-600">Account Type: Authorized B2B Partner Terminal</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Statement Period</p>
-                  <p className="text-sm font-bold text-purple-700 mt-1">{periodLabel}</p>
-                  <p className="text-slate-600 mt-0.5">Total Requisitions: {filteredReports.length}</p>
-                  <p className="text-slate-600">Partner Margin Share: {marginPercent}%</p>
-                </div>
-              </div>
-
-              {/* Itemized Requisition Breakdown */}
-              <div>
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b-2 border-slate-900 text-slate-900">
-                      <th className="py-2.5 font-bold uppercase text-[10px]">#</th>
-                      <th className="py-2.5 font-bold uppercase text-[10px]">Date</th>
-                      <th className="py-2.5 font-bold uppercase text-[10px]">Requisition ID</th>
-                      <th className="py-2.5 font-bold uppercase text-[10px]">Patient Name</th>
-                      <th className="py-2.5 font-bold uppercase text-[10px] text-right">Gross (MRP)</th>
-                      <th className="py-2.5 font-bold uppercase text-[10px] text-right">Wholesale Rate</th>
-                      <th className="py-2.5 font-bold uppercase text-[10px] text-right">Partner Margin</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {filteredReports.slice(0, 30).map((r, i) => {
-                      const gross = Number(r.bill?.total || r.bill?.totalAmount) || 0;
-                      const margin = Math.round((gross * marginPercent) / 100);
-                      const wholesale = gross - margin;
-                      return (
-                        <tr key={r.id}>
-                          <td className="py-2 font-mono text-slate-500">{i + 1}</td>
-                          <td className="py-2 text-slate-600 whitespace-nowrap">
-                            {r.created_at || r.createdAt ? new Date(r.created_at || r.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : "N/A"}
-                          </td>
-                          <td className="py-2 font-mono font-bold text-slate-900">{r.custom_id || r.customId || "REQ"}</td>
-                          <td className="py-2 text-slate-800">{r.patient?.name || "Patient"}</td>
-                          <td className="py-2 text-right font-mono text-slate-900">₹{gross.toLocaleString("en-IN")}</td>
-                          <td className="py-2 text-right font-mono text-slate-600">₹{wholesale.toLocaleString("en-IN")}</td>
-                          <td className="py-2 text-right font-mono font-bold text-purple-700">₹{margin.toLocaleString("en-IN")}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {filteredReports.length > 30 && (
-                  <p className="text-[11px] text-slate-500 italic text-center mt-2">
-                    ...and {filteredReports.length - 30} additional requisitions included in total settlement.
-                  </p>
-                )}
-              </div>
-
-              {/* Settlement Summary Box */}
-              <div className="flex justify-end pt-4 border-t-2 border-slate-900">
-                <div className="w-80 space-y-2 text-xs">
-                  <div className="flex justify-between text-slate-600">
-                    <span>Total Gross Diagnostic Volume:</span>
-                    <span className="font-mono font-bold text-slate-900">₹{grossB2BVolume.toLocaleString("en-IN")}</span>
-                  </div>
-                  <div className="flex justify-between text-purple-700 font-semibold">
-                    <span>Less: Partner Margin Share ({marginPercent}%):</span>
-                    <span className="font-mono font-bold">- ₹{partnerMarginTotal.toLocaleString("en-IN")}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600 pt-1 border-t border-slate-200">
-                    <span className="font-bold">Net Wholesale Cost to Central Lab:</span>
-                    <span className="font-mono font-bold text-slate-900">₹{wholesaleCostTotal.toLocaleString("en-IN")}</span>
-                  </div>
-                  <div className="flex justify-between text-emerald-700 font-semibold">
-                    <span>Already Paid / Settled:</span>
-                    <span className="font-mono font-bold">₹{totalPaid.toLocaleString("en-IN")}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-900 text-sm font-extrabold pt-2 border-t-2 border-slate-900">
-                    <span>Balance Due / Payable:</span>
-                    <span className="font-mono text-purple-700">₹{totalDue.toLocaleString("en-IN")}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Signatures & Bank Transfer Details */}
-              <div className="pt-8 border-t border-slate-200 grid grid-cols-2 gap-8 text-xs text-slate-600">
-                <div>
-                  <p className="font-bold uppercase text-[10px] text-slate-500 mb-1">Settlement Bank Details</p>
-                  <p className="font-mono">Bank: HDFC Bank Ltd.</p>
-                  <p className="font-mono">A/C Name: OnePath Healthcare Pvt. Ltd.</p>
-                  <p className="font-mono">A/C No: 50200012345678</p>
-                  <p className="font-mono">IFSC Code: HDFC0000123</p>
-                </div>
-                <div className="flex flex-col justify-end items-end text-right">
-                  <div className="w-44 border-b border-slate-400 pb-1 mb-1" />
-                  <p className="font-bold text-slate-900">Authorized Signatory</p>
-                  <p className="text-[10px] text-slate-500">OnePath Central Diagnostics Lab</p>
-                </div>
-              </div>
-
-              <div className="text-[10px] text-slate-400 text-center pt-2">
-                This is a computer generated commercial diagnostic B2B statement and tax invoice. Generated on {new Date().toLocaleString("en-IN")}.
-              </div>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -61,6 +61,7 @@ export default function PublicReportVerificationPage() {
 
         const res = await fetch(`${apiOrigin}/api/lis/public/reports/${reportId}`, {
           headers: { "Accept": "application/json" },
+          cache: "no-store",
         });
 
         if (!res.ok) {

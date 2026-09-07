@@ -40,6 +40,13 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
   const [excludedMainTests, setExcludedMainTests] = useState<string[]>([]);
   const [previewScale, setPreviewScale] = useState(0.8);
   const [totalPages, setTotalPages] = useState(1);
+  const [mobileTab, setMobileTab] = useState<"preview" | "controls">("preview");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 640) {
+      setPreviewScale(0.42);
+    }
+  }, []);
 
   // Top-level Parameter Blocks state (supports standalone parameters & full group blocks like DLC)
   const [blocksList, setBlocksList] = useState<TopLevelBlock[]>([]);
@@ -362,14 +369,14 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
         </div>
 
         {/* ── Top Bar ── */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-6 py-3.5 bg-background border-b border-border shadow-xs z-10 shrink-0 gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-6 py-3.5 bg-background border-b border-border shadow-xs z-10 shrink-0 gap-3 sm:gap-4">
           <div className="flex items-center gap-3">
-            <div className="bg-primary/10 p-2 rounded-lg">
+            <div className="bg-primary/10 p-2 rounded-lg shrink-0">
               <FileText className="h-5 w-5 text-primary" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="font-semibold text-base leading-none text-foreground">Report Sheet & Parameter Manager</h2>
+                <h2 className="font-semibold text-sm sm:text-base leading-none text-foreground">Report Sheet & Parameter Manager</h2>
                 <span className="bg-primary/15 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                   Live Customizer
                 </span>
@@ -380,18 +387,40 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            {/* Mobile Tab Switcher on < md */}
+            <div className="flex md:hidden items-center bg-muted/60 p-1 rounded-xl border border-border w-full mb-1">
+              <button
+                type="button"
+                onClick={() => setMobileTab("preview")}
+                className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all ${
+                  mobileTab === "preview" ? "bg-background text-primary shadow-xs" : "text-muted-foreground"
+                }`}
+              >
+                Preview Canvas
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileTab("controls")}
+                className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all ${
+                  mobileTab === "controls" ? "bg-background text-primary shadow-xs" : "text-muted-foreground"
+                }`}
+              >
+                Reorder &amp; Controls
+              </button>
+            </div>
+
             <Button
               variant="outline"
               size="sm"
               onClick={handleSaveLayout}
               disabled={isSavingLayout}
-              className="gap-1.5 border-primary/40 hover:bg-primary/10 text-primary font-bold text-xs shadow-xs cursor-pointer"
+              className="gap-1.5 border-primary/40 hover:bg-primary/10 text-primary font-bold text-xs shadow-xs cursor-pointer flex-1 sm:flex-none"
             >
               {isSavingLayout ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : layoutSavedSuccess ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Save className="h-3.5 w-3.5" />}
-              <span>{isSavingLayout ? "Saving..." : layoutSavedSuccess ? "Saved to Lab DB!" : "Save Layout to Lab Account"}</span>
+              <span>{isSavingLayout ? "Saving..." : layoutSavedSuccess ? "Saved!" : "Save Layout"}</span>
             </Button>
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="cursor-pointer">Cancel</Button>
-            <Button size="sm" onClick={() => handlePrint()} className="gap-1.5 font-bold shadow-xs cursor-pointer">
+            <Button size="sm" onClick={() => handlePrint()} className="gap-1.5 font-bold shadow-xs cursor-pointer flex-1 sm:flex-none">
               <Printer className="h-4 w-4" /> Print Document
             </Button>
           </div>
@@ -401,7 +430,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
 
           {/* Sidebar Controls */}
-          <div className="w-full md:w-[350px] shrink-0 bg-card border-b md:border-b-0 md:border-r border-border flex flex-col overflow-y-auto custom-scrollbar max-h-[40vh] md:max-h-full md:h-full">
+          <div className={`w-full md:w-[350px] shrink-0 bg-card border-b md:border-b-0 md:border-r border-border flex-col overflow-y-auto custom-scrollbar md:max-h-full md:h-full ${mobileTab === "controls" ? "flex flex-1" : "hidden md:flex"}`}>
             <div className="p-5 space-y-6">
 
               {/* 1. Appearance & Sections */}
@@ -635,7 +664,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
           {/* ── Preview Pane ── */}
           <div
             ref={containerRef}
-            className="flex-1 overflow-y-auto bg-zinc-200 dark:bg-zinc-900/90 flex justify-center py-8 px-4 custom-scrollbar shadow-inner"
+            className={`flex-1 overflow-auto sheet-pan-canvas bg-zinc-200 dark:bg-zinc-900/90 justify-center py-4 sm:py-8 px-2 sm:px-4 custom-scrollbar shadow-inner ${mobileTab === "preview" ? "flex" : "hidden md:flex"}`}
           >
             {printSettings && (
               <PaginatedReportPreview
