@@ -214,6 +214,7 @@
   );
   background-size: 200% 100%;
   animation: shimmer-sweep 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: background-position;
 }
 
 .dark .shimmer-gradient {
@@ -227,6 +228,7 @@
   );
   background-size: 200% 100%;
   animation: shimmer-sweep 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: background-position;
 }
 
 .shimmer-card-pulse {
@@ -247,6 +249,7 @@
   );
   animation: shimmer-slide 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   pointer-events: none;
+  will-change: transform;
 }
 
 .dark .shimmer-card-pulse::after {
@@ -256,6 +259,7 @@
     hsl(158 50% 46% / 0.09) 50%,
     transparent 100%
   );
+  will-change: transform;
 }
 
 /* ── Premium High-End Live Motion Keyframes (GPU-accelerated, Zero Jitter) ───────────────── */

@@ -784,7 +784,7 @@ export default function Navbar() {
                 <div className="h-5 w-5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center text-[10px]">
                   ₹
                 </div>
-                <span>My today's total :</span>
+                <span>{isB2B ? "Today's B2B Sale :" : "My today's total :"}</span>
               </div>
               <div>
                 <span className="font-mono">{todaySales}</span>

@@ -82,21 +82,37 @@ export default function TodaySamplesPage() {
     setTimeout(() => setCopiedBarcode(null), 2000);
   };
 
+  // Helper functions for statuses
+  const isReportRejected = (r: any) =>
+    r.status === "REJECTED" ||
+    r.meta?.sample_status === "REJECTED" ||
+    r.patient?.meta?.sample_status === "REJECTED";
+
+  const isReportApproved = (r: any) =>
+    !isReportRejected(r) &&
+    (r.status === "APPROVED" || r.status === "FINAL" || r.status === "COMPLETED" || r.status === "READY");
+
+  const isReportTransit = (r: any) =>
+    !isReportRejected(r) &&
+    !isReportApproved(r) &&
+    (r.status === "IN_TRANSIT" || r.status === "PROCESSING");
+
   // Counts
   const totalCount = reports.length;
-  const readyCount = reports.filter((r) => r.status === "COMPLETED" || r.status === "READY").length;
-  const transitCount = reports.filter((r) => r.status === "IN_TRANSIT" || r.status === "PROCESSING").length;
-  const collectedCount = reports.filter((r) => r.status !== "COMPLETED" && r.status !== "READY" && r.status !== "IN_TRANSIT" && r.status !== "PROCESSING").length;
+  const readyCount = reports.filter(isReportApproved).length;
+  const transitCount = reports.filter(isReportTransit).length;
+  const collectedCount = reports.filter((r) => !isReportRejected(r) && !isReportApproved(r) && !isReportTransit(r)).length;
   const paidCount = reports.filter((r) => {
+    const isB2B = currentUserRole === "B2B";
+    const b2bPrice = r.b2b_price !== undefined ? Number(r.b2b_price) : (r.b2bPrice !== undefined ? Number(r.b2bPrice) : null);
+    if (isB2B && b2bPrice !== null) {
+      return r.is_b2b_paid || r.isB2bPaid || (Number(r.bill?.paid_amount || 0) >= b2bPrice && b2bPrice > 0);
+    }
     const total = Number(r.bill?.total || r.bill?.totalAmount || 0);
     const paid = Number(r.bill?.paid_amount || r.bill?.paidAmount || 0);
     return total > 0 && paid >= total;
   }).length;
-  const dueCount = reports.filter((r) => {
-    const total = Number(r.bill?.total || r.bill?.totalAmount || 0);
-    const paid = Number(r.bill?.paid_amount || r.bill?.paidAmount || 0);
-    return (total - paid) > 0;
-  }).length;
+  const dueCount = Math.max(0, totalCount - paidCount);
 
   // Filtered samples
   const filteredSamples = useMemo(() => {
@@ -108,18 +124,20 @@ export default function TodaySamplesPage() {
       const matchesSearch = pName.toLowerCase().includes(query) || phone.toLowerCase().includes(query) || id.toLowerCase().includes(query);
       if (!matchesSearch) return false;
 
-      const total = Number(r.bill?.total || r.bill?.totalAmount || 0);
-      const paid = Number(r.bill?.paid_amount || r.bill?.paidAmount || 0);
-      const isPaid = total > 0 && paid >= total;
+      const isB2B = currentUserRole === "B2B";
+      const b2bPrice = r.b2b_price !== undefined ? Number(r.b2b_price) : (r.b2bPrice !== undefined ? Number(r.b2bPrice) : null);
+      const isPaid = (isB2B && b2bPrice !== null)
+        ? Boolean(r.is_b2b_paid || r.isB2bPaid || (Number(r.bill?.paid_amount || 0) >= b2bPrice && b2bPrice > 0))
+        : Boolean(Number(r.bill?.total || 0) > 0 && Number(r.bill?.paid_amount || 0) >= Number(r.bill?.total || 0));
 
-      if (stageFilter === "READY") return r.status === "COMPLETED" || r.status === "READY";
-      if (stageFilter === "TRANSIT") return r.status === "IN_TRANSIT" || r.status === "PROCESSING";
-      if (stageFilter === "COLLECTED") return r.status !== "COMPLETED" && r.status !== "READY" && r.status !== "IN_TRANSIT" && r.status !== "PROCESSING";
+      if (stageFilter === "READY") return isReportApproved(r);
+      if (stageFilter === "TRANSIT") return isReportTransit(r);
+      if (stageFilter === "COLLECTED") return !isReportRejected(r) && !isReportApproved(r) && !isReportTransit(r);
       if (stageFilter === "PAID") return isPaid;
       if (stageFilter === "DUE") return !isPaid;
       return true;
     });
-  }, [reports, search, stageFilter]);
+  }, [reports, search, stageFilter, currentUserRole]);
 
   // Reset to first page whenever search query or stage filter changes
   useEffect(() => {
@@ -310,13 +328,18 @@ export default function TodaySamplesPage() {
                   const p = item.patient || {};
                   const testsStr = item.tests || (Array.isArray(item.results) ? item.results.map((r: any) => r.test?.name).filter(Boolean).join(", ") : "Diagnostic Test Panel");
                   const stage = item.status || "IN_TRANSIT";
-                  const isApproved = stage === "COMPLETED" || stage === "READY";
-                  const isTransit = stage === "IN_TRANSIT" || stage === "PROCESSING";
+                  const isRejected = isReportRejected(item);
+                  const isApproved = isReportApproved(item);
+                  const isTransit = isReportTransit(item);
 
+                  const isB2BUser = currentUserRole === "B2B";
+                  const rawB2bPrice = item.b2b_price !== undefined ? Number(item.b2b_price) : (item.b2bPrice !== undefined ? Number(item.b2bPrice) : null);
                   const billTotal = Number(item.bill?.total || item.bill?.totalAmount || 0);
                   const billPaid = Number(item.bill?.paid_amount || item.bill?.paidAmount || 0);
                   const billDue = Math.max(0, billTotal - billPaid);
                   const isPaid = billDue <= 0 && billTotal > 0;
+                  const isB2bCleared = Boolean(item.is_b2b_paid || item.isB2bPaid || isPaid);
+                  const displayB2bAmount = rawB2bPrice !== null ? rawB2bPrice : billTotal;
 
                   const colTime = item.created_at || item.createdAt
                     ? new Date(item.created_at || item.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
@@ -366,13 +389,17 @@ export default function TodaySamplesPage() {
 
                       {/* Sample Stage Badge */}
                       <td className="py-4 px-4">
-                        {isApproved ? (
+                        {isRejected ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                            <AlertCircle className="h-3 w-3" /> Sample Rejected
+                          </span>
+                        ) : isApproved ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                            <CheckCircle2 className="h-3 w-3" /> Report Ready
+                            <CheckCircle2 className="h-3 w-3" /> Approved
                           </span>
                         ) : isTransit ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                            <Clock className="h-3 w-3" /> Central Hub
+                            <Clock className="h-3 w-3" /> Processing
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
@@ -381,9 +408,19 @@ export default function TodaySamplesPage() {
                         )}
                       </td>
 
-                      {/* Payment Status Badge */}
+                      {/* Payment Clearance / Status Badge */}
                       <td className="py-4 px-4">
-                        {isPaid ? (
+                        {isB2BUser ? (
+                          isB2bCleared ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" title="B2B Assigned Rate Cleared">
+                              ₹{displayB2bAmount.toFixed(0)} Paid
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20" title="Assigned B2B Rate">
+                              ₹{displayB2bAmount.toFixed(0)} B2B Rate
+                            </span>
+                          )
+                        ) : isPaid ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                             ₹{billTotal} PAID
                           </span>

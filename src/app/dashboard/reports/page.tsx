@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Printer, ChevronLeft, ChevronRight, Edit3, AlertTriangle,
-  Filter, X, Eye, Plus, Loader2, Clock, Wallet, CheckCircle2, Sparkles, IndianRupee, RefreshCw
+  Filter, X, Eye, Plus, Loader2, Clock, Wallet, CheckCircle2, Sparkles, IndianRupee, RefreshCw, Ban
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
@@ -225,10 +225,15 @@ export default function ReportsListPage() {
       patId.toLowerCase().includes(search.toLowerCase()) ||
       repId.toLowerCase().includes(search.toLowerCase());
 
+    const isRepRejected = r.status === "REJECTED" || r.meta?.sample_status === "REJECTED" || r.patient?.meta?.sample_status === "REJECTED";
+
     const matchesStatus =
       statusFilter === "ALL" ||
-      r.status === statusFilter ||
-      (statusFilter === "APPROVED" && (r.status === "COMPLETED" || r.status === "APPROVED"));
+      (statusFilter === "REJECTED" && isRepRejected) ||
+      (!isRepRejected && (
+        r.status === statusFilter ||
+        (statusFilter === "APPROVED" && (r.status === "COMPLETED" || r.status === "APPROVED"))
+      ));
     const resultsList = Array.isArray(r.results) ? r.results : [];
     const matchesCategory =
       categoryFilter === "ALL" ||
@@ -398,6 +403,7 @@ export default function ReportsListPage() {
               <option value="PENDING">Pending</option>
               <option value="FINAL">Final</option>
               <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Sample Rejected</option>
             </select>
           </div>
 
@@ -481,28 +487,60 @@ export default function ReportsListPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1 items-start">
-                          {rep.status === "APPROVED" || rep.status === "COMPLETED" ? (
-                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                              APPROVED
-                            </span>
-                          ) : rep.status === "FINAL" ? (
-                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 border border-blue-500/20">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                              FINAL
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-600 border border-amber-500/20">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                              PENDING
-                            </span>
-                          )}
-                          {(rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && abnormalCount > 0 && (
+                          {(() => {
+                            const isRejected = rep.status === "REJECTED" || rep.meta?.sample_status === "REJECTED" || rep.patient?.meta?.sample_status === "REJECTED";
+                            const rejectionReason = rep.meta?.rejection_reason || rep.patient?.meta?.rejection_reason || "Sample Rejected";
+
+                            if (isRejected) {
+                              return (
+                                <div className="space-y-1">
+                                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-500/15 text-rose-600 border border-rose-500/30">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse" />
+                                    Sample Rejected
+                                  </span>
+                                  <p className="text-[10px] font-medium text-rose-600 leading-tight">
+                                    {rejectionReason}
+                                  </p>
+                                  {isB2B && (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                      Fresh sample required
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            if (rep.status === "APPROVED" || rep.status === "COMPLETED") {
+                              return (
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  APPROVED
+                                </span>
+                              );
+                            }
+
+                            if (rep.status === "FINAL") {
+                              return (
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                  FINAL
+                                </span>
+                              );
+                            }
+
+                            return (
+                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-600 border border-amber-500/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                PENDING
+                              </span>
+                            );
+                          })()}
+                          {rep.status !== "REJECTED" && !rep.meta?.sample_status && (rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && abnormalCount > 0 && (
                             <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-[9px] font-bold text-destructive uppercase tracking-wide whitespace-nowrap">
                               <AlertTriangle className="h-3 w-3" /> {abnormalCount} abnormal
                             </span>
                           )}
-                          {isPartnerOrCC && (rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && (
+                          {isPartnerOrCC && rep.status !== "REJECTED" && (rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && (
                             rep.is_b2b_paid || rep.isB2bPaid ? (
                               <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[9px] font-extrabold text-emerald-600 uppercase tracking-wide border border-emerald-500/20 whitespace-nowrap">
                                 <CheckCircle2 className="h-3 w-3" /> Paid & Unlocked
@@ -516,41 +554,56 @@ export default function ReportsListPage() {
                         </div>
                       </td>
                       <td className="px-6 py-3.5 text-right">
-                        <div className="flex flex-col items-end gap-1.5 min-w-[125px]">
-                          {!isPartnerOrCC && (
-                            <Link href={`/dashboard/reports/${rep.id}/edit`} className="w-full">
-                              <Button size="sm" className="h-8 gap-1.5 w-full font-bold text-xs">
-                                <Edit3 className="h-3.5 w-3.5" /> Enter Results
+                        {(() => {
+                          const isRejected = rep.status === "REJECTED" || rep.meta?.sample_status === "REJECTED" || rep.patient?.meta?.sample_status === "REJECTED";
+                          if (isRejected) {
+                            return (
+                              <div className="flex flex-col items-end gap-1 min-w-[125px]">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-500/10 px-2.5 py-1.5 rounded-lg border border-rose-500/20 w-full justify-center">
+                                  <Ban className="h-3.5 w-3.5" /> Sample Rejected
+                                </span>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="flex flex-col items-end gap-1.5 min-w-[125px]">
+                              {!isPartnerOrCC && (
+                                <Link href={`/dashboard/reports/${rep.id}/edit`} className="w-full">
+                                  <Button size="sm" className="h-8 gap-1.5 w-full font-bold text-xs">
+                                    <Edit3 className="h-3.5 w-3.5" /> Enter Results
+                                  </Button>
+                                </Link>
+                              )}
+                              <Button 
+                                type="button"
+                                variant={isPartnerOrCC ? "default" : "outline"} 
+                                size="sm" 
+                                onClick={() => triggerPrint(rep)} 
+                                disabled={printingId === rep.id}
+                                className={`h-8 gap-1.5 w-full font-bold text-xs rounded-xl cursor-pointer ${
+                                  isPartnerOrCC ? "gradient-primary text-primary-foreground shadow-xs ring-inset-top" : "border border-border/80 hover:bg-muted text-foreground"
+                                }`}
+                                title={isPartnerOrCC && !(rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED") ? "Report is awaiting final approval from central lab" : "Print report"}
+                              >
+                                {printingId === rep.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Printer className="h-3.5 w-3.5" />
+                                )}
+                                <span>
+                                  {isPartnerOrCC
+                                    ? rep.is_b2b_paid || rep.isB2bPaid
+                                      ? "Print Report"
+                                      : (rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED")
+                                      ? `Print (₹${Number(rep.b2b_price ?? rep.b2bPrice ?? 0).toLocaleString("en-IN")})`
+                                      : "Awaiting Approval"
+                                    : "Print Report"}
+                                </span>
                               </Button>
-                            </Link>
-                          )}
-                          <Button 
-                            type="button"
-                            variant={isPartnerOrCC ? "default" : "outline"} 
-                            size="sm" 
-                            onClick={() => triggerPrint(rep)} 
-                            disabled={printingId === rep.id}
-                            className={`h-8 gap-1.5 w-full font-bold text-xs rounded-xl cursor-pointer ${
-                              isPartnerOrCC ? "gradient-primary text-primary-foreground shadow-xs ring-inset-top" : "border border-border/80 hover:bg-muted text-foreground"
-                            }`}
-                            title={isPartnerOrCC && !(rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED") ? "Report is awaiting final approval from central lab" : "Print report"}
-                          >
-                            {printingId === rep.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Printer className="h-3.5 w-3.5" />
-                            )}
-                            <span>
-                              {isPartnerOrCC
-                                ? rep.is_b2b_paid || rep.isB2bPaid
-                                  ? "Print Report"
-                                  : (rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED")
-                                  ? `Print (₹${Number(rep.b2b_price ?? rep.b2bPrice ?? 0).toLocaleString("en-IN")})`
-                                  : "Awaiting Approval"
-                                : "Print Report"}
-                            </span>
-                          </Button>
-                        </div>
+                            </div>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );

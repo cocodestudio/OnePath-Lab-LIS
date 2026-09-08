@@ -1099,8 +1099,9 @@ export const PaginatedReportPreview = React.forwardRef<
     hidePatientBlock?: boolean;
     hideInterpretation?: boolean;
     onPageCount?: (n: number) => void;
+    showMarginGuides?: boolean;
   }
->(({ report, settings, scale = 1, hidePatientBlock, hideInterpretation, onPageCount }, ref) => {
+>(({ report, settings, scale = 1, hidePatientBlock, hideInterpretation, onPageCount, showMarginGuides }, ref) => {
   const blocks = React.useMemo(
     () => buildReportBlocks(report, { hidePatientBlock, hideInterpretation }),
     [report, hidePatientBlock, hideInterpretation]
@@ -1170,23 +1171,28 @@ export const PaginatedReportPreview = React.forwardRef<
     return Math.max(0, ...enabledSignaturesList.map((s: any) => Number(s.marginTop || 0)));
   }, [enabledSignaturesList]);
 
-  // Measure block heights at natural (unscaled) content width
+  // Measure block heights at natural (unscaled) content width with loop guard
   React.useLayoutEffect(() => {
-    const next = blocks.map((_, i) => measureRefs.current[i]?.offsetHeight ?? 0);
-    setHeights(next);
-    if (patientMeasureRef.current) setPatientH(patientMeasureRef.current.offsetHeight);
-    if (sigMeasureRef.current) {
-      const mh = sigMeasureRef.current.offsetHeight;
-      if (mh > 0) setSigH(mh);
-    }
-    const t = setTimeout(() => {
-      setHeights(blocks.map((_, i) => measureRefs.current[i]?.offsetHeight ?? 0));
-      if (patientMeasureRef.current) setPatientH(patientMeasureRef.current.offsetHeight);
+    const measureHeights = () => {
+      const next = blocks.map((_, i) => measureRefs.current[i]?.offsetHeight ?? 0);
+      setHeights(prev => {
+        if (prev.length === next.length && prev.every((v, idx) => Math.abs(v - next[idx]) < 1)) {
+          return prev;
+        }
+        return next;
+      });
+      if (patientMeasureRef.current) {
+        const ph = patientMeasureRef.current.offsetHeight;
+        if (ph > 0) setPatientH(prev => Math.abs(prev - ph) < 1 ? prev : ph);
+      }
       if (sigMeasureRef.current) {
         const mh = sigMeasureRef.current.offsetHeight;
-        if (mh > 0) setSigH(mh);
+        if (mh > 0) setSigH(prev => Math.abs(prev - mh) < 1 ? prev : mh);
       }
-    }, 60);
+    };
+
+    measureHeights();
+    const t = setTimeout(measureHeights, 60);
     return () => clearTimeout(t);
   }, [blocks, contentWidth]);
 
@@ -1377,6 +1383,51 @@ export const PaginatedReportPreview = React.forwardRef<
                   </div>
                 )}
               </div>
+
+              {/* Visual Margin Guides for Designer & Settings Live Preview (Hidden on Print) */}
+              {showMarginGuides && (
+                <div className="absolute inset-0 pointer-events-none print:hidden z-20 select-none">
+                  {/* Top Header Boundary */}
+                  <div
+                    style={{ top: effectiveSettings.headerHeight }}
+                    className="absolute inset-x-0 border-b-2 border-dashed border-blue-500/80 flex items-center justify-end px-3 pointer-events-none"
+                  >
+                    <span className="text-[10px] font-mono font-bold bg-blue-600 text-white px-2 py-0.5 rounded shadow-xs -translate-y-1/2">
+                      Header: {effectiveSettings.headerHeight}px
+                    </span>
+                  </div>
+
+                  {/* Bottom Footer Boundary */}
+                  <div
+                    style={{ bottom: effectiveSettings.footerHeight }}
+                    className="absolute inset-x-0 border-t-2 border-dashed border-emerald-500/80 flex items-center justify-end px-3 pointer-events-none"
+                  >
+                    <span className="text-[10px] font-mono font-bold bg-emerald-600 text-white px-2 py-0.5 rounded shadow-xs translate-y-1/2">
+                      Footer: {effectiveSettings.footerHeight}px
+                    </span>
+                  </div>
+
+                  {/* Left Margin Boundary */}
+                  <div
+                    style={{
+                      left: effectiveSettings.marginLeft,
+                      top: effectiveSettings.headerHeight,
+                      height: usableH,
+                    }}
+                    className="absolute border-l-2 border-dashed border-amber-500/70"
+                  />
+
+                  {/* Right Margin Boundary */}
+                  <div
+                    style={{
+                      right: effectiveSettings.marginRight,
+                      top: effectiveSettings.headerHeight,
+                      height: usableH,
+                    }}
+                    className="absolute border-r-2 border-dashed border-amber-500/70"
+                  />
+                </div>
+              )}
             </div>
           </div>
         ))}

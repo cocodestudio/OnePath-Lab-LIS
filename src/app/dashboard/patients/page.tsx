@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Search, UserPlus, User, Eye, Edit2, Trash2, Loader2, AlertCircle, Users, X,
+  Search, UserPlus, User, Eye, Edit2, Ban, AlertOctagon, Loader2, AlertCircle, Users, X,
   MapPin, Phone, Stethoscope, Building, UserCheck, CheckCircle2, RefreshCw,
   ChevronLeft, ChevronRight, Calendar, Tag
 } from "lucide-react";
@@ -131,9 +131,11 @@ export default function PatientsPage() {
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
 
-  // Delete dialog state
-  const [deletePatient, setDeletePatient] = useState<Patient | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  // Reject sample dialog state
+  const [rejectPatient, setRejectPatient] = useState<Patient | null>(null);
+  const [rejectReason, setRejectReason] = useState<string>("Hemolyzed / Hemolytic Sample");
+  const [customRejectReason, setCustomRejectReason] = useState<string>("");
+  const [rejecting, setRejecting] = useState(false);
 
   useEffect(() => {
     fetchPatients();
@@ -264,19 +266,26 @@ export default function PatientsPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!deletePatient) return;
-    setDeleting(true);
+  const handleRejectSample = async () => {
+    if (!rejectPatient) return;
+    setRejecting(true);
     try {
-      await fetchFromLaravel(`/patients/${deletePatient.id}`, { method: "DELETE" });
-      toast.success("Patient record deleted successfully");
-      setPatients(prev => prev.filter(p => p.id !== deletePatient.id));
-      setDeletePatient(null);
+      const finalReason = rejectReason === "Other" ? (customRejectReason.trim() || "Sample Rejected") : rejectReason;
+      await fetchFromLaravel(`/lis/patients/${rejectPatient.id}/reject-sample`, {
+        method: "POST",
+        body: JSON.stringify({
+          reason: finalReason,
+          action: "REJECT"
+        })
+      });
+      toast.success("Sample marked as REJECTED. Patient & billing records remain intact.");
+      await fetchPatients();
+      setRejectPatient(null);
     } catch (err: any) {
-      console.error("Delete patient error:", err);
-      toast.error(err.message || "Failed to delete patient");
+      console.error("Reject sample error:", err);
+      toast.error(err.message || "Failed to reject sample");
     } finally {
-      setDeleting(false);
+      setRejecting(false);
     }
   };
 
@@ -421,7 +430,15 @@ export default function PatientsPage() {
                             {patName.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <p className="font-semibold text-foreground">{patName}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-semibold text-foreground">{patName}</p>
+                              {patient.meta?.sample_status === 'REJECTED' && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/10 text-rose-600 border border-rose-500/20">
+                                  <AlertOctagon className="h-2.5 w-2.5" />
+                                  Sample Rejected: {patient.meta?.rejection_reason || "Hemolytic"}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[10px] text-muted-foreground mt-0.5">
                               {patGender} · {patAge} Yrs
                             </p>
@@ -467,15 +484,25 @@ export default function PatientsPage() {
                               <Edit2 className="h-3.5 w-3.5" />
                             </Button>
                           </Link>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive cursor-pointer"
-                            onClick={() => setDeletePatient(patient)}
-                            title="Delete Patient"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                          {!isB2B && (currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'admin' || !currentUser?.role) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`h-8 w-8 cursor-pointer ${
+                                patient.meta?.sample_status === 'REJECTED'
+                                  ? 'text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30'
+                                  : 'text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10'
+                              }`}
+                              onClick={() => {
+                                setRejectPatient(patient);
+                                setRejectReason(patient.meta?.rejection_reason || "Hemolyzed / Hemolytic Sample");
+                                setCustomRejectReason("");
+                              }}
+                              title={patient.meta?.sample_status === 'REJECTED' ? "Update Sample Rejection" : "Reject Laboratory Sample"}
+                            >
+                              <Ban className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -636,38 +663,125 @@ export default function PatientsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 3. DELETE PATIENT MODAL */}
-      <Dialog open={!!deletePatient} onOpenChange={() => setDeletePatient(null)}>
+      {/* 3. REJECT SAMPLE MODAL */}
+      <Dialog open={!isB2B && !!rejectPatient} onOpenChange={() => setRejectPatient(null)}>
         <DialogContent className="max-w-md w-full rounded-2xl">
-          <DialogTitle className="sr-only">Delete Patient</DialogTitle>
+          <DialogTitle className="sr-only">Reject Laboratory Sample</DialogTitle>
           <div className="space-y-4">
-            <div className="flex items-center gap-3 border-b border-border/80 pb-3 text-destructive">
-              <AlertCircle className="h-6 w-6 shrink-0" />
+            <div className="flex items-center gap-3 border-b border-border/80 pb-3 text-amber-600">
+              <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                <Ban className="h-5 w-5 text-amber-600" />
+              </div>
               <div>
-                <h3 className="font-display text-base font-bold text-foreground">Delete Patient Record</h3>
-                <p className="text-xs text-muted-foreground">Are you sure you want to permanently delete this profile?</p>
+                <h3 className="font-display text-base font-bold text-foreground">Reject Laboratory Sample</h3>
+                <p className="text-xs text-muted-foreground">Mark specimen as clinically rejected. Bills & audit records remain intact.</p>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Patient: <strong className="text-foreground">{deletePatient?.name}</strong> ({deletePatient?.custom_id || deletePatient?.customId})
-            </p>
-            <div className="flex justify-end gap-2 pt-2 border-t border-border/80">
-              <button
-                type="button"
-                onClick={() => setDeletePatient(null)}
-                className="px-4 py-2 rounded-lg text-xs font-bold text-muted-foreground hover:text-foreground"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleting}
-                className="px-5 py-2 rounded-lg text-xs font-bold bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm flex items-center gap-1.5"
-              >
-                {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                <span>Delete</span>
-              </button>
+
+            <div className="bg-muted/40 p-3 rounded-xl space-y-1 text-xs border border-border/60">
+              <p className="text-muted-foreground">
+                Patient: <strong className="text-foreground">{rejectPatient?.name}</strong>
+              </p>
+              <p className="text-muted-foreground">
+                ID / Barcode: <span className="font-mono text-primary font-semibold">{rejectPatient?.custom_id || rejectPatient?.customId || "—"}</span> {rejectPatient?.vial_barcode ? `· ${rejectPatient.vial_barcode}` : ''}
+              </p>
+              {rejectPatient?.meta?.sample_status === 'REJECTED' && (
+                <p className="text-rose-600 font-medium pt-1">
+                  Current Status: Already Rejected ({rejectPatient?.meta?.rejection_reason || 'Hemolytic'})
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-foreground">Clinical Rejection Reason</Label>
+              <Select value={rejectReason} onValueChange={setRejectReason}>
+                <SelectTrigger className="w-full h-9 text-xs">
+                  <SelectValue placeholder="Select clinical reason" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Hemolyzed / Hemolytic Sample">Hemolyzed / Hemolytic Sample</SelectItem>
+                  <SelectItem value="Clotted / Coagulated Specimen">Clotted / Coagulated Specimen</SelectItem>
+                  <SelectItem value="Insufficient Sample Quantity (QNS)">Insufficient Sample Quantity (QNS)</SelectItem>
+                  <SelectItem value="Wrong Collection Tube / Container">Wrong Collection Tube / Container</SelectItem>
+                  <SelectItem value="Lipemic / Icteric Specimen">Lipemic / Icteric Specimen</SelectItem>
+                  <SelectItem value="Contaminated / Leaked Specimen">Contaminated / Leaked Specimen</SelectItem>
+                  <SelectItem value="Improper Storage / Cold Chain Broken">Improper Storage / Cold Chain Broken</SelectItem>
+                  <SelectItem value="Other">Other (Specify below)</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {rejectReason === "Other" && (
+                <div className="mt-2">
+                  <Input
+                    placeholder="Enter custom rejection reason..."
+                    value={customRejectReason}
+                    onChange={(e) => setCustomRejectReason(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-700 dark:text-amber-400 space-y-1">
+              <p className="font-semibold flex items-center gap-1.5">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" /> Financial & Audit Safety:
+              </p>
+              <p>
+                Rejecting this sample will <strong>NOT</strong> delete the billing ledger or alter B2B wallet deductions. If this is a B2B client, they will be notified to register a fresh sample.
+              </p>
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t border-border/80">
+              {rejectPatient?.meta?.sample_status === 'REJECTED' ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    if (!rejectPatient) return;
+                    setRejecting(true);
+                    try {
+                      await fetchFromLaravel(`/lis/patients/${rejectPatient.id}/reject-sample`, {
+                        method: "POST",
+                        body: JSON.stringify({ action: "RESTORE" })
+                      });
+                      toast.success("Sample restored to active status");
+                      await fetchPatients();
+                      setRejectPatient(null);
+                    } catch (err: any) {
+                      toast.error(err.message || "Failed to restore sample");
+                    } finally {
+                      setRejecting(false);
+                    }
+                  }}
+                  disabled={rejecting}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Restore to Active
+                </Button>
+              ) : <div />}
+
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setRejectPatient(null)}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleRejectSample}
+                  disabled={rejecting || (rejectReason === "Other" && !customRejectReason.trim())}
+                  className="text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-sm flex items-center gap-1.5"
+                >
+                  {rejecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+                  <span>{rejectPatient?.meta?.sample_status === 'REJECTED' ? "Update Rejection" : "Confirm Rejection"}</span>
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>

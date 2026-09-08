@@ -211,7 +211,7 @@ function ProfileContent() {
   const labName = labData?.centreName || labData?.centre_name || labData?.name || profile?.labName || profile?.lab_name || (profile as any)?.lab?.name || (profile as any)?.lab?.centreName || "Diagnostic Laboratory";
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-16 animate-fade-in">
+    <div className="w-full max-w-4xl mx-auto space-y-6 pb-16 px-4 sm:px-6 overflow-x-hidden animate-fade-in">
       {/* Toast */}
       {toastMessage && (
         <div
@@ -439,22 +439,6 @@ function ProfileContent() {
                 <Check className="h-3.5 w-3.5" />
                 <span>Your mobile number is verified</span>
               </p>
-            </div>
-
-            {/* Reset Password Button */}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsResetOpen(true);
-                  setOtpStep("REQUEST");
-                  setResetError(null);
-                }}
-                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer inline-flex items-center gap-1.5"
-              >
-                <KeyRound className="h-3.5 w-3.5" />
-                <span>Reset password</span>
-              </button>
             </div>
           </div>
         </div>

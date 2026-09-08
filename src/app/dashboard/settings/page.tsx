@@ -912,13 +912,19 @@ function SettingsContent() {
     reader.readAsDataURL(file);
   };
 
-  const activePreviewSettings: PrintSettings = {
+  const activePreviewSettings: PrintSettings = React.useMemo(() => ({
     ...settings,
     bgImage: showWithLetterheadPreview ? settings.bgImage : null,
-  };
+  }), [settings, showWithLetterheadPreview]);
 
-  const previewReportData = getDummyReportWithSettings(layoutSettings, settings);
-  const previewInvoiceData = getDummyInvoiceWithSettings(billSettings);
+  const previewReportData = React.useMemo(
+    () => getDummyReportWithSettings(layoutSettings, settings),
+    [layoutSettings, settings]
+  );
+  const previewInvoiceData = React.useMemo(
+    () => getDummyInvoiceWithSettings(billSettings),
+    [billSettings]
+  );
 
   if (isLoading) {
     return (
@@ -1116,7 +1122,7 @@ function SettingsContent() {
                     {activeTab === "bills-layout" ? (
                       <InvoiceSheet invoice={previewInvoiceData} settings={billSettings} />
                     ) : (
-                      <ReportSheet report={previewReportData} settings={activePreviewSettings} />
+                      <ReportSheet report={previewReportData} settings={activePreviewSettings} showMarginGuides={true} />
                     )}
                   </div>
                 </div>
@@ -1457,6 +1463,7 @@ function SettingsContent() {
                 <ReportSheet
                   report={previewReportData}
                   settings={activePreviewSettings}
+                  showMarginGuides={true}
                 />
               </div>
             </div>

@@ -31,6 +31,14 @@ const navigation: NavItem[] = [
   { name: "Reports", href: "/dashboard/reports", icon: FileText },
   { name: "Billing", href: "/dashboard/billing", icon: Receipt },
   {
+    name: "B2B",
+    icon: Briefcase,
+    children: [
+      { name: "Sales", href: "/dashboard/b2b" },
+      { name: "Wallet", href: "/dashboard/b2b/wallets" },
+    ],
+  },
+  {
     name: "Tests",
     icon: FlaskConical,
     children: [
@@ -141,6 +149,7 @@ export default function Sidebar() {
     if (href === "/dashboard/patients") return pathname === "/dashboard/patients";
     if (href === "/dashboard/today-samples") return pathname === "/dashboard/today-samples";
     if (href === "/dashboard/reports") return pathname === "/dashboard/reports";
+    if (href === "/dashboard/b2b") return pathname === "/dashboard/b2b";
     if (href === "/dashboard/wallet") return pathname === "/dashboard/wallet";
     if (href === "/dashboard/revenue") return pathname === "/dashboard/revenue";
     return pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/"));

@@ -233,9 +233,10 @@ function RegisterPatientPage() {
     const storedUser = getStoredUser();
     if (storedUser) {
       setCurrentUserRole(storedUser.role || "STAFF");
-      if ((storedUser.role === "COLLECTION_CENTER" || storedUser.role === "B2B") && storedUser.name) {
-        setCollectedAtSelect(storedUser.name);
-        setCollectedBySelect(storedUser.name);
+      if (storedUser.role === "COLLECTION_CENTER" || storedUser.role === "B2B") {
+        const centerName = storedUser.lab_name || storedUser.labName || storedUser.name || (storedUser.role === "B2B" ? "B2B Partner" : "Collection Center");
+        setCollectedAtSelect(centerName);
+        setCollectedBySelect(storedUser.name || centerName);
       }
     }
 
@@ -794,8 +795,15 @@ function RegisterPatientPage() {
     setEmail("");
     setAddress("");
     setRefDoctorSelect("Self");
-    setCollectedAtSelect("Main Lab");
-    setCollectedBySelect("Self / Lab Staff");
+    const storedUser = getStoredUser();
+    if (currentUserRole === "COLLECTION_CENTER" || currentUserRole === "B2B" || storedUser?.role === "COLLECTION_CENTER" || storedUser?.role === "B2B") {
+      const centerName = storedUser?.lab_name || storedUser?.labName || storedUser?.name || (storedUser?.role === "B2B" ? "B2B Partner" : "Collection Center");
+      setCollectedAtSelect(centerName);
+      setCollectedBySelect(storedUser?.name || centerName);
+    } else {
+      setCollectedAtSelect("Main Lab");
+      setCollectedBySelect("Self / Lab Staff");
+    }
     setAadhaarNo("");
     setHfrId("");
     setUhid("");
@@ -1344,14 +1352,25 @@ function RegisterPatientPage() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
                     
                     {/* Doctor Referral */}
                     {isFieldEnabled("refDoctor") && (
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
-                          Referred By {isFieldRequired("refDoctor") && <span className="text-rose-500 font-extrabold">*</span>}
-                        </label>
+                        <div className="flex items-center justify-between min-h-[20px]">
+                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                            Referred By {isFieldRequired("refDoctor") && <span className="text-rose-500 font-extrabold">*</span>}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setIsDoctorModalOpen(true)}
+                            disabled={registering || (!!newPatient && !isEditMode)}
+                            className="inline-flex items-center gap-1 text-[10.5px] text-primary font-bold hover:underline cursor-pointer"
+                          >
+                            <PlusCircle className="h-3 w-3" />
+                            <span>+ Doctor</span>
+                          </button>
+                        </div>
                         <Select value={refDoctorSelect} onValueChange={setRefDoctorSelect} disabled={registering || (!!newPatient && !isEditMode)}>
                           <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
                             <SelectValue />
@@ -1362,24 +1381,17 @@ function RegisterPatientPage() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <button
-                          type="button"
-                          onClick={() => setIsDoctorModalOpen(true)}
-                          disabled={registering || (!!newPatient && !isEditMode)}
-                          className="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline pt-0.5"
-                        >
-                          <PlusCircle className="h-3.5 w-3.5" />
-                          <span>Manage Doctors</span>
-                        </button>
                       </div>
                     )}
 
-                    {/* Second Referral */}
+                    {/* Second Referral (if enabled) */}
                     {isFieldEnabled("secondReferral") && (
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
-                          Second Referral {isFieldRequired("secondReferral") && <span className="text-rose-500 font-extrabold">*</span>}
-                        </label>
+                        <div className="flex items-center justify-between min-h-[20px]">
+                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                            Second Referral {isFieldRequired("secondReferral") && <span className="text-rose-500 font-extrabold">*</span>}
+                          </label>
+                        </div>
                         <input
                           type="text"
                           className="w-full px-4 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-sm placeholder:text-muted-foreground/50 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white outline-none text-foreground font-medium transition-all shadow-2xs"
@@ -1392,12 +1404,23 @@ function RegisterPatientPage() {
                       </div>
                     )}
 
-                    {/* Collection Center */}
-                    {isFieldEnabled("collectedAt") && (
+                    {/* Collection Center: Only visible for Central Lab Admin / Staff. Completely hidden from CC and B2B portal */}
+                    {currentUserRole !== "COLLECTION_CENTER" && currentUserRole !== "B2B" && isFieldEnabled("collectedAt") && (
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
-                          Collection Center {isFieldRequired("collectedAt") && <span className="text-rose-500 font-extrabold">*</span>}
-                        </label>
+                        <div className="flex items-center justify-between min-h-[20px]">
+                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                            Collection Center {isFieldRequired("collectedAt") && <span className="text-rose-500 font-extrabold">*</span>}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setIsCollectionModalOpen(true)}
+                            disabled={registering || (!!newPatient && !isEditMode)}
+                            className="inline-flex items-center gap-1 text-[10.5px] text-primary font-bold hover:underline cursor-pointer"
+                          >
+                            <Building className="h-3 w-3" />
+                            <span>+ Center</span>
+                          </button>
+                        </div>
                         <Select value={collectedAtSelect} onValueChange={setCollectedAtSelect} disabled={registering || (!!newPatient && !isEditMode)}>
                           <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
                             <SelectValue />
@@ -1408,24 +1431,26 @@ function RegisterPatientPage() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <button
-                          type="button"
-                          onClick={() => setIsCollectionModalOpen(true)}
-                          disabled={registering || (!!newPatient && !isEditMode)}
-                          className="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline pt-0.5"
-                        >
-                          <Building className="h-3.5 w-3.5" />
-                          <span>Manage Points</span>
-                        </button>
                       </div>
                     )}
 
                     {/* Phlebotomist / Collector */}
                     {isFieldEnabled("collectedBy") && (
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
-                          Collected By {isFieldRequired("collectedBy") && <span className="text-rose-500 font-extrabold">*</span>}
-                        </label>
+                        <div className="flex items-center justify-between min-h-[20px]">
+                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                            Collected By {isFieldRequired("collectedBy") && <span className="text-rose-500 font-extrabold">*</span>}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setIsPhleboModalOpen(true)}
+                            disabled={registering || (!!newPatient && !isEditMode)}
+                            className="inline-flex items-center gap-1 text-[10.5px] text-primary font-bold hover:underline cursor-pointer"
+                          >
+                            <UserCheck className="h-3 w-3" />
+                            <span>+ Staff</span>
+                          </button>
+                        </div>
                         <Select value={collectedBySelect} onValueChange={setCollectedBySelect} disabled={registering || (!!newPatient && !isEditMode)}>
                           <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
                             <SelectValue />
@@ -1436,15 +1461,6 @@ function RegisterPatientPage() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <button
-                          type="button"
-                          onClick={() => setIsPhleboModalOpen(true)}
-                          disabled={registering || (!!newPatient && !isEditMode)}
-                          className="inline-flex items-center gap-1.5 text-xs text-primary font-bold hover:underline pt-0.5"
-                        >
-                          <UserCheck className="h-3.5 w-3.5" />
-                          <span>Manage Staff</span>
-                        </button>
                       </div>
                     )}
 
@@ -1452,10 +1468,12 @@ function RegisterPatientPage() {
                     {(currentUserRole === "COLLECTION_CENTER" || currentUserRole === "B2B" || isFieldEnabled("vialBarcode")) && (
                       <>
                         <div className="space-y-1.5">
-                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider flex items-center justify-between">
-                            <span>Vial Barcode / Sample ID</span>
+                          <div className="flex items-center justify-between min-h-[20px]">
+                            <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                              Vial Barcode / Sample ID
+                            </label>
                             <span className="text-[10px] text-primary font-mono font-bold">SCANNER ON</span>
-                          </label>
+                          </div>
                           <div className="relative">
                             <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
                             <input
@@ -1470,9 +1488,11 @@ function RegisterPatientPage() {
                         </div>
 
                         <div className="space-y-1.5">
-                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
-                            Collection Date & Time
-                          </label>
+                          <div className="flex items-center justify-between min-h-[20px]">
+                            <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                              Collection Date &amp; Time
+                            </label>
+                          </div>
                           <div className="relative">
                             <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
                             <input
