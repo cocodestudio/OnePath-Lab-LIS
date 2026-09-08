@@ -33,12 +33,19 @@ export function updateStoredUser(updates: Partial<any>) {
   localStorage.setItem("lis_user", JSON.stringify(updated));
 }
 
-export function logout() {
+export function logout(reason?: string) {
   clearApiCache();
   localStorage.removeItem("lis_token");
   localStorage.removeItem("lis_user");
+  if (typeof window !== "undefined") {
+    sessionStorage.removeItem("lis_subscription_locked");
+  }
   document.cookie = "lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax; Secure;";
-  window.location.href = "/login";
+  if (reason === "suspended") {
+    window.location.href = "/login?suspended=true";
+  } else {
+    window.location.href = "/login";
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -163,7 +170,9 @@ export async function fetchFromLaravel(endpoint: string, options: FetchFromLarav
       }
 
       if (response.status === 402) {
-        window.dispatchEvent(new CustomEvent("subscription-expired"));
+        if (!cleanEndpoint.includes("/b2b/")) {
+          window.dispatchEvent(new CustomEvent("subscription-expired"));
+        }
         throw new Error("Subscription expired.");
       }
 
@@ -174,6 +183,14 @@ export async function fetchFromLaravel(endpoint: string, options: FetchFromLarav
       } catch (err) {
         if (!response.ok) {
           throw new Error(`Server returned error (${response.status}). Please try again.`);
+        }
+      }
+
+      if (response.status === 403) {
+        const msg = (data.message || data.error || "").toLowerCase();
+        if (data.is_suspended || msg.includes("suspended")) {
+          logout("suspended");
+          throw new Error("Your account has been suspended. Please contact support@onepathlab.com.");
         }
       }
 

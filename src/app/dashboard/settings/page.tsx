@@ -17,6 +17,7 @@ import { ReportSheet, type PrintSettings, type ReportSheetData } from "@/compone
 import { InvoiceSheet, type InvoiceData } from "@/components/invoice-sheet";
 import { MachineIntegrationTab } from "@/components/machine-integration-tab";
 import { CollectionCentersTab } from "@/components/collection-centers-tab";
+import { PaymentGatewayTab } from "@/components/payment-gateway-tab";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import {
@@ -255,7 +256,7 @@ function optimizeLetterheadImage(file: File): Promise<string> {
 }
 
 function SettingsContent() {
-  const [activeTab, setActiveTab] = useState<"letterhead" | "report-layout" | "bills-layout" | "machine-integration" | "collection-centers">("letterhead");
+  const [activeTab, setActiveTab] = useState<"letterhead" | "report-layout" | "bills-layout" | "machine-integration" | "collection-centers" | "payment-gateway">("letterhead");
   const [settings, setSettings] = useState<ExtendedPrintSettings>(defaultPrintSettings);
   const [layoutSettings, setLayoutSettings] = useState<ReportLayoutSettings>(defaultReportLayoutSettings);
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
@@ -1022,10 +1023,23 @@ function SettingsContent() {
               <Building2 className="h-3.5 w-3.5" />
               <span>RBAC</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("payment-gateway")}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                activeTab === "payment-gateway"
+                  ? "bg-background text-primary shadow-xs font-extrabold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              title="Payment Gateway & UPI Bank Settlement"
+            >
+              <CreditCard className="h-3.5 w-3.5" />
+              <span>Payment Gateway</span>
+            </button>
           </div>
         </div>
 
-        {activeTab !== "machine-integration" && activeTab !== "collection-centers" && (
+        {activeTab !== "machine-integration" && activeTab !== "collection-centers" && activeTab !== "payment-gateway" && (
           <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
             <Dialog>
               <DialogTrigger asChild>
@@ -3517,6 +3531,11 @@ function SettingsContent() {
       {/* TAB 5: COLLECTION CENTERS & B2B FRANCHISES */}
       {activeTab === "collection-centers" && (
         <CollectionCentersTab />
+      )}
+
+      {/* TAB 6: PAYMENT GATEWAY & BANK SETTLEMENT */}
+      {activeTab === "payment-gateway" && (
+        <PaymentGatewayTab />
       )}
 
       {/* Add Signature Dialog Modal */}

@@ -20,6 +20,16 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
 
+  // Check if redirected due to admin suspension
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("suspended") === "true") {
+        setError("Your account has been suspended. Please contact support@onepathlab.com.");
+      }
+    }
+  }, []);
+
   // Forgot password flow states
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
@@ -86,7 +96,14 @@ export default function LoginPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setError(data.message || data.error || "Invalid credentials. Please verify your email and password.");
+        if (
+          res.status === 403 &&
+          (data.is_suspended || (data.message || "").toLowerCase().includes("suspended"))
+        ) {
+          setError("Your account has been suspended. Please contact support@onepathlab.com.");
+        } else {
+          setError(data.message || data.error || "Invalid credentials. Please verify your email and password.");
+        }
         setLoading(false);
         return;
       }
@@ -289,9 +306,32 @@ export default function LoginPage() {
 
             {/* Error Message Alert */}
             {error && (
-              <div className="flex items-center gap-3 rounded-xl bg-red-50 border border-red-200 px-3.5 py-2.5 text-xs text-red-700 animate-fade-in">
-                <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
-                <p className="font-semibold">{error}</p>
+              <div className={`flex items-start gap-3 rounded-2xl p-3.5 text-xs animate-in fade-in slide-in-from-top-1 ${
+                error.toLowerCase().includes("suspended")
+                  ? "bg-rose-50 border-2 border-rose-300 text-rose-900 shadow-xs"
+                  : "bg-red-50 border border-red-200 text-red-700"
+              }`}>
+                {error.toLowerCase().includes("suspended") ? (
+                  <div className="w-7 h-7 rounded-xl bg-rose-100 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                    <Lock className="h-4 w-4" />
+                  </div>
+                ) : (
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
+                )}
+                <div className="space-y-1">
+                  <p className="font-bold leading-tight">{error}</p>
+                  {error.toLowerCase().includes("suspended") && (
+                    <p className="text-[11px] text-rose-700 font-medium">
+                      Contact support:{" "}
+                      <a
+                        href="mailto:support@onepathlab.com?subject=Account%20Suspension%20Inquiry"
+                        className="font-bold underline hover:text-rose-950 inline-flex items-center gap-1"
+                      >
+                        <span>support@onepathlab.com</span>
+                      </a>
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 

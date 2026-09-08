@@ -8,26 +8,52 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ReportSheet, type ReportSheetData, type PrintSettings } from "@/components/report-sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Edit, AlertCircle, Printer } from "lucide-react";
+import { ArrowLeft, Edit, AlertCircle, Printer, AlertTriangle, Wallet, Loader2 } from "lucide-react";
 import { PrintPreviewDialog } from "@/components/print-preview-dialog";
-import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
+import { fetchFromLaravel, getCleanLetterheadUrl, getStoredUser } from "@/lib/api-client";
+import { useToast } from "@/components/ui/toast";
 
 const defaultPrintSettings: PrintSettings = {
   bgImage: null, headerHeight: 185, footerHeight: 95, marginLeft: 32, marginRight: 32
 };
 
+type ExtendedReportData = ReportSheetData & {
+  isB2bPaid?: boolean;
+  is_b2b_paid?: boolean;
+  b2bPrice?: number;
+  b2b_price?: number;
+};
+
 export default function ReportDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const { toast } = useToast();
   const reportId = params.id as string;
-  const [report, setReport] = useState<ReportSheetData | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [report, setReport] = useState<ExtendedReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDeducting, setIsDeducting] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
+
+  const isB2B = currentUser?.role === "B2B";
+  const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER";
+  const isPartnerOrCC = isCollectionCenter || isB2B;
 
   const [printSettings, setPrintSettings] = useState<PrintSettings>(defaultPrintSettings);
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [sheetScale, setSheetScale] = useState<number>(1);
+  const [insufficientBalanceModal, setInsufficientBalanceModal] = useState<{
+    open: boolean;
+    cost?: number;
+    balance?: number;
+    deficit?: number;
+    repCode?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    setCurrentUser(getStoredUser());
+  }, []);
 
   useEffect(() => {
     const updateScale = () => {
@@ -61,7 +87,54 @@ export default function ReportDetailPage() {
     };
   }, [reportId]);
 
-  const triggerPrint = () => {
+  const triggerPrint = async () => {
+    if (isPartnerOrCC) {
+      try {
+        setIsDeducting(true);
+        const authRes = await fetchFromLaravel(`/b2b/reports/${reportId}/deduct-and-print`, {
+          method: "POST"
+        });
+
+        if (authRes && authRes.deducted) {
+          toast({
+            variant: "success",
+            title: "Report Unlocked",
+            description: `₹${Number(authRes.amount_deducted).toLocaleString("en-IN", { minimumFractionDigits: 2 })} debited from B2B wallet.`
+          });
+          setReport((prev: any) => prev ? { ...prev, isB2bPaid: true, is_b2b_paid: true } : prev);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("b2b_wallet_updated", { detail: authRes }));
+          }
+        }
+      } catch (authErr: any) {
+        console.error("B2B print deduction failed:", authErr);
+        const errorMsg = authErr.message || authErr.error || "Print authorization failed";
+        const isInsufficient = authErr.error_code === "INSUFFICIENT_BALANCE" || errorMsg.toLowerCase().includes("insufficient");
+
+        if (isInsufficient) {
+          setInsufficientBalanceModal({
+            open: true,
+            cost: authErr.report_cost || 0,
+            balance: authErr.current_balance ?? 0,
+            deficit: authErr.deficit ?? Math.max(0, (authErr.report_cost || 0) - (authErr.current_balance || 0)),
+            repCode: report?.customId || reportId,
+          });
+          setIsDeducting(false);
+          return;
+        }
+
+        toast({
+          variant: "error",
+          title: "Print Locked",
+          description: errorMsg,
+        });
+        setIsDeducting(false);
+        return;
+      } finally {
+        setIsDeducting(false);
+      }
+    }
+
     setShowPrintOptions(true);
   };
 
@@ -148,13 +221,25 @@ export default function ReportDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/dashboard/reports/${report.id}/edit`}>
-            <Button variant="outline" size="sm" className="h-9 gap-1.5 cursor-pointer text-xs font-semibold">
-              <Edit className="h-3.5 w-3.5" /> Edit Results
-            </Button>
-          </Link>
-          <Button onClick={triggerPrint} size="sm" className="h-9 gap-1.5 cursor-pointer gradient-primary text-primary-foreground text-xs font-bold shadow-xs">
-            <Printer className="h-3.5 w-3.5" /> Print / PDF
+          {!isPartnerOrCC && (
+            <Link href={`/dashboard/reports/${report.id}/edit`}>
+              <Button variant="outline" size="sm" className="h-9 gap-1.5 cursor-pointer text-xs font-semibold">
+                <Edit className="h-3.5 w-3.5" /> Edit Results
+              </Button>
+            </Link>
+          )}
+          <Button
+            onClick={triggerPrint}
+            disabled={isDeducting}
+            size="sm"
+            className="h-9 gap-1.5 cursor-pointer gradient-primary text-primary-foreground text-xs font-bold shadow-xs"
+          >
+            {isDeducting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
+            <span>
+              {isPartnerOrCC && !report.isB2bPaid && !report.is_b2b_paid && (report.status === "FINAL" || report.status === "APPROVED" || report.status === "COMPLETED")
+                ? `Print (₹${Number(report.b2bPrice ?? report.b2b_price ?? 0).toLocaleString("en-IN")})`
+                : "Print / PDF"}
+            </span>
           </Button>
         </div>
       </div>
@@ -208,6 +293,72 @@ export default function ReportDetailPage() {
         onOpenChange={setShowPrintOptions} 
         report={report} 
       />
+
+      {/* Insufficient Wallet Balance Modal */}
+      {insufficientBalanceModal?.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-card border border-destructive/30 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-scale-in">
+            <div className="flex items-center gap-3 text-destructive">
+              <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-foreground">Insufficient Wallet Balance</h3>
+                <p className="text-xs text-muted-foreground">Recharge required to print patient report</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-muted/50 border border-border/80 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Report ID:</span>
+                <span className="font-mono font-bold text-foreground">{insufficientBalanceModal.repCode}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Report Fee:</span>
+                <span className="font-bold text-foreground">
+                  ₹{Number(insufficientBalanceModal.cost || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Current Balance:</span>
+                <span className="font-bold text-destructive">
+                  ₹{Number(insufficientBalanceModal.balance || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="pt-2 border-t border-border flex items-center justify-between">
+                <span className="font-bold text-foreground">Minimum Recharge Needed:</span>
+                <span className="font-black text-purple-600 text-sm">
+                  ₹{Number(insufficientBalanceModal.deficit || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              As per laboratory policy, report printing is debited directly from your B2B wallet balance. Please add funds to unlock this report.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setInsufficientBalanceModal(null)}
+                className="h-10 px-4 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Close
+              </Button>
+              <Link href="/dashboard/wallet">
+                <Button
+                  size="sm"
+                  className="h-10 px-5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md gap-2 cursor-pointer"
+                >
+                  <Wallet className="h-4 w-4" />
+                  <span>Recharge Wallet</span>
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

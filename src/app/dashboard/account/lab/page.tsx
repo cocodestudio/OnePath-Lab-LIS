@@ -9,7 +9,8 @@ import {
   Loader2, RefreshCw, Eye, Plus, Check, Info, Phone, Mail, MapPin,
   Upload, Trash2, Calendar, Zap, Receipt, Activity, TrendingUp, Lock
 } from "lucide-react";
-import { fetchFromLaravel } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
+import { isSubscriptionExpired } from "@/lib/subscription";
 import {
   Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter
 } from "@/components/ui/dialog";
@@ -201,6 +202,16 @@ function LabAccountContent() {
 
       setLab(labRes);
       setInvoices(Array.isArray(invRes) ? invRes : []);
+
+      const expired = isSubscriptionExpired(labRes, getStoredUser());
+      if (expired) {
+        sessionStorage.setItem("lis_subscription_locked", "true");
+        window.dispatchEvent(new CustomEvent("subscription-locked", { detail: { isLocked: true, lab: labRes } }));
+        setActiveTab((curr) => (curr === "INVOICES" || curr === "SMS" ? "SUBSCRIPTION" : curr));
+      } else {
+        sessionStorage.removeItem("lis_subscription_locked");
+        window.dispatchEvent(new CustomEvent("subscription-locked", { detail: { isLocked: false, lab: labRes } }));
+      }
 
       if (labRes.dailyPatientVolumeTier || labRes.daily_patient_volume_tier) {
         setSelectedVolumeTier(labRes.dailyPatientVolumeTier || labRes.daily_patient_volume_tier);
@@ -577,7 +588,7 @@ function LabAccountContent() {
   const planName = lab?.planName || lab?.plan_name || "OnePath Pathology LIS Pro";
   const planPeriod = lab?.planPeriod || lab?.plan_period || "1 Year Annual License";
   const planStatus = lab?.planStatus || lab?.plan_status || "Active";
-  const planExpires = lab?.planExpiresAt || lab?.plan_expires_at || "2027-07-27";
+  const planExpires = lab?.planExpiresAt || lab?.plan_expires_at;
   const billLimit = (lab?.billLimit || lab?.bill_limit || 12000).toLocaleString();
 
   // Check if Centre profile is saved
@@ -587,9 +598,9 @@ function LabAccountContent() {
     (centreForm.address || lab?.address)
   );
 
-  // Active Plan & Expiry Logic
-  const planExpTime = planExpires ? new Date(planExpires).getTime() : 0;
-  const isExpired = !planExpires || isNaN(planExpTime) || Date.now() > planExpTime || planStatus.toLowerCase() === "expired" || planStatus.toLowerCase() === "suspended";
+  // Active Plan & Expiry Logic using shared subscription utility
+  const currentUser = getStoredUser();
+  const isExpired = isSubscriptionExpired(lab, currentUser);
   const isPaidPlanActive = !isExpired && (planStatus.toLowerCase() === "active" || planStatus.toLowerCase() === "paid");
 
   const isCurrent1Year = (planName.toLowerCase().includes("1 year") || planPeriod.toLowerCase().includes("1 year") || planPeriod.toLowerCase().includes("365")) && !planName.toLowerCase().includes("trial");
@@ -658,6 +669,30 @@ function LabAccountContent() {
         </div>
       )}
 
+      {/* Prominent Subscription Expired / Lockdown Notice */}
+      {isExpired && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-rose-500/15 via-amber-500/10 to-rose-500/15 border-2 border-rose-500/40 text-foreground space-y-2 shadow-md animate-in fade-in">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="h-10 w-10 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center shrink-0 text-rose-600 dark:text-rose-400 shadow-inner">
+              <Lock className="h-5 w-5 animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                  Operations Strictly Locked
+                </span>
+                <h3 className="text-sm sm:text-base font-bold text-foreground">
+                  7-Day Free Trial / Subscription Expired
+                </h3>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                All laboratory operations (Patient Registrations, Test Data Entry, QR Barcode Reports, and Billing) are locked. You must purchase or renew a subscription plan below to unlock your lab software.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Navigation Tabs */}
       <div className="flex items-center gap-6 border-b border-border text-sm font-semibold overflow-x-auto w-full scrollbar-none flex-nowrap">
         <button
@@ -685,6 +720,10 @@ function LabAccountContent() {
 
         <button
           onClick={() => {
+            if (isExpired) {
+              alert("Your laboratory trial/subscription has expired. Please choose a subscription plan and complete payment via PayU first to unlock tax invoices.");
+              return;
+            }
             if (!isCentreSaved) {
               setActiveTab("CENTRE");
             } else {
@@ -692,15 +731,21 @@ function LabAccountContent() {
             }
           }}
           className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap flex items-center gap-1.5 ${
+            isExpired ? "opacity-60 cursor-not-allowed" : ""
+          } ${
             activeTab === "INVOICES" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <span>GST Tax Invoices ({invoices.length})</span>
-          {!isCentreSaved && (
+          {isExpired ? (
+            <span className="flex items-center gap-0.5 text-[10px] font-bold text-rose-600 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+              <Lock className="h-2.5 w-2.5" /> Locked
+            </span>
+          ) : !isCentreSaved ? (
             <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
               <Lock className="h-2.5 w-2.5" /> Locked
             </span>
-          )}
+          ) : null}
           {activeTab === "INVOICES" && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
           )}
@@ -758,9 +803,15 @@ function LabAccountContent() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-4 border-t border-border/70 text-xs">
               <div>
                 <p className="text-[11px] font-semibold text-muted-foreground">Status</p>
-                <span className="inline-block mt-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                  {planStatus}
-                </span>
+                {isExpired ? (
+                  <span className="inline-block mt-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-600 border border-rose-500/30">
+                    Expired · Action Required
+                  </span>
+                ) : (
+                  <span className="inline-block mt-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                    {planStatus}
+                  </span>
+                )}
               </div>
 
               <div>
@@ -777,8 +828,12 @@ function LabAccountContent() {
 
               <div>
                 <p className="text-[11px] font-semibold text-muted-foreground">Plan Valid Till</p>
-                <p className="font-bold text-foreground mt-1.5">{formatDate(planExpires)}</p>
-                <p className="text-[10px] text-muted-foreground">Auto-Renewal Enabled</p>
+                <p className={`font-bold mt-1.5 ${isExpired ? "text-rose-600 font-extrabold" : "text-foreground"}`}>
+                  {planExpires ? formatDate(planExpires) : "Expired"} {isExpired ? "(Expired)" : ""}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {isExpired ? "Renew below with PayU" : "Auto-Renewal Enabled"}
+                </p>
               </div>
             </div>
 

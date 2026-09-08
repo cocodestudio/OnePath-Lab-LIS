@@ -15,9 +15,10 @@ import {
   Clock, Check, ExternalLink, ShieldCheck, Search, ArrowLeft,
   ArrowRight, Users, FileText, Receipt, X, Loader2, Command, Trash2,
   Copy, Building2, FlaskConical, PlusCircle, Coins, IndianRupee, Mail as MailIcon,
-  Sparkles, Gift, User as UserIcon
+  Sparkles, Gift, User as UserIcon, Lock
 } from "lucide-react";
 import { getStoredUser, logout, fetchFromLaravel } from "@/lib/api-client";
+import { isSubscriptionExpired } from "@/lib/subscription";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog";
@@ -77,6 +78,12 @@ export default function Navbar() {
   const [labData, setLabData] = useState<any>(null);
   const [todaySales, setTodaySales] = useState<string>("₹0");
   const [copiedLabId, setCopiedLabId] = useState(false);
+  const [isLocked, setIsLocked] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("lis_subscription_locked") === "true";
+    }
+    return false;
+  });
 
   useEffect(() => {
     setUser(getStoredUser());
@@ -93,9 +100,21 @@ export default function Navbar() {
     };
     window.addEventListener("user-updated", handleUserUpdate);
 
+    const handleLock = (e: any) => {
+      if (typeof e.detail?.isLocked === "boolean") {
+        setIsLocked(e.detail.isLocked);
+      } else {
+        setIsLocked(true);
+      }
+    };
+    window.addEventListener("subscription-locked", handleLock);
+    window.addEventListener("subscription-expired", handleLock);
+
     return () => {
       clearInterval(interval);
       window.removeEventListener("user-updated", handleUserUpdate);
+      window.removeEventListener("subscription-locked", handleLock);
+      window.removeEventListener("subscription-expired", handleLock);
     };
   }, []);
 
@@ -105,7 +124,12 @@ export default function Navbar() {
         fetchFromLaravel("/lab"),
         fetchFromLaravel("/today-sales"),
       ]);
-      if (labRes) setLabData(labRes);
+      if (labRes) {
+        setLabData(labRes);
+        const currentUser = getStoredUser();
+        const expired = isSubscriptionExpired(labRes, currentUser);
+        setIsLocked(expired);
+      }
       if (salesRes) {
         if (salesRes.formatted) {
           setTodaySales(salesRes.formatted);
@@ -342,14 +366,18 @@ export default function Navbar() {
             <input
               ref={searchInputRef}
               type="text"
+              disabled={isLocked}
               value={searchQuery}
               onChange={(e) => {
+                if (isLocked) return;
                 setSearchQuery(e.target.value);
                 setIsSearchOpen(true);
               }}
-              onFocus={() => setIsSearchOpen(true)}
-              placeholder="Search patients, reports..."
-              className="w-full h-9 sm:h-10 pl-8 sm:pl-10 pr-7 sm:pr-20 bg-background/90 hover:bg-background focus:bg-background border border-border/90 focus:border-primary rounded-xl text-xs sm:text-sm font-medium text-foreground outline-none transition-all shadow-xs placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-primary/15 truncate"
+              onFocus={() => {
+                if (!isLocked) setIsSearchOpen(true);
+              }}
+              placeholder={isLocked ? "Search locked (Subscription expired)" : "Search patients, reports..."}
+              className={`w-full h-9 sm:h-10 pl-8 sm:pl-10 pr-7 sm:pr-20 bg-background/90 hover:bg-background focus:bg-background border border-border/90 focus:border-primary rounded-xl text-xs sm:text-sm font-medium text-foreground outline-none transition-all shadow-xs placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-primary/15 truncate ${isLocked ? "opacity-60 cursor-not-allowed" : ""}`}
             />
 
             <div className="absolute right-2 sm:right-2.5 flex items-center gap-1.5">
@@ -502,6 +530,18 @@ export default function Navbar() {
 
       {/* Right Controls: Help Dropdown, Notification Bell, Profile */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        
+        {/* Subscription Expired Alert Pill */}
+        {isLocked && (
+          <Link
+            href="/dashboard/account/lab?tab=subscription"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-extrabold text-xs shadow-xs hover:bg-rose-500/25 transition-all animate-pulse"
+          >
+            <Lock className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Plan Expired · Activate</span>
+            <span className="sm:hidden">Activate</span>
+          </Link>
+        )}
         
         {/* Help & Support Button with Direct Action Redirection */}
         <DropdownMenu>
@@ -789,7 +829,7 @@ export default function Navbar() {
             {/* Logout */}
             <div className="p-2 border-t border-border/80 bg-muted/20">
               <DropdownMenuItem
-                onSelect={logout}
+                onSelect={() => logout()}
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
               >
                 <LogOut className="h-4 w-4" />

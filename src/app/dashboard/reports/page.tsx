@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Printer, ChevronLeft, ChevronRight, Edit3, AlertTriangle,
-  Filter, X, Eye, Plus, Loader2, Clock,
+  Filter, X, Eye, Plus, Loader2, Clock, Wallet, CheckCircle2, Sparkles, IndianRupee
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
@@ -32,6 +32,10 @@ interface Report {
   patient: { name: string; customId: string; phone: string; age: number; gender: string };
   bill: { customId: string; total: number; status: string };
   results: ReportTest[];
+  is_b2b_paid?: boolean;
+  isB2bPaid?: boolean;
+  b2b_price?: number;
+  b2bPrice?: number;
 }
 
 const DEFAULT_LAB = { name: "OnePath Lab Main", email: "info@onepathlab.com", address: "123 Healthcare Blvd, Medical District, Delhi", logoUrl: "/onepath-logo.png" };
@@ -58,6 +62,13 @@ export default function ReportsListPage() {
   const [printReport, setPrintReport] = useState<any | null>(null);
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const [insufficientBalanceModal, setInsufficientBalanceModal] = useState<{
+    open: boolean;
+    cost?: number;
+    balance?: number;
+    deficit?: number;
+    repCode?: string;
+  } | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -98,14 +109,64 @@ export default function ReportsListPage() {
 
     try {
       setPrintingId(rep.id);
+
+      // Enforce B2B wallet deduction on report print
+      if (isPartnerOrCC) {
+        try {
+          const authRes = await fetchFromLaravel(`/b2b/reports/${rep.id}/deduct-and-print`, {
+            method: "POST"
+          });
+
+          if (authRes) {
+            if (authRes.deducted) {
+              toast({
+                variant: "success",
+                title: "Report Unlocked",
+                description: `₹${Number(authRes.amount_deducted).toLocaleString("en-IN", { minimumFractionDigits: 2 })} debited from B2B wallet. Report opened for printing.`
+              });
+              setReports((prev: any[]) =>
+                prev.map((r) =>
+                  r.id === rep.id ? { ...r, is_b2b_paid: true, isB2bPaid: true } : r
+                )
+              );
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("b2b_wallet_updated", { detail: authRes }));
+              }
+            }
+          }
+        } catch (authErr: any) {
+          console.error("B2B print authorization failed:", authErr);
+          const errorMsg = authErr.message || authErr.error || "Print authorization failed";
+          const isInsufficient = authErr.error_code === "INSUFFICIENT_BALANCE" || errorMsg.toLowerCase().includes("insufficient");
+
+          if (isInsufficient) {
+            setInsufficientBalanceModal({
+              open: true,
+              cost: authErr.report_cost || rep.b2b_price || rep.b2bPrice || 0,
+              balance: authErr.current_balance ?? 0,
+              deficit: authErr.deficit ?? Math.max(0, (authErr.report_cost || 0) - (authErr.current_balance || 0)),
+              repCode: rep.custom_id || rep.customId || rep.id,
+            });
+            return;
+          }
+
+          toast({
+            variant: "error",
+            title: "Print Authorization Failed",
+            description: errorMsg,
+          });
+          return;
+        }
+      }
+
       const data = await fetchFromLaravel(`/reports/${rep.id}`);
       setPrintReport({ ...data, lab: data.lab || DEFAULT_LAB });
       setShowPrintOptions(true);
-    } catch {
+    } catch (err: any) {
       toast({
         variant: "error",
         title: "Could not load report",
-        description: "Failed to fetch report data for printing."
+        description: err.message || "Failed to fetch report data for printing."
       });
     } finally {
       setPrintingId(null);
@@ -359,6 +420,17 @@ export default function ReportsListPage() {
                               <AlertTriangle className="h-3 w-3" /> {abnormalCount} abnormal
                             </span>
                           )}
+                          {isPartnerOrCC && (rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && (
+                            rep.is_b2b_paid || rep.isB2bPaid ? (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[9px] font-extrabold text-emerald-600 uppercase tracking-wide border border-emerald-500/20 whitespace-nowrap">
+                                <CheckCircle2 className="h-3 w-3" /> Paid & Unlocked
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-purple-500/10 px-2 py-0.5 text-[9px] font-bold text-purple-600 border border-purple-500/20 whitespace-nowrap">
+                                Rate: ₹{Number(rep.b2b_price ?? rep.b2bPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              </span>
+                            )
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-3.5 text-right">
@@ -381,8 +453,20 @@ export default function ReportsListPage() {
                             }`}
                             title={isPartnerOrCC && !(rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED") ? "Report is awaiting final approval from central lab" : "Print report"}
                           >
-                            {printingId === rep.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
-                            <span>Print Report</span>
+                            {printingId === rep.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Printer className="h-3.5 w-3.5" />
+                            )}
+                            <span>
+                              {isPartnerOrCC
+                                ? rep.is_b2b_paid || rep.isB2bPaid
+                                  ? "Print Report"
+                                  : (rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED")
+                                  ? `Print (₹${Number(rep.b2b_price ?? rep.b2bPrice ?? 0).toLocaleString("en-IN")})`
+                                  : "Awaiting Approval"
+                                : "Print Report"}
+                            </span>
                           </Button>
                         </div>
                       </td>
@@ -399,11 +483,11 @@ export default function ReportsListPage() {
             <div className="text-xs text-muted-foreground">
               Showing <span className="font-semibold text-foreground">{indexOfFirstRow + 1}</span>–<span className="font-semibold text-foreground">{Math.min(indexOfLastRow, totalRows)}</span> of <span className="font-semibold text-foreground">{totalRows}</span> reports
             </div>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Rows:</span>
-                <Select value={rowsPerPage.toString()} onValueChange={(val) => { setRowsPerPage(Number(val)); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-8 text-xs font-semibold w-[70px]">
+                <span className="text-xs text-muted-foreground">Rows per page:</span>
+                <Select value={String(rowsPerPage)} onValueChange={(val) => { setRowsPerPage(Number(val)); setCurrentPage(1); }}>
+                  <SelectTrigger className="h-8 w-16 text-xs bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -431,6 +515,72 @@ export default function ReportsListPage() {
         }} 
         report={printReport} 
       />
+
+      {/* Insufficient Wallet Balance Modal */}
+      {insufficientBalanceModal?.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-card border border-destructive/30 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-5 animate-scale-in">
+            <div className="flex items-center gap-3 text-destructive">
+              <div className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-foreground">Insufficient Wallet Balance</h3>
+                <p className="text-xs text-muted-foreground">Recharge required to print patient report</p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl bg-muted/50 border border-border/80 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Report ID:</span>
+                <span className="font-mono font-bold text-foreground">{insufficientBalanceModal.repCode}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Report Fee:</span>
+                <span className="font-bold text-foreground">
+                  ₹{Number(insufficientBalanceModal.cost || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Current Balance:</span>
+                <span className="font-bold text-destructive">
+                  ₹{Number(insufficientBalanceModal.balance || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="pt-2 border-t border-border flex items-center justify-between">
+                <span className="font-bold text-foreground">Minimum Recharge Needed:</span>
+                <span className="font-black text-purple-600 text-sm">
+                  ₹{Number(insufficientBalanceModal.deficit || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              As per laboratory policy, report printing is debited directly from your B2B wallet balance. Please add funds to unlock this report.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setInsufficientBalanceModal(null)}
+                className="h-10 px-4 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Close
+              </Button>
+              <Link href="/dashboard/wallet">
+                <Button
+                  size="sm"
+                  className="h-10 px-5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md gap-2 cursor-pointer"
+                >
+                  <Wallet className="h-4 w-4" />
+                  <span>Recharge Wallet</span>
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

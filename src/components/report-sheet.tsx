@@ -196,10 +196,8 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
     }
   });
 
-  const baseUrl = typeof window !== "undefined" && window.location.origin
-    ? window.location.origin
-    : "https://lis.onepathlab.com";
-  const reportIdentifier = report.id || report.customId || "";
+  const baseUrl = "https://lis.onepathlab.com";
+  const reportIdentifier = report.id || report.customId || (report as any).custom_id || "";
   const qrValue = `${baseUrl}/r/${reportIdentifier}`;
 
   return (
