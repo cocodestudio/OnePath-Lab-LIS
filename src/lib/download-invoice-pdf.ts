@@ -16,9 +16,10 @@ export async function downloadSubscriptionTaxInvoicePdf(invoice: SubscriptionInv
     invoice.planDuration === "6_MONTHS" ||
     (invoice.description || "").toLowerCase().includes("6-month") ||
     (invoice.description || "").toLowerCase().includes("6 month") ||
+    invoice.baseAmount === 3999 ||
     invoice.baseAmount === 2499;
 
-  const base = invoice.baseAmount || (isSixMonths ? 2499.0 : 4999.0);
+  const base = invoice.baseAmount || (isSixMonths ? 3999.0 : 5999.0);
   const discount = invoice.discount || 0.0;
   const taxable = base - discount;
 

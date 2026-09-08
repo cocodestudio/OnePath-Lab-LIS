@@ -118,7 +118,7 @@ const jsonLd = {
         "India's premier Cloud Laboratory Information System (LIS) for clinical pathology laboratories, hospital networks, and diagnostic centers with ASTM/HL7 analyzer interfacing and NABL ISO 15189 compliance.",
       offers: {
         "@type": "Offer",
-        price: "2499",
+        price: "3999",
         priceCurrency: "INR",
         availability: "https://schema.org/InStock",
       },

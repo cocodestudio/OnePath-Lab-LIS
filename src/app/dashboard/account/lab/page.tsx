@@ -385,15 +385,15 @@ function LabAccountContent() {
       createdAt: inv.createdAt || inv.created_at,
       created_at: inv.created_at || inv.createdAt,
       planName: pName,
-      planDuration: (inv.description?.includes("6-Month") || inv.description?.includes("6 Month") || inv.baseAmount === 2499) ? "6_MONTHS" : "1_YEAR",
+      planDuration: (inv.description?.includes("6-Month") || inv.description?.includes("6 Month") || inv.baseAmount === 3999 || inv.baseAmount === 2499) ? "6_MONTHS" : "1_YEAR",
       description: inv.description || `OnePath Pathology LIS Platform - ${pName} (Unlimited Tests & QR Reports)`,
       sacCode: inv.sacCode || inv.sac_code || "998314",
-      baseAmount: inv.baseAmount ?? inv.base_amount ?? 4999.00,
+      baseAmount: inv.baseAmount ?? inv.base_amount ?? 5999.00,
       cgstRate: 9.00,
-      cgstAmount: inv.cgstAmount ?? inv.cgst_amount ?? 449.91,
+      cgstAmount: inv.cgstAmount ?? inv.cgst_amount ?? 539.91,
       sgstRate: 9.00,
-      sgstAmount: inv.sgstAmount ?? inv.sgst_amount ?? 449.91,
-      totalAmount: inv.totalAmount ?? inv.total_amount ?? 5899.00,
+      sgstAmount: inv.sgstAmount ?? inv.sgst_amount ?? 539.91,
+      totalAmount: inv.totalAmount ?? inv.total_amount ?? 7079.00,
       status: inv.status || "PAID",
       paymentMethod: inv.paymentMethod || inv.payment_method || "Online (UPI / Razorpay / NetBanking)",
       transactionId: `PAY-${(inv.customId || inv.id).slice(0, 8).toUpperCase()}`,
@@ -438,16 +438,16 @@ function LabAccountContent() {
       return;
     }
 
-    const isSixMonths = (lab?.planPeriod || "").toLowerCase().includes("6 month") || (lab?.planPrice === 2499);
+    const isSixMonths = (lab?.planPeriod || "").toLowerCase().includes("6 month") || (lab?.planPrice === 3999) || (lab?.planPrice === 2499);
     const planType = isSixMonths ? "6_MONTHS" : "1_YEAR";
-    const baseAmt = isSixMonths ? 2499.00 : 4999.00;
+    const baseAmt = isSixMonths ? 3999.00 : 5999.00;
     const planLabel = isSixMonths ? "Pathology Lab 6-Month License" : "Pathology Lab 1-Year License";
 
     // Check if an invoice for the current active subscription has already been generated
     const existing = invoices.find(inv => {
       const desc = (inv.description || "").toLowerCase();
-      if (planType === "6_MONTHS") return desc.includes("6-month") || desc.includes("6 month") || inv.baseAmount === 2499;
-      return desc.includes("1-year") || desc.includes("annual") || desc.includes("subscription plan") || inv.baseAmount === 4999;
+      if (planType === "6_MONTHS") return desc.includes("6-month") || desc.includes("6 month") || inv.baseAmount === 3999 || inv.baseAmount === 2499;
+      return desc.includes("1-year") || desc.includes("annual") || desc.includes("subscription plan") || inv.baseAmount === 5999 || inv.baseAmount === 4999;
     });
 
     if (existing) {
@@ -978,25 +978,25 @@ function LabAccountContent() {
 
                   <div className="p-4 bg-muted/40 rounded-xl space-y-1.5 border border-border">
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-3xl font-black text-foreground">₹5,899</span>
+                      <span className="text-3xl font-black text-foreground">₹7,079</span>
                       <span className="text-xs text-muted-foreground font-semibold">/ 365 Days</span>
                     </div>
                     <div className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-border/60">
                       <div className="flex justify-between">
                         <span>Base Plan Fee:</span>
-                        <span className="font-mono font-semibold text-foreground">₹4,999.00</span>
+                        <span className="font-mono font-semibold text-foreground">₹5,999.00</span>
                       </div>
                       <div className="flex justify-between">
                         <span>CGST @ 9%:</span>
-                        <span className="font-mono font-semibold text-foreground">₹449.91</span>
+                        <span className="font-mono font-semibold text-foreground">₹539.91</span>
                       </div>
                       <div className="flex justify-between">
                         <span>SGST @ 9%:</span>
-                        <span className="font-mono font-semibold text-foreground">₹449.91</span>
+                        <span className="font-mono font-semibold text-foreground">₹539.91</span>
                       </div>
                       <div className="flex justify-between font-bold text-xs text-emerald-600 pt-1 border-t border-border/60">
                         <span>Total Payable (incl. 18% GST):</span>
-                        <span className="font-mono font-black">₹5,899.00</span>
+                        <span className="font-mono font-black">₹7,078.82</span>
                       </div>
                     </div>
                   </div>
@@ -1052,7 +1052,7 @@ function LabAccountContent() {
                       ) : (
                         <RefreshCw className="h-4 w-4" />
                       )}
-                      <span>Renew 1-Year Plan (₹5,899 with GST)</span>
+                      <span>Renew 1-Year Plan (₹7,079 with GST)</span>
                     </button>
                   ) : (
                     <button
@@ -1066,7 +1066,7 @@ function LabAccountContent() {
                       ) : (
                         <Zap className="h-4 w-4" />
                       )}
-                      <span>Pay ₹5,899 with PayU (Instant 1-Year License)</span>
+                      <span>Pay ₹7,079 with PayU (Instant 1-Year License)</span>
                     </button>
                   )}
                 </div>
@@ -1089,25 +1089,25 @@ function LabAccountContent() {
 
                   <div className="p-4 bg-muted/40 rounded-xl space-y-1.5 border border-border">
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-3xl font-black text-foreground">₹2,949</span>
+                      <span className="text-3xl font-black text-foreground">₹4,719</span>
                       <span className="text-xs text-muted-foreground font-semibold">/ 180 Days</span>
                     </div>
                     <div className="text-[11px] text-muted-foreground space-y-0.5 pt-1 border-t border-border/60">
                       <div className="flex justify-between">
                         <span>Base Plan Fee:</span>
-                        <span className="font-mono font-semibold text-foreground">₹2,499.00</span>
+                        <span className="font-mono font-semibold text-foreground">₹3,999.00</span>
                       </div>
                       <div className="flex justify-between">
                         <span>CGST @ 9%:</span>
-                        <span className="font-mono font-semibold text-foreground">₹224.91</span>
+                        <span className="font-mono font-semibold text-foreground">₹359.91</span>
                       </div>
                       <div className="flex justify-between">
                         <span>SGST @ 9%:</span>
-                        <span className="font-mono font-semibold text-foreground">₹224.91</span>
+                        <span className="font-mono font-semibold text-foreground">₹359.91</span>
                       </div>
                       <div className="flex justify-between font-bold text-xs text-emerald-600 pt-1 border-t border-border/60">
                         <span>Total Payable (incl. 18% GST):</span>
-                        <span className="font-mono font-black">₹2,949.00</span>
+                        <span className="font-mono font-black">₹4,718.82</span>
                       </div>
                     </div>
                   </div>
@@ -1163,7 +1163,7 @@ function LabAccountContent() {
                       ) : (
                         <RefreshCw className="h-4 w-4" />
                       )}
-                      <span>Renew 6-Months Plan (₹2,949 with GST)</span>
+                      <span>Renew 6-Months Plan (₹4,719 with GST)</span>
                     </button>
                   ) : (
                     <button
@@ -1177,7 +1177,7 @@ function LabAccountContent() {
                       ) : (
                         <CreditCard className="h-4 w-4" />
                       )}
-                      <span>Pay ₹2,949 with PayU (Instant 6-Months License)</span>
+                      <span>Pay ₹4,719 with PayU (Instant 6-Months License)</span>
                     </button>
                   )}
                 </div>
@@ -1280,7 +1280,7 @@ function LabAccountContent() {
                         ? (inv.invoiceDate || inv.invoice_date)
                         : (inv.createdAt || inv.created_at || inv.invoiceDate || inv.invoice_date)) || new Date().toISOString();
                       const invDateObj = new Date(rawDateStr);
-                      const baseAmt = inv.baseAmount ?? inv.base_amount ?? 4999.00;
+                      const baseAmt = inv.baseAmount ?? inv.base_amount ?? 5999.00;
                       const cgstAmt = inv.cgstAmount ?? inv.cgst_amount ?? Math.round(baseAmt * 0.09 * 100) / 100;
                       const sgstAmt = inv.sgstAmount ?? inv.sgst_amount ?? Math.round(baseAmt * 0.09 * 100) / 100;
                       const invAmt = inv.totalAmount ?? inv.total_amount ?? (baseAmt + cgstAmt + sgstAmt);

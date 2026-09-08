@@ -63,8 +63,15 @@ export function SubscriptionTaxInvoiceSheet({
     !invoice.customer.state.toLowerCase().includes("uttar pradesh") &&
     !invoice.customer.state.toLowerCase().includes("up");
 
+  const isSixMonths =
+    invoice.planDuration === "6_MONTHS" ||
+    (invoice.description || "").toLowerCase().includes("6-month") ||
+    (invoice.description || "").toLowerCase().includes("6 month") ||
+    invoice.baseAmount === 3999 ||
+    invoice.baseAmount === 2499;
+
   // Pricing calculations
-  const base = invoice.baseAmount || 4999.0;
+  const base = invoice.baseAmount || (isSixMonths ? 3999.0 : 5999.0);
   const discount = invoice.discount || 0.0;
   const taxable = base - discount;
 
@@ -97,12 +104,6 @@ export function SubscriptionTaxInvoiceSheet({
   const formattedDate = !isNaN(dateObj.getTime())
     ? `${String(dateObj.getDate()).padStart(2, "0")}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${dateObj.getFullYear()}, ${dateObj.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}`
     : "07-09-2026, 05:42 PM";
-
-  const isSixMonths =
-    invoice.planDuration === "6_MONTHS" ||
-    (invoice.description || "").toLowerCase().includes("6-month") ||
-    (invoice.description || "").toLowerCase().includes("6 month") ||
-    invoice.baseAmount === 2499;
 
   const productTitle = isSixMonths
     ? "OnePathLab LIS Software - 6 Months Semi-Annual License Plan"
