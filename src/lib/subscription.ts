@@ -14,26 +14,35 @@ export function isSubscriptionExpired(lab: any, user?: any): boolean {
     return false;
   }
 
-  // 1. Explicit plan status check
+  // 1. Explicit user status check
+  const userStatus = (currentUser?.status || "").toLowerCase();
+  if (userStatus === "suspended" || userStatus === "expired") {
+    return true;
+  }
+
+  // 2. Explicit plan status check
   const planStatus = (lab?.planStatus || lab?.plan_status || "").toLowerCase();
   if (planStatus === "suspended" || planStatus === "expired") {
     return true;
   }
 
-  // 2. Plan expiration date check (e.g. 7-day trial or annual plan expired)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // 3. Plan expiration date check (calendar day boundary)
   const expiresAtStr = lab?.planExpiresAt || lab?.plan_expires_at;
   if (expiresAtStr) {
     const expDate = new Date(expiresAtStr);
     if (!isNaN(expDate.getTime())) {
-      // Set to end of the expiration day
-      expDate.setHours(23, 59, 59, 999);
-      if (Date.now() > expDate.getTime()) {
+      const exp = new Date(expDate);
+      exp.setHours(0, 0, 0, 0);
+      if (exp.getTime() <= today.getTime()) {
         return true;
       }
     }
   }
 
-  // 3. User trial check if plan is trial or pending
+  // 4. User trial check if plan is trial or pending
   const trialEndsAtStr = currentUser?.trialEndsAt || currentUser?.trial_ends_at;
   const isTrial = 
     (lab?.planName || lab?.plan_name || "").toLowerCase().includes("trial") ||
@@ -46,19 +55,24 @@ export function isSubscriptionExpired(lab: any, user?: any): boolean {
     if (checkDateStr) {
       const expDate = new Date(checkDateStr);
       if (!isNaN(expDate.getTime())) {
-        expDate.setHours(23, 59, 59, 999);
-        if (Date.now() > expDate.getTime()) {
+        const exp = new Date(expDate);
+        exp.setHours(0, 0, 0, 0);
+        if (exp.getTime() <= today.getTime()) {
           return true;
         }
       }
     }
   }
 
-  // 4. Also check user trialEndsAt directly if exists
+  // 5. Also check user trialEndsAt directly if exists
   if (trialEndsAtStr) {
-    const trialDate = new Date(trialEndsAtStr).getTime();
-    if (!isNaN(trialDate) && Date.now() > trialDate && (!planStatus || planStatus === "trial" || isTrial)) {
-      return true;
+    const trialDate = new Date(trialEndsAtStr);
+    if (!isNaN(trialDate.getTime())) {
+      const trial = new Date(trialDate);
+      trial.setHours(0, 0, 0, 0);
+      if (trial.getTime() <= today.getTime() && (!planStatus || planStatus === "trial" || isTrial)) {
+        return true;
+      }
     }
   }
 
@@ -72,7 +86,12 @@ export function getDaysRemaining(lab: any): number | null {
   const expDate = new Date(expiresAtStr);
   if (isNaN(expDate.getTime())) return null;
 
-  expDate.setHours(23, 59, 59, 999);
-  const diffMs = expDate.getTime() - Date.now();
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const exp = new Date(expDate);
+  exp.setHours(0, 0, 0, 0);
+
+  const diffMs = exp.getTime() - today.getTime();
+  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  return days <= 0 ? 0 : days;
 }

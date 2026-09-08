@@ -8,7 +8,7 @@ import {
   Search, ShieldCheck, IndianRupee, Clock, ChevronRight, ChevronLeft,
   Receipt, ArrowRight, Smartphone, Copy, Check, Filter, Calendar,
   TrendingUp, Shield, AlertTriangle, CheckCheck, X, FileText,
-  ChevronsLeft, ChevronsRight, HelpCircle
+  ChevronsLeft, ChevronsRight, HelpCircle, Lock
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 
@@ -161,8 +161,21 @@ export default function WalletPage() {
     setCurrentPage(1);
   };
 
+  const isGatewayEnabled = Boolean(gatewayConfig?.is_enabled);
+  const isGatewayConfigured = Boolean(gatewayConfig?.is_configured || gatewayConfig?.has_payu);
+  const isRechargeAllowed = isGatewayEnabled && isGatewayConfigured;
+
   const handleInitiateRecharge = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isRechargeAllowed) {
+      setToast({
+        text: !isGatewayEnabled
+          ? "Online wallet recharge is disabled by your laboratory administrator."
+          : "Payment gateway credentials are not yet configured by the laboratory.",
+        type: "error",
+      });
+      return;
+    }
     const min = gatewayConfig?.min_recharge_amount || 100;
     if (rechargeAmount < min) {
       setToast({ text: `Minimum recharge amount is ₹${min.toLocaleString("en-IN")}`, type: "error" });
@@ -510,6 +523,29 @@ export default function WalletPage() {
               </div>
 
               <form onSubmit={handleInitiateRecharge} className="space-y-5">
+                {/* Gateway Disabled / Unconfigured Alerts */}
+                {!isGatewayEnabled ? (
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 flex items-start gap-3">
+                    <Lock className="h-5 w-5 shrink-0 mt-0.5 text-amber-600" />
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider">Online Wallet Recharge Disabled</h4>
+                      <p className="text-xs mt-0.5 leading-relaxed">
+                        Online balance addition is currently disabled by your laboratory administrator. Please contact lab management directly for manual top-ups or credit facility adjustments.
+                      </p>
+                    </div>
+                  </div>
+                ) : !isGatewayConfigured ? (
+                  <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-800 dark:text-rose-200 flex items-start gap-3">
+                    <Lock className="h-5 w-5 shrink-0 mt-0.5 text-rose-600" />
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider">Payment Gateway Not Configured</h4>
+                      <p className="text-xs mt-0.5 leading-relaxed">
+                        The laboratory administrator has not configured their PayU merchant credentials yet. Online balance addition will unlock as soon as keys are saved.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+
                 {/* Quick Amount Chips */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-foreground">Select Recharge Amount</label>
@@ -518,11 +554,14 @@ export default function WalletPage() {
                       <button
                         key={amt}
                         type="button"
+                        disabled={!isRechargeAllowed}
                         onClick={() => handleQuickAmount(amt)}
-                        className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
-                          rechargeAmount === amt
-                            ? "bg-purple-600 text-white border-purple-600 shadow-xs"
-                            : "bg-background border-border hover:bg-accent text-foreground"
+                        className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all text-center ${
+                          !isRechargeAllowed
+                            ? "opacity-50 cursor-not-allowed bg-muted/40 border-border text-muted-foreground"
+                            : rechargeAmount === amt
+                            ? "bg-purple-600 text-white border-purple-600 shadow-xs cursor-pointer"
+                            : "bg-background border-border hover:bg-accent text-foreground cursor-pointer"
                         }`}
                       >
                         ₹{amt.toLocaleString("en-IN")}
@@ -541,10 +580,15 @@ export default function WalletPage() {
                       min={gatewayConfig?.min_recharge_amount || 100}
                       step="10"
                       value={rechargeAmount}
+                      disabled={!isRechargeAllowed}
                       onChange={(e) => setRechargeAmount(Number(e.target.value))}
                       required
                       placeholder="Enter amount"
-                      className="w-full h-12 pl-9 pr-4 rounded-xl bg-background border border-border text-base font-extrabold text-foreground focus:border-purple-600 outline-none"
+                      className={`w-full h-12 pl-9 pr-4 rounded-xl bg-background border border-border text-base font-extrabold text-foreground outline-none ${
+                        !isRechargeAllowed
+                          ? "opacity-50 cursor-not-allowed bg-muted/40"
+                          : "focus:border-purple-600"
+                      }`}
                     />
                   </div>
                 </div>
@@ -552,15 +596,25 @@ export default function WalletPage() {
                 {/* Single Payment Method: PayU Instant */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-foreground">Payment Method</label>
-                  <div className="p-4 rounded-xl border-2 border-purple-600 bg-purple-50/60 dark:bg-purple-950/30 flex items-center justify-between gap-3 shadow-xs">
+                  <div className={`p-4 rounded-xl border-2 flex items-center justify-between gap-3 shadow-xs ${
+                    !isRechargeAllowed
+                      ? "border-border bg-muted/30 opacity-70"
+                      : "border-purple-600 bg-purple-50/60 dark:bg-purple-950/30"
+                  }`}>
                     <div className="flex items-center gap-3.5">
-                      <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <div className={`w-10 h-10 rounded-xl text-white flex items-center justify-center shrink-0 shadow-xs ${
+                        !isRechargeAllowed ? "bg-muted-foreground/50" : "bg-purple-600"
+                      }`}>
                         <Sparkles className="h-5 w-5" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-bold text-foreground">PayU Instant</p>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300/60">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                            !isRechargeAllowed
+                              ? "bg-muted text-muted-foreground border-border"
+                              : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300/60"
+                          }`}>
                             Instant Auto-Credit
                           </span>
                         </div>
@@ -569,7 +623,9 @@ export default function WalletPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center shrink-0">
+                    <div className={`w-5 h-5 rounded-full text-white flex items-center justify-center shrink-0 ${
+                      !isRechargeAllowed ? "bg-muted-foreground/50" : "bg-purple-600"
+                    }`}>
                       <Check className="h-3 w-3" />
                     </div>
                   </div>
@@ -585,19 +641,33 @@ export default function WalletPage() {
 
                 <button
                   type="submit"
-                  disabled={isSubmittingRecharge}
-                  className="w-full h-12 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-sm shadow-md hover:-translate-y-px active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  disabled={!isRechargeAllowed || isSubmittingRecharge}
+                  className={`w-full h-12 rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 ${
+                    !isRechargeAllowed
+                      ? "bg-muted text-muted-foreground border border-border cursor-not-allowed shadow-none"
+                      : "bg-purple-600 hover:bg-purple-700 text-white hover:-translate-y-px active:scale-[0.98] cursor-pointer"
+                  }`}
                 >
-                  {isSubmittingRecharge ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                  {!isRechargeAllowed ? (
+                    <>
+                      <Lock className="h-4 w-4" />
+                      <span>
+                        {!isGatewayEnabled
+                          ? "Recharge Locked (Disabled by Lab)"
+                          : "Recharge Locked (Keys Not Configured)"}
+                      </span>
+                    </>
+                  ) : isSubmittingRecharge ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Redirecting to PayU...</span>
+                    </>
                   ) : (
-                    <CreditCard className="h-4 w-4" />
+                    <>
+                      <CreditCard className="h-4 w-4" />
+                      <span>Recharge ₹{rechargeAmount.toLocaleString("en-IN")} via PayU Instant</span>
+                    </>
                   )}
-                  <span>
-                    {isSubmittingRecharge
-                      ? "Redirecting to PayU..."
-                      : `Recharge ₹${rechargeAmount.toLocaleString("en-IN")} via PayU Instant`}
-                  </span>
                 </button>
               </form>
             </div>

@@ -15,7 +15,7 @@ export function PaymentGatewayTab() {
   const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   // Form State
-  const [isEnabled, setIsEnabled] = useState(true);
+  const [isEnabled, setIsEnabled] = useState(false);
   const [payuMode, setPayuMode] = useState<"production" | "test">("production");
   const [payuKey, setPayuKey] = useState("");
   const [payuSalt, setPayuSalt] = useState("");
@@ -39,7 +39,7 @@ export function PaymentGatewayTab() {
       const res = await fetchFromLaravel("/lab/payment-gateway");
       if (res && res.settings) {
         const s = res.settings;
-        setIsEnabled(s.is_enabled ?? true);
+        setIsEnabled(Boolean(s.is_enabled ?? false));
         setPayuMode(s.payu_mode === "test" || s.payu_mode === "sandbox" ? "test" : "production");
         setPayuKey(s.payu_merchant_key || "");
         setPayuSalt(s.payu_merchant_salt || "");
@@ -55,6 +55,14 @@ export function PaymentGatewayTab() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isEnabled && (!payuKey.trim() || !payuSalt.trim())) {
+      setToast({
+        text: "Please enter both PayU Merchant Key and Salt before enabling online payments.",
+        type: "error",
+      });
+      return;
+    }
+
     try {
       setIsSaving(true);
       await fetchFromLaravel("/lab/payment-gateway", {
@@ -64,7 +72,7 @@ export function PaymentGatewayTab() {
           payu_mode: payuMode,
           payu_merchant_key: payuKey.trim(),
           payu_merchant_salt: payuSalt.trim(),
-          min_recharge_amount: Number(minRechargeAmount) || 100,
+          min_recharge_amount: Number(minRechargeAmount) || 500,
         }),
       });
 

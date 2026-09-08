@@ -66,7 +66,7 @@ export default function Sidebar() {
         return;
       }
       try {
-        const labRes = await fetchFromLaravel("/lab");
+        const labRes = await fetchFromLaravel("/lab", { skipCache: true });
         if (labRes) {
           const expired = isSubscriptionExpired(labRes, u);
           setIsLocked(expired);
