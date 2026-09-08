@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Printer, ChevronLeft, ChevronRight, Edit3, AlertTriangle,
-  Filter, X, Eye, Plus, Loader2, Clock, Wallet, CheckCircle2, Sparkles, IndianRupee
+  Filter, X, Eye, Plus, Loader2, Clock, Wallet, CheckCircle2, Sparkles, IndianRupee, RefreshCw
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
@@ -43,10 +43,16 @@ const DEFAULT_LAB = { name: "OnePath Lab Main", email: "info@onepathlab.com", ad
 export default function ReportsListPage() {
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [reports, setReports] = useState<Report[]>([]);
+  const [reports, setReports] = useState<any[]>([]);
+  const [outstandingLock, setOutstandingLock] = useState<{
+    isLocked: boolean;
+    outstandingBalance: number;
+    message?: string;
+  } | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filterDate, setFilterDate] = useState(() => new Date().toISOString().split("T")[0]);
 
   const isB2B = currentUser?.role === "B2B";
@@ -79,6 +85,14 @@ export default function ReportsListPage() {
     fetchReports();
   }, []);
 
+  useEffect(() => {
+    const handleWalletUpdated = () => {
+      fetchReports(true);
+    };
+    window.addEventListener("b2b_wallet_updated", handleWalletUpdated);
+    return () => window.removeEventListener("b2b_wallet_updated", handleWalletUpdated);
+  }, []);
+
   const fetchReports = async (forceRefresh?: boolean | any) => {
     const isForce = forceRefresh === true;
     try {
@@ -86,8 +100,18 @@ export default function ReportsListPage() {
         setLoading(true);
       }
       const data = await fetchFromLaravel("/reports", { skipCache: isForce });
-      const list = Array.isArray(data) ? data : (data?.data || []);
-      setReports(list);
+      if (data?.is_outstanding_locked) {
+        setOutstandingLock({
+          isLocked: true,
+          outstandingBalance: Number(data.outstanding_balance || 0),
+          message: data.message,
+        });
+        setReports([]);
+      } else {
+        setOutstandingLock(null);
+        const list = Array.isArray(data) ? data : (data?.data || []);
+        setReports(list);
+      }
     } catch (err) {
       console.error("Error fetching reports:", err);
       if (reports.length === 0) setReports([]);
@@ -137,7 +161,11 @@ export default function ReportsListPage() {
         } catch (authErr: any) {
           console.error("B2B print authorization failed:", authErr);
           const errorMsg = authErr.message || authErr.error || "Print authorization failed";
-          const isInsufficient = authErr.error_code === "INSUFFICIENT_BALANCE" || errorMsg.toLowerCase().includes("insufficient");
+          const isInsufficient =
+            authErr.error_code === "INSUFFICIENT_BALANCE" ||
+            authErr.error_code === "OUTSTANDING_LOCKED" ||
+            errorMsg.toLowerCase().includes("insufficient") ||
+            errorMsg.toLowerCase().includes("outstanding");
 
           if (isInsufficient) {
             setInsufficientBalanceModal({
@@ -240,8 +268,62 @@ export default function ReportsListPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card">
+      {outstandingLock?.isLocked ? (
+        <div className="rounded-2xl border-2 border-red-500/30 bg-card p-8 md:p-12 text-center shadow-xl space-y-6 my-6 max-w-2xl mx-auto animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto text-red-600 shadow-sm">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 text-red-600 text-xs font-bold uppercase tracking-wider">
+              Outstanding Due Pending
+            </div>
+            <h2 className="text-2xl font-black tracking-tight text-foreground">Reports Access Locked</h2>
+            <p className="text-muted-foreground text-sm max-w-md mx-auto leading-relaxed">
+              Your B2B account has an outstanding balance of{" "}
+              <span className="font-extrabold text-red-600">
+                ₹{outstandingLock.outstandingBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              </span>
+              . As per lab policy, patient reports are hidden and locked until outstanding dues are cleared.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-accent/40 border border-border/70 max-w-sm mx-auto flex items-center justify-between">
+            <span className="text-xs text-muted-foreground font-semibold">Outstanding Balance:</span>
+            <span className="text-lg font-black text-red-600">
+              -₹{outstandingLock.outstandingBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <Button
+              onClick={() => {
+                setInsufficientBalanceModal({
+                  open: true,
+                  cost: outstandingLock.outstandingBalance,
+                  balance: -outstandingLock.outstandingBalance,
+                  deficit: outstandingLock.outstandingBalance,
+                  repCode: "Clear Outstanding",
+                });
+              }}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/25 hover:scale-[1.02] transition-all px-6 py-2.5 h-auto rounded-xl gap-2 cursor-pointer"
+            >
+              <Wallet className="w-4 h-4" />
+              Pay Outstanding (₹{outstandingLock.outstandingBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => fetchReports(true)}
+              className="rounded-xl px-4 py-2.5 h-auto gap-2 cursor-pointer font-semibold"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh Status
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Filters */}
+          <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card">
         <div className="flex flex-col sm:flex-row flex-wrap items-end gap-4">
           <div className="space-y-1.5 flex-1 min-w-[200px]">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Search</label>
@@ -506,6 +588,8 @@ export default function ReportsListPage() {
           </div>
         )}
       </div>
+      </>
+      )}
 
       <FullscreenPrintReportModal 
         open={showPrintOptions} 
@@ -525,8 +609,12 @@ export default function ReportsListPage() {
                 <AlertTriangle className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-foreground">Insufficient Wallet Balance</h3>
-                <p className="text-xs text-muted-foreground">Recharge required to print patient report</p>
+                <h3 className="text-base font-bold text-foreground">
+                  {insufficientBalanceModal.repCode === "Clear Outstanding" ? "Outstanding Balance Pending" : "Insufficient Wallet Balance"}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {insufficientBalanceModal.repCode === "Clear Outstanding" ? "Recharge required to clear dues and view reports" : "Recharge required to print patient report"}
+                </p>
               </div>
             </div>
 

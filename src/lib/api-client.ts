@@ -170,10 +170,24 @@ export async function fetchFromLaravel(endpoint: string, options: FetchFromLarav
       }
 
       if (response.status === 402) {
+        let errData: any = {};
+        try {
+          const text = await response.text();
+          errData = text ? JSON.parse(text) : {};
+        } catch (_) {}
+
         if (!cleanEndpoint.includes("/b2b/")) {
           window.dispatchEvent(new CustomEvent("subscription-expired"));
+          throw new Error(errData.message || errData.error || "Subscription expired.");
         }
-        throw new Error("Subscription expired.");
+
+        const b2bErr: any = new Error(errData.message || errData.error || "Insufficient wallet balance.");
+        b2bErr.status = 402;
+        b2bErr.error_code = errData.error_code || "INSUFFICIENT_BALANCE";
+        b2bErr.deficit = errData.deficit;
+        b2bErr.current_balance = errData.current_balance;
+        b2bErr.report_cost = errData.report_cost;
+        throw b2bErr;
       }
 
       const text = await response.text();
