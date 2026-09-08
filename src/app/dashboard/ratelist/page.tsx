@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import Link from "next/link";
 import {
   Search, RefreshCw, IndianRupee, ChevronLeft, ChevronRight,
   Edit3, ArrowUpDown, Layers, X, CheckCircle2, Percent, Sparkles,
-  Briefcase, Building2, Plus, Copy, Trash2, Check, Printer,
-  Filter, AlertCircle, TrendingUp, Wallet, ArrowRight, Settings2,
+  Briefcase, Building2, Plus, Copy, Trash2, Check,
+  Filter, AlertCircle, TrendingUp, Settings2,
   SlidersHorizontal, ShieldCheck, Tag
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -470,7 +469,7 @@ export default function RateListPage() {
 
   // Filtered & Sorted Tests for Admin
   const filteredTests = useMemo(() => {
-    let list = testRates.filter((t) => {
+    const list = testRates.filter((t) => {
       const q = search.toLowerCase();
       const code = (t.test_code || "").toLowerCase();
       const name = (t.name || "").toLowerCase();
@@ -558,19 +557,9 @@ export default function RateListPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.print()}
-              className="gap-1.5 text-xs font-semibold print:hidden"
-            >
-              <Printer className="h-3.5 w-3.5" />
-              <span>Print Rate Sheet</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
               onClick={loadB2bClientRateList}
               disabled={loading}
-              className="gap-1.5 text-xs font-semibold print:hidden"
+              className="gap-1.5 text-xs font-semibold"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-primary" : ""}`} />
               <span>Refresh</span>
@@ -592,7 +581,7 @@ export default function RateListPage() {
                 {b2bClientData?.rate_list_name || "Standard Diagnostic Rates"}
               </h2>
               <p className="text-xs text-muted-foreground">
-                Rates apply automatically on patient intake &amp; prepaid wallet deductions.
+                Rates apply automatically on patient intake &amp; billing calculations.
               </p>
             </div>
           </div>
@@ -602,12 +591,6 @@ export default function RateListPage() {
               <span className="text-[10px] text-muted-foreground block font-sans">Available Tests</span>
               <strong className="text-foreground text-sm">{filteredB2bTests.length}</strong>
             </div>
-            <Link href="/dashboard/wallet">
-              <Button size="sm" className="gap-1.5 text-xs font-bold gradient-primary text-primary-foreground shadow-xs cursor-pointer print:hidden">
-                <Wallet className="h-3.5 w-3.5" />
-                <span>Prepaid Wallet</span>
-              </Button>
-            </Link>
           </div>
         </div>
 
