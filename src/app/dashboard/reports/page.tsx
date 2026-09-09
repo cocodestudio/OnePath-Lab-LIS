@@ -134,8 +134,8 @@ export default function ReportsListPage() {
     try {
       setPrintingId(rep.id);
 
-      // Enforce B2B wallet deduction on report print
-      if (isPartnerOrCC) {
+      // Enforce B2B wallet deduction on report print (only for B2B; Collection Center never requires payment)
+      if (isB2B) {
         try {
           const authRes = await fetchFromLaravel(`/b2b/reports/${rep.id}/deduct-and-print`, {
             method: "POST"
@@ -540,7 +540,7 @@ export default function ReportsListPage() {
                               <AlertTriangle className="h-3 w-3" /> {abnormalCount} abnormal
                             </span>
                           )}
-                          {isPartnerOrCC && rep.status !== "REJECTED" && (rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && (
+                          {isB2B && rep.status !== "REJECTED" && (rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && (
                             rep.is_b2b_paid || rep.isB2bPaid ? (
                               <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[9px] font-extrabold text-emerald-600 uppercase tracking-wide border border-emerald-500/20 whitespace-nowrap">
                                 <CheckCircle2 className="h-3 w-3" /> Paid & Unlocked
@@ -592,11 +592,15 @@ export default function ReportsListPage() {
                                   <Printer className="h-3.5 w-3.5" />
                                 )}
                                 <span>
-                                  {isPartnerOrCC
+                                  {isB2B
                                     ? rep.is_b2b_paid || rep.isB2bPaid
                                       ? "Print Report"
                                       : (rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED")
                                       ? `Print (₹${Number(rep.b2b_price ?? rep.b2bPrice ?? 0).toLocaleString("en-IN")})`
+                                      : "Awaiting Approval"
+                                    : isCollectionCenter
+                                    ? (rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED")
+                                      ? "Print Report"
                                       : "Awaiting Approval"
                                     : "Print Report"}
                                 </span>

@@ -88,7 +88,8 @@ export default function ReportDetailPage() {
   }, [reportId]);
 
   const triggerPrint = async () => {
-    if (isPartnerOrCC) {
+    // Only B2B accounts are subject to wallet deduction on print; CC bypasses payment
+    if (isB2B) {
       try {
         setIsDeducting(true);
         const authRes = await fetchFromLaravel(`/b2b/reports/${reportId}/deduct-and-print`, {
@@ -236,7 +237,7 @@ export default function ReportDetailPage() {
           >
             {isDeducting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
             <span>
-              {isPartnerOrCC && !report.isB2bPaid && !report.is_b2b_paid && (report.status === "FINAL" || report.status === "APPROVED" || report.status === "COMPLETED")
+              {isB2B && !report.isB2bPaid && !report.is_b2b_paid && (report.status === "FINAL" || report.status === "APPROVED" || report.status === "COMPLETED")
                 ? `Print (₹${Number(report.b2bPrice ?? report.b2b_price ?? 0).toLocaleString("en-IN")})`
                 : "Print / PDF"}
             </span>
