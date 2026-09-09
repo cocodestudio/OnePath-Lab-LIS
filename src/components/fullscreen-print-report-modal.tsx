@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   X, Calendar, Printer, Download,
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
-  ZoomIn, ZoomOut, RotateCcw, FileText,
+  ZoomIn, ZoomOut, RotateCcw, FileText, Loader2,
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import {
@@ -15,6 +15,7 @@ import {
   type PrintSettings,
   type ReportSheetData,
 } from "@/components/report-sheet";
+import { WhatsAppQrDialog } from "@/components/whatsapp-qr-dialog";
 import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
 import { getReportPackage } from "@/lib/packages";
@@ -90,6 +91,8 @@ export function FullscreenPrintReportModal({
   const [totalPages, setTotalPages] = useState(1);
   const [liveLab, setLiveLab] = useState<any>(null);
   const [mobileTab, setMobileTab] = useState<"preview" | "tests" | "actions">("preview");
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth < 640) {
@@ -266,19 +269,90 @@ export function FullscreenPrintReportModal({
     handlePrint();
   };
 
-  // ── WhatsApp Dispatch (Phone number from patient record) ──────────────────
-  const handleWhatsApp = () => {
+  // ── Automated WhatsApp Dispatch via OpenWA Gateway ──────────────────
+  const handleWhatsApp = async () => {
     const phone = report?.patient?.phone;
     if (!phone) {
-      toast.error("No Phone", "Patient has no phone number on record.");
+      toast.error("No Phone Number", "Patient has no mobile number registered for WhatsApp delivery.");
       return;
     }
-    const cleaned = phone.replace(/\D/g, "");
-    const intl = cleaned.startsWith("91") ? cleaned : `91${cleaned}`;
-    const msg = encodeURIComponent(
-      `Hello ${report?.patient?.name || "Patient"}, your lab report (ID: ${report?.customId}) is ready. Please contact us for details.`
-    );
-    window.open(`https://wa.me/${intl}?text=${msg}`, "_blank");
+
+    if (!printRef.current || !activeReportData) {
+      toast.error("Not Ready", "Report preview is still rendering. Please wait a moment.");
+      return;
+    }
+
+    setIsSendingWhatsApp(true);
+    toast.info("Preparing WhatsApp", "Rendering high-resolution PDF report...");
+
+    try {
+      // Query all page canvas wrappers in preview
+      const pageElements = printRef.current.querySelectorAll<HTMLElement>(".report-print-page");
+      if (!pageElements || pageElements.length === 0) {
+        throw new Error("No printable report pages found in preview.");
+      }
+
+      const { default: jsPDF } = await import("jspdf");
+      const { default: html2canvas } = await import("html2canvas");
+
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+      });
+
+      for (let i = 0; i < pageElements.length; i++) {
+        if (i > 0) pdf.addPage();
+        const el = pageElements[i];
+
+        // Capture crisp 2x resolution canvas
+        const canvas = await html2canvas(el, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          backgroundColor: "#ffffff",
+          windowWidth: 794,
+        });
+
+        const imgData = canvas.toDataURL("image/jpeg", 0.90);
+        pdf.addImage(imgData, "JPEG", 0, 0, 210, 297, undefined, "FAST");
+      }
+
+      const pdfBase64 = pdf.output("datauristring");
+
+      toast.info("Sending...", `Delivering PDF report to +${phone.replace(/\D/g, "")} on WhatsApp...`);
+
+      const res = await fetchFromLaravel(`/reports/${report.id}/send-whatsapp`, {
+        method: "POST",
+        body: JSON.stringify({
+          pdf_base64: pdfBase64,
+          phone: phone,
+        }),
+      });
+
+      if (res?.status === "success" || res?.success) {
+        toast.success("Sent on WhatsApp!", `Official report PDF sent to ${phone} successfully!`);
+      } else {
+        if (
+          res?.error?.not_connected ||
+          res?.not_connected ||
+          res?.message?.toLowerCase().includes("not connected") ||
+          res?.message?.toLowerCase().includes("qr")
+        ) {
+          toast.error("Pairing Required", "Please scan the QR code to pair your WhatsApp account first.");
+          setIsQrModalOpen(true);
+        } else {
+          toast.error("Dispatch Failed", res?.message || "Could not deliver WhatsApp message.");
+        }
+      }
+    } catch (err: any) {
+      console.error("WhatsApp dispatch error:", err);
+      toast.error("WhatsApp Error", err?.message || "An unexpected error occurred while preparing the report.");
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
   };
 
   if (!report || !activeReportData) return null;
@@ -612,24 +686,36 @@ export function FullscreenPrintReportModal({
 
               <Button
                 type="button"
-                onClick={() => {
-                  toast.info("Coming Soon", "Direct automated WhatsApp report delivery is coming in the next update!");
-                }}
-                className="w-full h-11 relative overflow-hidden gap-2 font-bold text-sm bg-emerald-600/90 hover:bg-emerald-600 text-white cursor-pointer shadow-sm rounded-xl transition-all"
+                onClick={handleWhatsApp}
+                disabled={isSendingWhatsApp}
+                className="w-full h-11 relative overflow-hidden gap-2 font-bold text-sm bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-sm rounded-xl transition-all"
               >
-                <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current shrink-0" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                </svg>
-                <span>Send WhatsApp Report</span>
-                <span className="ml-auto text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-400 text-amber-950 tracking-wider shadow-xs">
-                  Coming Soon
-                </span>
+                {isSendingWhatsApp ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                    <span>Sending to WhatsApp...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current shrink-0" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                    </svg>
+                    <span>Send WhatsApp Report</span>
+                  </>
+                )}
               </Button>
             </div>
 
           </div>
 
         </div>
+
+        {/* WhatsApp QR Pairing Dialog Modal */}
+        <WhatsAppQrDialog
+          open={isQrModalOpen}
+          onOpenChange={setIsQrModalOpen}
+          onConnected={handleWhatsApp}
+        />
       </DialogContent>
     </Dialog>
   );
