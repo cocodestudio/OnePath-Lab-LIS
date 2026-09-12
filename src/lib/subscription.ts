@@ -1,4 +1,4 @@
-import { getStoredUser } from "./api-client";
+import { getStoredUser, updateStoredUser } from "./api-client";
 
 /**
  * Subscription Status & Lockdown Utilities for OnePath LIS
@@ -14,35 +14,54 @@ export function isSubscriptionExpired(lab: any, user?: any): boolean {
     return false;
   }
 
-  // 1. Explicit user status check
+  // 1. Explicit account-level suspension check (Admin Ban)
   const userStatus = (currentUser?.status || "").toLowerCase();
-  if (userStatus === "suspended" || userStatus === "expired") {
+  if (userStatus === "suspended") {
     return true;
   }
 
-  // 2. Explicit plan status check
   const planStatus = (lab?.planStatus || lab?.plan_status || "").toLowerCase();
-  if (planStatus === "suspended" || planStatus === "expired") {
+  if (planStatus === "suspended") {
     return true;
   }
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // 3. Plan expiration date check (calendar day boundary)
+  // 2. Authoritative Lab Subscription Check (Server validated active plan)
   const expiresAtStr = lab?.planExpiresAt || lab?.plan_expires_at;
-  if (expiresAtStr) {
-    const expDate = new Date(expiresAtStr);
-    if (!isNaN(expDate.getTime())) {
-      const exp = new Date(expDate);
-      exp.setHours(0, 0, 0, 0);
-      if (exp.getTime() <= today.getTime()) {
-        return true;
+  if (lab && (planStatus === "active" || planStatus === "paid")) {
+    if (expiresAtStr) {
+      const expDate = new Date(expiresAtStr);
+      if (!isNaN(expDate.getTime())) {
+        const exp = new Date(expDate);
+        exp.setHours(0, 0, 0, 0);
+        if (exp.getTime() > today.getTime()) {
+          // Plan is active and in future -> definitely NOT expired!
+          // Auto-heal stale 'expired' status in local user storage if present
+          if (typeof window !== "undefined" && userStatus === "expired") {
+            updateStoredUser({ status: "active" });
+          }
+          return false;
+        } else {
+          return true; // Expiry date reached or passed
+        }
       }
+    } else {
+      // Active plan without explicit expiry date -> considered active
+      if (typeof window !== "undefined" && userStatus === "expired") {
+        updateStoredUser({ status: "active" });
+      }
+      return false;
     }
   }
 
-  // 4. User trial check if plan is trial or pending
+  // Explicit expired plan status on lab
+  if (planStatus === "expired") {
+    return true;
+  }
+
+  // 3. User trial check if plan is trial or pending
   const trialEndsAtStr = currentUser?.trialEndsAt || currentUser?.trial_ends_at;
   const isTrial = 
     (lab?.planName || lab?.plan_name || "").toLowerCase().includes("trial") ||
@@ -59,9 +78,20 @@ export function isSubscriptionExpired(lab: any, user?: any): boolean {
         exp.setHours(0, 0, 0, 0);
         if (exp.getTime() <= today.getTime()) {
           return true;
+        } else {
+          // Trial date extended and in the future
+          if (typeof window !== "undefined" && userStatus === "expired") {
+            updateStoredUser({ status: "active" });
+          }
+          return false;
         }
       }
     }
+  }
+
+  // 4. Fallback user status check if no active lab plan was matched
+  if (userStatus === "expired") {
+    return true;
   }
 
   // 5. Also check user trialEndsAt directly if exists

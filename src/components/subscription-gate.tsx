@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Lock, Loader2, ArrowRight, ShieldAlert } from "lucide-react";
-import { fetchFromLaravel, getStoredUser, getStoredToken, logout } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser, getStoredToken, logout, updateStoredUser } from "@/lib/api-client";
 import { isSubscriptionExpired } from "@/lib/subscription";
 
 export default function SubscriptionGate() {
@@ -73,6 +73,14 @@ export default function SubscriptionGate() {
           } else {
             setIsLocked(false);
             sessionStorage.removeItem("lis_subscription_locked");
+            if (user && (user.status || "").toLowerCase() === "expired") {
+              updateStoredUser({ status: "active" });
+              window.dispatchEvent(new CustomEvent("user-updated"));
+            }
+            if (data.authUser || data.auth_user) {
+              updateStoredUser(data.authUser || data.auth_user);
+              window.dispatchEvent(new CustomEvent("user-updated"));
+            }
             window.dispatchEvent(new CustomEvent("subscription-locked", { detail: { isLocked: false, lab: data } }));
           }
         }

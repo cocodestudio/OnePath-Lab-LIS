@@ -9,7 +9,7 @@ import {
   Loader2, RefreshCw, Eye, Plus, Check, Info, Phone, Mail, MapPin,
   Upload, Trash2, Calendar, Zap, Receipt, Activity, TrendingUp, Lock
 } from "lucide-react";
-import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser, updateStoredUser, clearApiCache } from "@/lib/api-client";
 import { isSubscriptionExpired } from "@/lib/subscription";
 import {
   Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter
@@ -160,6 +160,8 @@ function LabAccountContent() {
     const msg = searchParams.get("msg");
 
     if (payment === "success") {
+      clearApiCache("/lab");
+      sessionStorage.removeItem("lis_subscription_locked");
       setPaymentBanner({
         title: "Subscription Activated Successfully!",
         message: `Your payment was completed successfully via PayU (Ref #${txnid || "COMPLETED"}). Your laboratory features and reports are now fully active.`,
@@ -173,6 +175,8 @@ function LabAccountContent() {
         type: "error",
       });
     } else if (usagePayment === "success") {
+      clearApiCache("/lab");
+      sessionStorage.removeItem("lis_subscription_locked");
       setPaymentBanner({
         title: "Yearly Usage Settlement Completed!",
         message: `Your patient volume over-quota charges have been cleared to ₹0. Official GST Tax Invoice has been generated below.`,
@@ -196,8 +200,8 @@ function LabAccountContent() {
     try {
       setLoading(true);
       const [labRes, invRes] = await Promise.all([
-        fetchFromLaravel("/lab"),
-        fetchFromLaravel("/lab/invoices"),
+        fetchFromLaravel("/lab", { skipCache: true }),
+        fetchFromLaravel("/lab/invoices", { skipCache: true }),
       ]);
 
       setLab(labRes);
@@ -210,6 +214,14 @@ function LabAccountContent() {
         setActiveTab((curr) => (curr === "INVOICES" || curr === "SMS" ? "SUBSCRIPTION" : curr));
       } else {
         sessionStorage.removeItem("lis_subscription_locked");
+        if (getStoredUser()?.status === "expired") {
+          updateStoredUser({ status: "active" });
+          window.dispatchEvent(new CustomEvent("user-updated"));
+        }
+        if (labRes?.authUser || labRes?.auth_user) {
+          updateStoredUser(labRes.authUser || labRes.auth_user);
+          window.dispatchEvent(new CustomEvent("user-updated"));
+        }
         window.dispatchEvent(new CustomEvent("subscription-locked", { detail: { isLocked: false, lab: labRes } }));
       }
 

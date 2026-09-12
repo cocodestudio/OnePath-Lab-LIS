@@ -113,6 +113,7 @@ export default function LoginPage() {
 
       localStorage.setItem("lis_token", token);
       localStorage.setItem("lis_user", JSON.stringify(user || {}));
+      sessionStorage.removeItem("lis_subscription_locked");
       document.cookie = `lis_token=${token}; path=/; max-age=86400; SameSite=Lax; Secure`;
 
       router.push("/dashboard");
