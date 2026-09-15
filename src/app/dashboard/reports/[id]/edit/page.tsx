@@ -844,19 +844,29 @@ export default function ResultEntryPage() {
   const [rangeUnit, setRangeUnit] = useState("");
   const [savingRange, setSavingRange] = useState(false);
 
+  const [loadingAvailableTests, setLoadingAvailableTests] = useState(false);
+
   useEffect(() => {
     if (reportId) {
       fetchReport();
-      fetchAvailableTests();
     }
   }, [reportId]);
 
   const fetchAvailableTests = async () => {
+    if (availableTests.length > 0 || loadingAvailableTests) return;
     try {
+      setLoadingAvailableTests(true);
       const data = await fetchFromLaravel("/tests");
       const list = Array.isArray(data) ? data : (data?.data || []);
       setAvailableTests(list.filter((t: any) => t.fieldType === "Group" || (!t.parent && !t.parentId && !t.parent_id)));
-    } catch { }
+    } catch { } finally {
+      setLoadingAvailableTests(false);
+    }
+  };
+
+  const handleOpenAddTestModal = () => {
+    fetchAvailableTests();
+    setIsTestModalOpen(true);
   };
 
   const fetchReport = async () => {
@@ -1485,9 +1495,70 @@ export default function ResultEntryPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6 w-full animate-fade-in p-4 sm:p-6 lg:p-8">
-        <Skeleton className="h-[200px] w-full rounded-xl" />
-        <Skeleton className="h-[400px] w-full rounded-xl" />
+      <div className="flex flex-col gap-6 max-w-[1400px] mx-auto animate-fade-in min-h-[calc(100vh-68px-1.75rem)] pb-12">
+        {/* Top Header Skeleton */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-border/80 pb-4 mb-2">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-9 w-20 rounded-lg" />
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-48 rounded" />
+              <Skeleton className="h-3.5 w-72 rounded" />
+            </div>
+          </div>
+          <Skeleton className="h-10 w-36 rounded-xl" />
+        </div>
+
+        {/* Patient Ribbon Skeleton */}
+        <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex items-center gap-4">
+            <Skeleton className="w-12 h-12 rounded-xl" />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-5 w-40 rounded" />
+                <Skeleton className="h-4 w-16 rounded" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-24 rounded" />
+                <Skeleton className="h-4 w-32 rounded" />
+                <Skeleton className="h-4 w-28 rounded" />
+              </div>
+            </div>
+          </div>
+          <Skeleton className="h-9 w-28 rounded-lg" />
+        </div>
+
+        {/* Add Additional Test Bar Skeleton */}
+        <div className="flex items-center justify-between bg-card p-4 rounded-xl border border-border/70 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Skeleton className="w-9 h-9 rounded-lg" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-4 w-36 rounded" />
+              <Skeleton className="h-3 w-64 rounded" />
+            </div>
+          </div>
+          <Skeleton className="h-9 w-44 rounded-lg" />
+        </div>
+
+        {/* Test Group Table Skeleton */}
+        <div className="bg-card border border-border/70 rounded-xl shadow-card overflow-hidden">
+          <div className="bg-muted/30 px-6 py-4 border-b border-border/60 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Skeleton className="h-5 w-5 rounded-full" />
+              <Skeleton className="h-5 w-48 rounded" />
+            </div>
+            <Skeleton className="h-5 w-24 rounded" />
+          </div>
+          <div className="p-6 space-y-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0 gap-4">
+                <Skeleton className="h-4 w-48 rounded" />
+                <Skeleton className="h-8 w-32 rounded-lg" />
+                <Skeleton className="h-4 w-20 rounded" />
+                <Skeleton className="h-4 w-28 rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -1610,7 +1681,7 @@ export default function ResultEntryPage() {
               <p className="text-xs text-muted-foreground">Select a test from the catalog to append to this patient report.</p>
             </div>
             <div className="w-full sm:w-[240px]">
-              <Button type="button" onClick={() => setIsTestModalOpen(true)} disabled={modifyingTest} className="w-full cursor-pointer font-bold text-xs">
+              <Button type="button" onClick={handleOpenAddTestModal} disabled={modifyingTest} className="w-full cursor-pointer font-bold text-xs">
                 Browse Test Catalog
               </Button>
             </div>

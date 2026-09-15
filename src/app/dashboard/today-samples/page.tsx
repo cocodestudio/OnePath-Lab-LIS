@@ -441,7 +441,7 @@ export default function TodaySamplesPage() {
                           >
                             <User className="h-3.5 w-3.5" />
                           </Link>
-                          {isApproved && (
+                          {isApproved && currentUserRole !== "B2B" && (
                             <Link
                               href={`/dashboard/reports/${item.id}`}
                               className="p-1.5 rounded-lg border border-border bg-card text-primary hover:bg-primary/10 transition-colors cursor-pointer"

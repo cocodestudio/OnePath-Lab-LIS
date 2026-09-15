@@ -226,6 +226,10 @@ export interface ReportLayoutSettings {
   signatureSettings: {
     printOnEveryPage: boolean;
     showSignatureOnly: boolean;
+    positionMode?: "flow" | "fixed";
+    bottomOffset?: number;
+    horizontalAlign?: "left" | "center" | "right";
+    horizontalOffset?: number;
   };
   signaturePrintOnEveryPage?: boolean;
   showSignatureOnly?: boolean;
@@ -347,6 +351,10 @@ export const defaultReportLayoutSettings: ReportLayoutSettings = {
   signatureSettings: {
     printOnEveryPage: false,
     showSignatureOnly: false,
+    positionMode: "fixed",
+    bottomOffset: 45,
+    horizontalAlign: "right",
+    horizontalOffset: 35,
   },
   signaturePrintOnEveryPage: false,
   showSignatureOnly: false,
@@ -503,9 +511,26 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
         ? !!raw.showSignatureOnly
         : (raw.show_signature_only !== undefined ? !!raw.show_signature_only : false));
 
+  const positionMode: "flow" | "fixed" = rawSigSettings.positionMode || rawSigSettings.position_mode || raw.signaturePositionMode || "fixed";
+  const bottomOffset = typeof rawSigSettings.bottomOffset === "number"
+    ? rawSigSettings.bottomOffset
+    : (typeof rawSigSettings.bottom_offset === "number"
+        ? rawSigSettings.bottom_offset
+        : (typeof raw.signatureBottomOffset === "number" ? raw.signatureBottomOffset : 45));
+  const horizontalAlign: "left" | "center" | "right" = rawSigSettings.horizontalAlign || rawSigSettings.horizontal_align || raw.signatureHorizontalAlign || "right";
+  const horizontalOffset = typeof rawSigSettings.horizontalOffset === "number"
+    ? rawSigSettings.horizontalOffset
+    : (typeof rawSigSettings.horizontal_offset === "number"
+        ? rawSigSettings.horizontal_offset
+        : (typeof raw.signatureHorizontalOffset === "number" ? raw.signatureHorizontalOffset : 35));
+
   res.signatureSettings = {
     printOnEveryPage,
     showSignatureOnly,
+    positionMode,
+    bottomOffset,
+    horizontalAlign,
+    horizontalOffset,
   };
   res.signaturePrintOnEveryPage = printOnEveryPage;
   res.showSignatureOnly = showSignatureOnly;

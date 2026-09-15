@@ -11,7 +11,7 @@ import {
   Percent, DollarSign, Receipt, RefreshCw, X, Check,
   Mail, Shield, CreditCard, Building2, Calendar, CheckSquare, RotateCcw,
   ClipboardList, Asterisk, Activity, Scale, Ruler, HeartPulse, ShieldCheck, Tag, Clock,
-  Banknote, QrCode, Globe, Wallet, Boxes
+  Banknote, QrCode, Globe, Wallet, Boxes, Lock, TestTube2, Barcode
 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -41,6 +41,153 @@ interface Patient {
   [key: string]: any;
 }
 
+interface SpecimenTubeGroup {
+  tubeType: "EDTA" | "SST" | "FLUORIDE" | "CITRATE" | "URINE" | "STOOL" | "OTHER";
+  capColor: string;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeText: string;
+  tubeTitle: string;
+  specimenType: string;
+  additive: string;
+  tests: Array<{ id: string; name: string }>;
+}
+
+function classifyTestsIntoTubes(tests: Array<{ id: string; name: string; category?: string }>): SpecimenTubeGroup[] {
+  const groups: Record<string, SpecimenTubeGroup> = {
+    EDTA: {
+      tubeType: "EDTA",
+      capColor: "#8b5cf6",
+      badgeBg: "bg-purple-500/10",
+      badgeBorder: "border-purple-500/30",
+      badgeText: "text-purple-600 dark:text-purple-400",
+      tubeTitle: "EDTA (Lavender Cap)",
+      specimenType: "Whole Blood (EDTA)",
+      additive: "K2/K3 EDTA Anticoagulant",
+      tests: [],
+    },
+    FLUORIDE: {
+      tubeType: "FLUORIDE",
+      capColor: "#64748b",
+      badgeBg: "bg-slate-500/10",
+      badgeBorder: "border-slate-500/30",
+      badgeText: "text-slate-600 dark:text-slate-400",
+      tubeTitle: "Sodium Fluoride (Grey Cap)",
+      specimenType: "Fluoride Plasma / Blood",
+      additive: "NaF + Potassium Oxalate (Glycolytic Inhibitor)",
+      tests: [],
+    },
+    CITRATE: {
+      tubeType: "CITRATE",
+      capColor: "#0284c7",
+      badgeBg: "bg-sky-500/10",
+      badgeBorder: "border-sky-500/30",
+      badgeText: "text-sky-600 dark:text-sky-400",
+      tubeTitle: "Sodium Citrate 3.2% (Light Blue Cap)",
+      specimenType: "Citrated Plasma",
+      additive: "Buffered Sodium Citrate 1:9",
+      tests: [],
+    },
+    URINE: {
+      tubeType: "URINE",
+      capColor: "#eab308",
+      badgeBg: "bg-amber-500/10",
+      badgeBorder: "border-amber-500/30",
+      badgeText: "text-amber-600 dark:text-amber-400",
+      tubeTitle: "Sterile Urine Container (Yellow Cap)",
+      specimenType: "Urine (Spot / Clean Catch)",
+      additive: "Sterile Preservative-Free",
+      tests: [],
+    },
+    STOOL: {
+      tubeType: "STOOL",
+      capColor: "#92400e",
+      badgeBg: "bg-orange-500/10",
+      badgeBorder: "border-orange-500/30",
+      badgeText: "text-orange-700 dark:text-orange-400",
+      tubeTitle: "Stool Specimen Container",
+      specimenType: "Stool",
+      additive: "Sterile Container",
+      tests: [],
+    },
+    SST: {
+      tubeType: "SST",
+      capColor: "#f59e0b",
+      badgeBg: "bg-amber-500/10",
+      badgeBorder: "border-amber-500/30",
+      badgeText: "text-amber-600 dark:text-amber-400",
+      tubeTitle: "SST / Plain Serum (Gold / Red Cap)",
+      specimenType: "Serum (Clotted Blood)",
+      additive: "Clot Activator & Gel Separator",
+      tests: [],
+    },
+  };
+
+  tests.forEach((t) => {
+    const nameLower = (t.name || "").toLowerCase();
+    const catLower = (t.category || "").toLowerCase();
+
+    // 1. Urine checks
+    if (nameLower.includes("urine") || (catLower.includes("clinical pathology") && nameLower.includes("urine"))) {
+      groups.URINE.tests.push({ id: t.id, name: t.name });
+    }
+    // 2. Stool checks
+    else if (nameLower.includes("stool") || nameLower.includes("occult blood")) {
+      groups.STOOL.tests.push({ id: t.id, name: t.name });
+    }
+    // 3. Citrate / Coagulation checks
+    else if (
+      nameLower.includes("pt/inr") ||
+      nameLower.includes("pt (") ||
+      nameLower.includes("prothrombin") ||
+      nameLower.includes("aptt") ||
+      nameLower.includes("d-dimer") ||
+      nameLower.includes("fibrinogen") ||
+      catLower.includes("coagulation")
+    ) {
+      groups.CITRATE.tests.push({ id: t.id, name: t.name });
+    }
+    // 4. Fluoride / Glucose checks
+    else if (
+      nameLower.includes("fasting blood sugar") ||
+      nameLower.includes("fbs") ||
+      nameLower.includes("ppbs") ||
+      nameLower.includes("post prandial") ||
+      nameLower.includes("rbs") ||
+      nameLower.includes("random blood sugar") ||
+      nameLower.includes("glucose tolerance") ||
+      nameLower.includes("ogtt")
+    ) {
+      groups.FLUORIDE.tests.push({ id: t.id, name: t.name });
+    }
+    // 5. EDTA / Hematology checks
+    else if (
+      nameLower.includes("cbc") ||
+      nameLower.includes("complete blood") ||
+      nameLower.includes("hemogram") ||
+      nameLower.includes("tlc") ||
+      nameLower.includes("dlc") ||
+      nameLower.includes("platelet") ||
+      nameLower.includes("esr") ||
+      nameLower.includes("hba1c") ||
+      nameLower.includes("glycosylated") ||
+      nameLower.includes("blood group") ||
+      nameLower.includes("peripheral smear") ||
+      nameLower.includes("reticulocyte") ||
+      nameLower.includes("malaria") ||
+      catLower.includes("hematology")
+    ) {
+      groups.EDTA.tests.push({ id: t.id, name: t.name });
+    }
+    // 6. Default: All Biochemistry, Serology, Immunoassay, Hormones belong in SST / Plain Serum
+    else {
+      groups.SST.tests.push({ id: t.id, name: t.name });
+    }
+  });
+
+  return Object.values(groups).filter((g) => g.tests.length > 0);
+}
+
 const defaultDoctors = ["Self", "Dr. Rajesh Sharma", "Dr. Amit Verma", "Dr. Anjali Gupta", "Dr. S. K. Roy"];
 const defaultCollectionPoints = ["Main Lab", "Home Collection", "Hospital OPD", "Branch 1 - City Center"];
 const defaultPhlebotomists = ["Self / Lab Staff", "Rahul Phlebotomist", "Pooja Sharma (Tech)", "Vikram Collector"];
@@ -54,6 +201,16 @@ function RegisterPatientPage() {
   const [existingBill, setExistingBill] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
   const isB2B = currentUserRole === "B2B";
+
+  const isApprovedReport = existingReport && (
+    existingReport.status === "APPROVED" ||
+    existingReport.status === "FINAL" ||
+    existingReport.status === "COMPLETED"
+  );
+  const isEditLocked = isEditMode && isB2B && Boolean(isApprovedReport);
+
+  // Multi-Vial Barcode Mapping: tubeType => barcode string
+  const [vialBarcodes, setVialBarcodes] = useState<Record<string, string>>({});
 
   // Dynamic Intake Field Rules State
   const [intakeFields, setIntakeFields] = useState<IntakeFieldConfig[]>(DEFAULT_INTAKE_FIELDS);
@@ -173,6 +330,7 @@ function RegisterPatientPage() {
     collectedAt?: string;
     packageName?: string | null;
     tests?: Array<{ id: string; name: string; category: string; price: number }>;
+    vialBarcodes?: Record<string, string>;
   } | null>(null);
 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -366,7 +524,50 @@ function RegisterPatientPage() {
           setOwnerName(patientData.owner_name || patientData.ownerName || "");
           setBreed(patientData.breed || "");
           setSpecies(patientData.species || "");
-          setSampleBarcode(patientData.vial_barcode || patientData.vialBarcode || patientData.meta?.vial_barcode || "");
+          let patMeta = patientData.meta;
+          if (typeof patMeta === "string") {
+            try { patMeta = JSON.parse(patMeta); } catch { patMeta = {}; }
+          }
+          if (!patMeta || typeof patMeta !== "object") {
+            patMeta = {};
+          }
+
+          let loadedBarcodes: Record<string, string> = {};
+          if (patMeta?.vial_barcodes) {
+            if (typeof patMeta.vial_barcodes === "string") {
+              try { loadedBarcodes = JSON.parse(patMeta.vial_barcodes); } catch {}
+            } else if (typeof patMeta.vial_barcodes === "object") {
+              loadedBarcodes = { ...patMeta.vial_barcodes };
+            }
+          }
+
+          const rawBarcode = patientData.vial_barcode || patientData.vialBarcode || patMeta?.vial_barcode || "";
+          setSampleBarcode(rawBarcode);
+
+          if (Object.keys(loadedBarcodes).length > 0) {
+            setVialBarcodes(loadedBarcodes);
+          } else if (rawBarcode) {
+            const parts = rawBarcode.split(",").map((s: string) => s.trim()).filter(Boolean);
+            if (parts.length > 0) {
+              parts.forEach((code: string, idx: number) => {
+                const upper = code.toUpperCase();
+                if (upper.includes("EDTA")) loadedBarcodes["EDTA"] = code;
+                else if (upper.includes("SST") || upper.includes("SERUM") || upper.includes("PLAIN")) loadedBarcodes["SST"] = code;
+                else if (upper.includes("FLUORIDE") || upper.includes("GLUCOSE")) loadedBarcodes["FLUORIDE"] = code;
+                else if (upper.includes("CITRATE") || upper.includes("COAG")) loadedBarcodes["CITRATE"] = code;
+                else if (upper.includes("URINE")) loadedBarcodes["URINE"] = code;
+                else if (upper.includes("STOOL")) loadedBarcodes["STOOL"] = code;
+                else {
+                  loadedBarcodes[`VIAL_${idx + 1}`] = code;
+                }
+              });
+              setVialBarcodes(loadedBarcodes);
+            }
+          }
+
+          if (patientData.reports && Array.isArray(patientData.reports) && patientData.reports.length > 0) {
+            setExistingReport(patientData.reports[0]);
+          }
 
           const patObj: Patient = {
             id: patientData.id,
@@ -378,20 +579,42 @@ function RegisterPatientPage() {
             refDoctor: doc,
             address: patientData.address || "",
             collectedAt: coll,
+            vial_barcode: rawBarcode,
+            vialBarcode: rawBarcode,
+            meta: {
+              ...patMeta,
+              vial_barcode: rawBarcode,
+              vial_barcodes: loadedBarcodes,
+            },
           };
           setNewPatient(patObj);
 
           // Fetch associated reports & bills for this patient
           try {
-            const reportsRes = await fetchFromLaravel("/reports");
-            const allReports = Array.isArray(reportsRes) ? reportsRes : (reportsRes?.data || []);
-            const patReport = allReports.find((r: any) => (r.patient_id === editId || r.patientId === editId));
+            let patReport = (patientData.reports && Array.isArray(patientData.reports) && patientData.reports.length > 0)
+              ? patientData.reports[0]
+              : null;
+
+            if (!patReport || !patReport.results || patReport.results.length === 0) {
+              try {
+                const reportsRes = await fetchFromLaravel(`/reports?patient_id=${editId}`);
+                const allReports = Array.isArray(reportsRes) ? reportsRes : (reportsRes?.data || []);
+                if (allReports.length > 0) {
+                  patReport = allReports.find((r: any) => (r.patient_id === editId || r.patientId === editId)) || allReports[0];
+                }
+              } catch (e) {}
+            }
+
             if (patReport) {
               setExistingReport(patReport);
               if (patReport.results && Array.isArray(patReport.results)) {
                 const testIds: string[] = [];
                 patReport.results.forEach((res: any) => {
                   const tId = res.test_id || res.testId || (res.test && res.test.id);
+                  const pId = res.test?.parent_id || res.test?.parentId || res.test?.parent?.id;
+                  if (pId && !testIds.includes(pId)) {
+                    testIds.push(pId);
+                  }
                   if (tId && !testIds.includes(tId)) {
                     testIds.push(tId);
                   }
@@ -400,20 +623,35 @@ function RegisterPatientPage() {
                   setSelectedTests(testIds);
                 }
               }
-            }
-          } catch (e) {}
 
-          try {
-            const billsRes = await fetchFromLaravel("/bills");
-            const allBills = Array.isArray(billsRes) ? billsRes : (billsRes?.data || []);
-            const patBill = allBills.find((b: any) => (b.patient_id === editId || b.patientId === editId));
+              const pkgName = patReport.package_name || patReport.packageName || patReport.meta?.packageName;
+              if (pkgName) {
+                const pkgs = getStoredPackages();
+                const foundPkg = pkgs.find(p => p.name.toLowerCase() === pkgName.toLowerCase() || p.id === pkgName);
+                if (foundPkg) {
+                  setSelectedPackage(foundPkg);
+                }
+              }
+            }
+
+            let patBill = patReport?.bill || (patientData.bills && Array.isArray(patientData.bills) && patientData.bills.length > 0 ? patientData.bills[0] : null);
+            if (!patBill) {
+              try {
+                const billsRes = await fetchFromLaravel(`/bills?search=${patientData.custom_id || patientData.customId || editId}`);
+                const allBills = Array.isArray(billsRes) ? billsRes : (billsRes?.data || []);
+                patBill = allBills.find((b: any) => (b.patient_id === editId || b.patientId === editId)) || allBills[0] || null;
+              } catch (e) {}
+            }
+
             if (patBill) {
               setExistingBill(patBill);
               setDiscount((patBill.discount || 0).toString());
               setPaidAmount((patBill.paid_amount || patBill.paidAmount || 0).toString());
               setPaymentStatus(patBill.status || "UNPAID");
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error("Error fetching associated report & bill:", e);
+          }
         }
       } catch (err) {
         console.error("Error loading patient for edit:", err);
@@ -524,6 +762,12 @@ function RegisterPatientPage() {
   const handleRegisterPatient = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegisterError(null);
+
+    if (isEditLocked) {
+      setRegisterError("This patient's report has already been approved by the central lab. Editing is locked.");
+      return;
+    }
+
     setRegistering(true);
 
     const missing: string[] = [];
@@ -564,6 +808,11 @@ function RegisterPatientPage() {
       const fullName = `${designation} ${firstName.trim()} ${lastName.trim()}`.trim();
       const calculatedAge = parseInt(ageYears) || (parseInt(ageMonths) > 0 ? 1 : 0) || 0;
 
+      const effectiveVialBarcodes = Object.keys(vialBarcodes).length > 0 ? vialBarcodes : (newPatient?.meta?.vial_barcodes || {});
+      const barcodeValues = Object.values(effectiveVialBarcodes).map(b => String(b).trim()).filter(Boolean);
+      const primaryBarcode = barcodeValues[0] || sampleBarcode.trim() || newPatient?.vial_barcode || null;
+      const joinedBarcodes = barcodeValues.length > 0 ? barcodeValues.join(",") : primaryBarcode;
+
       let data;
       if (editPatientId) {
         data = await fetchFromLaravel(`/patients/${editPatientId}`, {
@@ -584,8 +833,14 @@ function RegisterPatientPage() {
             pincode: pincode.trim() || null,
             collected_at: `${collectedAtSelect} (${collectedBySelect})`,
             collected_by: collectedBySelect || null,
-            vial_barcode: sampleBarcode.trim() || null,
-            vialBarcode: sampleBarcode.trim() || null,
+            vial_barcode: joinedBarcodes,
+            vialBarcode: joinedBarcodes,
+            vial_barcodes: effectiveVialBarcodes,
+            meta: {
+              ...(newPatient?.meta || {}),
+              vial_barcode: joinedBarcodes,
+              vial_barcodes: effectiveVialBarcodes,
+            },
             aadhaar_no: aadhaarNo.trim() || null,
             insurance_no: insuranceNo.trim() || null,
             tpa: tpa.trim() || null,
@@ -621,8 +876,13 @@ function RegisterPatientPage() {
             pincode: pincode.trim() || null,
             collectedAt: `${collectedAtSelect} (${collectedBySelect})`,
             collectedBy: collectedBySelect || null,
-            vialBarcode: sampleBarcode.trim() || null,
-            vial_barcode: sampleBarcode.trim() || null,
+            vialBarcode: joinedBarcodes,
+            vial_barcode: joinedBarcodes,
+            vial_barcodes: effectiveVialBarcodes,
+            meta: {
+              vial_barcode: joinedBarcodes,
+              vial_barcodes: effectiveVialBarcodes,
+            },
             aadhaarNo: aadhaarNo.trim() || null,
             insuranceNo: insuranceNo.trim() || null,
             tpa: tpa.trim() || null,
@@ -661,6 +921,13 @@ function RegisterPatientPage() {
         insuranceNo: insuranceNo.trim() || undefined,
         hfrId: hfrId.trim() || undefined,
         corporateName: corporateName.trim() || undefined,
+        vial_barcode: joinedBarcodes,
+        vialBarcode: joinedBarcodes,
+        meta: {
+          ...(data?.meta || newPatient?.meta || {}),
+          vial_barcode: joinedBarcodes,
+          vial_barcodes: effectiveVialBarcodes,
+        },
       };
 
       setNewPatient(patientObj);
@@ -689,6 +956,33 @@ function RegisterPatientPage() {
     }
     return list;
   });
+
+  const specimenTubes = useMemo(() => classifyTestsIntoTubes(selectedTestObjects), [selectedTestObjects]);
+
+  // Map generic loaded barcodes (like VIAL_1 or PRIMARY) to tubes once specimenTubes are calculated
+  useEffect(() => {
+    if (specimenTubes.length > 0) {
+      setVialBarcodes((prev) => {
+        const updated = { ...prev };
+        let changed = false;
+        specimenTubes.forEach((tube, idx) => {
+          if (!updated[tube.tubeType] || updated[tube.tubeType].trim() === "") {
+            const genericKey = `VIAL_${idx + 1}`;
+            if (updated[genericKey]) {
+              updated[tube.tubeType] = updated[genericKey];
+              delete updated[genericKey];
+              changed = true;
+            } else if (updated["PRIMARY"] && idx === 0) {
+              updated[tube.tubeType] = updated["PRIMARY"];
+              delete updated["PRIMARY"];
+              changed = true;
+            }
+          }
+        });
+        return changed ? updated : prev;
+      });
+    }
+  }, [specimenTubes]);
 
   const rawSubtotal = selectedTestObjects.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
   const subtotal = selectedPackage ? selectedPackage.price : rawSubtotal;
@@ -722,22 +1016,100 @@ function RegisterPatientPage() {
         throw new Error("Please select at least one clinical investigation or diagnostic package.");
       }
 
-      const report = await fetchFromLaravel("/reports", {
-        method: "POST",
-        body: JSON.stringify({
-          patientId: newPatient.id,
-          testIds: validTestIds,
-          total: grandTotal,
-          discount: computedDiscount,
-          paidAmount: computedPaid,
-          paymentStatus: computedStatus,
-          packageName: selectedPackage?.name || null,
-          package_name: selectedPackage?.name || null,
-        }),
-      });
+      let report: any;
+      let assignedBillCustomId = "INV-CONFIRMED";
+      const currentBillId = existingBill?.id || existingReport?.bill?.id || existingReport?.bill_id;
 
-      const assignedBillCustomId = report.bill?.customId || report.bill?.custom_id || report.customId || report.custom_id || "INV-CONFIRMED";
+      if (isEditMode && (currentBillId || existingReport?.id)) {
+        if (currentBillId) {
+          try {
+            const updatedBill = await fetchFromLaravel(`/bills/${currentBillId}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                test_ids: validTestIds,
+                total: grandTotal,
+                discount: computedDiscount,
+                paid_amount: computedPaid,
+                status: computedStatus,
+              }),
+            });
+            setExistingBill(updatedBill);
+            assignedBillCustomId = updatedBill.custom_id || updatedBill.customId || existingBill?.custom_id || existingBill?.customId || "INV-UPDATED";
+          } catch (e) {
+            console.error("Error updating bill in edit mode:", e);
+          }
+        }
+
+        if (existingReport?.id) {
+          try {
+            report = await fetchFromLaravel(`/reports/${existingReport.id}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                package_name: selectedPackage?.name || null,
+                packageName: selectedPackage?.name || null,
+              }),
+            });
+            setExistingReport(report);
+          } catch (e) {
+            report = existingReport;
+          }
+        } else {
+          report = existingReport || { id: "REP-EDIT", bill: existingBill };
+        }
+      } else {
+        report = await fetchFromLaravel("/reports", {
+          method: "POST",
+          body: JSON.stringify({
+            patientId: newPatient.id,
+            testIds: validTestIds,
+            total: grandTotal,
+            discount: computedDiscount,
+            paidAmount: computedPaid,
+            paymentStatus: computedStatus,
+            packageName: selectedPackage?.name || null,
+            package_name: selectedPackage?.name || null,
+          }),
+        });
+        assignedBillCustomId = report.bill?.customId || report.bill?.custom_id || report.customId || report.custom_id || "INV-CONFIRMED";
+      }
+
       const assignedPatientCustomId = newPatient.customId || (newPatient as any).custom_id || "";
+
+      // Persist multi-vial barcodes to patient model & meta
+      const activeVialBarcodes = { ...vialBarcodes };
+      const barcodeValues = Object.values(activeVialBarcodes).map(b => String(b).trim()).filter(Boolean);
+      const primaryBarcode = barcodeValues[0] || sampleBarcode.trim() || newPatient?.vial_barcode || null;
+      const joinedBarcodes = barcodeValues.length > 0 ? barcodeValues.join(",") : primaryBarcode;
+
+      if (newPatient.id) {
+        try {
+          await fetchFromLaravel(`/patients/${newPatient.id}`, {
+            method: "PUT",
+            body: JSON.stringify({
+              vial_barcode: joinedBarcodes,
+              vialBarcode: joinedBarcodes,
+              vial_barcodes: activeVialBarcodes,
+              meta: {
+                ...(newPatient.meta || {}),
+                vial_barcode: joinedBarcodes,
+                vial_barcodes: activeVialBarcodes,
+              },
+            }),
+          });
+          setNewPatient((prev: any) => prev ? {
+            ...prev,
+            vial_barcode: joinedBarcodes,
+            vialBarcode: joinedBarcodes,
+            meta: {
+              ...(prev.meta || {}),
+              vial_barcode: joinedBarcodes,
+              vial_barcodes: activeVialBarcodes,
+            },
+          } : prev);
+        } catch (e) {
+          console.error("Error updating patient vial barcodes:", e);
+        }
+      }
 
       if (selectedPackage) {
         saveReportPackage(report.id, selectedPackage.name, assignedBillCustomId);
@@ -771,6 +1143,7 @@ function RegisterPatientPage() {
         collectedAt: newPatient.collectedAt,
         packageName: selectedPackage?.name || null,
         tests: invoiceTests,
+        vialBarcodes: { ...vialBarcodes },
       });
       setIsModalOpen(false);
     } catch (err: any) {
@@ -824,6 +1197,7 @@ function RegisterPatientPage() {
     setSuccessDetails(null);
     setIsPrintModalOpen(false);
     setSampleBarcode("");
+    setVialBarcodes({});
     setSelectedPaymentMode("UNPAID");
     setPaymentUpdateMessage(null);
   };
@@ -1057,6 +1431,23 @@ function RegisterPatientPage() {
             {/* Left 8 Cols: High-Contrast Seamless Form */}
             <div className="lg:col-span-8 space-y-6">
               
+              {isEditLocked && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-rose-500/10 border-2 border-rose-500/30 text-rose-700 dark:text-rose-400 flex items-start gap-3 shadow-xs animate-fade-in">
+                  <ShieldCheck className="h-5 w-5 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                  <div className="space-y-1 text-xs">
+                    <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                      <span>Report Approved & Finalized — Patient Editing Locked</span>
+                      <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-mono font-extrabold uppercase">
+                        {existingReport?.status || "FINAL"}
+                      </span>
+                    </h4>
+                    <p className="leading-relaxed text-muted-foreground">
+                      This patient&apos;s diagnostic investigation report has already been reviewed, approved, and finalized by the central laboratory administration. Modification of patient demographics and clinical investigations is strictly locked for B2B partner accounts.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {registerError && (
                 <div className="flex items-center gap-3 rounded-xl bg-destructive/10 border border-destructive/30 p-4 text-sm text-destructive font-medium shadow-sm animate-fade-in">
                   <AlertCircle className="h-5 w-5 shrink-0" />
@@ -1352,7 +1743,7 @@ function RegisterPatientPage() {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
                     
                     {/* Doctor Referral */}
                     {isFieldEnabled("refDoctor") && (
@@ -1464,48 +1855,24 @@ function RegisterPatientPage() {
                       </div>
                     )}
 
-                    {/* Collection Center & B2B: Vial Barcode & Collection Time */}
-                    {(currentUserRole === "COLLECTION_CENTER" || currentUserRole === "B2B" || isFieldEnabled("vialBarcode")) && (
-                      <>
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between min-h-[20px]">
-                            <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
-                              Vial Barcode / Sample ID
-                            </label>
-                            <span className="text-[10px] text-primary font-mono font-bold">SCANNER ON</span>
-                          </div>
-                          <div className="relative">
-                            <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
-                            <input
-                              type="text"
-                              className="w-full pl-10 pr-4 h-11 bg-background border-2 border-primary/40 focus:border-primary rounded-xl text-sm placeholder:text-muted-foreground/50 focus:ring-2 focus:ring-primary/20 outline-none text-foreground font-mono font-bold transition-all shadow-2xs"
-                              placeholder="Scan or enter barcode"
-                              value={sampleBarcode}
-                              onChange={(e) => setSampleBarcode(e.target.value)}
-                              disabled={registering || (!!newPatient && !isEditMode)}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between min-h-[20px]">
-                            <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
-                              Collection Date &amp; Time
-                            </label>
-                          </div>
-                          <div className="relative">
-                            <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
-                            <input
-                              type="datetime-local"
-                              className="w-full pl-10 pr-4 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-xs font-semibold focus:border-zinc-900 dark:focus:border-white focus:ring-1 outline-none text-foreground transition-all shadow-2xs"
-                              value={collectionDateTime}
-                              onChange={(e) => setCollectionDateTime(e.target.value)}
-                              disabled={registering || (!!newPatient && !isEditMode)}
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )}
+                    {/* Collection Date & Time */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between min-h-[20px]">
+                        <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                          Collection Date &amp; Time
+                        </label>
+                      </div>
+                      <div className="relative">
+                        <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <input
+                          type="datetime-local"
+                          className="w-full pl-10 pr-4 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-xs font-semibold focus:border-zinc-900 dark:focus:border-white focus:ring-1 outline-none text-foreground transition-all shadow-2xs"
+                          value={collectionDateTime}
+                          onChange={(e) => setCollectionDateTime(e.target.value)}
+                          disabled={registering || (!!newPatient && !isEditMode)}
+                        />
+                      </div>
+                    </div>
 
                   </div>
                 </div>
@@ -1786,23 +2153,30 @@ function RegisterPatientPage() {
                 {/* Form Action CTA */}
                 {(!newPatient || isEditMode) && (
                   <div className="flex items-center justify-end gap-3 pt-5 border-t border-border/80">
-                    <button
-                      type="submit"
-                      disabled={registering}
-                      className="gradient-primary text-primary-foreground font-bold px-8 py-3.5 rounded-xl ring-inset-top transition-all hover:-translate-y-px hover:shadow-lg active:scale-[0.99] flex items-center gap-2 disabled:opacity-60 text-sm shadow-md cursor-pointer"
-                    >
-                      {registering ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>{isEditMode ? "Updating Patient Info…" : "Saving Demographics…"}</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>{isEditMode ? "Save Changes & Select Clinical Tests" : "Save & Select Clinical Tests"}</span>
-                          <ArrowRight className="h-4 w-4" />
-                        </>
-                      )}
-                    </button>
+                    {isEditLocked ? (
+                      <div className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 font-bold text-xs shadow-xs">
+                        <Lock className="h-4 w-4 shrink-0 text-amber-600" />
+                        <span>Demographics Locked — Report is {existingReport?.status || "APPROVED"}</span>
+                      </div>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={registering}
+                        className="gradient-primary text-primary-foreground font-bold px-8 py-3.5 rounded-xl ring-inset-top transition-all hover:-translate-y-px hover:shadow-lg active:scale-[0.99] flex items-center gap-2 disabled:opacity-60 text-sm shadow-md cursor-pointer"
+                      >
+                        {registering ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>{isEditMode ? "Updating Patient Info…" : "Saving Demographics…"}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>{isEditMode ? "Save Changes & Select Clinical Tests" : "Save & Select Clinical Tests"}</span>
+                            <ArrowRight className="h-4 w-4" />
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 )}
               </form>
@@ -1839,6 +2213,167 @@ function RegisterPatientPage() {
                   </span>
                 )}
               </div>
+
+              {/* Smart Specimen Tube Triage & Multi-Vial Barcode Assignment */}
+              {newPatient && specimenTubes.length > 0 && (
+                <div className="rounded-2xl border border-border/90 bg-card p-6 shadow-sm space-y-5 animate-fade-in">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/70 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-xs">
+                        <TestTube2 className="h-6 w-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-display font-bold text-base text-foreground">
+                            Specimen Tube Triage & Multi-Vial Barcoding
+                          </h4>
+                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                            Smart Phlebotomy
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Tests automatically grouped by vacutainer additive. Scan or enter vial barcodes per tube.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-muted text-foreground border border-border">
+                        {specimenTubes.length} Tubes Required
+                      </span>
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 border ${
+                        specimenTubes.every(t => vialBarcodes[t.tubeType]?.trim())
+                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                          : "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                      }`}>
+                        {specimenTubes.every(t => vialBarcodes[t.tubeType]?.trim()) ? (
+                          <>
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>All Tubes Labeled</span>
+                          </>
+                        ) : (
+                          <>
+                            <QrCode className="h-3.5 w-3.5" />
+                            <span>
+                              {specimenTubes.filter(t => vialBarcodes[t.tubeType]?.trim()).length} / {specimenTubes.length} Scanned
+                            </span>
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {specimenTubes.map((tube, idx) => {
+                      const isScanned = Boolean(vialBarcodes[tube.tubeType]?.trim());
+                      return (
+                        <div
+                          key={tube.tubeType}
+                          className="rounded-xl border border-border/80 bg-background/80 hover:bg-background transition-all p-4 flex flex-col justify-between space-y-3 relative overflow-hidden shadow-xs hover:border-border"
+                          style={{ borderLeftWidth: 4, borderLeftColor: tube.capColor }}
+                        >
+                          {/* Tube Header */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3">
+                              <div
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0 shadow-xs"
+                                style={{ backgroundColor: tube.capColor }}
+                              >
+                                #{idx + 1}
+                              </div>
+                              <div>
+                                <h5 className="font-bold text-sm text-foreground leading-snug">
+                                  {tube.tubeTitle}
+                                </h5>
+                                <p className="text-[11px] text-muted-foreground font-medium">
+                                  {tube.specimenType} · <span className="italic">{tube.additive}</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 ${
+                              isScanned
+                                ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
+                                : "bg-amber-500/15 text-amber-600 border border-amber-500/30"
+                            }`}>
+                              {isScanned ? (
+                                <>
+                                  <Check className="h-3 w-3" />
+                                  <span>Labeled</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Clock className="h-3 w-3" />
+                                  <span>Pending</span>
+                                </>
+                              )}
+                            </span>
+                          </div>
+
+                          {/* Bundled Tests */}
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {tube.tests.map(test => (
+                              <span
+                                key={test.id}
+                                className="px-2 py-0.5 rounded-md bg-muted/80 text-foreground text-[11px] font-medium border border-border/50 truncate max-w-[200px]"
+                                title={test.name}
+                              >
+                                {test.name}
+                              </span>
+                            ))}
+                          </div>
+
+                          {/* Barcode Scanner & Input */}
+                          <div className="pt-2 border-t border-border/60">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                              {tube.tubeType} Vial Barcode
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <div className="relative flex-1">
+                                <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                <input
+                                  id={`vial-barcode-input-${idx}`}
+                                  type="text"
+                                  className="w-full pl-9 pr-3 py-2 text-xs font-mono font-bold rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent uppercase placeholder:font-sans placeholder:font-normal placeholder:text-muted-foreground/60"
+                                  placeholder={`Scan ${tube.tubeType} barcode…`}
+                                  value={vialBarcodes[tube.tubeType] || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value.toUpperCase();
+                                    setVialBarcodes(prev => ({ ...prev, [tube.tubeType]: val }));
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      const nextInput = document.getElementById(`vial-barcode-input-${idx + 1}`);
+                                      if (nextInput) {
+                                        (nextInput as HTMLInputElement).focus();
+                                      }
+                                    }
+                                  }}
+                                />
+                              </div>
+
+                              <button
+                                type="button"
+                                title="Auto-generate vial barcode"
+                                onClick={() => {
+                                  const prefix = newPatient?.customId || "VIAL";
+                                  const autoCode = `${prefix}-${tube.tubeType}-${Math.floor(1000 + Math.random() * 9000)}`;
+                                  setVialBarcodes(prev => ({ ...prev, [tube.tubeType]: autoCode }));
+                                }}
+                                className="px-2.5 py-2 text-[11px] font-bold rounded-lg border border-border bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-all shrink-0 flex items-center gap-1 cursor-pointer"
+                              >
+                                <Sparkles className="h-3 w-3 text-primary" />
+                                <span className="hidden sm:inline">Auto</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
             </div>
 
@@ -1910,11 +2445,11 @@ function RegisterPatientPage() {
                     {booking ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Generating Invoice & Barcode…</span>
+                        <span>{isEditMode ? "Updating Booking & Invoice…" : "Generating Invoice & Barcode…"}</span>
                       </>
                     ) : (
                       <>
-                        <span>Generate Invoice & Barcode</span>
+                        <span>{isEditMode ? "Update Booking & Generate Invoice" : "Generate Invoice & Barcode"}</span>
                         <ArrowRight className="h-4 w-4" />
                       </>
                     )}
@@ -2191,6 +2726,75 @@ function RegisterPatientPage() {
             </div>
 
           </div>
+
+          {/* Specimen Tubes & Multi-Vial Barcodes Confirmed Summary */}
+          {specimenTubes.length > 0 && (
+            <div className="bg-card border border-border/90 rounded-2xl p-6 shadow-xs space-y-4 animate-fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-xs">
+                    <TestTube2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-foreground">
+                      Collected Specimen Tubes & Assigned Barcodes
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Vacutainer barcodes registered for laboratory analyzers and specimen routing.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>{specimenTubes.length} Tubes Processed</span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {specimenTubes.map((tube, idx) => {
+                  const assignedBarcode = (successDetails?.vialBarcodes && successDetails.vialBarcodes[tube.tubeType]) || vialBarcodes[tube.tubeType];
+                  return (
+                    <div
+                      key={tube.tubeType}
+                      className="p-4 rounded-xl border border-border/80 bg-muted/20 flex flex-col justify-between space-y-3 shadow-xs"
+                      style={{ borderLeftWidth: 4, borderLeftColor: tube.capColor }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="w-6 h-6 rounded-full text-white text-[11px] font-black flex items-center justify-center shrink-0 shadow-xs"
+                            style={{ backgroundColor: tube.capColor }}
+                          >
+                            #{idx + 1}
+                          </span>
+                          <span className="font-bold text-xs text-foreground">{tube.tubeTitle}</span>
+                        </div>
+                        <span className="text-[10px] font-medium text-muted-foreground">{tube.specimenType}</span>
+                      </div>
+
+                      <div className="flex items-center justify-between bg-card border border-border/80 px-3 py-2 rounded-lg shadow-2xs">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1.5">
+                          <Barcode className="h-3.5 w-3.5 text-primary" />
+                          Barcode:
+                        </span>
+                        <span className="font-mono text-xs font-black text-primary">
+                          {assignedBarcode || "AUTO-ASSIGNED"}
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        <span className="font-semibold text-foreground/80">Investigations: </span>
+                        {tube.tests.map(t => t.name).join(", ")}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Payment Handling: Hidden for B2B Partners */}
           {!isB2B && (

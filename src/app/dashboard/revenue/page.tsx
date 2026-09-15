@@ -498,79 +498,97 @@ export default function B2BRevenuePage() {
       </div>
 
       {/* ── Financial KPI Stat Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Total MRP */}
-        <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total MRP</span>
-            <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 border border-purple-200/60 dark:border-purple-800/40 flex items-center justify-center">
-              <IndianRupee className="h-5 w-5" />
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs space-y-3 animate-pulse">
+              <div className="flex items-center justify-between">
+                <div className="h-4 w-24 bg-muted/80 rounded" />
+                <div className="w-10 h-10 rounded-xl bg-muted/60" />
+              </div>
+              <div className="h-8 w-36 bg-muted/80 rounded mt-2" />
+              <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                <div className="h-3 w-20 bg-muted/60 rounded" />
+                <div className="h-3 w-16 bg-muted/60 rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Card 1: Total MRP */}
+          <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total MRP</span>
+              <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 border border-purple-200/60 dark:border-purple-800/40 flex items-center justify-center">
+                <IndianRupee className="h-5 w-5" />
+              </div>
+            </div>
+            <p className="text-3xl font-extrabold text-foreground mt-3 tracking-tight">
+              ₹{grossB2BVolume.toLocaleString("en-IN")}
+            </p>
+            <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
+              <span>Requisitions:</span>
+              <span className="font-bold text-foreground">{filteredReports.length} orders</span>
             </div>
           </div>
-          <p className="text-3xl font-extrabold text-foreground mt-3 tracking-tight">
-            ₹{grossB2BVolume.toLocaleString("en-IN")}
-          </p>
-          <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
-            <span>Requisitions:</span>
-            <span className="font-bold text-foreground">{filteredReports.length} orders</span>
-          </div>
-        </div>
 
-        {/* Card 2: Lab Margin */}
-        <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Lab Margin</span>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 border border-blue-200/60 dark:border-blue-800/40 flex items-center justify-center">
-              <Building2 className="h-5 w-5" />
+          {/* Card 2: Lab Margin */}
+          <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Lab Margin</span>
+              <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 border border-blue-200/60 dark:border-blue-800/40 flex items-center justify-center">
+                <Building2 className="h-5 w-5" />
+              </div>
+            </div>
+            <p className="text-3xl font-extrabold text-foreground mt-3 tracking-tight">
+              ₹{totalLabMargin.toLocaleString("en-IN")}
+            </p>
+            <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
+              <span>Payable to Central Lab</span>
+              <span className="font-bold text-blue-600">Wholesale Tariff</span>
             </div>
           </div>
-          <p className="text-3xl font-extrabold text-foreground mt-3 tracking-tight">
-            ₹{totalLabMargin.toLocaleString("en-IN")}
-          </p>
-          <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
-            <span>Payable to Central Lab</span>
-            <span className="font-bold text-blue-600">Wholesale Tariff</span>
-          </div>
-        </div>
 
-        {/* Card 3: B2B Centre Margin */}
-        <div className="bg-gradient-to-br from-purple-500/10 via-card to-card border border-purple-200 dark:border-purple-900/50 rounded-2xl p-5 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300">B2B Centre Margin</span>
-            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
-              <TrendingUp className="h-5 w-5" />
+          {/* Card 3: B2B Centre Margin */}
+          <div className="bg-gradient-to-br from-purple-500/10 via-card to-card border border-purple-200 dark:border-purple-900/50 rounded-2xl p-5 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300">B2B Centre Margin</span>
+              <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
+                <TrendingUp className="h-5 w-5" />
+              </div>
+            </div>
+            <p className="text-3xl font-extrabold text-purple-700 dark:text-purple-300 mt-3 tracking-tight">
+              ₹{totalB2BCentreMargin.toLocaleString("en-IN")}
+            </p>
+            <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
+              <span>Centre Earnings</span>
+              <span className="font-bold text-purple-600">Retained Margin</span>
             </div>
           </div>
-          <p className="text-3xl font-extrabold text-purple-700 dark:text-purple-300 mt-3 tracking-tight">
-            ₹{totalB2BCentreMargin.toLocaleString("en-IN")}
-          </p>
-          <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
-            <span>Centre Earnings</span>
-            <span className="font-bold text-purple-600">Retained Margin</span>
-          </div>
-        </div>
 
-        {/* Card 4: Outstanding Due vs Paid */}
-        <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Settlement Balance</span>
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              totalDue > 0
-                ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 border border-amber-200/60 dark:border-amber-800/40"
-                : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 border border-emerald-200/60 dark:border-emerald-800/40"
-            }`}>
-              {totalDue > 0 ? <Clock className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
+          {/* Card 4: Outstanding Due vs Paid */}
+          <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Settlement Balance</span>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                totalDue > 0
+                  ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 border border-amber-200/60 dark:border-amber-800/40"
+                  : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 border border-emerald-200/60 dark:border-emerald-800/40"
+              }`}>
+                {totalDue > 0 ? <Clock className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
+              </div>
+            </div>
+            <p className={`text-3xl font-extrabold mt-3 tracking-tight ${totalDue > 0 ? "text-amber-600" : "text-emerald-600"}`}>
+              ₹{totalDue.toLocaleString("en-IN")}
+            </p>
+            <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
+              <span>Collected / Paid:</span>
+              <span className="font-bold text-emerald-600">₹{totalPaid.toLocaleString("en-IN")}</span>
             </div>
           </div>
-          <p className={`text-3xl font-extrabold mt-3 tracking-tight ${totalDue > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-            ₹{totalDue.toLocaleString("en-IN")}
-          </p>
-          <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
-            <span>Collected / Paid:</span>
-            <span className="font-bold text-emerald-600">₹{totalPaid.toLocaleString("en-IN")}</span>
-          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Search & Status Filters for Ledger Table ── */}
       <div className="bg-card border border-border/70 rounded-2xl p-4 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -614,7 +632,27 @@ export default function B2BRevenuePage() {
         </div>
 
         <div className="table-responsive-container">
-          {filteredReports.length === 0 ? (
+          {loading ? (
+            <div className="p-6 space-y-3 animate-pulse">
+              <div className="h-9 w-full bg-muted/40 rounded-lg mb-2" />
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="flex items-center justify-between py-3.5 border-b border-border/30 last:border-0 gap-4">
+                  <div className="h-4 w-24 bg-muted/70 rounded" />
+                  <div className="h-4 w-20 bg-muted/60 rounded" />
+                  <div className="space-y-1 flex-1 max-w-[180px]">
+                    <div className="h-4 w-32 bg-muted/70 rounded" />
+                    <div className="h-3 w-20 bg-muted/50 rounded" />
+                  </div>
+                  <div className="h-5 w-16 bg-muted/60 rounded-md" />
+                  <div className="h-4 w-16 bg-muted/70 rounded ml-auto" />
+                  <div className="h-4 w-16 bg-muted/60 rounded" />
+                  <div className="h-4 w-16 bg-muted/70 rounded" />
+                  <div className="h-5 w-14 bg-muted/60 rounded-full" />
+                  <div className="h-5 w-20 bg-muted/60 rounded-full" />
+                </div>
+              ))}
+            </div>
+          ) : filteredReports.length === 0 ? (
             <div className="py-16 text-center text-muted-foreground space-y-2">
               <FileText className="h-10 w-10 mx-auto opacity-30 text-purple-500" />
               <p className="text-xs font-semibold">No requisitions match the selected criteria.</p>

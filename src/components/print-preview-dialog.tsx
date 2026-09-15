@@ -2,14 +2,15 @@
 
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import {
-  Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription
+  Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription, DialogFooter
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { 
   Printer, FileText, CheckCircle2, ChevronUp, ChevronDown, 
   Trash2, Eye, EyeOff, Save, Check, Loader2, Sparkles, Sliders, BookOpen,
-  GripVertical, Layers, ChevronRight
+  GripVertical, Layers, ChevronRight, Phone, Send
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import { ReportSheet, PaginatedReportPreview, type PrintSettings, type ReportTest } from "@/components/report-sheet";
@@ -59,6 +60,9 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
   const [layoutSavedSuccess, setLayoutSavedSuccess] = useState(false);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isPhonePromptOpen, setIsPhonePromptOpen] = useState(false);
+  const [customPhone, setCustomPhone] = useState("");
+  const [savePhoneToProfile, setSavePhoneToProfile] = useState(true);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollListRef = useRef<HTMLDivElement>(null);
@@ -354,10 +358,11 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
     documentTitle: report ? `Report_${report.customId}` : "Report",
   });
 
-  const handleWhatsApp = async () => {
-    const phone = report?.patient?.phone;
+  const handleWhatsApp = async (overridePhone?: string | unknown) => {
+    const phone = (typeof overridePhone === "string" ? overridePhone : (report?.patient?.phone || "")).trim();
     if (!phone) {
-      toast.error("No Phone Number", "Patient has no mobile number registered for WhatsApp delivery.");
+      setCustomPhone("");
+      setIsPhonePromptOpen(true);
       return;
     }
 
@@ -367,6 +372,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
     }
 
     setIsSendingWhatsApp(true);
+    const displayPhone = phone.replace(/\D/g, "");
     toast.info("Preparing WhatsApp", "Rendering high-resolution PDF report...");
 
     try {
@@ -389,8 +395,9 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
         if (i > 0) pdf.addPage();
         const el = pageElements[i];
 
+        // Capture crisp 1.5x resolution canvas for fast upload and lightweight payload
         const canvas = await html2canvas(el, {
-          scale: 2,
+          scale: 1.5,
           useCORS: true,
           allowTaint: true,
           logging: false,
@@ -398,35 +405,29 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
           windowWidth: 794,
         });
 
-        const imgData = canvas.toDataURL("image/jpeg", 0.90);
+        const imgData = canvas.toDataURL("image/jpeg", 0.75);
         pdf.addImage(imgData, "JPEG", 0, 0, 210, 297, undefined, "FAST");
       }
 
       const pdfBase64 = pdf.output("datauristring");
-      toast.info("Sending...", `Delivering PDF report to +${phone.replace(/\D/g, "")} on WhatsApp...`);
+      toast.info("Sending via WhatsApp...", `Delivering official PDF report to +${displayPhone}...`);
 
       const res = await fetchFromLaravel(`/reports/${report.id}/send-whatsapp`, {
         method: "POST",
         body: JSON.stringify({
           pdf_base64: pdfBase64,
           phone: phone,
+          save_phone: savePhoneToProfile,
         }),
       });
 
       if (res?.status === "success" || res?.success) {
-        toast.success("Sent on WhatsApp!", `Official report PDF sent to ${phone} successfully!`);
-      } else {
-        if (
-          res?.error?.not_connected ||
-          res?.not_connected ||
-          res?.message?.toLowerCase().includes("not connected") ||
-          res?.message?.toLowerCase().includes("qr")
-        ) {
-          toast.error("Pairing Required", "Please scan the QR code to pair your WhatsApp account first.");
-          setIsQrModalOpen(true);
-        } else {
-          toast.error("Dispatch Failed", res?.message || "Could not deliver WhatsApp message.");
+        toast.success("Sent on WhatsApp!", `Official report PDF sent to +${displayPhone} successfully!`);
+        if (report?.patient) {
+          report.patient.phone = phone;
         }
+      } else {
+        toast.error("Dispatch Failed", res?.message || "Could not deliver WhatsApp message via Meta Cloud API.");
       }
     } catch (err: any) {
       console.error("WhatsApp dispatch error:", err);
@@ -507,7 +508,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="cursor-pointer">Cancel</Button>
             <Button
               size="sm"
-              onClick={handleWhatsApp}
+              onClick={() => handleWhatsApp()}
               disabled={isSendingWhatsApp}
               className="gap-1.5 font-bold shadow-xs cursor-pointer flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white"
             >
@@ -788,8 +789,96 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
         <WhatsAppQrDialog
           open={isQrModalOpen}
           onOpenChange={setIsQrModalOpen}
-          onConnected={handleWhatsApp}
+          onConnected={() => handleWhatsApp()}
         />
+
+        {/* WhatsApp Phone Number Input Prompt Dialog */}
+        <Dialog open={isPhonePromptOpen} onOpenChange={setIsPhonePromptOpen}>
+          <DialogContent className="sm:max-w-[420px] p-6 rounded-2xl">
+            <DialogHeader>
+              <div className="flex items-center gap-3 mb-1">
+                <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600">
+                  <Phone className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-bold">WhatsApp Number Required</DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground">
+                    Enter patient&apos;s mobile number to send the official PDF report.
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="bg-muted/40 p-3 rounded-xl border text-xs space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Patient:</span>
+                  <span className="font-semibold">{report?.patient?.name || "N/A"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Report ID:</span>
+                  <span className="font-mono font-medium">{report?.customId || report?.id}</span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Mobile / WhatsApp Number</label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-xs font-semibold text-muted-foreground select-none">+91</span>
+                  <Input
+                    type="tel"
+                    maxLength={10}
+                    placeholder="9045757272"
+                    value={customPhone}
+                    onChange={(e) => setCustomPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    className="pl-11 h-11 text-sm font-medium tracking-wide rounded-xl"
+                    autoFocus
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">Enter 10-digit Indian WhatsApp mobile number</p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <Checkbox
+                  id="savePhonePreview"
+                  checked={savePhoneToProfile}
+                  onCheckedChange={(c) => setSavePhoneToProfile(!!c)}
+                />
+                <label htmlFor="savePhonePreview" className="text-xs text-muted-foreground cursor-pointer select-none">
+                  Save mobile number to patient profile permanently
+                </label>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0 mt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsPhonePromptOpen(false)}
+                className="rounded-xl h-10 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  const cleaned = customPhone.replace(/\D/g, "");
+                  if (cleaned.length < 10) {
+                    toast.error("Invalid Number", "Please enter a valid 10-digit mobile number.");
+                    return;
+                  }
+                  setIsPhonePromptOpen(false);
+                  handleWhatsApp(cleaned);
+                }}
+                disabled={customPhone.replace(/\D/g, "").length < 10 || isSendingWhatsApp}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 text-xs font-semibold gap-1.5"
+              >
+                <Send className="h-3.5 w-3.5" />
+                <span>Send WhatsApp Report</span>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );

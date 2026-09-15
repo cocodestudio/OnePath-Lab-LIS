@@ -63,6 +63,7 @@ export interface ReportSheetData {
     insurance_no?: string | null;
     height?: string | number | null;
     weight?: string | number | null;
+    [key: string]: any;
   };
   results: ReportTest[];
   lab: { 
@@ -98,7 +99,7 @@ export const A4_H = 1123;
 export interface ReportBlock { key: string; node: React.ReactNode; }
 
 export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
-  const patient = report.patient || ({} as any);
+  const patient: any = report.patient || {};
   const lab = (report.lab || {}) as any;
   const reportSettings = normalizeReportSettings(lab.report_settings || lab.reportSettings || (report as any).report_settings || (report as any).reportSettings);
 
@@ -116,6 +117,8 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
 
   const packageName = (report as any).packageName || (report as any).package_name || (report as any).meta?.packageName || (report as any).meta?.package_name || getReportPackage(report.id) || getReportPackage(report.customId) || getReportPackage(patient.customId);
 
+  const patMeta = patient.meta || {};
+
   const allMap: Record<string, { label: string; value: React.ReactNode }> = {
     "Name": { label: "Patient Name:", value: <span className="font-extrabold text-[11.5px] text-black uppercase">{patient.name || "—"}</span> },
     "Package": { label: "Package:", value: <span className="font-extrabold text-[11px] text-zinc-900">{packageName || "—"}</span> },
@@ -131,67 +134,93 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
       )
     },
     "Referred By": { label: "Referred By:", value: <span className="font-semibold text-zinc-900">{doctorName}</span> },
-    "Email ID": { label: "Email ID:", value: <span className="font-mono text-[10px]">{patient.email || (report as any).patient?.email || "—"}</span> },
-    "Insurance No.": { label: "Insurance No:", value: <span className="font-mono">{patient.insuranceNo || patient.insurance_no || "—"}</span> },
+    "Email ID": { label: "Email ID:", value: <span className="font-mono text-[10px]">{patient.email || (report as any).patient?.email || patMeta.email || "—"}</span> },
+    "Insurance No.": { label: "Insurance No:", value: <span className="font-mono">{patient.insuranceNo || patient.insurance_no || patMeta.insuranceNo || patMeta.insurance_no || "—"}</span> },
     "Report ID": { label: "Report ID:", value: <span className="font-bold text-black font-mono">{report.customId || "—"}</span> },
     "Report Date": { label: "Report Date:", value: <span>{regDateStr}</span> },
     "Registration Date": { label: "Reg. Date:", value: <span>{regDateStr}</span> },
-    "Phone No.": { label: "Contact No:", value: <span className="font-mono">{reportSettings.fieldsToShow.phoneNumber ? (patient.phone || "—") : "—"}</span> },
-    "Aadhaar No.": { label: "Aadhaar No:", value: <span className="font-mono">{patient.aadhaarNo || patient.aadhaar_no || "—"}</span> },
+    "Phone No.": { label: "Contact No:", value: <span className="font-mono">{reportSettings.fieldsToShow.phoneNumber ? (patient.phone || patMeta.phone || "—") : "—"}</span> },
+    "Aadhaar No.": { label: "Aadhaar No:", value: <span className="font-mono">{patient.aadhaarNo || patient.aadhaar_no || patMeta.aadhaarNo || patMeta.aadhaar_no || "—"}</span> },
     "Patient ID": { label: "Patient ID (PID):", value: <span className="font-bold text-black font-mono">{patient.customId || "—"}</span> },
-    "Address": { label: "Address:", value: <span className="break-words font-medium">{patient.address || "—"}</span> },
-    "Collected At": { label: "Collected At:", value: <span>{(report as any).collectedAt || "Main Lab"}</span> },
-    "UHID": { label: "UHID:", value: <span className="font-mono font-bold">{patient.customId || "—"}</span> },
-    "Passport Number": { label: "Passport No:", value: <span className="font-mono">{(patient as any).passportNumber || (patient as any).passport_no || "—"}</span> },
-    "Owner Name": { label: "Owner Name:", value: <span>{(patient as any).ownerName || "—"}</span> },
-    "Breed": { label: "Breed:", value: <span>{(patient as any).breed || "—"}</span> },
-    "Species": { label: "Species:", value: <span>{(patient as any).species || "—"}</span> },
-    "Referring Lab": { label: "Referring Lab:", value: <span>{(report as any).referringLab || "—"}</span> },
+    "Address": { label: "Address:", value: <span className="break-words font-medium">{patient.address || patMeta.address || "—"}</span> },
+    "Collected At": { label: "Collected At:", value: <span>{patient.collectedAt || patient.collected_at || patMeta.collectedAt || patMeta.collected_at || (report as any).collectedAt || "Main Lab"}</span> },
+    "UHID": { label: "UHID:", value: <span className="font-mono font-bold">{patient.uhid || patMeta.uhid || patient.customId || "—"}</span> },
+    "Passport Number": { label: "Passport No:", value: <span className="font-mono">{patient.passportNumber || patient.passport_number || patMeta.passportNumber || patMeta.passport_number || "—"}</span> },
+    "Owner Name": { label: "Owner Name:", value: <span>{patient.ownerName || patient.owner_name || patMeta.ownerName || patMeta.owner_name || "—"}</span> },
+    "Breed": { label: "Breed:", value: <span>{patient.breed || patMeta.breed || "—"}</span> },
+    "Species": { label: "Species:", value: <span>{patient.species || patMeta.species || "—"}</span> },
+    "Referring Lab": { label: "Referring Lab:", value: <span>{(report as any).referringLab || patMeta.referringLab || "—"}</span> },
     "Received Date": { label: "Received Date:", value: <span>{regDateStr}</span> },
     "Company": { label: "Company:", value: <span>{(report as any).company || lab.name || "—"}</span> },
     "Report Status": { label: "Status:", value: <span className="font-bold uppercase text-emerald-700 text-[10px]">{report.status || "COMPLETED"}</span> },
-    "Barcode": { label: "Barcode:", value: <BarcodeSVG value={report.customId || report.id} width={0.9} height={18} fontSize={7} /> },
-    "Referring Hospital": { label: "Referring Hosp:", value: <span>{(report as any).referringHospital || "—"}</span> },
-    "Second Referral": { label: "2nd Referral:", value: <span>{(report as any).secondReferral || "—"}</span> },
-    "Government Panel": { label: "Govt Panel:", value: <span>{(report as any).govPanel || "—"}</span> },
+    "Barcode": { label: "Barcode:", value: <BarcodeSVG value={patient.vialBarcode || patient.vial_barcode || patMeta.vial_barcode || report.customId || report.id} width={0.9} height={18} fontSize={7} /> },
+    "Referring Hospital": { label: "Referring Hosp:", value: <span>{(report as any).referringHospital || patMeta.referringHospital || "—"}</span> },
+    "Second Referral": { label: "2nd Referral:", value: <span>{patient.secondReferral || patient.second_referral || patMeta.secondReferral || patMeta.second_referral || (report as any).secondReferral || "—"}</span> },
+    "Government Panel": { label: "Govt Panel:", value: <span>{patient.govPanel || patient.gov_panel || patMeta.govPanel || patMeta.gov_panel || (report as any).govPanel || "—"}</span> },
     "Collection Date": { label: "Collection Date:", value: <span>{regDateStr}</span> },
     "B2B Address": { label: "B2B Address:", value: <span>{lab.address || "—"}</span> },
     "Custom ID": { label: "Custom ID:", value: <span className="font-mono">{report.customId || "—"}</span> },
     "B2B Phone Number": { label: "Lab Phone:", value: <span className="font-mono">{lab.phone || "—"}</span> },
     "B2B Email": { label: "Lab Email:", value: <span>{lab.email || "—"}</span> },
-    "TPA": { label: "TPA:", value: <span>{(report as any).tpa || "—"}</span> },
-    "Corporate Client": { label: "Corporate:", value: <span>{(report as any).corporateClient || "—"}</span> },
-    "Corporate Plan": { label: "Corp Plan:", value: <span>{(report as any).corporatePlan || "—"}</span> },
+    "TPA": { label: "TPA:", value: <span>{patient.tpa || patMeta.tpa || (report as any).tpa || "—"}</span> },
+    "Corporate Client": { label: "Corporate:", value: <span>{patient.corporateName || patient.corporate_name || patMeta.corporateName || patMeta.corporate_name || (report as any).corporateClient || "—"}</span> },
+    "Corporate Plan": { label: "Corp Plan:", value: <span>{patient.corporatePlan || patient.corporate_plan || patMeta.corporatePlan || patMeta.corporate_plan || (report as any).corporatePlan || "—"}</span> },
     "Processed At": { label: "Processed At:", value: <span>{(report as any).processedAt || "Main Lab"}</span> },
-    "Pincode": { label: "Pincode:", value: <span>{lab.pincode || "—"}</span> },
-    "District": { label: "District:", value: <span>{lab.city || "—"}</span> },
-    "Town": { label: "Town:", value: <span>{lab.city || "—"}</span> },
-    "Collection Center": { label: "Center:", value: <span>{(report as any).collectionCenter || "Main Branch"}</span> },
-    "HFR ID": { label: "HFR ID:", value: <span>{(report as any).hfrId || "—"}</span> },
+    "Pincode": { label: "Pincode:", value: <span>{patient.pincode || patMeta.pincode || lab.pincode || "—"}</span> },
+    "District": { label: "District:", value: <span>{patient.district || patMeta.district || lab.city || "—"}</span> },
+    "Town": { label: "Town:", value: <span>{patient.city || patMeta.city || lab.city || "—"}</span> },
+    "Collection Center": { label: "Center:", value: <span>{patient.collectedAt || patient.collected_at || patMeta.collectedAt || (report as any).collectionCenter || "Main Branch"}</span> },
+    "HFR ID": { label: "HFR ID:", value: <span>{patient.hfrId || patient.hfr_id || patMeta.hfrId || patMeta.hfr_id || (report as any).hfrId || "—"}</span> },
     "Investigation": { label: "Investigation:", value: <span>{report.results?.[0]?.test?.category || "General Pathology"}</span> },
-    "Height": { label: "Height:", value: <span>{patient.height ? `${patient.height} cm` : "—"}</span> },
-    "Weight": { label: "Weight:", value: <span>{patient.weight ? `${patient.weight} kg` : "—"}</span> },
+    "Height": { label: "Height:", value: <span>{patient.height || patMeta.height ? `${patient.height || patMeta.height} cm` : "—"}</span> },
+    "Weight": { label: "Weight:", value: <span>{patient.weight || patMeta.weight ? `${patient.weight || patMeta.weight} kg` : "—"}</span> },
   };
 
-  const intakeMap = new Map<string, boolean>();
+  // Build sets of explicitly enabled and explicitly disabled intake fields
+  const enabledIntakeSet = new Set<string>();
+  const disabledIntakeSet = new Set<string>();
+
   if (Array.isArray(reportSettings.intakeFields)) {
     reportSettings.intakeFields.forEach((f) => {
-      if (f.orderingName) intakeMap.set(f.orderingName, f.showOnReport);
-      if (f.label) intakeMap.set(f.label, f.showOnReport);
-      if (f.key) intakeMap.set(f.key, f.showOnReport);
+      const isShown = Boolean(f.showOnReport);
+      if (isShown) {
+        if (f.orderingName) enabledIntakeSet.add(f.orderingName);
+        if (f.label) enabledIntakeSet.add(f.label);
+        if (f.key) enabledIntakeSet.add(f.key);
+      } else {
+        if (f.orderingName) disabledIntakeSet.add(f.orderingName);
+        if (f.label) disabledIntakeSet.add(f.label);
+        if (f.key) disabledIntakeSet.add(f.key);
+      }
     });
   }
 
-  const activeOrder = reportSettings.patientDetailsOrder && reportSettings.patientDetailsOrder.length > 0
-    ? reportSettings.patientDetailsOrder
+  // Determine active display order
+  const baseOrder = reportSettings.patientDetailsOrder && reportSettings.patientDetailsOrder.length > 0
+    ? [...reportSettings.patientDetailsOrder]
     : ["Name", "Patient ID", "Age/Gender", "Report ID", "Phone No.", "Referred By", "Address", "Report Date"];
 
+  // If user enabled an intake field with showOnReport: true, ensure it is added to the report order
+  if (Array.isArray(reportSettings.intakeFields)) {
+    reportSettings.intakeFields.forEach((f) => {
+      if (f.showOnReport && f.orderingName && !baseOrder.includes(f.orderingName)) {
+        baseOrder.push(f.orderingName);
+      }
+    });
+  }
+
   const items: { label: string; value: React.ReactNode }[] = [];
-  activeOrder.forEach((key) => {
+  const addedKeys = new Set<string>();
+
+  baseOrder.forEach((key) => {
+    if (addedKeys.has(key)) return;
     if (key === "Package" || key === "Package Name") return;
     if (key === "Phone No." && reportSettings.fieldsToShow.phoneNumber === false) return;
-    if (intakeMap.has(key) && intakeMap.get(key) === false) return;
+    // Strictly omit if user has unchecked it from intake fields
+    if (disabledIntakeSet.has(key)) return;
+
     if (allMap[key]) {
+      addedKeys.add(key);
       items.push(allMap[key]);
     }
   });
@@ -1044,9 +1073,10 @@ export function buildReportBlocks(
   const globalShowSignatureOnly = Boolean(
     reportSettings.signatureSettings?.showSignatureOnly || reportSettings.showSignatureOnly
   );
+  const isFixedSig = reportSettings.signatureSettings?.positionMode !== "flow";
 
-  if (printOnEveryPage) {
-    // If printing signatures on every page, push only the end of report line into blocks flow
+  if (printOnEveryPage || isFixedSig) {
+    // If printing signatures on every page or using static fixed positioning, push only the end of report line into blocks flow
     blocks.push({
       key: "report-end-of-report-line",
       node: (
@@ -1059,7 +1089,7 @@ export function buildReportBlocks(
       ),
     });
   } else {
-    // When unticked (default), signatures appear only on the last page at the end of report
+    // When in flow mode, signatures appear only on the last page at the end of report
     blocks.push({
       key: "report-signatures-footer",
       node: (
@@ -1196,8 +1226,29 @@ export const PaginatedReportPreview = React.forwardRef<
     return () => clearTimeout(t);
   }, [blocks, contentWidth]);
 
+  const isFixedSig = reportSettings.signatureSettings?.positionMode !== "flow";
+  const sigBottomOffset = typeof reportSettings.signatureSettings?.bottomOffset === "number"
+    ? reportSettings.signatureSettings.bottomOffset
+    : 45;
+  const sigAlign = reportSettings.signatureSettings?.horizontalAlign || "right";
+  const sigHorizontalOffset = typeof reportSettings.signatureSettings?.horizontalOffset === "number"
+    ? reportSettings.signatureSettings.horizontalOffset
+    : 35;
+
+  // The content must never bleed into the footer or collide with a fixed signature
+  const bottomReserved = Math.max(
+    effectiveSettings.footerHeight,
+    isFixedSig && enabledSignaturesList.length > 0
+      ? (sigBottomOffset + sigH)
+      : effectiveSettings.footerHeight
+  );
+  const contentAreaHeight = Math.max(120, A4_H - effectiveSettings.headerHeight - bottomReserved);
+
   // Pack blocks into pages with Patient Block room on every page
-  const effectiveUsableH = usableH - (hidePatientBlock ? 0 : patientH) - (printOnEveryPage && enabledSignaturesList.length > 0 ? sigH : 0);
+  const effectiveUsableH = Math.max(
+    100,
+    contentAreaHeight - (hidePatientBlock ? 0 : patientH) - (!isFixedSig && printOnEveryPage && enabledSignaturesList.length > 0 ? sigH : 0)
+  );
 
   const pages = React.useMemo(() => {
     if (heights.length !== blocks.length) return [blocks.map((_, i) => i)];
@@ -1208,8 +1259,6 @@ export const PaginatedReportPreview = React.forwardRef<
     blocks.forEach((b, i) => {
       const isSig = b.key === "report-signatures-footer";
       const measuredH = heights[i] || 0;
-      // For signature footer, calculate base physical content height without user's large top margin
-      // so user can push signature to the footer without falsely creating a 2nd empty page!
       const h = isSig
         ? Math.max(75, measuredH - maxUserMarginTop)
         : measuredH;
@@ -1355,7 +1404,7 @@ export const PaginatedReportPreview = React.forwardRef<
                 />
               )}
 
-              {/* Content area */}
+              {/* Content area strictly bounded between header and footer */}
               <div
                 className="text-zinc-900 flex flex-col justify-between"
                 style={{
@@ -1363,26 +1412,50 @@ export const PaginatedReportPreview = React.forwardRef<
                   top: effectiveSettings.headerHeight,
                   left: effectiveSettings.marginLeft,
                   width: contentWidth,
-                  height: usableH,
-                  overflow: "visible",
+                  height: contentAreaHeight,
+                  maxHeight: contentAreaHeight,
+                  overflow: "hidden",
                   zIndex: 1,
                   fontFamily: 'Arial, "Helvetica Neue", Helvetica, "Segoe UI", Roboto, sans-serif',
                 }}
               >
-                <div className="flex-1">
+                <div className="flex-1 overflow-hidden">
                   {!hidePatientBlock && <PatientInfoBlock report={report} />}
                   {pageBlockIdxs.map((bi) => (
                     <div key={blocks[bi].key}>{blocks[bi].node}</div>
                   ))}
                 </div>
 
-                {/* If printOnEveryPage is true, render signatures at the bottom of EVERY page */}
-                {printOnEveryPage && enabledSignaturesList.length > 0 && (
+                {/* If printOnEveryPage is true AND in flow mode, render signatures at bottom of EVERY page in flow */}
+                {!isFixedSig && printOnEveryPage && enabledSignaturesList.length > 0 && (
                   <div className="mt-auto pt-2 shrink-0 select-none" style={{ pageBreakInside: 'avoid' }}>
                     {renderSignaturesGrid(signatureRows, enabledSignaturesList, globalShowSignatureOnly)}
                   </div>
                 )}
               </div>
+
+              {/* Static Fixed Position Doctor Signature (Static on last page or every page) */}
+              {isFixedSig && enabledSignaturesList.length > 0 && (printOnEveryPage || pi === pages.length - 1) && (
+                <div
+                  className="report-static-signature-container select-none print:select-none"
+                  style={{
+                    position: "absolute",
+                    bottom: `${sigBottomOffset}px`,
+                    left: sigAlign === "left"
+                      ? `${sigHorizontalOffset}px`
+                      : (sigAlign === "center" ? "50%" : undefined),
+                    right: sigAlign === "right"
+                      ? `${sigHorizontalOffset}px`
+                      : undefined,
+                    transform: sigAlign === "center" ? "translateX(-50%)" : undefined,
+                    zIndex: 10,
+                    pointerEvents: "none",
+                    maxWidth: `${contentWidth}px`,
+                  }}
+                >
+                  {renderSignaturesGrid(signatureRows, enabledSignaturesList, globalShowSignatureOnly)}
+                </div>
+              )}
 
               {/* Visual Margin Guides for Designer & Settings Live Preview (Hidden on Print) */}
               {showMarginGuides && (
@@ -1397,13 +1470,13 @@ export const PaginatedReportPreview = React.forwardRef<
                     </span>
                   </div>
 
-                  {/* Bottom Footer Boundary */}
+                  {/* Bottom Footer Content Boundary (Strict line where content stops) */}
                   <div
                     style={{ bottom: effectiveSettings.footerHeight }}
-                    className="absolute inset-x-0 border-t-2 border-dashed border-emerald-500/80 flex items-center justify-end px-3 pointer-events-none"
+                    className="absolute inset-x-0 border-t-2 border-dashed border-rose-500/80 flex items-center justify-end px-3 pointer-events-none"
                   >
-                    <span className="text-[10px] font-mono font-bold bg-emerald-600 text-white px-2 py-0.5 rounded shadow-xs translate-y-1/2">
-                      Footer: {effectiveSettings.footerHeight}px
+                    <span className="text-[10px] font-mono font-bold bg-rose-600 text-white px-2 py-0.5 rounded shadow-xs translate-y-1/2">
+                      Footer Stop Line: {effectiveSettings.footerHeight}px
                     </span>
                   </div>
 
@@ -1412,7 +1485,7 @@ export const PaginatedReportPreview = React.forwardRef<
                     style={{
                       left: effectiveSettings.marginLeft,
                       top: effectiveSettings.headerHeight,
-                      height: usableH,
+                      height: contentAreaHeight,
                     }}
                     className="absolute border-l-2 border-dashed border-amber-500/70"
                   />
@@ -1422,10 +1495,31 @@ export const PaginatedReportPreview = React.forwardRef<
                     style={{
                       right: effectiveSettings.marginRight,
                       top: effectiveSettings.headerHeight,
-                      height: usableH,
+                      height: contentAreaHeight,
                     }}
                     className="absolute border-r-2 border-dashed border-amber-500/70"
                   />
+
+                  {/* Static Signature Guide (if fixed mode) */}
+                  {isFixedSig && enabledSignaturesList.length > 0 && (
+                    <div
+                      style={{
+                        bottom: `${sigBottomOffset}px`,
+                        left: sigAlign === "left"
+                          ? `${sigHorizontalOffset}px`
+                          : (sigAlign === "center" ? "50%" : undefined),
+                        right: sigAlign === "right"
+                          ? `${sigHorizontalOffset}px`
+                          : undefined,
+                        transform: sigAlign === "center" ? "translateX(-50%)" : undefined,
+                      }}
+                      className="absolute border border-indigo-500/50 bg-indigo-500/10 rounded px-2 py-0.5 flex items-center gap-1 pointer-events-none z-30"
+                    >
+                      <span className="text-[9px] font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-white/90 dark:bg-zinc-900/90 px-1 py-0.2 rounded shadow-2xs">
+                        Fixed Signature ({sigBottomOffset}px)
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

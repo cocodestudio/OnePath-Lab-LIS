@@ -6,7 +6,7 @@ import {
   Edit3, ArrowUpDown, Layers, X, CheckCircle2, Percent, Sparkles,
   Briefcase, Building2, Plus, Copy, Trash2, Check,
   Filter, AlertCircle, TrendingUp, Settings2,
-  SlidersHorizontal, ShieldCheck, Tag
+  SlidersHorizontal, ShieldCheck, Tag, FlaskConical, Boxes
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +53,20 @@ interface TestRateItem {
   method?: string;
 }
 
+interface PackageRateItem {
+  id: string;
+  name: string;
+  test_code?: string;
+  category?: string;
+  description?: string;
+  tests_count?: number;
+  mrp: number;
+  b2b_price_default: number;
+  custom_price: number | null;
+  effective_price: number;
+  is_overridden: boolean;
+}
+
 interface B2BPartner {
   id: string | number;
   name: string;
@@ -77,9 +91,12 @@ export default function RateListPage() {
   const [rateLists, setRateLists] = useState<CustomRateList[]>([]);
   const [selectedRateListId, setSelectedRateListId] = useState<number | null>(null);
 
-  // Rate Matrix State (Tests under selected rate list)
+  // Rate Matrix State (Tests & Packages under selected rate list)
   const [testRates, setTestRates] = useState<TestRateItem[]>([]);
-  const [editedRates, setEditedRates] = useState<Record<string, string>>({}); // test_id => custom price string
+  const [packageRates, setPackageRates] = useState<PackageRateItem[]>([]);
+  const [ratesSubTab, setRatesSubTab] = useState<"TESTS" | "PACKAGES">("TESTS");
+  const [b2bSubTab, setB2bSubTab] = useState<"TESTS" | "PACKAGES">("TESTS");
+  const [editedRates, setEditedRates] = useState<Record<string, string>>({}); // test_id / pkg_id => custom price string
   const [isSavingRates, setIsSavingRates] = useState(false);
 
   // B2B Partner Directory State
@@ -135,6 +152,19 @@ export default function RateListPage() {
       pricing_source: string;
       method?: string;
     }>;
+    packages?: Array<{
+      id: string;
+      name: string;
+      test_code?: string;
+      category?: string;
+      description?: string;
+      tests_count?: number;
+      mrp: number;
+      b2b_price: number;
+      wholesale_margin: number;
+      discount_percent: number;
+      pricing_source: string;
+    }>;
   } | null>(null);
 
   const isB2B = user?.role === "B2B";
@@ -182,6 +212,7 @@ export default function RateListPage() {
         } else if (res.data.length === 0) {
           setSelectedRateListId(null);
           setTestRates([]);
+          setPackageRates([]);
         }
       }
     } catch (err) {
@@ -210,6 +241,7 @@ export default function RateListPage() {
       const res = await fetchFromLaravel(`/rate-lists/${id}`, { skipCache: true });
       if (res && res.status === "success" && res.data) {
         setTestRates(res.data.tests || []);
+        setPackageRates(res.data.packages || []);
         setEditedRates({});
       }
     } catch (err) {
@@ -513,6 +545,15 @@ export default function RateListPage() {
     return filteredTests.slice(start, start + pageSize);
   }, [filteredTests, currentPage, pageSize]);
 
+  // B2B Client Portal Pagination State
+  const [b2bPage, setB2bPage] = useState(1);
+  const [b2bPageSize, setB2bPageSize] = useState(15);
+
+  // Reset B2B pagination when filters change
+  useEffect(() => {
+    setB2bPage(1);
+  }, [search, selectedCategory, b2bSubTab]);
+
   // Filtered Tests for B2B Client Portal
   const filteredB2bTests = useMemo(() => {
     if (!b2bClientData?.tests) return [];
@@ -525,6 +566,51 @@ export default function RateListPage() {
       return matchesQuery && matchesCat;
     });
   }, [b2bClientData, search, selectedCategory]);
+
+  const totalB2bTests = filteredB2bTests.length;
+  const totalB2bTestPages = Math.max(1, Math.ceil(totalB2bTests / b2bPageSize));
+  const safeB2bTestPage = Math.min(Math.max(1, b2bPage), totalB2bTestPages);
+
+  const paginatedB2bTests = useMemo(() => {
+    const start = (safeB2bTestPage - 1) * b2bPageSize;
+    return filteredB2bTests.slice(start, start + b2bPageSize);
+  }, [filteredB2bTests, safeB2bTestPage, b2bPageSize]);
+
+  // Filtered Packages for B2B Client Portal
+  const filteredB2bPackages = useMemo(() => {
+    if (!b2bClientData?.packages) return [];
+    return b2bClientData.packages.filter((p) => {
+      const q = search.toLowerCase();
+      const code = (p.test_code || "").toLowerCase();
+      const name = (p.name || "").toLowerCase();
+      return !search || code.includes(q) || name.includes(q);
+    });
+  }, [b2bClientData, search]);
+
+  const totalB2bPackages = filteredB2bPackages.length;
+  const totalB2bPackagePages = Math.max(1, Math.ceil(totalB2bPackages / b2bPageSize));
+  const safeB2bPackagePage = Math.min(Math.max(1, b2bPage), totalB2bPackagePages);
+
+  const paginatedB2bPackages = useMemo(() => {
+    const start = (safeB2bPackagePage - 1) * b2bPageSize;
+    return filteredB2bPackages.slice(start, start + b2bPageSize);
+  }, [filteredB2bPackages, safeB2bPackagePage, b2bPageSize]);
+
+  // Filtered Packages for Admin Rate Matrix
+  const filteredPackages = useMemo(() => {
+    return packageRates.filter((p) => {
+      const q = search.toLowerCase();
+      const code = (p.test_code || "").toLowerCase();
+      const name = (p.name || "").toLowerCase();
+      const matchesQuery = !search || code.includes(q) || name.includes(q);
+      const isOverridden = editedRates[p.id] !== undefined ? editedRates[p.id] !== "" : p.is_overridden;
+      const matchesOverride =
+        overrideFilter === "ALL" ||
+        (overrideFilter === "OVERRIDDEN_ONLY" && isOverridden) ||
+        (overrideFilter === "DEFAULT_ONLY" && !isOverridden);
+      return matchesQuery && matchesOverride;
+    });
+  }, [packageRates, search, overrideFilter, editedRates]);
 
   const selectedRateList = rateLists.find((rl) => rl.id === selectedRateListId);
   const pendingEditsCount = Object.keys(editedRates).length;
@@ -586,21 +672,60 @@ export default function RateListPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4 text-xs font-mono shrink-0">
+          <div className="flex items-center gap-3 text-xs font-mono shrink-0">
             <div className="bg-card px-3.5 py-2 rounded-xl border border-border/80 text-center">
               <span className="text-[10px] text-muted-foreground block font-sans">Available Tests</span>
               <strong className="text-foreground text-sm">{filteredB2bTests.length}</strong>
             </div>
+            <div className="bg-card px-3.5 py-2 rounded-xl border border-border/80 text-center">
+              <span className="text-[10px] text-muted-foreground block font-sans">Health Packages</span>
+              <strong className="text-foreground text-sm">{filteredB2bPackages.length}</strong>
+            </div>
           </div>
         </div>
 
-        {/* ── Search & Category Filter ── */}
+        {/* ── Sub-tab Switcher: Individual Tests vs Health Packages ── */}
+        <div className="flex items-center gap-2 border-b border-border/70 pb-2">
+          <button
+            type="button"
+            onClick={() => {
+              setB2bSubTab("TESTS");
+              setSearch("");
+            }}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              b2bSubTab === "TESTS"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            }`}
+          >
+            <FlaskConical className="h-4 w-4" />
+            <span>Individual Tests ({filteredB2bTests.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setB2bSubTab("PACKAGES");
+              setSearch("");
+            }}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              b2bSubTab === "PACKAGES"
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            }`}
+          >
+            <Boxes className="h-4 w-4" />
+            <span>Health Packages ({filteredB2bPackages.length})</span>
+          </button>
+        </div>
+
+        {/* ── Search & Filter ── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-wrap print:hidden">
           <div className="relative w-full sm:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search test name or code..."
+              placeholder={b2bSubTab === "TESTS" ? "Search test name or code..." : "Search health package..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 pr-8 h-9 text-xs"
@@ -615,96 +740,290 @@ export default function RateListPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
-            <span className="text-xs font-bold text-muted-foreground mr-1 flex items-center gap-1">
-              <Filter className="h-3.5 w-3.5 text-primary" /> Dept:
-            </span>
-            {categories.slice(0, 7).map((c) => (
-              <Button
-                key={c}
-                variant={selectedCategory === c ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedCategory(c)}
-                className="text-xs h-8 px-2.5 shrink-0"
-              >
-                {c}
-              </Button>
-            ))}
-          </div>
+          {b2bSubTab === "TESTS" && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+              <span className="text-xs font-bold text-muted-foreground mr-1 flex items-center gap-1">
+                <Filter className="h-3.5 w-3.5 text-primary" /> Dept:
+              </span>
+              {categories.slice(0, 7).map((c) => (
+                <Button
+                  key={c}
+                  variant={selectedCategory === c ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedCategory(c)}
+                  className="text-xs h-8 px-2.5 shrink-0"
+                >
+                  {c}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ── Client Rate Sheet Table ── */}
-        <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
-                  <th className="py-3 px-4 w-12">#</th>
-                  <th className="py-3 px-4">Test Investigation</th>
-                  <th className="py-3 px-4">Department</th>
-                  <th className="py-3 px-4 text-right">Standard MRP</th>
-                  <th className="py-3 px-4 text-right">Your Agreed B2B Rate</th>
-                  <th className="py-3 px-4 text-center">Your Margin</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {loading ? (
-                  Array.from({ length: 8 }).map((_, idx) => (
-                    <tr key={idx} className="animate-fade-in">
-                      <td className="py-3.5 px-4"><div className="h-4 w-6 rounded shimmer-gradient" /></td>
-                      <td className="py-3.5 px-4"><div className="h-4 w-40 rounded shimmer-gradient mb-1" /><div className="h-3 w-20 rounded shimmer-gradient" /></td>
-                      <td className="py-3.5 px-4"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
-                      <td className="py-3.5 px-4 text-right"><div className="h-4 w-16 rounded shimmer-gradient ml-auto" /></td>
-                      <td className="py-3.5 px-4 text-right"><div className="h-5 w-20 rounded shimmer-gradient ml-auto" /></td>
-                      <td className="py-3.5 px-4 text-center"><div className="h-5 w-16 rounded-full shimmer-gradient mx-auto" /></td>
-                    </tr>
-                  ))
-                ) : filteredB2bTests.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-12 text-center text-muted-foreground">
-                      <AlertCircle className="h-6 w-6 mx-auto mb-2 text-muted-foreground/60" />
-                      <p className="font-semibold text-foreground">No test investigations found</p>
-                      <p className="text-[11px] mt-0.5">Try searching with a different test name or code</p>
-                    </td>
+        {b2bSubTab === "TESTS" ? (
+          <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
+                    <th className="py-3 px-4 w-12">#</th>
+                    <th className="py-3 px-4">Test Investigation</th>
+                    <th className="py-3 px-4">Department</th>
+                    <th className="py-3 px-4 text-right">Standard MRP</th>
+                    <th className="py-3 px-4 text-right">Your Agreed B2B Rate</th>
+                    <th className="py-3 px-4 text-center">Your Margin</th>
                   </tr>
-                ) : (
-                  filteredB2bTests.map((t, idx) => (
-                    <tr key={t.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="py-3 px-4 font-mono text-[11px] text-muted-foreground">{idx + 1}</td>
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-foreground text-xs">{t.name}</div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/70">
-                            {t.test_code || "TEST-CODE"}
-                          </span>
-                          {t.method && <span className="text-[10px] text-muted-foreground italic">· {t.method}</span>}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-[10px] font-semibold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">
-                          {t.category || "General"}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-semibold text-muted-foreground">
-                        ₹{Number(t.mrp || 0).toLocaleString("en-IN")}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <span className="font-mono font-extrabold text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-lg border border-emerald-500/20 inline-block">
-                          ₹{Number(t.b2b_price || 0).toLocaleString("en-IN")}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="text-[10px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 inline-block font-mono">
-                          Save ₹{Number(t.wholesale_margin || 0).toLocaleString("en-IN")} ({t.discount_percent}%)
-                        </span>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {loading ? (
+                    Array.from({ length: 8 }).map((_, idx) => (
+                      <tr key={idx} className="animate-fade-in">
+                        <td className="py-3.5 px-4"><div className="h-4 w-6 rounded shimmer-gradient" /></td>
+                        <td className="py-3.5 px-4"><div className="h-4 w-40 rounded shimmer-gradient mb-1" /><div className="h-3 w-20 rounded shimmer-gradient" /></td>
+                        <td className="py-3.5 px-4"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
+                        <td className="py-3.5 px-4 text-right"><div className="h-4 w-16 rounded shimmer-gradient ml-auto" /></td>
+                        <td className="py-3.5 px-4 text-right"><div className="h-5 w-20 rounded shimmer-gradient ml-auto" /></td>
+                        <td className="py-3.5 px-4 text-center"><div className="h-5 w-16 rounded-full shimmer-gradient mx-auto" /></td>
+                      </tr>
+                    ))
+                  ) : filteredB2bTests.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                        <AlertCircle className="h-6 w-6 mx-auto mb-2 text-muted-foreground/60" />
+                        <p className="font-semibold text-foreground">No test investigations found</p>
+                        <p className="text-[11px] mt-0.5">Try searching with a different test name or code</p>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    paginatedB2bTests.map((t, idx) => (
+                      <tr key={t.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-3 px-4 font-mono text-[11px] text-muted-foreground">{(safeB2bTestPage - 1) * b2bPageSize + idx + 1}</td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-foreground text-xs">{t.name}</div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/70">
+                              {t.test_code || "TEST-CODE"}
+                            </span>
+                            {t.method && <span className="text-[10px] text-muted-foreground italic">· {t.method}</span>}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-[10px] font-semibold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">
+                            {t.category || "General"}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-semibold text-muted-foreground">
+                          ₹{Number(t.mrp || 0).toLocaleString("en-IN")}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="font-mono font-extrabold text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-lg border border-emerald-500/20 inline-block">
+                            ₹{Number(t.b2b_price || 0).toLocaleString("en-IN")}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="text-[10px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 inline-block font-mono">
+                            Save ₹{Number(t.wholesale_margin || 0).toLocaleString("en-IN")} ({t.discount_percent}%)
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* B2B Tests Pagination Controls */}
+            {totalB2bTests > 0 && (
+              <div className="p-4 border-t border-border/70 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground bg-muted/20">
+                <div className="flex items-center gap-3">
+                  <span>
+                    Showing {(safeB2bTestPage - 1) * b2bPageSize + 1}–{Math.min(safeB2bTestPage * b2bPageSize, totalB2bTests)} of {totalB2bTests} investigations
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px]">Per page:</span>
+                    <select
+                      value={b2bPageSize}
+                      onChange={(e) => {
+                        setB2bPageSize(Number(e.target.value));
+                        setB2bPage(1);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-background border border-border text-xs text-foreground font-semibold focus:outline-none"
+                    >
+                      <option value={15}>15</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={safeB2bTestPage === 1}
+                    onClick={() => setB2bPage((p) => Math.max(1, p - 1))}
+                    className="h-8 px-2.5 text-xs"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+                    <span>Previous</span>
+                  </Button>
+                  <span className="px-2.5 font-mono font-bold text-foreground">
+                    Page {safeB2bTestPage} of {totalB2bTestPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={safeB2bTestPage >= totalB2bTestPages}
+                    onClick={() => setB2bPage((p) => Math.min(totalB2bTestPages, p + 1))}
+                    className="h-8 px-2.5 text-xs"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        ) : (
+          /* Health Packages Table for B2B Client */
+          <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
+                    <th className="py-3 px-4 w-12">#</th>
+                    <th className="py-3 px-4">Health Package</th>
+                    <th className="py-3 px-4">Category</th>
+                    <th className="py-3 px-4 text-right">Standard MRP</th>
+                    <th className="py-3 px-4 text-right">Your Agreed B2B Rate</th>
+                    <th className="py-3 px-4 text-center">Your Margin</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {loading ? (
+                    Array.from({ length: 4 }).map((_, idx) => (
+                      <tr key={idx} className="animate-fade-in">
+                        <td className="py-3.5 px-4"><div className="h-4 w-6 rounded shimmer-gradient" /></td>
+                        <td className="py-3.5 px-4"><div className="h-4 w-48 rounded shimmer-gradient mb-1" /><div className="h-3 w-28 rounded shimmer-gradient" /></td>
+                        <td className="py-3.5 px-4"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
+                        <td className="py-3.5 px-4 text-right"><div className="h-4 w-16 rounded shimmer-gradient ml-auto" /></td>
+                        <td className="py-3.5 px-4 text-right"><div className="h-5 w-20 rounded shimmer-gradient ml-auto" /></td>
+                        <td className="py-3.5 px-4 text-center"><div className="h-5 w-16 rounded-full shimmer-gradient mx-auto" /></td>
+                      </tr>
+                    ))
+                  ) : filteredB2bPackages.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                        <AlertCircle className="h-6 w-6 mx-auto mb-2 text-muted-foreground/60" />
+                        <p className="font-semibold text-foreground">No health packages found</p>
+                        <p className="text-[11px] mt-0.5">Try searching with a different package name or code</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedB2bPackages.map((pkg, idx) => (
+                      <tr key={pkg.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-3 px-4 font-mono text-[11px] text-muted-foreground">{(safeB2bPackagePage - 1) * b2bPageSize + idx + 1}</td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-foreground text-xs flex items-center gap-2">
+                            <span>{pkg.name}</span>
+                            {pkg.tests_count && (
+                              <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.2 rounded border border-primary/20">
+                                {pkg.tests_count} Tests Bundled
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/70">
+                              {pkg.test_code || "PKG-CODE"}
+                            </span>
+                            {pkg.description && (
+                              <span className="text-[10px] text-muted-foreground truncate max-w-sm">
+                                {pkg.description}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-[10px] font-semibold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">
+                            {pkg.category || "Health Package"}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-semibold text-muted-foreground">
+                          ₹{Number(pkg.mrp || 0).toLocaleString("en-IN")}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="font-mono font-extrabold text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-lg border border-emerald-500/20 inline-block">
+                            ₹{Number(pkg.b2b_price || 0).toLocaleString("en-IN")}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="text-[10px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 inline-block font-mono">
+                            Save ₹{Number(pkg.wholesale_margin || 0).toLocaleString("en-IN")} ({pkg.discount_percent}%)
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* B2B Packages Pagination Controls */}
+            {totalB2bPackages > 0 && (
+              <div className="p-4 border-t border-border/70 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-muted-foreground bg-muted/20">
+                <div className="flex items-center gap-3">
+                  <span>
+                    Showing {(safeB2bPackagePage - 1) * b2bPageSize + 1}–{Math.min(safeB2bPackagePage * b2bPageSize, totalB2bPackages)} of {totalB2bPackages} health packages
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px]">Per page:</span>
+                    <select
+                      value={b2bPageSize}
+                      onChange={(e) => {
+                        setB2bPageSize(Number(e.target.value));
+                        setB2bPage(1);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-background border border-border text-xs text-foreground font-semibold focus:outline-none"
+                    >
+                      <option value={15}>15</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={safeB2bPackagePage === 1}
+                    onClick={() => setB2bPage((p) => Math.max(1, p - 1))}
+                    className="h-8 px-2.5 text-xs"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+                    <span>Previous</span>
+                  </Button>
+                  <span className="px-2.5 font-mono font-bold text-foreground">
+                    Page {safeB2bPackagePage} of {totalB2bPackagePages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={safeB2bPackagePage >= totalB2bPackagePages}
+                    onClick={() => setB2bPage((p) => Math.min(totalB2bPackagePages, p + 1))}
+                    className="h-8 px-2.5 text-xs"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -1012,6 +1331,43 @@ export default function RateListPage() {
             </div>
           </div>
 
+          {/* Sub-tab Switcher: Individual Tests vs Health Packages */}
+          <div className="flex items-center gap-2 border-b border-border/70 pb-2">
+            <button
+              type="button"
+              onClick={() => {
+                setRatesSubTab("TESTS");
+                setSearch("");
+                setCurrentPage(1);
+              }}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                ratesSubTab === "TESTS"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              }`}
+            >
+              <FlaskConical className="h-3.5 w-3.5" />
+              <span>Individual Tests ({testRates.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setRatesSubTab("PACKAGES");
+                setSearch("");
+                setCurrentPage(1);
+              }}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                ratesSubTab === "PACKAGES"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              }`}
+            >
+              <Boxes className="h-3.5 w-3.5" />
+              <span>Health Packages ({packageRates.length})</span>
+            </button>
+          </div>
+
           {/* Search & Filter Bar */}
           <div className="rounded-2xl border border-border/80 bg-card p-3 sm:p-4 space-y-3 shadow-xs">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 flex-wrap">
@@ -1020,7 +1376,7 @@ export default function RateListPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder="Search test name or code..."
+                  placeholder={ratesSubTab === "TESTS" ? "Search test name or code..." : "Search health package..."}
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
@@ -1053,7 +1409,7 @@ export default function RateListPage() {
                   }}
                   className="text-xs h-8 px-2.5"
                 >
-                  All ({testRates.length})
+                  All ({ratesSubTab === "TESTS" ? testRates.length : packageRates.length})
                 </Button>
                 <Button
                   variant={overrideFilter === "OVERRIDDEN_ONLY" ? "default" : "outline"}
@@ -1079,184 +1435,328 @@ export default function RateListPage() {
                 </Button>
               </div>
 
-              {/* Category Dropdown */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-muted-foreground">Dept:</span>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => {
-                    setSelectedCategory(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="h-8 px-2 rounded-lg bg-background border border-border/80 text-xs text-foreground focus:ring-1 focus:ring-primary outline-none"
-                >
-                  {categories.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Test Rates Table */}
-          <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
-                    <th className="py-3 px-3.5 w-12">#</th>
-                    <th className="py-3 px-4">Test Details</th>
-                    <th className="py-3 px-3">Department</th>
-                    <th className="py-3 px-3.5 text-right">Standard MRP</th>
-                    <th className="py-3 px-3.5 text-right">Base B2B</th>
-                    <th className="py-3 px-4 text-right font-extrabold text-primary min-w-[150px]">
-                      Custom Rate for {selectedRateList?.name || "List"} (₹)
-                    </th>
-                    <th className="py-3 px-3.5 text-center">Wholesale Margin</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {loading ? (
-                    Array.from({ length: 8 }).map((_, idx) => (
-                      <tr key={idx} className="animate-fade-in">
-                        <td className="py-3 px-3.5"><div className="h-4 w-6 rounded shimmer-gradient" /></td>
-                        <td className="py-3 px-4"><div className="h-4 w-36 rounded shimmer-gradient mb-1" /><div className="h-3 w-20 rounded shimmer-gradient" /></td>
-                        <td className="py-3 px-3"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
-                        <td className="py-3 px-3.5 text-right"><div className="h-4 w-14 rounded shimmer-gradient ml-auto" /></td>
-                        <td className="py-3 px-3.5 text-right"><div className="h-4 w-14 rounded shimmer-gradient ml-auto" /></td>
-                        <td className="py-3 px-4 text-right"><div className="h-7 w-24 rounded shimmer-gradient ml-auto" /></td>
-                        <td className="py-3 px-3.5 text-center"><div className="h-5 w-16 rounded-full shimmer-gradient mx-auto" /></td>
-                      </tr>
-                    ))
-                  ) : paginatedRows.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-12 text-center text-muted-foreground">
-                        <AlertCircle className="h-6 w-6 mx-auto mb-2 text-muted-foreground/60" />
-                        <p className="font-semibold text-foreground">No tests match current filters</p>
-                        <p className="text-[11px] mt-0.5">Try changing your search query or department filter</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedRows.map((t, idx) => {
-                      const rowNum = (currentPage - 1) * pageSize + idx + 1;
-                      const hasPendingEdit = editedRates[t.id] !== undefined;
-                      const currentVal = hasPendingEdit
-                        ? editedRates[t.id]
-                        : t.custom_price !== null
-                        ? String(t.custom_price)
-                        : "";
-                      const effectiveVal = hasPendingEdit
-                        ? (currentVal === "" ? t.b2b_price_default : parseFloat(currentVal) || 0)
-                        : t.effective_price;
-                      const mrp = t.mrp || 0;
-                      const marginPct = mrp > 0 && mrp >= effectiveVal ? Math.round(((mrp - effectiveVal) / mrp) * 100) : 0;
-
-                      return (
-                        <tr
-                          key={t.id}
-                          className={`transition-colors ${
-                            hasPendingEdit
-                              ? "bg-primary/5 font-medium"
-                              : t.is_overridden
-                              ? "bg-emerald-500/5 hover:bg-emerald-500/10"
-                              : "hover:bg-muted/30"
-                          }`}
-                        >
-                          <td className="py-3 px-3.5 font-mono text-[11px] text-muted-foreground">{rowNum}</td>
-                          <td className="py-3 px-4">
-                            <div className="font-bold text-foreground text-xs">{t.name}</div>
-                            <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/70">
-                              {t.test_code || "TEST-CODE"}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3">
-                            <span className="text-[10px] font-semibold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">
-                              {t.category || "General"}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3.5 text-right font-mono text-muted-foreground">
-                            ₹{mrp.toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-3 px-3.5 text-right font-mono text-muted-foreground text-[11px]">
-                            ₹{t.b2b_price_default.toLocaleString("en-IN")}
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <div className="relative w-28">
-                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 font-mono text-muted-foreground text-xs">₹</span>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="any"
-                                  placeholder={String(t.b2b_price_default)}
-                                  value={currentVal}
-                                  onChange={(e) => handleRateInputChange(t.id, e.target.value)}
-                                  className={`h-8 pl-6 pr-2 text-right font-mono text-xs font-bold rounded-lg ${
-                                    hasPendingEdit
-                                      ? "border-primary ring-1 ring-primary bg-primary/10"
-                                      : t.is_overridden
-                                      ? "border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5"
-                                      : "border-border/80"
-                                  }`}
-                                />
-                              </div>
-                              {currentVal !== "" && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRateInputChange(t.id, "")}
-                                  className="text-[10px] text-muted-foreground hover:text-rose-600 p-1 rounded hover:bg-muted"
-                                  title="Reset to default rate"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-3.5 text-center">
-                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-mono">
-                              {marginPct}% off MRP
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="p-4 border-t border-border/70 flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalItems)} of {totalItems} tests
-                </span>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    className="h-8 px-2 text-xs"
+              {/* Category Dropdown (Only for Tests) */}
+              {ratesSubTab === "TESTS" && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-muted-foreground">Dept:</span>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => {
+                      setSelectedCategory(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="h-8 px-2 rounded-lg bg-background border border-border/80 text-xs text-foreground focus:ring-1 focus:ring-primary outline-none"
                   >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </Button>
-                  <span className="px-2 font-mono font-bold text-foreground">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    className="h-8 px-2 text-xs"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </Button>
+                    {categories.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
+
+          {/* Rates Table: Tests vs Packages */}
+          {ratesSubTab === "PACKAGES" ? (
+            <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
+                      <th className="py-3 px-3.5 w-12">#</th>
+                      <th className="py-3 px-4">Health Package Details</th>
+                      <th className="py-3 px-3">Category</th>
+                      <th className="py-3 px-3.5 text-right">Standard MRP</th>
+                      <th className="py-3 px-3.5 text-right">Base B2B</th>
+                      <th className="py-3 px-4 text-right font-extrabold text-primary min-w-[150px]">
+                        Custom Rate for {selectedRateList?.name || "List"} (₹)
+                      </th>
+                      <th className="py-3 px-3.5 text-center">Wholesale Margin</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {loading ? (
+                      Array.from({ length: 4 }).map((_, idx) => (
+                        <tr key={idx} className="animate-fade-in">
+                          <td className="py-3 px-3.5"><div className="h-4 w-6 rounded shimmer-gradient" /></td>
+                          <td className="py-3 px-4"><div className="h-4 w-48 rounded shimmer-gradient mb-1" /><div className="h-3 w-28 rounded shimmer-gradient" /></td>
+                          <td className="py-3 px-3"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
+                          <td className="py-3 px-3.5 text-right"><div className="h-4 w-14 rounded shimmer-gradient ml-auto" /></td>
+                          <td className="py-3 px-3.5 text-right"><div className="h-4 w-14 rounded shimmer-gradient ml-auto" /></td>
+                          <td className="py-3 px-4 text-right"><div className="h-7 w-24 rounded shimmer-gradient ml-auto" /></td>
+                          <td className="py-3 px-3.5 text-center"><div className="h-5 w-16 rounded-full shimmer-gradient mx-auto" /></td>
+                        </tr>
+                      ))
+                    ) : filteredPackages.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-muted-foreground">
+                          <AlertCircle className="h-6 w-6 mx-auto mb-2 text-muted-foreground/60" />
+                          <p className="font-semibold text-foreground">No health packages match current filters</p>
+                          <p className="text-[11px] mt-0.5">Try changing your search query or reset filter</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredPackages.map((pkg, idx) => {
+                        const hasPendingEdit = editedRates[pkg.id] !== undefined;
+                        const currentVal = hasPendingEdit
+                          ? editedRates[pkg.id]
+                          : pkg.custom_price !== null
+                          ? String(pkg.custom_price)
+                          : "";
+                        const effectiveVal = hasPendingEdit
+                          ? (currentVal === "" ? pkg.b2b_price_default : parseFloat(currentVal) || 0)
+                          : pkg.effective_price;
+                        const mrp = pkg.mrp || 0;
+                        const marginPct = mrp > 0 && mrp >= effectiveVal ? Math.round(((mrp - effectiveVal) / mrp) * 100) : 0;
+
+                        return (
+                          <tr
+                            key={pkg.id}
+                            className={`transition-colors ${
+                              hasPendingEdit
+                                ? "bg-primary/5 font-medium"
+                                : pkg.is_overridden
+                                ? "bg-emerald-500/5 hover:bg-emerald-500/10"
+                                : "hover:bg-muted/30"
+                            }`}
+                          >
+                            <td className="py-3.5 px-3.5 font-mono text-[11px] text-muted-foreground">{idx + 1}</td>
+                            <td className="py-3.5 px-4">
+                              <div className="font-bold text-foreground text-xs flex items-center gap-2">
+                                <span>{pkg.name}</span>
+                                {pkg.tests_count && (
+                                  <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.2 rounded border border-primary/20">
+                                    {pkg.tests_count} Tests Bundled
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/70">
+                                  {pkg.test_code || "PKG-CODE"}
+                                </span>
+                                {pkg.description && (
+                                  <span className="text-[10px] text-muted-foreground truncate max-w-sm">
+                                    {pkg.description}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-3">
+                              <span className="text-[10px] font-semibold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">
+                                {pkg.category || "Health Package"}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-3.5 text-right font-mono text-muted-foreground">
+                              ₹{mrp.toLocaleString("en-IN")}
+                            </td>
+                            <td className="py-3.5 px-3.5 text-right font-mono text-muted-foreground text-[11px]">
+                              ₹{pkg.b2b_price_default.toLocaleString("en-IN")}
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <div className="relative w-28">
+                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 font-mono text-muted-foreground text-xs">₹</span>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder={String(pkg.b2b_price_default)}
+                                    value={currentVal}
+                                    onChange={(e) => handleRateInputChange(pkg.id, e.target.value)}
+                                    className={`h-8 pl-6 pr-2 text-right font-mono text-xs font-bold rounded-lg ${
+                                      hasPendingEdit
+                                        ? "border-primary ring-1 ring-primary bg-primary/10"
+                                        : pkg.is_overridden
+                                        ? "border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5"
+                                        : "border-border/80"
+                                    }`}
+                                  />
+                                </div>
+                                {currentVal !== "" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRateInputChange(pkg.id, "")}
+                                    className="text-[10px] text-muted-foreground hover:text-rose-600 p-1 rounded hover:bg-muted"
+                                    title="Reset to default rate"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-3.5 text-center">
+                              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-mono">
+                                {marginPct}% off MRP
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
+                      <th className="py-3 px-3.5 w-12">#</th>
+                      <th className="py-3 px-4">Test Details</th>
+                      <th className="py-3 px-3">Department</th>
+                      <th className="py-3 px-3.5 text-right">Standard MRP</th>
+                      <th className="py-3 px-3.5 text-right">Base B2B</th>
+                      <th className="py-3 px-4 text-right font-extrabold text-primary min-w-[150px]">
+                        Custom Rate for {selectedRateList?.name || "List"} (₹)
+                      </th>
+                      <th className="py-3 px-3.5 text-center">Wholesale Margin</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {loading ? (
+                      Array.from({ length: 8 }).map((_, idx) => (
+                        <tr key={idx} className="animate-fade-in">
+                          <td className="py-3 px-3.5"><div className="h-4 w-6 rounded shimmer-gradient" /></td>
+                          <td className="py-3 px-4"><div className="h-4 w-36 rounded shimmer-gradient mb-1" /><div className="h-3 w-20 rounded shimmer-gradient" /></td>
+                          <td className="py-3 px-3"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
+                          <td className="py-3 px-3.5 text-right"><div className="h-4 w-14 rounded shimmer-gradient ml-auto" /></td>
+                          <td className="py-3 px-3.5 text-right"><div className="h-4 w-14 rounded shimmer-gradient ml-auto" /></td>
+                          <td className="py-3 px-4 text-right"><div className="h-7 w-24 rounded shimmer-gradient ml-auto" /></td>
+                          <td className="py-3 px-3.5 text-center"><div className="h-5 w-16 rounded-full shimmer-gradient mx-auto" /></td>
+                        </tr>
+                      ))
+                    ) : paginatedRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-muted-foreground">
+                          <AlertCircle className="h-6 w-6 mx-auto mb-2 text-muted-foreground/60" />
+                          <p className="font-semibold text-foreground">No tests match current filters</p>
+                          <p className="text-[11px] mt-0.5">Try changing your search query or department filter</p>
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedRows.map((t, idx) => {
+                        const rowNum = (currentPage - 1) * pageSize + idx + 1;
+                        const hasPendingEdit = editedRates[t.id] !== undefined;
+                        const currentVal = hasPendingEdit
+                          ? editedRates[t.id]
+                          : t.custom_price !== null
+                          ? String(t.custom_price)
+                          : "";
+                        const effectiveVal = hasPendingEdit
+                          ? (currentVal === "" ? t.b2b_price_default : parseFloat(currentVal) || 0)
+                          : t.effective_price;
+                        const mrp = t.mrp || 0;
+                        const marginPct = mrp > 0 && mrp >= effectiveVal ? Math.round(((mrp - effectiveVal) / mrp) * 100) : 0;
+
+                        return (
+                          <tr
+                            key={t.id}
+                            className={`transition-colors ${
+                              hasPendingEdit
+                                ? "bg-primary/5 font-medium"
+                                : t.is_overridden
+                                ? "bg-emerald-500/5 hover:bg-emerald-500/10"
+                                : "hover:bg-muted/30"
+                            }`}
+                          >
+                            <td className="py-3 px-3.5 font-mono text-[11px] text-muted-foreground">{rowNum}</td>
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-foreground text-xs">{t.name}</div>
+                              <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/70">
+                                {t.test_code || "TEST-CODE"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="text-[10px] font-semibold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">
+                                {t.category || "General"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3.5 text-right font-mono text-muted-foreground">
+                              ₹{mrp.toLocaleString("en-IN")}
+                            </td>
+                            <td className="py-3 px-3.5 text-right font-mono text-muted-foreground text-[11px]">
+                              ₹{t.b2b_price_default.toLocaleString("en-IN")}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <div className="relative w-28">
+                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 font-mono text-muted-foreground text-xs">₹</span>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder={String(t.b2b_price_default)}
+                                    value={currentVal}
+                                    onChange={(e) => handleRateInputChange(t.id, e.target.value)}
+                                    className={`h-8 pl-6 pr-2 text-right font-mono text-xs font-bold rounded-lg ${
+                                      hasPendingEdit
+                                        ? "border-primary ring-1 ring-primary bg-primary/10"
+                                        : t.is_overridden
+                                        ? "border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5"
+                                        : "border-border/80"
+                                    }`}
+                                  />
+                                </div>
+                                {currentVal !== "" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRateInputChange(t.id, "")}
+                                    className="text-[10px] text-muted-foreground hover:text-rose-600 p-1 rounded hover:bg-muted"
+                                    title="Reset to default rate"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-3.5 text-center">
+                              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 font-mono">
+                                {marginPct}% off MRP
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="p-4 border-t border-border/70 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>
+                    Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, totalItems)} of {totalItems} tests
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      className="h-8 px-2 text-xs"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </Button>
+                    <span className="px-2 font-mono font-bold text-foreground">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      className="h-8 px-2 text-xs"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

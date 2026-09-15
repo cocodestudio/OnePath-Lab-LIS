@@ -15,10 +15,8 @@ import {
 } from "lucide-react";
 import { ReportSheet, type PrintSettings, type ReportSheetData } from "@/components/report-sheet";
 import { InvoiceSheet, type InvoiceData } from "@/components/invoice-sheet";
-import { MachineIntegrationTab } from "@/components/machine-integration-tab";
 import { CollectionCentersTab } from "@/components/collection-centers-tab";
 import { PaymentGatewayTab } from "@/components/payment-gateway-tab";
-import { WhatsAppGatewayTab } from "@/components/whatsapp-gateway-tab";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import {
@@ -75,6 +73,29 @@ function getDummyReportWithSettings(layoutSettings: ReportLayoutSettings, printS
       email: "rajesh.kumar@example.com",
       aadhaarNo: "XXXX-XXXX-1234",
       insuranceNo: "HDFC-ERGO-9921",
+      uhid: "UHID-882109",
+      hfr_id: "HFR-DEL-4019",
+      height: "175 cm",
+      weight: "72 kg",
+      sampleCollectedAt: new Date().toISOString(),
+      sampleReceivedAt: new Date().toISOString(),
+      sampleReportedAt: new Date().toISOString(),
+      secondRefDoctor: "Dr. R. K. Gupta",
+      sampleCollectedBy: "Amit Singh (Phlebotomist)",
+      collectionCenter: "Central Diagnostic Hub",
+      vialBarcode: "890123456789",
+      meta: {
+        uhid: "UHID-882109",
+        hfr_id: "HFR-DEL-4019",
+        height: "175 cm",
+        weight: "72 kg",
+        aadhaar_no: "XXXX-XXXX-1234",
+        insurance_no: "HDFC-ERGO-9921",
+        second_ref_doctor: "Dr. R. K. Gupta",
+        sample_collected_by: "Amit Singh (Phlebotomist)",
+        collection_center: "Central Diagnostic Hub",
+        vial_barcode: "890123456789",
+      },
     },
     lab: {
       name: "OnePath Pathology Laboratory",
@@ -816,6 +837,8 @@ function SettingsContent() {
   const handleToggleIntakeField = (key: string, property: "enabled" | "required" | "showOnReport") => {
     setLayoutSettings(prev => {
       const currentList = prev.intakeFields && prev.intakeFields.length > 0 ? prev.intakeFields : DEFAULT_INTAKE_FIELDS;
+      let nextOrdering = [...prev.patientDetailsOrder];
+
       const updated = currentList.map(item => {
         if (item.key !== key) return item;
         const newVal = !item[property];
@@ -823,11 +846,27 @@ function SettingsContent() {
         if (property === "enabled" && !newVal) {
           nextItem.required = false;
         }
+
+        if (property === "showOnReport") {
+          const ordName = item.orderingName || item.label;
+          if (newVal) {
+            if (ordName && !nextOrdering.includes(ordName)) {
+              nextOrdering.push(ordName);
+            }
+          } else {
+            if (ordName) {
+              nextOrdering = nextOrdering.filter(o => o !== ordName && o !== item.label && o !== item.key);
+            }
+          }
+        }
+
         return nextItem;
       });
+
       return {
         ...prev,
         intakeFields: updated,
+        patientDetailsOrder: nextOrdering,
       };
     });
   };
@@ -1007,18 +1046,6 @@ function SettingsContent() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab("machine-integration")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                activeTab === "machine-integration"
-                  ? "bg-background text-primary shadow-xs font-extrabold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Cpu className="h-3.5 w-3.5" />
-              <span>Machine Integration</span>
-            </button>
-            <button
-              type="button"
               onClick={() => setActiveTab("collection-centers")}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 activeTab === "collection-centers"
@@ -1043,108 +1070,11 @@ function SettingsContent() {
               <CreditCard className="h-3.5 w-3.5" />
               <span>Payment Gateway</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("whatsapp-gateway")}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                activeTab === "whatsapp-gateway"
-                  ? "bg-background text-emerald-600 dark:text-emerald-400 shadow-xs font-extrabold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-              title="Official WhatsApp Report Delivery Gateway"
-            >
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current shrink-0" xmlns="http://www.w3.org/2000/svg">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-              </svg>
-              <span>WhatsApp Gateway</span>
-            </button>
           </div>
         </div>
 
-        {activeTab !== "machine-integration" && activeTab !== "collection-centers" && activeTab !== "payment-gateway" && activeTab !== "whatsapp-gateway" && (
+        {activeTab !== "collection-centers" && activeTab !== "payment-gateway" && (
           <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
-            <Dialog>
-              <DialogTrigger asChild>
-                <button
-                  type="button"
-                  className="px-4 py-2.5 rounded-xl border border-border bg-card text-xs font-bold text-foreground hover:bg-accent transition-colors inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
-                >
-                  <Eye className="h-4 w-4 text-primary" />
-                  <span>Full Preview</span>
-                </button>
-              </DialogTrigger>
-              <DialogContent className="w-[96vw] max-w-5xl h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border/80 shadow-2xl">
-                <DialogHeader className="px-4 sm:px-6 py-3 border-b border-border/80 bg-card shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <DialogTitle className="font-display font-bold text-foreground flex items-center gap-2 text-sm sm:text-base">
-                    <span>{activeTab === "bills-layout" ? "Diagnostic Bill / Receipt Preview" : "Diagnostic Report Print Layout Preview"}</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-primary/10 text-primary font-bold hidden sm:inline">
-                      Live A4 ({Math.round(previewScale * 100)}%)
-                    </span>
-                  </DialogTitle>
-                  <div className="flex items-center gap-2 pr-6">
-                    {activeTab !== "bills-layout" && settings.bgImage && (
-                      <button
-                        type="button"
-                        onClick={() => setShowWithLetterheadPreview(!showWithLetterheadPreview)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                          showWithLetterheadPreview
-                            ? "bg-primary/10 border-primary text-primary"
-                            : "bg-muted border-border text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {showWithLetterheadPreview ? "Letterhead: ON" : "Letterhead: OFF"}
-                      </button>
-                    )}
-                    <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 border border-border/60">
-                      <button
-                        type="button"
-                        onClick={() => setPreviewScale(prev => Math.max(0.35, prev - 0.05))}
-                        className="p-1 hover:bg-card rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                        title="Zoom Out"
-                      >
-                        <ZoomOut className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewScale(0.65)}
-                        className="p-1 hover:bg-card rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                        title="Reset Zoom"
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewScale(prev => Math.min(1.0, prev + 0.05))}
-                        className="p-1 hover:bg-card rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                        title="Zoom In"
-                      >
-                        <ZoomIn className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </DialogHeader>
-                <div className="flex-1 overflow-auto sheet-pan-canvas bg-muted/50 p-2 sm:p-8 flex justify-center items-start">
-                  <div 
-                    style={{
-                      transform: `scale(${previewScale})`,
-                      transformOrigin: "top center",
-                      width: "794px",
-                      marginBottom: `-${1123 * (1 - previewScale)}px`,
-                      marginRight: `-${794 * (1 - previewScale) / 2}px`,
-                      marginLeft: `-${794 * (1 - previewScale) / 2}px`,
-                    }}
-                    className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 w-[794px] bg-white transition-transform duration-200"
-                  >
-                    {activeTab === "bills-layout" ? (
-                      <InvoiceSheet invoice={previewInvoiceData} settings={billSettings} />
-                    ) : (
-                      <ReportSheet report={previewReportData} settings={activePreviewSettings} showMarginGuides={true} />
-                    )}
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-
             <button
               type="button"
               onClick={saveSettings}
@@ -1167,7 +1097,7 @@ function SettingsContent() {
               <div>
                 <h3 className="font-display font-bold text-sm text-foreground">Interactive Margin Controls</h3>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Adjust the printable boundaries. Changes reflect live on the real-time canvas sheet.
+                  Adjust printable boundaries. Changes reflect live on the real-time canvas sheet.
                 </p>
               </div>
 
@@ -1182,7 +1112,7 @@ function SettingsContent() {
                 <input
                   type="range"
                   min="0"
-                  max="140"
+                  max="300"
                   value={settings.headerHeight}
                   onChange={(e) => {
                     setActivePreset("custom");
@@ -1192,8 +1122,8 @@ function SettingsContent() {
                 />
                 <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
                   <span>0 px</span>
-                  <span>60 px</span>
-                  <span>140 px</span>
+                  <span>150 px</span>
+                  <span>300 px</span>
                 </div>
               </div>
 
@@ -1208,7 +1138,7 @@ function SettingsContent() {
                 <input
                   type="range"
                   min="0"
-                  max="140"
+                  max="300"
                   value={settings.footerHeight}
                   onChange={(e) => {
                     setActivePreset("custom");
@@ -1218,8 +1148,8 @@ function SettingsContent() {
                 />
                 <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
                   <span>0 px</span>
-                  <span>60 px</span>
-                  <span>140 px</span>
+                  <span>150 px</span>
+                  <span>300 px</span>
                 </div>
               </div>
 
@@ -2467,6 +2397,172 @@ function SettingsContent() {
                     </div>
                   </label>
                 </div>
+
+                {/* Static Fixed vs Dynamic Flow Mode */}
+                <div className="pt-3 border-t border-border/70 space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-foreground block">
+                      Canvas Positioning Mode
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLayoutSettings(prev => ({
+                            ...prev,
+                            signatureSettings: {
+                              ...prev.signatureSettings,
+                              positionMode: "fixed",
+                            },
+                          }));
+                        }}
+                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all text-left flex flex-col gap-0.5 cursor-pointer select-none ${
+                          (layoutSettings.signatureSettings?.positionMode ?? "fixed") === "fixed"
+                            ? "bg-primary text-primary-foreground border-primary shadow-xs ring-2 ring-primary/20"
+                            : "bg-background border-border text-foreground hover:bg-muted/40"
+                        }`}
+                      >
+                        <span className="font-extrabold">📌 Static Fixed Position</span>
+                        <span className={`text-[10px] font-normal ${
+                          (layoutSettings.signatureSettings?.positionMode ?? "fixed") === "fixed" ? "text-primary-foreground/80" : "text-muted-foreground"
+                        }`}>
+                          Locked coordinates on canvas, unaffected by table row counts
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLayoutSettings(prev => ({
+                            ...prev,
+                            signatureSettings: {
+                              ...prev.signatureSettings,
+                              positionMode: "flow",
+                            },
+                          }));
+                        }}
+                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all text-left flex flex-col gap-0.5 cursor-pointer select-none ${
+                          (layoutSettings.signatureSettings?.positionMode ?? "fixed") === "flow"
+                            ? "bg-primary text-primary-foreground border-primary shadow-xs ring-2 ring-primary/20"
+                            : "bg-background border-border text-foreground hover:bg-muted/40"
+                        }`}
+                      >
+                        <span className="font-extrabold">🌊 Dynamic Flow</span>
+                        <span className={`text-[10px] font-normal ${
+                          (layoutSettings.signatureSettings?.positionMode ?? "fixed") === "flow" ? "text-primary-foreground/80" : "text-muted-foreground"
+                        }`}>
+                          Appears immediately following report table content
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {(layoutSettings.signatureSettings?.positionMode ?? "fixed") === "fixed" && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+                      {/* Slider: Distance from Bottom */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-foreground">Vertical Distance from Bottom</span>
+                          <span className="font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-[11px]">
+                            {layoutSettings.signatureSettings?.bottomOffset ?? 45} px
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="300"
+                          value={layoutSettings.signatureSettings?.bottomOffset ?? 45}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setLayoutSettings(prev => ({
+                              ...prev,
+                              signatureSettings: {
+                                ...prev.signatureSettings,
+                                bottomOffset: val,
+                              },
+                            }));
+                          }}
+                          className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                        />
+                        <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+                          <span>0 px</span>
+                          <span>150 px</span>
+                          <span>300 px</span>
+                        </div>
+                      </div>
+
+                      {/* Horizontal Alignment */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-foreground block">
+                          Horizontal Alignment
+                        </label>
+                        <div className="grid grid-cols-3 gap-1 bg-background p-1 rounded-xl border border-border">
+                          {(["left", "center", "right"] as const).map((align) => {
+                            const currentAlign = layoutSettings.signatureSettings?.horizontalAlign ?? "right";
+                            const isSel = currentAlign === align;
+                            return (
+                              <button
+                                key={align}
+                                type="button"
+                                onClick={() => {
+                                  setLayoutSettings(prev => ({
+                                    ...prev,
+                                    signatureSettings: {
+                                      ...prev.signatureSettings,
+                                      horizontalAlign: align,
+                                    },
+                                  }));
+                                }}
+                                className={`py-1 text-xs font-bold capitalize rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer select-none ${
+                                  isSel
+                                    ? "bg-primary text-primary-foreground shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground"
+                                }`}
+                              >
+                                {align === "left" && <AlignLeft className="h-3 w-3" />}
+                                {align === "center" && <AlignCenter className="h-3 w-3" />}
+                                {align === "right" && <AlignRight className="h-3 w-3" />}
+                                <span>{align}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Horizontal Offset */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-foreground">Horizontal Offset (From Edge)</span>
+                          <span className="font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded text-[11px]">
+                            {layoutSettings.signatureSettings?.horizontalOffset ?? 36} px
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="300"
+                          value={layoutSettings.signatureSettings?.horizontalOffset ?? 36}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setLayoutSettings(prev => ({
+                              ...prev,
+                              signatureSettings: {
+                                ...prev.signatureSettings,
+                                horizontalOffset: val,
+                              },
+                            }));
+                          }}
+                          className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                        />
+                        <div className="flex justify-between text-[10px] text-muted-foreground font-mono">
+                          <span>0 px</span>
+                          <span>150 px</span>
+                          <span>300 px</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* List of Doctor Signatures */}
@@ -3546,24 +3642,14 @@ function SettingsContent() {
         </div>
       )}
 
-      {/* TAB 4: MACHINE INTEGRATION & LIVE HUB */}
-      {activeTab === "machine-integration" && (
-        <MachineIntegrationTab />
-      )}
-
-      {/* TAB 5: COLLECTION CENTERS & B2B FRANCHISES */}
+      {/* TAB: COLLECTION CENTERS & B2B FRANCHISES */}
       {activeTab === "collection-centers" && (
         <CollectionCentersTab />
       )}
 
-      {/* TAB 6: PAYMENT GATEWAY & BANK SETTLEMENT */}
+      {/* TAB: PAYMENT GATEWAY & BANK SETTLEMENT */}
       {activeTab === "payment-gateway" && (
         <PaymentGatewayTab />
-      )}
-
-      {/* TAB 7: OFFICIAL WHATSAPP GATEWAY INTEGRATION */}
-      {activeTab === "whatsapp-gateway" && (
-        <WhatsAppGatewayTab />
       )}
 
       {/* Add Signature Dialog Modal */}
