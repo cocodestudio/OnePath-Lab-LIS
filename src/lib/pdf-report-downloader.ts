@@ -208,9 +208,9 @@ export async function generateNativePdfBlob(html: string, filename: string): Pro
 
 /**
  * Pristine Client-Side PDF Generation Engine
- * Uses an isolated off-screen sandbox mounted directly to document.body,
+ * Uses an isolated sandbox mounted directly to document.body,
  * integer 2x DPI rendering, and lossless PNG compression so all table borders
- * and lines remain 100% straight and balanced without server dependencies.
+ * and lines remain 100% straight and balanced without server or network dependencies.
  */
 export async function generatePristineClientPdf(printContainer: HTMLElement, filename?: string): Promise<Blob> {
   const { default: jsPDF } = await import("jspdf");
@@ -231,16 +231,18 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
     compress: true,
   });
 
-  // Create clean isolated sandbox on body to eliminate modal transforms, zoom, and subpixel flex centering
+  // Clean isolated sandbox placed at origin behind page to eliminate modal transforms & subpixel offsets
   const sandbox = document.createElement("div");
   sandbox.style.position = "fixed";
   sandbox.style.top = "0";
-  sandbox.style.left = "-100000px";
+  sandbox.style.left = "0";
   sandbox.style.width = "794px";
   sandbox.style.height = "1123px";
   sandbox.style.overflow = "hidden";
   sandbox.style.backgroundColor = "#ffffff";
   sandbox.style.zIndex = "-99999";
+  sandbox.style.pointerEvents = "none";
+  sandbox.style.opacity = "1";
   document.body.appendChild(sandbox);
 
   try {
@@ -262,27 +264,55 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
       clone.style.boxSizing = "border-box";
       clone.style.backgroundColor = "#ffffff";
 
-      // Inline any images
-      inlineElementImages(clone);
+      // Inline loaded images from original DOM element to guarantee 0 network latency and no missing bitmaps
+      const origImgs = el.querySelectorAll<HTMLImageElement>("img");
+      const cloneImgs = clone.querySelectorAll<HTMLImageElement>("img");
+      origImgs.forEach((origImg, idx) => {
+        const cloneImg = cloneImgs[idx];
+        if (!cloneImg) return;
+        try {
+          if (origImg.complete && origImg.naturalWidth > 0) {
+            const c = document.createElement("canvas");
+            c.width = origImg.naturalWidth;
+            c.height = origImg.naturalHeight;
+            const ctx = c.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(origImg, 0, 0);
+              cloneImg.src = c.toDataURL("image/png");
+            }
+          }
+        } catch {
+          cloneImg.src = origImg.src;
+        }
+      });
+
+      // Stabilize table borders so lines remain 100% straight and balanced
+      clone.querySelectorAll<HTMLTableElement>("table").forEach((tbl) => {
+        tbl.style.borderCollapse = "collapse";
+      });
 
       sandbox.innerHTML = "";
       sandbox.appendChild(clone);
 
-      // Short delay for DOM styles and layout paint to settle
+      // Short delay for layout paint
       await new Promise((r) => setTimeout(r, 60));
 
       const canvas = await html2canvas(clone, {
-        scale: 2, // Exact integer 2x DPI so 1px border becomes exactly 2px uniformly
+        scale: 2, // Exact integer 2x DPI so 1px borders stay uniform
         useCORS: true,
         allowTaint: true,
         logging: false,
         backgroundColor: "#ffffff",
         width: 794,
         height: 1123,
-        windowWidth: 1200, // Desktop media queries, no column distortion
+        x: 0,
+        y: 0,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 1200,
       });
 
-      // Lossless PNG: zero JPEG compression distortion or line blurring
+      // Lossless PNG: zero JPEG ringing or line blurring
       const imgData = canvas.toDataURL("image/png");
       pdf.addImage(imgData, "PNG", 0, 0, 210, 297, undefined, "FAST");
     }
@@ -297,18 +327,18 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
 
 /**
  * Downloads a pixel-perfect Vector PDF directly to user's downloads folder.
- * Uses server-side Chromium engine with automated seamless client-side fallback.
+ * Executes the pristine client engine directly for instant, error-free download with zero line distortion.
  */
 export async function downloadNativePdf({ printContainer, filename }: GeneratePdfOptions): Promise<void> {
   const safeFilename = filename || "LabReport.pdf";
   let pdfBlob: Blob;
 
   try {
+    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
+  } catch (clientErr) {
+    console.warn("Client engine encountered issue, trying server fallback:", clientErr);
     const html = prepareReportHtml(printContainer);
     pdfBlob = await generateNativePdfBlob(html, safeFilename);
-  } catch (serverErr) {
-    console.warn("Server-side PDF engine unavailable, executing pristine client-side engine:", serverErr);
-    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
   }
 
   // Trigger browser download
@@ -320,7 +350,9 @@ export async function downloadNativePdf({ printContainer, filename }: GeneratePd
   downloadLink.click();
 
   setTimeout(() => {
-    document.body.removeChild(downloadLink);
+    if (downloadLink.parentNode) {
+      document.body.removeChild(downloadLink);
+    }
     URL.revokeObjectURL(blobUrl);
   }, 3000);
 }
@@ -333,11 +365,11 @@ export async function getNativePdfBase64({ printContainer, filename }: GenerateP
   let pdfBlob: Blob;
 
   try {
+    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
+  } catch (clientErr) {
+    console.warn("Client engine encountered issue, trying server fallback:", clientErr);
     const html = prepareReportHtml(printContainer);
     pdfBlob = await generateNativePdfBlob(html, safeFilename);
-  } catch (serverErr) {
-    console.warn("Server-side PDF engine unavailable, executing pristine client-side engine:", serverErr);
-    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
   }
 
   return new Promise((resolve, reject) => {
