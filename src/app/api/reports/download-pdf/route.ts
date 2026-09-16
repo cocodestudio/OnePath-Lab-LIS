@@ -52,6 +52,9 @@ function findChromeExecutable(): string {
   throw new Error("No compatible Chrome, Chromium, or Edge executable found on the host system.");
 }
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   let browser: any = null;
 
@@ -82,10 +85,13 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       try {
         const chromium = (await import("@sparticuz/chromium")).default;
-        chromePath = await chromium.executablePath();
+        const arch = process.arch === "arm64" ? "arm64" : "x64";
+        const packUrl = `https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.${arch}.tar`;
+        chromePath = await chromium.executablePath(packUrl);
         launchArgs = [...chromium.args, "--font-render-hinting=none"];
-      } catch {
-        throw new Error("No compatible Chrome, Chromium, or Edge executable found on the host system.");
+      } catch (e2: any) {
+        console.error("Sparticuz chromium launch error:", e2);
+        throw new Error(e2?.message || "No compatible Chrome, Chromium, or Edge executable found on the host system.");
       }
     }
 
