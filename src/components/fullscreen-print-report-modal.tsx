@@ -27,6 +27,7 @@ import { WhatsAppQrDialog } from "@/components/whatsapp-qr-dialog";
 import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
 import { getReportPackage } from "@/lib/packages";
+import { downloadNativePdf, getNativePdfBase64 } from "@/lib/pdf-report-downloader";
 
 interface FullscreenPrintReportModalProps {
   open: boolean;
@@ -269,15 +270,33 @@ export function FullscreenPrintReportModal({
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [open, handlePrint]);
 
-  // ── Native Vector PDF Download (Approach 1: Zero overlap, 100% Vector Quality) ──
-  const handleDownloadPdf = async (_withLetterhead: boolean) => {
+  // ── Direct Pixel-Perfect High-Resolution Native Vector PDF Download (Option A) ──────
+  const handleDirectDownloadPdf = async () => {
     if (!printRef.current || !activeReportData) {
-      toast.error("Not Ready", "Preview still loading. Please wait a moment.");
+      toast.error("Not Ready", "Report preview is still rendering. Please wait a moment.");
       return;
     }
 
-    toast.info("Vector PDF Export", "Select 'Save as PDF' in the destination dropdown to save crisp vector PDF.");
-    handlePrint();
+    setIsDownloadingPdf(true);
+    toast.info("Preparing PDF", "Generating exact high-resolution vector PDF...");
+
+    try {
+      const pName = (report?.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const rCode = (report?.customId || report?.id || "Report").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `LabReport_${rCode}_${pName}.pdf`;
+
+      await downloadNativePdf({
+        printContainer: printRef.current,
+        filename,
+      });
+
+      toast.success("Downloaded", `${filename} downloaded successfully!`);
+    } catch (err: any) {
+      console.error("Direct PDF download error:", err);
+      toast.error("Download Error", err?.message || "Failed to generate report PDF.");
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
   // ── Automated WhatsApp Dispatch via Meta Cloud API ──────────────────
@@ -296,44 +315,17 @@ export function FullscreenPrintReportModal({
 
     setIsSendingWhatsApp(true);
     const displayPhone = phone.replace(/\D/g, "");
-    toast.info("Preparing WhatsApp", "Rendering high-resolution PDF report...");
+    toast.info("Preparing WhatsApp", "Rendering crisp native PDF report...");
 
     try {
-      // Query all page canvas wrappers in preview
-      const pageElements = printRef.current.querySelectorAll<HTMLElement>(".report-print-page");
-      if (!pageElements || pageElements.length === 0) {
-        throw new Error("No printable report pages found in preview.");
-      }
+      const pName = (report?.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const rCode = (report?.customId || report?.id || "Report").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `LabReport_${rCode}_${pName}.pdf`;
 
-      const { default: jsPDF } = await import("jspdf");
-      const { default: html2canvas } = await import("html2canvas");
-
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-        compress: true,
+      const pdfBase64 = await getNativePdfBase64({
+        printContainer: printRef.current,
+        filename,
       });
-
-      for (let i = 0; i < pageElements.length; i++) {
-        if (i > 0) pdf.addPage();
-        const el = pageElements[i];
-
-        // Capture crisp 1.5x resolution canvas for fast upload and lightweight payload
-        const canvas = await html2canvas(el, {
-          scale: 1.5,
-          useCORS: true,
-          allowTaint: true,
-          logging: false,
-          backgroundColor: "#ffffff",
-          windowWidth: 794,
-        });
-
-        const imgData = canvas.toDataURL("image/jpeg", 0.75);
-        pdf.addImage(imgData, "JPEG", 0, 0, 210, 297, undefined, "FAST");
-      }
-
-      const pdfBase64 = pdf.output("datauristring");
 
       toast.info("Sending via WhatsApp...", `Delivering official PDF report to +${displayPhone}...`);
 
@@ -530,11 +522,12 @@ export function FullscreenPrintReportModal({
 
                 <button
                   type="button"
-                  onClick={() => handleDownloadPdf(printWithHeaderFooter)}
-                  className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                  onClick={() => handleDirectDownloadPdf()}
+                  disabled={isDownloadingPdf}
+                  className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
                   title="Download PDF"
                 >
-                  <Download className="h-4 w-4" />
+                  {isDownloadingPdf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 </button>
                 <button
                   type="button"
@@ -679,6 +672,25 @@ export function FullscreenPrintReportModal({
 
             {/* Bottom Actions Footer */}
             <div className="p-4 border-t border-border/80 bg-muted/20 space-y-2.5">
+              <Button
+                type="button"
+                onClick={() => handleDirectDownloadPdf()}
+                disabled={isDownloadingPdf}
+                className="w-full h-11 gap-2 font-extrabold text-sm bg-emerald-700 hover:bg-emerald-800 text-white cursor-pointer shadow-md rounded-xl transition-all"
+              >
+                {isDownloadingPdf ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                    <span>Generating PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" />
+                    <span>Download PDF</span>
+                  </>
+                )}
+              </Button>
+
               <Button
                 type="button"
                 onClick={() => handlePrint()}

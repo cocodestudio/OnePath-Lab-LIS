@@ -9,6 +9,7 @@ import {
 import { ReportSheet } from "@/components/report-sheet";
 import { getCleanLetterheadUrl } from "@/lib/api-client";
 import { useReactToPrint } from "react-to-print";
+import { downloadNativePdf } from "@/lib/pdf-report-downloader";
 
 export default function PublicReportVerificationPage() {
   const params = useParams();
@@ -262,8 +263,23 @@ export default function PublicReportVerificationPage() {
     documentTitle: `Report_${patientName}_${code}`,
   });
 
-  const handleDownloadPdf = () => {
-    handleNativePrint();
+  const handleDownloadPdf = async () => {
+    if (!printRef.current || !sheetData) return;
+
+    setIsDownloading(true);
+    try {
+      const filename = `LabReport_${code}_${patientName}.pdf`;
+      await downloadNativePdf({
+        printContainer: printRef.current,
+        filename,
+      });
+    } catch (err: any) {
+      console.error("Public QR PDF download error:", err);
+      // Graceful fallback to browser print if server request fails
+      handleNativePrint();
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const handleWhatsAppShare = () => {
