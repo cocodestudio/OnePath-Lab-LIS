@@ -66,20 +66,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const chromePath = findChromeExecutable();
+    let chromePath: string | undefined;
+    let launchArgs = [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--no-first-run",
+      "--no-zygote",
+      "--font-render-hinting=none",
+    ];
+
+    try {
+      chromePath = findChromeExecutable();
+    } catch (e) {
+      try {
+        const chromium = (await import("@sparticuz/chromium")).default;
+        chromePath = await chromium.executablePath();
+        launchArgs = [...chromium.args, "--font-render-hinting=none"];
+      } catch {
+        throw new Error("No compatible Chrome, Chromium, or Edge executable found on the host system.");
+      }
+    }
 
     browser = await puppeteer.launch({
       executablePath: chromePath,
       headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--no-first-run",
-        "--no-zygote",
-        "--font-render-hinting=none",
-      ],
+      args: launchArgs,
     });
 
     const page = await browser.newPage();
