@@ -233,7 +233,21 @@ export interface ReportLayoutSettings {
   };
   signaturePrintOnEveryPage?: boolean;
   showSignatureOnly?: boolean;
+  groupByDepartment?: boolean;
+  departmentOrder?: string[];
 }
+
+export const DEFAULT_DEPARTMENT_ORDER = [
+  "Haematology",
+  "Biochemistry",
+  "Serology & Immunology",
+  "Clinical Pathology",
+  "Microbiology",
+  "Endocrinology & Hormones",
+  "Molecular Biology",
+  "Histopathology & Cytology",
+  "Other / General",
+] as const;
 
 export const defaultReportLayoutSettings: ReportLayoutSettings = {
   defaultDesignation: "MR.",
@@ -258,6 +272,8 @@ export const defaultReportLayoutSettings: ReportLayoutSettings = {
     "Phone No.",
     "Report Status",
   ],
+  groupByDepartment: true,
+  departmentOrder: [...DEFAULT_DEPARTMENT_ORDER],
   intakeFields: DEFAULT_INTAKE_FIELDS,
   typography: {
     departmentFontSize: 13,
@@ -534,6 +550,17 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
   };
   res.signaturePrintOnEveryPage = printOnEveryPage;
   res.showSignatureOnly = showSignatureOnly;
+
+  res.groupByDepartment = raw.groupByDepartment !== undefined 
+    ? !!raw.groupByDepartment 
+    : (raw.group_by_department !== undefined ? !!raw.group_by_department : true);
+
+  const rawDeptOrder = raw.departmentOrder || raw.department_order;
+  if (Array.isArray(rawDeptOrder) && rawDeptOrder.length > 0) {
+    res.departmentOrder = rawDeptOrder;
+  } else {
+    res.departmentOrder = [...DEFAULT_DEPARTMENT_ORDER];
+  }
 
   return res;
 }

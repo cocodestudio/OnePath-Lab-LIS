@@ -52,6 +52,39 @@ function findChromeExecutable(): string {
   throw new Error("No compatible Chrome, Chromium, or Edge executable found on the host system.");
 }
 
+function getLocalStaticCss(): string {
+  try {
+    const candidates = [
+      path.join(process.cwd(), ".next", "static", "css"),
+      path.join(process.cwd(), "..", ".next", "static", "css"),
+    ];
+
+    for (const cssDir of candidates) {
+      if (fs.existsSync(cssDir)) {
+        let combined = "";
+        const readDirRecursive = (dir: string) => {
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              readDirRecursive(fullPath);
+            } else if (entry.isFile() && entry.name.endsWith(".css")) {
+              try {
+                combined += fs.readFileSync(fullPath, "utf-8") + "\n";
+              } catch {}
+            }
+          }
+        };
+        readDirRecursive(cssDir);
+        if (combined.trim().length > 0) return combined;
+      }
+    }
+  } catch (e) {
+    console.warn("Could not read local static CSS directory:", e);
+  }
+  return "";
+}
+
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -110,11 +143,24 @@ export async function POST(req: NextRequest) {
       deviceScaleFactor: 2,
     });
 
-    // Load full HTML content
-    await page.setContent(html, {
-      waitUntil: "domcontentloaded",
-      timeout: 20000,
-    });
+    // Load full HTML content with network stabilization
+    try {
+      await page.setContent(html, {
+        waitUntil: ["domcontentloaded", "networkidle0"],
+        timeout: 25000,
+      });
+    } catch {
+      await page.setContent(html, {
+        waitUntil: "domcontentloaded",
+        timeout: 10000,
+      });
+    }
+
+    // Ensure all compiled Next.js styles from local server disk are injected
+    const localCss = getLocalStaticCss();
+    if (localCss) {
+      await page.addStyleTag({ content: localCss });
+    }
 
     // Wait for web fonts and all pending images to complete layout paint
     await page.evaluate(async () => {
@@ -131,11 +177,12 @@ export async function POST(req: NextRequest) {
             return new Promise<void>((resolve) => {
               img.onload = () => resolve();
               img.onerror = () => resolve();
-              setTimeout(resolve, 4000);
+              setTimeout(resolve, 3000);
             });
           })
         );
       }
+      await new Promise((r) => setTimeout(r, 60));
     });
 
     // Export pure vector PDF matching A4 exactly (210mm x 297mm)

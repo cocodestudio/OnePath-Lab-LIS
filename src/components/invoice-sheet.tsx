@@ -83,7 +83,9 @@ export const InvoiceSheet = React.forwardRef<
   const patientPhone = patient.phone || "—";
   const patientAddress = patient.address || "—";
 
-  const balance = Math.max(0, (invoice.total || 0) + (invoice.discount || 0) - (invoice.paidAmount || 0));
+  const isPaid = invoice.status === "PAID";
+  const effectivePaidAmount = isPaid ? (invoice.total || 0) : (invoice.paidAmount || 0);
+  const balance = isPaid ? 0 : Math.max(0, (invoice.total || 0) - (invoice.paidAmount || 0));
   const isA5 = billSettings.size === "A5";
 
   const groupedTests = React.useMemo(() => {
@@ -413,7 +415,7 @@ export const InvoiceSheet = React.forwardRef<
 
           <div className="flex justify-between text-emerald-700 font-bold py-0.5">
             <span>Paid Amount:</span>
-            <span className="font-mono">₹{(invoice.paidAmount || 0).toFixed(2)}</span>
+            <span className="font-mono">₹{effectivePaidAmount.toFixed(2)}</span>
           </div>
 
           <div className="flex justify-between font-extrabold text-zinc-900 border-t border-zinc-300 pt-1">

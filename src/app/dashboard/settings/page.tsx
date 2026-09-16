@@ -11,7 +11,8 @@ import {
   Pilcrow, MoveHorizontal, Receipt, QrCode, PlusCircle,
   CreditCard, PenTool, Image as ImageIcon, ClipboardList,
   CheckSquare, Stethoscope, User, Shield, Lock, Asterisk,
-  Cpu, Radio, Activity, HardDrive, Terminal, Building2
+  Cpu, Radio, Activity, HardDrive, Terminal, Building2,
+  GripVertical, FlaskConical, Plus
 } from "lucide-react";
 import { ReportSheet, type PrintSettings, type ReportSheetData } from "@/components/report-sheet";
 import { InvoiceSheet, type InvoiceData } from "@/components/invoice-sheet";
@@ -23,6 +24,7 @@ import {
   ALL_DESIGNATIONS,
   ALL_ORDERING_FIELDS,
   DEFAULT_INTAKE_FIELDS,
+  DEFAULT_DEPARTMENT_ORDER,
   type IntakeFieldConfig,
   type ReportLayoutSettings,
   type DoctorSignatureConfig,
@@ -172,6 +174,38 @@ function getDummyReportWithSettings(layoutSettings: ReportLayoutSettings, printS
           refRangeMin: 70,
           refRangeMax: 100,
           method: "GOD-POD",
+        },
+      },
+      {
+        id: "r4b",
+        resultValue: "0.9",
+        isAbnormal: false,
+        test: {
+          id: "t4b",
+          name: "Serum Creatinine",
+          category: "Biochemistry",
+          price: 0,
+          unit: "mg/dL",
+          refRangeMin: 0.7,
+          refRangeMax: 1.3,
+          method: "Modified Jaffe's Method",
+        },
+      },
+      {
+        id: "r5",
+        resultValue: "NEGATIVE",
+        isAbnormal: false,
+        test: {
+          id: "t5",
+          name: "Widal Slide Agglutination",
+          category: "Serology & Immunology",
+          price: 0,
+          unit: "Titre",
+          refRangeMin: 0,
+          refRangeMax: 0,
+          textRefRange: "Negative (< 1:80)",
+          rangeType: "TEXT",
+          method: "Slide Agglutination",
         },
       },
     ],
@@ -829,6 +863,86 @@ function SettingsContent() {
     setLayoutSettings(prev => ({
       ...prev,
       patientDetailsOrder: [...defaultReportLayoutSettings.patientDetailsOrder],
+    }));
+  };
+
+  // Department Sequence & Priority handlers (Drag & Drop)
+  const currentDeptOrder = layoutSettings.departmentOrder && layoutSettings.departmentOrder.length > 0
+    ? layoutSettings.departmentOrder
+    : [...DEFAULT_DEPARTMENT_ORDER];
+
+  const [draggedDeptIdx, setDraggedDeptIdx] = useState<number | null>(null);
+  const [dragOverDeptIdx, setDragOverDeptIdx] = useState<number | null>(null);
+
+  const handleDeptDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedDeptIdx(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", `${index}`);
+  };
+
+  const handleDeptDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverDeptIdx !== index) {
+      setDragOverDeptIdx(index);
+    }
+  };
+
+  const handleDeptDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDeptDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedDeptIdx === null || draggedDeptIdx === targetIndex) {
+      setDraggedDeptIdx(null);
+      setDragOverDeptIdx(null);
+      return;
+    }
+
+    const nextOrder = [...currentDeptOrder];
+    const [moved] = nextOrder.splice(draggedDeptIdx, 1);
+    nextOrder.splice(targetIndex, 0, moved);
+
+    setLayoutSettings(prev => ({
+      ...prev,
+      departmentOrder: nextOrder,
+    }));
+    setDraggedDeptIdx(null);
+    setDragOverDeptIdx(null);
+  };
+
+  const handleDeptDragEnd = () => {
+    setDraggedDeptIdx(null);
+    setDragOverDeptIdx(null);
+  };
+
+  const handleResetDefaultDeptOrder = () => {
+    setLayoutSettings(prev => ({
+      ...prev,
+      departmentOrder: [...DEFAULT_DEPARTMENT_ORDER],
+    }));
+  };
+
+  const [newCustomDept, setNewCustomDept] = useState("");
+
+  const handleAddCustomDept = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newCustomDept.trim();
+    if (!trimmed) return;
+    if (!currentDeptOrder.some(d => d.toLowerCase() === trimmed.toLowerCase())) {
+      setLayoutSettings(prev => ({
+        ...prev,
+        departmentOrder: [...currentDeptOrder, trimmed],
+      }));
+    }
+    setNewCustomDept("");
+  };
+
+  const handleRemoveDept = (deptName: string) => {
+    setLayoutSettings(prev => ({
+      ...prev,
+      departmentOrder: currentDeptOrder.filter(d => d !== deptName),
     }));
   };
 
@@ -1832,6 +1946,163 @@ function SettingsContent() {
                 );
               })}
             </div>
+          </div>
+
+          {/* SECTION: DEPARTMENT SEQUENCE & GROUPING PRIORITY */}
+          <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-primary" />
+                  <h2 className="font-display text-base font-bold text-foreground">
+                    Department Sequence & Grouping Priority
+                  </h2>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    layoutSettings.groupByDepartment
+                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                      : "bg-muted text-muted-foreground border border-border"
+                  }`}>
+                    {layoutSettings.groupByDepartment ? "Active (Department-wise)" : "Default (Medical Priority)"}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Configure whether reports group investigations by department, and drag-and-drop departments to set their display priority.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleResetDefaultDeptOrder}
+                  className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="Reset to default medical sequence (Haematology, Biochemistry, Serology, etc.)"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span>Reset Default Order</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Department-Wise Grouping Checkbox / Toggle */}
+            <label className="flex items-start sm:items-center gap-3 p-3.5 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!layoutSettings.groupByDepartment}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setLayoutSettings(prev => ({
+                    ...prev,
+                    groupByDepartment: checked,
+                  }));
+                }}
+                className="h-5 w-5 rounded border-border text-primary accent-primary cursor-pointer shrink-0 mt-0.5 sm:mt-0"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-xs sm:text-sm text-foreground">
+                    Show Reports Department-Wise (Group by Department)
+                  </span>
+                  {layoutSettings.groupByDepartment && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                      <Check className="h-3 w-3" /> Enabled
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  When enabled, all tests of each department stay grouped together in the priority sequence set below. When disabled, the report uses default clinical priority layout.
+                </p>
+              </div>
+            </label>
+
+            {/* Department Drag & Drop Reorder List */}
+            <div className="space-y-2">
+              <div className="text-[11px] font-semibold text-muted-foreground flex items-center justify-between px-1">
+                <span>Drag &amp; Drop to Reorder Priority ({currentDeptOrder.length} Departments)</span>
+                <span className="text-[10px] text-primary font-medium">Hold &amp; Drag cards to change sequence</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {currentDeptOrder.map((deptName, idx) => {
+                  const isDragging = draggedDeptIdx === idx;
+                  const isOver = dragOverDeptIdx === idx && draggedDeptIdx !== idx;
+
+                  return (
+                    <div
+                      key={deptName}
+                      draggable
+                      onDragStart={(e) => handleDeptDragStart(e, idx)}
+                      onDragOver={(e) => handleDeptDragOver(e, idx)}
+                      onDragLeave={handleDeptDragLeave}
+                      onDrop={(e) => handleDeptDrop(e, idx)}
+                      onDragEnd={handleDeptDragEnd}
+                      className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-grab active:cursor-grabbing select-none shadow-2xs group ${
+                        isDragging
+                          ? "opacity-30 border-dashed border-primary bg-primary/10 scale-[0.98]"
+                          : isOver
+                          ? "border-primary ring-2 ring-primary/30 bg-primary/5 scale-[1.01]"
+                          : "border-border/80 bg-background hover:bg-muted/40 hover:border-border"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Drag Handle */}
+                        <div className="p-1 text-muted-foreground/60 group-hover:text-foreground shrink-0 rounded transition-colors">
+                          <GripVertical className="h-4 w-4" />
+                        </div>
+
+                        {/* Order Badge */}
+                        <span className={`h-6 w-6 rounded-lg flex items-center justify-center font-mono font-bold text-[11px] shrink-0 ${
+                          idx === 0
+                            ? "bg-primary text-primary-foreground shadow-xs"
+                            : idx === 1
+                            ? "bg-primary/20 text-primary font-extrabold"
+                            : "bg-muted text-muted-foreground"
+                        }`}>
+                          {idx + 1}
+                        </span>
+
+                        <div className="flex items-center gap-2 min-w-0">
+                          <FlaskConical className="h-4 w-4 text-primary shrink-0 opacity-70" />
+                          <span className="font-bold text-xs text-foreground truncate">{deptName}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveDept(deptName);
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                          title="Remove from list"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Add Custom Department Input */}
+            <form onSubmit={handleAddCustomDept} className="flex items-center gap-2 pt-2">
+              <input
+                type="text"
+                placeholder="Add another department (e.g. Molecular Biology, Allergy, Cytology)…"
+                value={newCustomDept}
+                onChange={(e) => setNewCustomDept(e.target.value)}
+                className="flex-1 bg-background border border-border/80 rounded-xl px-3.5 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary font-medium"
+              />
+              <button
+                type="submit"
+                disabled={!newCustomDept.trim()}
+                className="gradient-primary text-primary-foreground font-bold text-xs px-4 py-2 rounded-xl shadow-xs hover:-translate-y-px transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Add Department</span>
+              </button>
+            </form>
           </div>
 
           {/* SECTION 4: TESTS TYPOGRAPHY */}

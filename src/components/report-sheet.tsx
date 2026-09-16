@@ -284,6 +284,41 @@ function getDepartmentPriority(category: string): number {
   return 50;
 }
 
+function getDepartmentOrderIndex(category: string, orderList: string[]): number {
+  if (!orderList || orderList.length === 0) return 999;
+  const name = (category || "").trim().toLowerCase();
+
+  // 1. Direct exact match
+  const exactIdx = orderList.findIndex(d => d.trim().toLowerCase() === name);
+  if (exactIdx !== -1) return exactIdx;
+
+  // 2. Keyword/substring match
+  const matchIdx = orderList.findIndex(d => {
+    const dLower = d.trim().toLowerCase();
+    return name.includes(dLower) || dLower.includes(name);
+  });
+  if (matchIdx !== -1) return matchIdx;
+
+  // 3. Fallback normalized tokens match
+  for (let i = 0; i < orderList.length; i++) {
+    const dLower = orderList[i].trim().toLowerCase();
+    if (
+      ((name.includes("haemat") || name.includes("hemat")) && (dLower.includes("haemat") || dLower.includes("hemat"))) ||
+      ((name.includes("bio") || name.includes("chem")) && (dLower.includes("bio") || dLower.includes("chem"))) ||
+      ((name.includes("serol") || name.includes("immun")) && (dLower.includes("serol") || dLower.includes("immun"))) ||
+      (name.includes("micro") && dLower.includes("micro")) ||
+      ((name.includes("urine") || name.includes("path")) && (dLower.includes("urine") || dLower.includes("path"))) ||
+      ((name.includes("hormon") || name.includes("endocrin")) && (dLower.includes("hormon") || dLower.includes("endocrin"))) ||
+      (name.includes("molecul") && dLower.includes("molecul")) ||
+      ((name.includes("histo") || name.includes("cyto")) && (dLower.includes("histo") || dLower.includes("cyto")))
+    ) {
+      return i;
+    }
+  }
+
+  return 900 + getDepartmentPriority(category);
+}
+
 function getTestPriority(mainTestName: string, category?: string): number {
   const name = (mainTestName || "").trim().toLowerCase();
   const cat = (category || "").trim().toLowerCase();
@@ -440,9 +475,21 @@ export function buildReportBlocks(
   const noteConf = reportSettings.noteComment;
   const endConf = reportSettings.endingLine;
 
+  const isDeptGroupingEnabled = !!reportSettings.groupByDepartment;
   const groupedTests: Record<string, Record<string, ReportTest[]>> = {};
   (report.results || []).forEach((item) => {
-    const cat = item.test.category || "General Pathology";
+    let cat = item.test.category || "General Pathology";
+    if (isDeptGroupingEnabled) {
+      let rootTest: any = item.test;
+      if (item.test.parent) {
+        if (item.test.parent.parent) {
+          rootTest = item.test.parent.parent;
+        } else {
+          rootTest = item.test.parent;
+        }
+      }
+      cat = rootTest.category || item.test.category || "General Pathology";
+    }
     if (!groupedTests[cat]) groupedTests[cat] = {};
 
     let mainTestName = item.test.name;
@@ -586,8 +633,15 @@ export function buildReportBlocks(
     getReportPackage(report.customId) ||
     (report.patient?.customId ? getReportPackage(report.patient.customId) : "");
 
-  // Render Tests by Department and Test Panels in Medical Priority Order
+  const customDeptOrder = reportSettings.departmentOrder;
+
+  // Render Tests by Department and Test Panels in Configured / Medical Priority Order
   const sortedCategories = Object.entries(groupedTests).sort(([catA], [catB]) => {
+    if (isDeptGroupingEnabled && customDeptOrder && Array.isArray(customDeptOrder) && customDeptOrder.length > 0) {
+      const idxA = getDepartmentOrderIndex(catA, customDeptOrder);
+      const idxB = getDepartmentOrderIndex(catB, customDeptOrder);
+      if (idxA !== idxB) return idxA - idxB;
+    }
     const pA = getDepartmentPriority(catA);
     const pB = getDepartmentPriority(catB);
     if (pA !== pB) return pA - pB;
@@ -595,8 +649,8 @@ export function buildReportBlocks(
   });
 
   sortedCategories.forEach(([category, mainTests], catIdx) => {
-    // 1. Department Header
-    if (reportSettings.fieldsToShow.departmentName !== false) {
+    const buildDepartmentHeaderNode = (suffix: string, isSeparateTest = false) => {
+      if (reportSettings.fieldsToShow.departmentName === false) return null;
       const alignVal = String(typo.departmentNameAlignment || "").toLowerCase();
       const deptAlign = alignVal === "left" 
         ? "text-left" 
@@ -604,11 +658,13 @@ export function buildReportBlocks(
           ? "text-right" 
           : "text-center";
 
-      blocks.push({
-        key: `department-header-${category}`,
+      return {
+        key: `department-header-${category}-${suffix}`,
         node: (
           <div 
-            className={`font-extrabold text-zinc-900 uppercase tracking-widest pb-1 mb-1 border-b border-zinc-300 ${deptAlign}`}
+            className={`font-extrabold text-zinc-900 uppercase tracking-widest pb-1 mb-1 border-b border-zinc-300 ${deptAlign} ${
+              isSeparateTest ? "mt-2" : ""
+            }`}
             style={{ 
               fontFamily: 'Arial, Helvetica, sans-serif',
               fontSize: `${typo.departmentFontSize || 13}px`,
@@ -618,22 +674,28 @@ export function buildReportBlocks(
             {category}
           </div>
         ),
-      });
-    }
+      };
+    };
 
-    // Health Package display directly under Department Header on the left
-    if (resolvedPackageName && catIdx === 0) {
-      blocks.push({
-        key: `package-header-${category}`,
-        node: (
-          <div className="text-left mb-1.5 mt-0.5 flex items-center gap-1.5 select-none">
-            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Health Package:</span>
-            <span className="font-extrabold text-[11px] text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-300">
-              {resolvedPackageName}
-            </span>
-          </div>
-        ),
-      });
+    // When department-wise grouping is OFF (default), show department header once per category
+    if (!isDeptGroupingEnabled) {
+      const headerBlock = buildDepartmentHeaderNode("group");
+      if (headerBlock) blocks.push(headerBlock);
+
+      // Health Package display directly under Department Header on the left
+      if (resolvedPackageName && catIdx === 0) {
+        blocks.push({
+          key: `package-header-${category}`,
+          node: (
+            <div className="text-left mb-1.5 mt-0.5 flex items-center gap-1.5 select-none">
+              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Health Package:</span>
+              <span className="font-extrabold text-[11px] text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-300">
+                {resolvedPackageName}
+              </span>
+            </div>
+          ),
+        });
+      }
     }
 
     const sortedMainTests = Object.entries(mainTests).sort(([nameA], [nameB]) => {
@@ -643,8 +705,29 @@ export function buildReportBlocks(
       return nameA.localeCompare(nameB);
     });
 
-    sortedMainTests.forEach(([mainTestName, itemsList]) => {
+    sortedMainTests.forEach(([mainTestName, itemsList], testIdx) => {
       if (!itemsList || itemsList.length === 0) return;
+
+      // When department-wise grouping is ON, show department header before EACH test in this department!
+      if (isDeptGroupingEnabled) {
+        const headerBlock = buildDepartmentHeaderNode(`test-${testIdx}-${mainTestName}`, testIdx > 0 || catIdx > 0);
+        if (headerBlock) blocks.push(headerBlock);
+
+        // Health Package display under the very first department header
+        if (resolvedPackageName && catIdx === 0 && testIdx === 0) {
+          blocks.push({
+            key: `package-header-${category}`,
+            node: (
+              <div className="text-left mb-1.5 mt-0.5 flex items-center gap-1.5 select-none">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Health Package:</span>
+                <span className="font-extrabold text-[11px] text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-300">
+                  {resolvedPackageName}
+                </span>
+              </div>
+            ),
+          });
+        }
+      }
 
       const firstTestObj = itemsList[0].test;
       const mainTestObj = firstTestObj.parent?.parent ? firstTestObj.parent.parent : (firstTestObj.parent ? firstTestObj.parent : firstTestObj);

@@ -310,13 +310,13 @@ export default function BillingPage() {
   // Quick mark paid directly from table row
   const handleQuickMarkPaid = async (bill: Bill) => {
     if (isB2B) return;
-    const netTotal = Math.max(0, (Number(bill.total) || 0) - (Number(bill.discount) || 0));
+    const fullTotal = Number(bill.total) || 0;
     try {
       setUpdatingBillId(bill.id);
       await fetchFromLaravel(`/bills/${bill.id}`, {
         method: "PUT",
         body: JSON.stringify({
-          paid_amount: netTotal,
+          paid_amount: fullTotal,
           status: "PAID",
         }),
       });
@@ -337,12 +337,13 @@ export default function BillingPage() {
 
     try {
       const finalPaid = isB2B ? 0 : editPaid;
-      const finalStatus = isB2B ? "UNPAID" : (finalPaid >= editNetTotal ? "PAID" : (finalPaid > 0 ? "PARTIAL" : "UNPAID"));
+      const finalStatus = isB2B ? "UNPAID" : (finalPaid >= editNetTotal || paymentStatus === "PAID" ? "PAID" : (finalPaid > 0 ? "PARTIAL" : "UNPAID"));
+      const resolvedPaid = isB2B ? 0 : (finalStatus === "PAID" ? Math.max(finalPaid, editNetTotal) : finalPaid);
 
       const payload: any = {
         discount: isB2B ? 0 : editDiscount,
         total: editNetTotal,
-        paid_amount: finalPaid,
+        paid_amount: resolvedPaid,
         status: finalStatus,
       };
 
@@ -404,8 +405,8 @@ export default function BillingPage() {
   });
 
   const totalInvoiced = filteredBills.reduce((acc, b) => acc + (Number(b.total) || 0), 0);
-  const totalCollected = filteredBills.reduce((acc, b) => acc + (Number(b.paid_amount) || 0), 0);
-  const totalDue = Math.max(0, totalInvoiced - totalCollected);
+  const totalCollected = filteredBills.reduce((acc, b) => acc + (b.status === "PAID" ? (Number(b.total) || 0) : (Number(b.paid_amount) || 0)), 0);
+  const totalDue = filteredBills.reduce((acc, b) => acc + (b.status === "PAID" ? 0 : Math.max(0, (Number(b.total) || 0) - (Number(b.paid_amount) || 0))), 0);
   const paidCount = filteredBills.filter((b) => b.status === "PAID").length;
   const unpaidCount = filteredBills.filter((b) => b.status !== "PAID").length;
 
@@ -654,7 +655,9 @@ export default function BillingPage() {
                     month: "short",
                     year: "numeric"
                   });
-                  const due = Math.max(0, (Number(bill.total) || 0) - (Number(bill.paid_amount) || 0));
+                  const isBillPaid = bill.status === "PAID";
+                  const due = isBillPaid ? 0 : Math.max(0, (Number(bill.total) || 0) - (Number(bill.paid_amount) || 0));
+                  const displayPaid = isBillPaid ? (Number(bill.total) || 0) : (Number(bill.paid_amount) || 0);
                   const mainItems = getMainBillItems(bill, allTestsMap);
 
                   return (
@@ -685,7 +688,7 @@ export default function BillingPage() {
                       </td>
 
                       <td className="py-3.5 px-4 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                        ₹{(Number(bill.paid_amount) || 0).toFixed(2)}
+                        ₹{displayPaid.toFixed(2)}
                       </td>
 
                       <td className="py-3.5 px-4 text-right font-mono font-bold text-amber-600 dark:text-amber-400">
@@ -829,7 +832,9 @@ export default function BillingPage() {
                     createdAt: (selectedBillForInvoice.createdAt || selectedBillForInvoice.created_at) as string || new Date().toISOString(),
                     total: Number(selectedBillForInvoice.total || 0),
                     discount: Number(selectedBillForInvoice.discount || 0),
-                    paidAmount: Number(selectedBillForInvoice.paid_amount ?? (selectedBillForInvoice as any).paidAmount ?? 0),
+                    paidAmount: selectedBillForInvoice.status === "PAID"
+                      ? Number(selectedBillForInvoice.total || 0)
+                      : Number(selectedBillForInvoice.paid_amount ?? (selectedBillForInvoice as any).paidAmount ?? 0),
                     status: selectedBillForInvoice.status || "UNPAID",
                     paymentMode: "CASH / UPI",
                     billedBy: "Accounts / Billing Desk",
@@ -1206,7 +1211,7 @@ export default function BillingPage() {
                     <div className="flex justify-between items-center text-xs p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
                       <span className="text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wide">Balance Due</span>
                       <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-sm">
-                        ₹{Math.max(0, editNetTotal - editPaid).toFixed(2)}
+                        ₹{(paymentStatus === "PAID" ? 0 : Math.max(0, editNetTotal - editPaid)).toFixed(2)}
                       </span>
                     </div>
                   </div>

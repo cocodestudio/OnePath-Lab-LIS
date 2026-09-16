@@ -779,6 +779,9 @@ function computeAutomatedFormulas(
   return { calculatedValues, calculatedIds };
 }
 
+// Global memory cache so investigations load instantly on browse
+let globalAvailableTestsCache: Test[] | null = null;
+
 export default function ResultEntryPage() {
   const router = useRouter();
   const params = useParams();
@@ -800,7 +803,7 @@ export default function ResultEntryPage() {
   const [history, setHistory] = useState<Report[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [printedInterpretations, setPrintedInterpretations] = useState<string[]>([]);
-  const [availableTests, setAvailableTests] = useState<Test[]>([]);
+  const [availableTests, setAvailableTests] = useState<Test[]>(() => globalAvailableTestsCache || []);
   const [modifyingTest, setModifyingTest] = useState(false);
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [isPatientDetailsOpen, setIsPatientDetailsOpen] = useState(false);
@@ -850,22 +853,28 @@ export default function ResultEntryPage() {
     if (reportId) {
       fetchReport();
     }
+    // Prefetch investigations catalog immediately in the background
+    fetchAvailableTests();
   }, [reportId]);
 
-  const fetchAvailableTests = async () => {
-    if (availableTests.length > 0 || loadingAvailableTests) return;
+  const fetchAvailableTests = async (force = false) => {
+    if ((availableTests.length > 0 && !force) || loadingAvailableTests) return;
     try {
       setLoadingAvailableTests(true);
       const data = await fetchFromLaravel("/tests");
       const list = Array.isArray(data) ? data : (data?.data || []);
-      setAvailableTests(list.filter((t: any) => t.fieldType === "Group" || (!t.parent && !t.parentId && !t.parent_id)));
+      const filtered = list.filter((t: any) => t.fieldType === "Group" || (!t.parent && !t.parentId && !t.parent_id));
+      globalAvailableTestsCache = filtered;
+      setAvailableTests(filtered);
     } catch { } finally {
       setLoadingAvailableTests(false);
     }
   };
 
   const handleOpenAddTestModal = () => {
-    fetchAvailableTests();
+    if (availableTests.length === 0) {
+      fetchAvailableTests();
+    }
     setIsTestModalOpen(true);
   };
 
@@ -2565,34 +2574,66 @@ export default function ResultEntryPage() {
             </div>
 
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-              <button
-                type="button"
-                onClick={() => setActiveCategory("ALL")}
-                className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${activeCategory === "ALL"
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-              >
-                All Categories ({availableTests.length})
-              </button>
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setActiveCategory(cat)}
-                  className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${activeCategory === cat
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "bg-muted text-muted-foreground hover:text-foreground"
-                    }`}
-                >
-                  {cat} ({(groupedTests[cat] || []).length})
-                </button>
-              ))}
+              {loadingAvailableTests && availableTests.length === 0 ? (
+                <div className="flex items-center gap-2 animate-pulse py-0.5">
+                  <div className="h-6 w-28 bg-muted rounded-full" />
+                  <div className="h-6 w-24 bg-muted rounded-full" />
+                  <div className="h-6 w-32 bg-muted rounded-full" />
+                  <div className="h-6 w-24 bg-muted rounded-full" />
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setActiveCategory("ALL")}
+                    className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${activeCategory === "ALL"
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                      }`}
+                  >
+                    All Categories ({availableTests.length})
+                  </button>
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setActiveCategory(cat)}
+                      className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${activeCategory === cat
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "bg-muted text-muted-foreground hover:text-foreground"
+                        }`}
+                    >
+                      {cat} ({(groupedTests[cat] || []).length})
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 bg-background custom-scrollbar">
-            {Object.keys(filteredGroups).length === 0 ? (
+            {loadingAvailableTests && availableTests.length === 0 ? (
+              <div className="space-y-6 animate-pulse">
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-36 bg-muted rounded" />
+                  <div className="h-px flex-1 bg-border/80" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {Array.from({ length: 9 }).map((_, i) => (
+                    <div key={i} className="p-3.5 rounded-xl border border-border/80 bg-card/60 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                          <div className="h-4 w-4 rounded bg-muted shrink-0" />
+                          <div className="h-3.5 w-3/4 bg-muted rounded" />
+                        </div>
+                        <div className="h-3.5 w-10 bg-muted rounded shrink-0" />
+                      </div>
+                      <div className="h-2.5 w-1/2 bg-muted/60 rounded ml-6" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : Object.keys(filteredGroups).length === 0 ? (
               <div className="text-center py-16 text-muted-foreground space-y-2">
                 <FlaskConical className="h-10 w-10 mx-auto opacity-30" />
                 <p className="text-xs font-bold text-foreground">No available investigations match your filter.</p>
