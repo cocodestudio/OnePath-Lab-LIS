@@ -228,11 +228,10 @@ function SupportContent() {
                 setHistoryCategoryFilter("ALL");
                 setActiveView("HISTORY");
               }}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${
-                activeView === "HISTORY"
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${activeView === "HISTORY"
                   ? "gradient-primary text-primary-foreground"
                   : "border border-border/90 bg-card hover:bg-accent text-foreground"
-              }`}
+                }`}
             >
               <LifeBuoy className="h-3.5 w-3.5" />
               <span>Ticket History ({tickets.length})</span>
@@ -259,7 +258,7 @@ function SupportContent() {
       {/* ================= VIEW 1: MAIN HUB ================= */}
       {activeView === "HUB" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
+
           {/* Left Column: Quick Raise Support Ticket Box */}
           <div className="lg:col-span-5 space-y-4">
             <div className="bg-card/90 rounded-2xl border border-border/90 p-5 sm:p-6 shadow-sm space-y-4">
@@ -297,7 +296,7 @@ function SupportContent() {
                   rows={4}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Apko kya support chahiye yahan batayein (Describe your issue or request)..."
+                  placeholder="Describe your issue or request..."
                   className="w-full p-3.5 bg-background border border-border/90 rounded-xl text-xs text-foreground outline-none focus:border-primary resize-none placeholder:text-muted-foreground/50"
                   maxLength={500}
                 />
@@ -318,11 +317,10 @@ function SupportContent() {
                         key={tag}
                         type="button"
                         onClick={() => handleTagToggle(tag)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                          isSelected
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${isSelected
                             ? "bg-primary text-primary-foreground shadow-sm"
                             : "bg-muted text-muted-foreground hover:text-foreground hover:bg-accent border border-border/60"
-                        }`}
+                          }`}
                       >
                         {tag}
                       </button>
@@ -367,10 +365,10 @@ function SupportContent() {
 
           {/* Right Column: 3 Category Hub Cards & Helpdesk info */}
           <div className="lg:col-span-7 space-y-5">
-            
+
             {/* The 3 Main Interactive Action Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              
+
               {/* Card 1: Issues */}
               <div className="p-5 rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-500/5 to-transparent flex flex-col justify-between space-y-4 hover:border-red-500/40 transition-all shadow-sm">
                 <div>
@@ -611,7 +609,7 @@ function SupportContent() {
           {/* Right Guidance */}
           <div className="lg:col-span-5 space-y-6 pt-2">
             <h3 className="font-display text-xl font-bold text-foreground">When to report an issue?</h3>
-            
+
             <div className="space-y-4 text-xs">
               <div className="flex items-start gap-3.5">
                 <div className="h-9 w-9 rounded-xl bg-red-500/10 text-red-600 flex items-center justify-center shrink-0">
@@ -739,7 +737,7 @@ function SupportContent() {
           {/* Right Guidance */}
           <div className="lg:col-span-5 space-y-6 pt-2">
             <h3 className="font-display text-xl font-bold text-foreground">You can share feedback about:</h3>
-            
+
             <div className="space-y-4 text-xs">
               <div className="border-l-2 border-primary pl-3 space-y-1">
                 <h4 className="font-bold text-foreground">Overall product</h4>
@@ -852,7 +850,7 @@ function SupportContent() {
           {/* Right Guidance */}
           <div className="lg:col-span-5 space-y-6 pt-2">
             <h3 className="font-display text-xl font-bold text-foreground">We can build the right feature, if you:</h3>
-            
+
             <div className="space-y-4 text-xs">
               <div className="border-l-2 border-blue-500 pl-3 space-y-1">
                 <h4 className="font-bold text-foreground">Elaborate the feature</h4>
@@ -886,11 +884,10 @@ function SupportContent() {
                 <button
                   key={cat}
                   onClick={() => setHistoryCategoryFilter(cat)}
-                  className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all shrink-0 ${
-                    historyCategoryFilter === cat
+                  className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all shrink-0 ${historyCategoryFilter === cat
                       ? "bg-card text-primary shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
-                  }`}
+                    }`}
                 >
                   {cat === "ALL" ? "All Tickets" : cat === "FEATURE_REQUEST" ? "Features" : cat}
                 </button>
@@ -939,13 +936,12 @@ function SupportContent() {
                             {ticket.category}
                           </span>
                           <span
-                            className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
-                              ticket.status === "RESOLVED"
+                            className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${ticket.status === "RESOLVED"
                                 ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
                                 : ticket.status === "IN_PROGRESS"
-                                ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
-                                : "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                            }`}
+                                  ? "bg-blue-500/10 text-blue-600 border-blue-500/20"
+                                  : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                              }`}
                           >
                             {ticket.status}
                           </span>
@@ -953,7 +949,7 @@ function SupportContent() {
 
                         <h4 className="font-bold text-sm text-foreground">{ticket.subject}</h4>
                         <p className="text-xs text-muted-foreground line-clamp-1">{ticket.description}</p>
-                        
+
                         {(ticket.adminReply || ticket.admin_reply) && (
                           <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 pt-1">
                             <MessageCircle className="h-3.5 w-3.5 shrink-0" />
@@ -983,7 +979,7 @@ function SupportContent() {
       <Dialog open={!!selectedTicket} onOpenChange={() => setSelectedTicket(null)}>
         <DialogContent className="w-[95vw] max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl bg-card border border-border/80 shadow-2xl max-h-[92vh] flex flex-col">
           <DialogTitle className="sr-only">Support Ticket Details</DialogTitle>
-          
+
           <div className="flex items-center justify-between px-6 py-4 border-b border-border/80 bg-card shrink-0">
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">

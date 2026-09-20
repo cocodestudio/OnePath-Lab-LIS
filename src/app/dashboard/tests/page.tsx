@@ -210,6 +210,7 @@ export default function TestMasterPage() {
 
   // Modals
   const [notesModalOpen, setNotesModalOpen] = useState(false);
+  const [generatingAiInterpretation, setGeneratingAiInterpretation] = useState(false);
   const [activeNotesTab, setActiveNotesTab] = useState<"INTERPRETATION" | "COMMENT" | "NOTES">("INTERPRETATION");
 
   // Custom Options Modal State (Horizontal Landscape)
@@ -603,6 +604,58 @@ export default function TestMasterPage() {
 
     setError(null);
     setDialogOpen(true);
+  };
+
+  const handleAiGenerateInterpretation = async () => {
+    if (!name.trim()) {
+      toast.error("Test Name Required", "Please enter a test name first to generate clinical interpretation.");
+      return;
+    }
+    setGeneratingAiInterpretation(true);
+    try {
+      const paramList = subTests
+        .map((st) => ({
+          name: st.name?.trim(),
+          unit: st.unit || "",
+          ref_range:
+            st.rangeType === "numeric"
+              ? st.refRangeMin && st.refRangeMax
+                ? `${st.refRangeMin} - ${st.refRangeMax}`
+                : ""
+              : st.textRefRange || "",
+        }))
+        .filter((p) => p.name);
+
+      const res = await fetchFromLaravel("/ai/generate-interpretation", {
+        method: "POST",
+        body: JSON.stringify({
+          test_name: name.trim(),
+          category: category === "Other" && customCategory ? customCategory : category,
+          parameters: paramList,
+        }),
+      });
+
+      if (res && res.interpretation) {
+        setInterpretation(res.interpretation);
+        const providerLabel =
+          res.provider === "gemini"
+            ? "Google Gemini"
+            : res.provider === "groq"
+            ? "Groq AI"
+            : "Pathology Engine";
+
+        toast.success(
+          "Clinical Interpretation Ready",
+          `Generated via ${providerLabel} with diagnostic reference table.`
+        );
+      } else {
+        toast.error("Generation Failed", "Could not generate clinical interpretation.");
+      }
+    } catch (err: any) {
+      toast.error("AI Error", err.message || "Failed to generate clinical interpretation.");
+    } finally {
+      setGeneratingAiInterpretation(false);
+    }
   };
 
   const handleAddSubTest = () => {
@@ -1517,14 +1570,6 @@ export default function TestMasterPage() {
                 <span>Live Preview</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setNotesModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg border border-border/80 bg-background text-[11px] sm:text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs"
-              >
-                <FileText className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-blue-500" />
-                <span>Notes</span>
-              </button>
 
               <Button
                 type="button"
@@ -2154,7 +2199,7 @@ export default function TestMasterPage() {
                 className="inline-flex items-center gap-2 px-4 h-11 rounded-xl border border-border bg-card text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs disabled:opacity-50"
               >
                 <FileText className="h-4 w-4 text-blue-500" />
-                <span>Interpretation & Notes</span>
+                <span>Interpretation</span>
               </button>
 
               <Button
@@ -2506,7 +2551,7 @@ export default function TestMasterPage() {
       </Dialog>
 
       {/* =========================================================================
-          RICH TIPTAP INTERPRETATION, COMMENTS & NOTES MODAL EDITOR
+          RICH TIPTAP CLINICAL INTERPRETATION MODAL
       ========================================================================= */}
       <Dialog open={notesModalOpen} onOpenChange={setNotesModalOpen}>
         <DialogContent className="max-w-6xl w-[95vw] h-[88vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl border-border/80 shadow-2xl bg-card">
@@ -2514,114 +2559,61 @@ export default function TestMasterPage() {
             <div>
               <DialogTitle className="font-display text-base font-bold text-foreground flex items-center gap-2">
                 <FileText className="h-4 w-4 text-primary" />
-                <span>Clinical Interpretation & Report Comments: {name || "Main Test"}</span>
+                <span>Clinical Interpretation: {name || "Main Test"}</span>
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Rich text formatting with full toolbar for clinical advice, report comments, and technician precautions.
+                Diagnostic guidelines, biological reference intervals, and pathological interpretation printed on patient reports.
               </DialogDescription>
             </div>
           </div>
 
-          {/* Tabs: Interpretation, Comment, Notes */}
-          <div className="flex items-center gap-6 px-6 border-b border-border text-xs font-bold bg-background shrink-0">
-            <button
-              type="button"
-              onClick={() => setActiveNotesTab("INTERPRETATION")}
-              className={`py-3 relative transition-colors cursor-pointer flex items-center gap-1.5 ${
-                activeNotesTab === "INTERPRETATION" ? "text-primary border-b-2 border-primary font-bold" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <span>📝 Clinical Interpretation</span>
-              {interpretation && interpretation.trim() !== "" && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveNotesTab("COMMENT")}
-              className={`py-3 relative transition-colors cursor-pointer flex items-center gap-1.5 ${
-                activeNotesTab === "COMMENT" ? "text-primary border-b-2 border-primary font-bold" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <span>💬 Default Report Comment</span>
-              {comment && comment.trim() !== "" && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveNotesTab("NOTES")}
-              className={`py-3 relative transition-colors cursor-pointer flex items-center gap-1.5 ${
-                activeNotesTab === "NOTES" ? "text-primary border-b-2 border-primary font-bold" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <span>📌 Technician & Method Notes</span>
-              {notes && notes.trim() !== "" && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              )}
-            </button>
-          </div>
-
           <div className="p-6 flex-1 overflow-y-auto bg-muted/10">
-            {activeNotesTab === "INTERPRETATION" && (
-              <div className="space-y-2 h-full flex flex-col">
-                <label className="font-bold text-xs text-foreground block shrink-0">
-                  Diagnostic Significance & Pathological Guidelines:
+            <div className="space-y-2 h-full flex flex-col">
+              <div className="flex items-center justify-between shrink-0">
+                <label className="font-bold text-xs text-foreground block">
+                  Diagnostic Significance &amp; Pathological Guidelines:
                 </label>
-                <div className="bg-white dark:bg-zinc-950 rounded-xl border border-border overflow-hidden flex-1 shadow-sm">
-                  <TipTapEditor
-                    value={interpretation}
-                    onChange={(html) => setInterpretation(html)}
-                    hideHeader={true}
-                  />
-                </div>
+                <span className="text-[11px] text-muted-foreground">
+                  Reference tables and clinical remarks will appear directly in patient reports
+                </span>
               </div>
-            )}
-
-            {activeNotesTab === "COMMENT" && (
-              <div className="space-y-2 h-full flex flex-col">
-                <label className="font-bold text-xs text-foreground block shrink-0">
-                  Default Patient / Doctor Comment (Printed on Patient Report):
-                </label>
-                <div className="bg-white dark:bg-zinc-950 rounded-xl border border-border overflow-hidden flex-1 shadow-sm">
-                  <TipTapEditor
-                    value={comment}
-                    onChange={(html) => setComment(html)}
-                    hideHeader={true}
-                  />
-                </div>
+              <div className="bg-white dark:bg-zinc-950 rounded-xl border border-border overflow-hidden flex-1 shadow-sm">
+                <TipTapEditor
+                  value={interpretation}
+                  onChange={(html) => setInterpretation(html)}
+                  hideHeader={true}
+                />
               </div>
-            )}
-
-            {activeNotesTab === "NOTES" && (
-              <div className="space-y-2 h-full flex flex-col">
-                <label className="font-bold text-xs text-foreground block shrink-0">
-                  Technical Methodology & Specimen Handling Notes:
-                </label>
-                <div className="bg-white dark:bg-zinc-950 rounded-xl border border-border overflow-hidden flex-1 shadow-sm">
-                  <TipTapEditor
-                    value={notes}
-                    onChange={(html) => setNotes(html)}
-                    hideHeader={true}
-                  />
-                </div>
-              </div>
-            )}
+            </div>
           </div>
 
           <div className="p-4 px-6 border-t border-border bg-muted/30 flex items-center justify-between shrink-0">
             <span className="text-[11px] text-muted-foreground">
-              {activeNotesTab === "INTERPRETATION" && "Interpretation is printed on reports when enabled."}
-              {activeNotesTab === "COMMENT" && "Comments appear directly below test results."}
-              {activeNotesTab === "NOTES" && "Notes are internal to lab staff and reports."}
+              Clinical interpretation is automatically appended to patient diagnostic reports when enabled.
             </span>
-            <Button
-              type="button"
-              onClick={() => setNotesModalOpen(false)}
-              className="rounded-xl px-8 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-sm"
-            >
-              Done / Save Notes
-            </Button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleAiGenerateInterpretation}
+                disabled={generatingAiInterpretation}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-purple-500/40 bg-purple-50 hover:bg-purple-100/80 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Generate comprehensive clinical interpretation with reference table using AI"
+              >
+                {generatingAiInterpretation ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-600 dark:text-purple-400" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                )}
+                <span>{generatingAiInterpretation ? "Generating Interpretation..." : "AI Generate Interpretation"}</span>
+              </button>
+              <Button
+                type="button"
+                onClick={() => setNotesModalOpen(false)}
+                className="rounded-xl px-7 h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-sm"
+              >
+                Done / Save
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

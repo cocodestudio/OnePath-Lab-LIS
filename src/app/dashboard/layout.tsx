@@ -2,6 +2,7 @@ import Sidebar from "./sidebar-client";
 import Navbar from "./navbar";
 import SubscriptionGate from "@/components/subscription-gate";
 import { DashboardScroller } from "@/components/dashboard-scroller";
+import { AiGuideWidget } from "@/components/ai-guide-widget";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -14,6 +15,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </DashboardScroller>
       </div>
       <SubscriptionGate />
+      <AiGuideWidget />
     </div>
   );
 }

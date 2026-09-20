@@ -14,7 +14,8 @@ import {
   User, AlertCircle, TrendingUp, History, ExternalLink, ClipboardList, Plus, Trash2,
   Search, ChevronDown, ChevronRight, FileText, Eye, Edit, Pencil, Building2, Phone, Calendar, Receipt, Printer,
   MessageSquare, FileEdit, Sparkles, CheckCheck, Calculator, Zap, X, Check, Save,
-  Shield, Mail, MapPin, Stethoscope, BadgeCheck, CreditCard, Clock, Hash, Activity, Boxes
+  Shield, Mail, MapPin, Stethoscope, BadgeCheck, CreditCard, Clock, Hash, Activity, Boxes,
+  Cpu, Radio, RefreshCw, HardDrive
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -796,6 +797,7 @@ export default function ResultEntryPage() {
   const [paramRemarks, setParamRemarks] = useState<Record<string, string>>({});
   const [showParamRemark, setShowParamRemark] = useState<Record<string, boolean>>({});
   const [testNotes, setTestNotes] = useState<Record<string, { notes?: string; remarks?: string; advices?: string }>>({});
+  const [generatingAiField, setGeneratingAiField] = useState<Record<string, boolean>>({});
 
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -846,6 +848,232 @@ export default function ResultEntryPage() {
   const [rangeMaxFemale, setRangeMaxFemale] = useState("");
   const [rangeUnit, setRangeUnit] = useState("");
   const [savingRange, setSavingRange] = useState(false);
+
+  // Machine Integration / Auto-Communication state
+  const [isMachineModalOpen, setIsMachineModalOpen] = useState(false);
+  const [machineResults, setMachineResults] = useState<any[]>([]);
+  const [loadingMachineResults, setLoadingMachineResults] = useState(false);
+  const [isSimulatingMachine, setIsSimulatingMachine] = useState(false);
+
+  const fetchMachineResults = async () => {
+    try {
+      setLoadingMachineResults(true);
+      const data = await fetchFromLaravel("/instruments/results?per_page=20", { skipCache: true });
+      if (data) {
+        setMachineResults(data.data || (Array.isArray(data) ? data : []));
+      }
+    } catch (err: any) {
+      console.error("Failed to load machine results:", err);
+    } finally {
+      setLoadingMachineResults(false);
+    }
+  };
+
+  const simulateMachineRun = async (type: "HAEMATOLOGY" | "BIOCHEMISTRY") => {
+    try {
+      setIsSimulatingMachine(true);
+      const sampleId = report?.customId || report?.patient?.customId || `SMP-${Math.floor(1000 + Math.random() * 9000)}`;
+      const res = await fetchFromLaravel("/instruments/simulate", {
+        method: "POST",
+        body: JSON.stringify({ type, sample_id: sampleId }),
+      });
+      if (res && res.result) {
+        setMachineResults((prev) => [res.result, ...prev]);
+        toast.success(
+          "Simulator Completed",
+          `Simulated ${type === "HAEMATOLOGY" ? "Aveacon CBC" : "Beacon Biochem"} test run generated!`
+        );
+      }
+    } catch (err: any) {
+      toast.error("Simulation Failed", err.message);
+    } finally {
+      setIsSimulatingMachine(false);
+    }
+  };
+
+  const applyMachineRunToReport = async (run: any) => {
+    if (!run || !run.parsed_parameters) return;
+    const params = run.parsed_parameters;
+    let filledCount = 0;
+
+    const matchMachineParamToTest = (paramKey: string, testName: string): boolean => {
+      const param = paramKey.trim().toUpperCase();
+      const name = (testName || "").toLowerCase().trim();
+
+      // Negative Exclusions to prevent false matches
+      if (param === "HGB") {
+        if (name.includes("mean corpuscular") || name.includes("mch") || name.includes("mchc") || name.includes("hba1c") || name.includes("glycated")) {
+          return false;
+        }
+        return name.includes("haemoglobin") || name.includes("hemoglobin") || /\b(hgb|hb)\b/.test(name);
+      }
+
+      if (param === "PLT") {
+        if (name.includes("volume") || name.includes("mpv") || name.includes("distribution") || name.includes("pdw") || name.includes("pct")) {
+          return false;
+        }
+        return name.includes("platelet") || /\b(plt)\b/.test(name);
+      }
+
+      if (param === "MPV") {
+        return name.includes("mpv") || (name.includes("mean platelet") && name.includes("volume"));
+      }
+
+      if (param === "MCH") {
+        if (name.includes("mchc") || name.includes("concentration")) return false;
+        return name.includes("mch") || (name.includes("mean corpuscular") && name.includes("hemoglobin"));
+      }
+
+      if (param === "MCHC") {
+        return name.includes("mchc") || name.includes("corpuscular hb concentration") || name.includes("hemoglobin concentration");
+      }
+
+      if (param === "MCV") {
+        return name.includes("mcv") || name.includes("mean corpuscular volume");
+      }
+
+      if (param === "WBC") {
+        return name.includes("wbc") || name.includes("leucocyte") || name.includes("leukocyte") || name.includes("tlc") || name.includes("white blood cell");
+      }
+
+      if (param === "RBC") {
+        if (name.includes("wbc") || name.includes("distribution") || name.includes("rdw")) return false;
+        return name.includes("rbc") || name.includes("red blood cell") || name.includes("erythrocyte");
+      }
+
+      if (param === "HCT") {
+        return name.includes("hct") || name.includes("pcv") || name.includes("packed cell") || name.includes("hematocrit");
+      }
+
+      if (param === "NEU%") {
+        if (name.includes("absolute") || name.includes("anc") || name.includes("ratio") || name.includes("nlr")) return false;
+        return name.includes("neutrophil") || name.includes("granulocyte") || name.includes("polymorph");
+      }
+
+      if (param === "LYM%") {
+        if (name.includes("absolute") || name.includes("alc") || name.includes("ratio") || name.includes("nlr")) return false;
+        return name.includes("lymphocyte");
+      }
+
+      if (param === "MON%") {
+        if (name.includes("absolute") || name.includes("amc")) return false;
+        return name.includes("monocyte");
+      }
+
+      if (param === "EOS%") {
+        if (name.includes("absolute") || name.includes("aec")) return false;
+        return name.includes("eosinophil");
+      }
+
+      if (param === "BAS%") {
+        if (name.includes("absolute") || name.includes("abc")) return false;
+        return name.includes("basophil");
+      }
+
+      if (param === "RDW-CV") {
+        return name.includes("rdw-cv") || (name.includes("rdw") && !name.includes("sd")) || name.includes("red cell distribution");
+      }
+
+      if (param === "RDW-SD") {
+        return name.includes("rdw-sd");
+      }
+
+      if (param === "GLU") {
+        return name.includes("glucose") || name.includes("sugar") || name.includes("fbs") || name.includes("rbs");
+      }
+
+      if (param === "SGPT") {
+        return name.includes("sgpt") || name.includes("alt") || name.includes("alanine amino");
+      }
+
+      if (param === "SGOT") {
+        return name.includes("sgot") || name.includes("ast") || name.includes("aspartate amino");
+      }
+
+      if (param === "BILI_TOTAL") {
+        return (name.includes("bilirubin") && name.includes("total")) || (name.includes("total") && name.includes("bilirubin"));
+      }
+
+      if (param === "BILI_DIRECT") {
+        return (name.includes("bilirubin") && name.includes("direct")) || (name.includes("direct") && name.includes("bilirubin"));
+      }
+
+      if (param === "UREA") {
+        return name.includes("urea") && !name.includes("uric");
+      }
+
+      if (param === "CREAT") {
+        return name.includes("creatinine") || name.includes("serum creat");
+      }
+
+      if (param === "URIC") {
+        return name.includes("uric acid") || name.includes("serum uric");
+      }
+
+      if (param === "CHOL") {
+        if (name.includes("hdl") || name.includes("ldl") || name.includes("vldl")) return false;
+        return name.includes("cholesterol") || name.includes("total chol");
+      }
+
+      return name.includes(param.toLowerCase());
+    };
+
+    const findMatchingValue = (testName: string) => {
+      for (const [key, paramData] of Object.entries(params)) {
+        const val = typeof paramData === "object" && paramData !== null ? (paramData as any).value : String(paramData);
+        if (matchMachineParamToTest(key, testName) && val !== undefined && val !== null && String(val).trim() !== "") {
+          return String(val).trim();
+        }
+      }
+      return null;
+    };
+
+    const newValues: Record<string, string> = { ...values };
+    const newAbnormals: Record<string, boolean> = { ...abnormalOverrides };
+
+    const collectAllTests = (items: any[]): any[] => {
+      let list: any[] = [];
+      for (const item of items) {
+        list.push(item);
+        if (item.subTests && Array.isArray(item.subTests)) {
+          list = list.concat(collectAllTests(item.subTests));
+        }
+      }
+      return list;
+    };
+
+    const allItems = collectAllTests(report?.results || []);
+
+    for (const item of allItems) {
+      const test = item.test || item;
+      if (!test || !test.name) continue;
+
+      const matchedVal = findMatchingValue(test.name);
+      if (matchedVal !== null) {
+        newValues[item.id] = matchedVal;
+        filledCount++;
+
+        const abCheck = isValueAbnormal(test, matchedVal);
+        newAbnormals[item.id] = abCheck.abnormal;
+      }
+    }
+
+    setValues(newValues);
+    setAbnormalOverrides(newAbnormals);
+    setIsMachineModalOpen(false);
+
+    toast.success(
+      "Machine Results Auto-Filled",
+      `${filledCount} parameter values successfully populated from ${run.instrument_name || "Analyzer"}!`
+    );
+
+    try {
+      await fetchFromLaravel(`/instruments/results/${run.id}/apply`, {
+        method: "POST",
+        body: JSON.stringify({ report_id: report?.id }),
+      });
+    } catch (_) {}
+  };
 
   const [loadingAvailableTests, setLoadingAvailableTests] = useState(false);
 
@@ -1064,6 +1292,91 @@ export default function ResultEntryPage() {
       delete current[field];
       return { ...prev, [testId]: current };
     });
+  };
+
+  const handleGenerateAiSuggestion = async (
+    mainTestId: string,
+    fieldType: "remarks" | "advices" | "notes",
+    group: any
+  ) => {
+    const fieldKey = `${mainTestId}_${fieldType}`;
+    setGeneratingAiField((prev) => ({ ...prev, [fieldKey]: true }));
+
+    try {
+      // Gather test parameters from this group with their entered values
+      const paramsList: Array<{
+        name: string;
+        value: string;
+        unit: string;
+        is_abnormal: boolean;
+        ref_range: string;
+      }> = [];
+
+      (group.sections || []).forEach((sec: any) => {
+        (sec.items || []).forEach((item: any) => {
+          const val = values[item.id] || "";
+          if (val && val.trim() !== "") {
+            const { abnormal } = isValueAbnormal(item.test, val);
+            const range = getRefRange(
+              item.test,
+              report?.patient?.gender || "Male",
+              report?.patient?.age || 30
+            );
+            const rangeStr = formatRefRangeText(range);
+
+            paramsList.push({
+              name: item.test.name,
+              value: val.trim(),
+              unit: item.test.unit || "",
+              is_abnormal: abnormal || !!abnormalOverrides[item.id],
+              ref_range: rangeStr !== "—" ? rangeStr : "",
+            });
+          }
+        });
+      });
+
+      const res = await fetchFromLaravel("/ai/suggest", {
+        method: "POST",
+        body: JSON.stringify({
+          type: fieldType,
+          test_name: group.mainTestName,
+          parameters: paramsList,
+          patient: {
+            age: report?.patient?.age,
+            gender: report?.patient?.gender,
+            name: report?.patient?.name,
+          },
+        }),
+      });
+
+      if (res && res.suggestion) {
+        setTestNotes((prev) => ({
+          ...prev,
+          [mainTestId]: {
+            ...(prev[mainTestId] || {}),
+            [fieldType]: res.suggestion,
+          },
+        }));
+
+        const providerLabel =
+          res.provider === "gemini"
+            ? "Google Gemini"
+            : res.provider === "groq"
+            ? "Groq AI"
+            : "Clinical Engine";
+
+        toast.success(
+          `AI ${fieldType.charAt(0).toUpperCase() + fieldType.slice(1)} Ready`,
+          `Generated via ${providerLabel} based on patient test findings.`
+        );
+      } else {
+        toast.error("Generation Failed", "Could not generate suggestion.");
+      }
+    } catch (err: any) {
+      toast.error("AI Error", err.message || "Failed to generate AI suggestion.");
+    } finally {
+      setGeneratingAiField((prev) => ({ ...prev, [fieldKey]: false }));
+    }
   };
 
   const getRefRange = (test: Test, patientGender: string, patientAge: number) => {
@@ -1611,16 +1924,32 @@ export default function ResultEntryPage() {
             </div>
           </div>
 
-          {/* Prominent Save Results Button at Top Right */}
-          <Button
-            type="button"
-            onClick={() => handleSaveResults()}
-            disabled={saving}
-            className="h-10 px-5 gap-2 font-bold shadow-sm cursor-pointer gradient-primary text-primary-foreground hover:-translate-y-px transition-all rounded-xl w-full sm:w-auto"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            <span>{saving ? "Saving…" : "Save Results"}</span>
-          </Button>
+          {/* Action Buttons: Fetch from Machine + Save Results */}
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsMachineModalOpen(true);
+                fetchMachineResults();
+              }}
+              className="h-10 px-4 gap-2 font-bold shadow-2xs cursor-pointer border-emerald-500/40 bg-emerald-50/60 hover:bg-emerald-100/70 text-emerald-800 rounded-xl"
+              title="Import and auto-populate results from connected Cell Counter or Biochemistry Analyzer"
+            >
+              <Cpu className="h-4 w-4 text-emerald-600 animate-pulse" />
+              <span>Fetch from Machine</span>
+            </Button>
+
+            <Button
+              type="button"
+              onClick={() => handleSaveResults()}
+              disabled={saving}
+              className="h-10 px-5 gap-2 font-bold shadow-sm cursor-pointer gradient-primary text-primary-foreground hover:-translate-y-px transition-all rounded-xl w-full sm:w-auto"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              <span>{saving ? "Saving…" : "Save Results"}</span>
+            </Button>
+          </div>
         </div>
 
         {/* Patient Ribbon with View Details Button */}
@@ -2147,18 +2476,34 @@ export default function ResultEntryPage() {
                     <div className="space-y-2.5">
                       {currentTestMeta.notes !== undefined && (
                         <div className="p-3 bg-background rounded-xl border border-border/80 space-y-1.5 shadow-xs animate-fade-in">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
                             <span className="text-[11px] font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                               <FileEdit className="h-3.5 w-3.5 text-primary" />
                               Note for {group.mainTestName}:
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => removeTestMeta(group.mainTestId, "notes")}
-                              className="text-[11px] font-semibold text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
-                            >
-                              Remove
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleGenerateAiSuggestion(group.mainTestId, "notes", group)}
+                                disabled={!!generatingAiField[`${group.mainTestId}_notes`]}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-gradient-to-r from-amber-500/10 to-primary/10 hover:from-amber-500/20 hover:to-primary/20 text-primary border border-primary/25 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+                                title="Auto-generate clinical notes using AI"
+                              >
+                                {generatingAiField[`${group.mainTestId}_notes`] ? (
+                                  <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                ) : (
+                                  <Sparkles className="h-3 w-3 text-amber-500 fill-amber-500/20" />
+                                )}
+                                <span>{generatingAiField[`${group.mainTestId}_notes`] ? "Writing..." : "AI Suggestion"}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeTestMeta(group.mainTestId, "notes")}
+                                className="text-[11px] font-semibold text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
+                              >
+                                Remove
+                              </button>
+                            </div>
                           </div>
                           <textarea
                             rows={2}
@@ -2172,18 +2517,34 @@ export default function ResultEntryPage() {
 
                       {currentTestMeta.remarks !== undefined && (
                         <div className="p-3 bg-background rounded-xl border border-border/80 space-y-1.5 shadow-xs animate-fade-in">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
                             <span className="text-[11px] font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                               <MessageSquare className="h-3.5 w-3.5 text-primary" />
                               Remarks for {group.mainTestName}:
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => removeTestMeta(group.mainTestId, "remarks")}
-                              className="text-[11px] font-semibold text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
-                            >
-                              Remove
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleGenerateAiSuggestion(group.mainTestId, "remarks", group)}
+                                disabled={!!generatingAiField[`${group.mainTestId}_remarks`]}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-gradient-to-r from-amber-500/10 to-primary/10 hover:from-amber-500/20 hover:to-primary/20 text-primary border border-primary/25 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+                                title="Auto-generate clinical remarks using AI"
+                              >
+                                {generatingAiField[`${group.mainTestId}_remarks`] ? (
+                                  <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                ) : (
+                                  <Sparkles className="h-3 w-3 text-amber-500 fill-amber-500/20" />
+                                )}
+                                <span>{generatingAiField[`${group.mainTestId}_remarks`] ? "Writing..." : "AI Suggestion"}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeTestMeta(group.mainTestId, "remarks")}
+                                className="text-[11px] font-semibold text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
+                              >
+                                Remove
+                              </button>
+                            </div>
                           </div>
                           <textarea
                             rows={2}
@@ -2197,18 +2558,34 @@ export default function ResultEntryPage() {
 
                       {currentTestMeta.advices !== undefined && (
                         <div className="p-3 bg-background rounded-xl border border-border/80 space-y-1.5 shadow-xs animate-fade-in">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
                             <span className="text-[11px] font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                               <Sparkles className="h-3.5 w-3.5 text-primary" />
                               Advices for {group.mainTestName}:
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => removeTestMeta(group.mainTestId, "advices")}
-                              className="text-[11px] font-semibold text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
-                            >
-                              Remove
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleGenerateAiSuggestion(group.mainTestId, "advices", group)}
+                                disabled={!!generatingAiField[`${group.mainTestId}_advices`]}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-gradient-to-r from-amber-500/10 to-primary/10 hover:from-amber-500/20 hover:to-primary/20 text-primary border border-primary/25 transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+                                title="Auto-generate clinical advice using AI"
+                              >
+                                {generatingAiField[`${group.mainTestId}_advices`] ? (
+                                  <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                ) : (
+                                  <Sparkles className="h-3 w-3 text-amber-500 fill-amber-500/20" />
+                                )}
+                                <span>{generatingAiField[`${group.mainTestId}_advices`] ? "Writing..." : "AI Suggestion"}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeTestMeta(group.mainTestId, "advices")}
+                                className="text-[11px] font-semibold text-muted-foreground hover:text-destructive cursor-pointer transition-colors"
+                              >
+                                Remove
+                              </button>
+                            </div>
                           </div>
                           <textarea
                             rows={2}
@@ -3017,6 +3394,151 @@ export default function ResultEntryPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 5. Machine Integration / Auto-Communication Modal */}
+      <Dialog open={isMachineModalOpen} onOpenChange={setIsMachineModalOpen}>
+        <DialogContent className="max-w-2xl bg-card border border-border/80 rounded-2xl p-6 shadow-2xl">
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle className="font-display font-bold text-foreground flex items-center gap-2">
+                <Cpu className="h-5 w-5 text-emerald-600" />
+                <span>Analyzer Results Queue</span>
+              </DialogTitle>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={fetchMachineResults}
+                  disabled={loadingMachineResults}
+                  className="h-8 px-2.5 text-xs gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loadingMachineResults ? "animate-spin text-primary" : ""}`} />
+                  <span>Refresh</span>
+                </Button>
+              </div>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
+              Select any live test run from your connected <strong>Aveacon</strong>, <strong>Mindray</strong>, or <strong>Beacon</strong> analyzer to auto-populate matching parameters directly into this report.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Instant Simulators inside dialog */}
+          <div className="p-3 bg-muted/50 border border-border/60 rounded-xl flex items-center justify-between gap-3 flex-wrap text-xs">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Radio className="h-3.5 w-3.5 text-emerald-500 animate-pulse" />
+              <span>Test Simulator:</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => simulateMachineRun("HAEMATOLOGY")}
+                disabled={isSimulatingMachine}
+                className="h-7 text-[11px] gap-1 cursor-pointer bg-background hover:bg-muted"
+              >
+                {isSimulatingMachine ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3 text-amber-500" />}
+                <span>Simulate CBC Run</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => simulateMachineRun("BIOCHEMISTRY")}
+                disabled={isSimulatingMachine}
+                className="h-7 text-[11px] gap-1 cursor-pointer bg-background hover:bg-muted"
+              >
+                <Activity className="h-3 w-3 text-blue-500" />
+                <span>Simulate Biochem Run</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Results List */}
+          <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+            {loadingMachineResults ? (
+              <div className="py-12 flex flex-col items-center justify-center text-muted-foreground space-y-2">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <span className="text-xs">Fetching analyzer data stream...</span>
+              </div>
+            ) : machineResults.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground space-y-2">
+                <HardDrive className="h-8 w-8 mx-auto text-muted-foreground/50" />
+                <p className="text-xs font-semibold">No recent machine runs found in queue.</p>
+                <p className="text-[11px]">Run a sample on your cell counter or click &quot;Simulate CBC Run&quot; above to test!</p>
+              </div>
+            ) : (
+              machineResults.map((run: any) => {
+                const paramKeys = Object.keys(run.parsed_parameters || {});
+                const isExactMatch =
+                  (report?.customId && run.sample_id && String(run.sample_id).toLowerCase().includes(String(report.customId).toLowerCase())) ||
+                  (((report?.patient as any)?.vialBarcode || (report?.patient as any)?.vial_barcode) && run.barcode && String(run.barcode).includes(String((report?.patient as any)?.vialBarcode || (report?.patient as any)?.vial_barcode))) ||
+                  (report?.patient?.customId && run.sample_id && String(run.sample_id).includes(String(report.patient.customId)));
+
+                return (
+                  <div
+                    key={run.id}
+                    className={`p-3.5 rounded-xl border transition-all space-y-2.5 ${
+                      isExactMatch
+                        ? "bg-emerald-500/10 border-emerald-500/40 shadow-xs"
+                        : "bg-background border-border/70 hover:border-border"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded">
+                            {run.sample_id || "Unlabeled Sample"}
+                          </span>
+                          {isExactMatch && (
+                            <span className="bg-emerald-600 text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full shadow-2xs">
+                              🎯 MATCHES THIS REPORT
+                            </span>
+                          )}
+                          <span className="text-xs text-muted-foreground font-medium">
+                            {run.instrument_name || "Hematology Analyzer"}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground font-mono block mt-1">
+                          Tested: {new Date(run.tested_at || run.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        </span>
+                      </div>
+
+                      <Button
+                        size="sm"
+                        onClick={() => applyMachineRunToReport(run)}
+                        className="h-8 px-3.5 text-xs font-bold gap-1.5 gradient-primary text-primary-foreground shadow-2xs cursor-pointer shrink-0"
+                      >
+                        <Zap className="h-3.5 w-3.5" />
+                        <span>Auto-fill ({paramKeys.length})</span>
+                      </Button>
+                    </div>
+
+                    {/* Parameter Pills */}
+                    <div className="flex flex-wrap gap-1 text-[10px]">
+                      {paramKeys.slice(0, 8).map((k) => {
+                        const p = run.parsed_parameters[k];
+                        const val = typeof p === "object" && p !== null ? p.value : p;
+                        return (
+                          <span
+                            key={k}
+                            className="bg-muted/80 text-foreground px-2 py-0.5 rounded font-mono border border-border/50"
+                          >
+                            <strong>{k}:</strong> {val}
+                          </span>
+                        );
+                      })}
+                      {paramKeys.length > 8 && (
+                        <span className="text-[10px] text-muted-foreground px-1 py-0.5 font-semibold">
+                          +{paramKeys.length - 8} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -12,7 +12,7 @@ const https = require('https');
 const TCP_PORT = process.env.PORT || 8080;
 const COM_PORT = process.env.COM_PORT || ''; // e.g., 'COM1', 'COM3', '/dev/ttyUSB0'
 const BAUD_RATE = parseInt(process.env.BAUD_RATE || '9600', 10);
-const LIS_API_URL = process.env.LIS_API_URL || 'https://api.onepathlab.com/api/lis/instruments/ingest';
+const LIS_API_URL = process.env.LIS_API_URL || 'https://api.onepathlab.com/api/lis/instruments/webhook';
 const AUTH_TOKEN = process.env.LIS_TOKEN || ''; // Optional LIS Bearer Token or API Key
 
 console.log('================================================================');

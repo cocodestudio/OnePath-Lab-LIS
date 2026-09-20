@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Upload, X, Loader2, Save, Eye,
   Sliders, CheckCircle2, Trash2, RefreshCw,
@@ -18,6 +19,7 @@ import { ReportSheet, type PrintSettings, type ReportSheetData } from "@/compone
 import { InvoiceSheet, type InvoiceData } from "@/components/invoice-sheet";
 import { CollectionCentersTab } from "@/components/collection-centers-tab";
 import { PaymentGatewayTab } from "@/components/payment-gateway-tab";
+import { MachineIntegrationTab } from "@/components/machine-integration-tab";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import {
@@ -312,10 +314,23 @@ function optimizeLetterheadImage(file: File): Promise<string> {
 }
 
 function SettingsContent() {
-  const [activeTab, setActiveTab] = useState<"letterhead" | "report-layout" | "bills-layout" | "machine-integration" | "collection-centers" | "payment-gateway" | "whatsapp-gateway">("letterhead");
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState<"letterhead" | "report-layout" | "bills-layout" | "machine-integration" | "collection-centers" | "payment-gateway" | "whatsapp-gateway">(
+    (initialTab && ["letterhead", "report-layout", "bills-layout", "machine-integration", "collection-centers", "payment-gateway"].includes(initialTab))
+      ? (initialTab as any)
+      : "letterhead"
+  );
   const [settings, setSettings] = useState<ExtendedPrintSettings>(defaultPrintSettings);
   const [layoutSettings, setLayoutSettings] = useState<ReportLayoutSettings>(defaultReportLayoutSettings);
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab && ["letterhead", "report-layout", "bills-layout", "machine-integration", "collection-centers", "payment-gateway"].includes(tab)) {
+      setActiveTab(tab as any);
+    }
+  }, [searchParams]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -1184,10 +1199,23 @@ function SettingsContent() {
               <CreditCard className="h-3.5 w-3.5" />
               <span>Payment Gateway</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("machine-integration")}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                activeTab === "machine-integration"
+                  ? "bg-background text-primary shadow-xs font-extrabold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+              title="Machine Auto-Communication & Interfacing Hub (LAN / RS-232)"
+            >
+              <Cpu className="h-3.5 w-3.5" />
+              <span>Machine Interfacing</span>
+            </button>
           </div>
         </div>
 
-        {activeTab !== "collection-centers" && activeTab !== "payment-gateway" && (
+        {activeTab !== "collection-centers" && activeTab !== "payment-gateway" && activeTab !== "machine-integration" && (
           <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
             <button
               type="button"
@@ -3921,6 +3949,11 @@ function SettingsContent() {
       {/* TAB: PAYMENT GATEWAY & BANK SETTLEMENT */}
       {activeTab === "payment-gateway" && (
         <PaymentGatewayTab />
+      )}
+
+      {/* TAB: MACHINE INTEGRATION & ANALYZERS */}
+      {activeTab === "machine-integration" && (
+        <MachineIntegrationTab />
       )}
 
       {/* Add Signature Dialog Modal */}
