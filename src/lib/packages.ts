@@ -164,6 +164,27 @@ export function resolvePackageTestIds(pkg: LabPackage, availableTests: any[] = [
   return resolvedIds;
 }
 
+import { fetchFromLaravel } from "@/lib/api-client";
+
+export function normalizePackage(p: any): LabPackage {
+  const testIds = Array.isArray(p.testIds)
+    ? p.testIds
+    : Array.isArray(p.test_ids)
+    ? p.test_ids
+    : [];
+  const tests = Array.isArray(p.tests) ? p.tests : [];
+  return {
+    id: String(p.id),
+    name: p.name || "",
+    code: p.code || p.test_code || `PKG-${String(p.id).substring(0, 5).toUpperCase()}`,
+    price: Number(p.price || 0),
+    testIds: testIds.length > 0 ? testIds : tests.map((t: any) => t.id).filter(Boolean),
+    tests: tests,
+    description: p.description || "",
+    createdAt: p.createdAt || p.created_at || new Date().toISOString(),
+  };
+}
+
 export function getStoredPackages(): LabPackage[] {
   if (typeof window === "undefined") return DEFAULT_PACKAGES;
   try {
@@ -202,6 +223,41 @@ export function saveStoredPackages(packages: LabPackage[]) {
   }
 }
 
+export async function fetchPackagesFromApi(): Promise<LabPackage[]> {
+  try {
+    const res = await fetchFromLaravel("/packages", { skipCache: true });
+    if (res && res.status === "success" && Array.isArray(res.data)) {
+      const normalized = res.data.map(normalizePackage);
+      if (normalized.length > 0) {
+        saveStoredPackages(normalized);
+        return normalized;
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to fetch packages from API:", err);
+  }
+  return getStoredPackages();
+}
+
+export async function syncLocalPackagesWithBackend(): Promise<LabPackage[]> {
+  const localPackages = getStoredPackages();
+  try {
+    const res = await fetchFromLaravel("/packages/sync", {
+      method: "POST",
+      body: JSON.stringify({ packages: localPackages }),
+      skipCache: true,
+    });
+    if (res && res.status === "success" && Array.isArray(res.data)) {
+      const normalized = res.data.map(normalizePackage);
+      saveStoredPackages(normalized);
+      return normalized;
+    }
+  } catch (err) {
+    console.warn("Failed to sync packages with backend:", err);
+  }
+  return localPackages;
+}
+
 export function addPackage(pkg: Omit<LabPackage, "id" | "createdAt">): LabPackage {
   const current = getStoredPackages();
   const newPkg: LabPackage = {
@@ -211,6 +267,15 @@ export function addPackage(pkg: Omit<LabPackage, "id" | "createdAt">): LabPackag
   };
   const updated = [newPkg, ...current];
   saveStoredPackages(updated);
+
+  // Background server persistence
+  fetchFromLaravel("/packages", {
+    method: "POST",
+    body: JSON.stringify(newPkg),
+  }).catch((err) => {
+    console.warn("Background package create sync failed:", err);
+  });
+
   return newPkg;
 }
 
@@ -225,6 +290,17 @@ export function updatePackage(id: string, updates: Partial<LabPackage>): LabPack
     return p;
   });
   saveStoredPackages(updated);
+
+  // Background server persistence
+  if (updatedItem) {
+    fetchFromLaravel("/packages", {
+      method: "POST",
+      body: JSON.stringify({ id, ...updates }),
+    }).catch((err) => {
+      console.warn("Background package update sync failed:", err);
+    });
+  }
+
   return updatedItem;
 }
 
@@ -232,6 +308,14 @@ export function deletePackage(id: string): boolean {
   const current = getStoredPackages();
   const filtered = current.filter((p) => p.id !== id);
   saveStoredPackages(filtered);
+
+  // Background server persistence
+  fetchFromLaravel(`/packages/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  }).catch((err) => {
+    console.warn("Background package delete sync failed:", err);
+  });
+
   return true;
 }
 

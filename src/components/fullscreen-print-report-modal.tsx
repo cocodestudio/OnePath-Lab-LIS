@@ -95,6 +95,7 @@ export function FullscreenPrintReportModal({
   const [selectedMainTestIds, setSelectedMainTestIds] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [printWithHeaderFooter, setPrintWithHeaderFooter] = useState(false);
+  const [separatePagePerTest, setSeparatePagePerTest] = useState<boolean>(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [zoomScale, setZoomScale] = useState<number>(0.80);
   const [totalPages, setTotalPages] = useState(1);
@@ -132,13 +133,25 @@ export function FullscreenPrintReportModal({
   // ── Sync on modal open & Fetch Latest Lab Settings ────
   useEffect(() => {
     if (open) {
+      const initialSetting = Boolean(
+        report?.lab?.report_settings?.separatePagePerTest ??
+        (typeof report?.lab?.report_settings === "string" ? JSON.parse(report?.lab?.report_settings || "{}")?.separatePagePerTest : false)
+      );
+      setSeparatePagePerTest(initialSetting);
+
       fetchFromLaravel("/lab", { skipCache: true })
         .then((fresh) => {
-          if (fresh) setLiveLab(fresh);
+          if (fresh) {
+            setLiveLab(fresh);
+            const raw = typeof fresh.report_settings === 'string' ? JSON.parse(fresh.report_settings || '{}') : fresh.report_settings;
+            if (raw && typeof raw.separatePagePerTest === 'boolean') {
+              setSeparatePagePerTest(raw.separatePagePerTest);
+            }
+          }
         })
         .catch(() => {});
     }
-  }, [open]);
+  }, [open, report]);
 
   useEffect(() => {
     if (open && report) {
@@ -198,18 +211,34 @@ export function FullscreenPrintReportModal({
       getReportPackage(report.customId) ||
       getReportPackage(report.patient?.customId);
 
+    const labReportSettings = typeof currentLab?.report_settings === 'string'
+      ? JSON.parse(currentLab.report_settings || '{}')
+      : (currentLab?.report_settings || {});
+
+    const updatedLab = currentLab ? {
+      ...currentLab,
+      report_settings: {
+        ...labReportSettings,
+        separatePagePerTest,
+      },
+      reportSettings: {
+        ...labReportSettings,
+        separatePagePerTest,
+      },
+    } : currentLab;
+
     return {
       ...report,
       packageName: resolvedPackageName,
       package_name: resolvedPackageName,
-      lab: currentLab,
+      lab: updatedLab,
       reportDate: selectedDate.toISOString(),
       results: filteredResults,
       printedInterpretations: JSON.stringify(printedInterpretations ?? (typeof report.printedInterpretations === 'string' ? JSON.parse(report.printedInterpretations || '[]') : (report.printedInterpretations ?? report.printed_interpretations ?? []))),
       testNotes: testNotes || report.testNotes || report.test_notes,
       test_notes: testNotes || report.test_notes || report.testNotes,
     };
-  }, [report, liveLab, selectedMainTestIds, enteredValues, abnormalOverrides, paramRemarks, testNotes, printedInterpretations, selectedDate]);
+  }, [report, liveLab, selectedMainTestIds, enteredValues, abnormalOverrides, paramRemarks, testNotes, printedInterpretations, selectedDate, separatePagePerTest]);
 
   // ── Date & Time Helpers ───────────────────────────────
   const adj = (fn: (d: Date) => void) =>
@@ -664,6 +693,19 @@ export function FullscreenPrintReportModal({
                     type="checkbox"
                     checked={printWithHeaderFooter}
                     onChange={(e) => setPrintWithHeaderFooter(e.target.checked)}
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 cursor-pointer accent-primary"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 rounded-xl border border-border/80 bg-muted/20 hover:bg-muted/30 cursor-pointer transition-colors mt-2">
+                  <div className="space-y-0.5 pr-2">
+                    <span className="text-xs font-bold text-foreground block">1 Test Per Page (Separate)</span>
+                    <span className="text-[10px] text-muted-foreground block">Print each test on a separate fresh page</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={separatePagePerTest}
+                    onChange={(e) => setSeparatePagePerTest(e.target.checked)}
                     className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 cursor-pointer accent-primary"
                   />
                 </label>

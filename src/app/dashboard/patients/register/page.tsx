@@ -29,6 +29,8 @@ import {
 import { getStoredPackages, type LabPackage, saveReportPackage, resolvePackageTestIds } from "@/lib/packages";
 import { InvoiceSheet } from "@/components/invoice-sheet";
 import { printInvoiceElement } from "@/lib/print-invoice";
+import { AbhaLinkModal, type AbhaVerifiedPatient } from "@/components/abha-link-modal";
+import { AbhaQrPosterModal } from "@/components/abha-qr-poster-modal";
 
 interface Test {
   id: string; name: string; category: string; price: number;
@@ -262,6 +264,18 @@ function RegisterPatientPage() {
   const [hfrId, setHfrId] = useState("");
   const [uhid, setUhid] = useState("");
   const [passportNumber, setPassportNumber] = useState("");
+  // Government ABHA Identity
+  const [abhaNumber, setAbhaNumber] = useState("");
+  const [abhaAddress, setAbhaAddress] = useState("");
+  const [isAbhaVerified, setIsAbhaVerified] = useState(false);
+  const [abhaProfilePhoto, setAbhaProfilePhoto] = useState<string | null>(null);
+  const [isAbhaModalOpen, setIsAbhaModalOpen] = useState(false);
+
+
+
+  // ABHA QR Poster Modal State
+  const [isAbhaQrModalOpen, setIsAbhaQrModalOpen] = useState(false);
+
   const [corporateName, setCorporateName] = useState("");
   const [corporatePlan, setCorporatePlan] = useState("");
   const [govPanel, setGovPanel] = useState("");
@@ -334,6 +348,163 @@ function RegisterPatientPage() {
   } | null>(null);
 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  const handleAbhaVerified = async (verified: AbhaVerifiedPatient) => {
+    // 1. Populate all local registration form fields
+    const nameParts = (verified.name || "").trim().split(" ");
+    let fName = "";
+    let lName = "";
+    if (nameParts.length > 1) {
+      fName = nameParts[0];
+      lName = nameParts.slice(1).join(" ");
+    } else {
+      fName = verified.name || "";
+      lName = "";
+    }
+    setFirstName(fName);
+    setLastName(lName);
+
+    let des = designation;
+    if (verified.designation) {
+      des = verified.designation.replace(/\.$/, "") + ".";
+      setDesignation(des);
+    }
+
+    const gen = verified.gender || gender || "Male";
+    if (verified.gender) {
+      setGender(verified.gender);
+    }
+
+    let ageNum = 0;
+    if (verified.age) {
+      ageNum = Number(verified.age);
+      setAgeYears(String(verified.age));
+      setAgeMonths("");
+      setAgeDays("");
+    }
+
+    const ph = (verified.phone || phone || "N/A").trim();
+    if (verified.phone) {
+      setPhone(verified.phone);
+    }
+
+    if (verified.email) {
+      setEmail(verified.email);
+    }
+
+    if (verified.address) {
+      setAddress(verified.address);
+    }
+
+    if (verified.pincode) {
+      setPincode(verified.pincode);
+    }
+
+    if (verified.city) {
+      setCity(verified.city);
+    }
+
+    if (verified.district) {
+      setDistrict(verified.district);
+    }
+
+    if (verified.state) {
+      setState(verified.state);
+    }
+
+    if (verified.aadhaar_no) {
+      setAadhaarNo(verified.aadhaar_no);
+    }
+
+    setAbhaNumber(verified.abha_number || "");
+    setAbhaAddress(verified.abha_address || "");
+    setIsAbhaVerified(true);
+    setAbhaProfilePhoto(verified.abha_profile_photo || null);
+
+    // 2. Background Database Write - Save patient immediately so they are searchable in top search bar
+    try {
+      const patientPayload = {
+        name: verified.name || `${fName} ${lName}`.trim() || "Patient",
+        designation: des || "Mr.",
+        gender: gen,
+        age: ageNum,
+        phone: ph,
+        email: verified.email || email || null,
+        address: verified.address || address || "N/A",
+        city: verified.city || city || null,
+        district: verified.district || district || null,
+        state: verified.state || state || null,
+        pincode: verified.pincode || pincode || null,
+        aadhaar_no: verified.aadhaar_no || aadhaarNo || null,
+        aadhaarNo: verified.aadhaar_no || aadhaarNo || null,
+        abha_number: verified.abha_number || null,
+        abhaNumber: verified.abha_number || null,
+        abha_address: verified.abha_address || null,
+        abhaAddress: verified.abha_address || null,
+        is_abha_verified: true,
+        isAbhaVerified: true,
+        abha_profile_photo: verified.abha_profile_photo || null,
+        abhaProfilePhoto: verified.abha_profile_photo || null,
+        abha_txn_id: verified.txn_id || null,
+        ref_doctor: refDoctorSelect || "Self",
+        refDoctor: refDoctorSelect || "Self",
+        collected_at: `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`,
+        collectedAt: `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`,
+        collected_by: collectedBySelect || null,
+        collectedBy: collectedBySelect || null,
+      };
+
+      let savedPatient: any = null;
+      if (editPatientId) {
+        savedPatient = await fetchFromLaravel(`/patients/${editPatientId}`, {
+          method: "PUT",
+          body: JSON.stringify(patientPayload),
+        });
+      } else {
+        // Check if patient already exists by ABHA number or address
+        const searchTerm = verified.abha_number || verified.abha_address;
+        let existingId: string | null = null;
+        if (searchTerm) {
+          try {
+            const checkRes = await fetchFromLaravel(`/patients?search=${encodeURIComponent(searchTerm)}`);
+            const foundList = Array.isArray(checkRes) ? checkRes : (checkRes?.data || []);
+            const matched = foundList.find((p: any) =>
+              (p.abha_number && p.abha_number === verified.abha_number) ||
+              (p.abha_address && p.abha_address === verified.abha_address)
+            );
+            if (matched) {
+              existingId = matched.id;
+            }
+          } catch (e) { }
+        }
+
+        if (existingId) {
+          savedPatient = await fetchFromLaravel(`/patients/${existingId}`, {
+            method: "PUT",
+            body: JSON.stringify(patientPayload),
+          });
+        } else {
+          savedPatient = await fetchFromLaravel("/patients", {
+            method: "POST",
+            body: JSON.stringify(patientPayload),
+          });
+        }
+      }
+
+      if (savedPatient && (savedPatient.id || savedPatient.customId || savedPatient.custom_id)) {
+        const pId = savedPatient.id || editPatientId;
+        if (pId) {
+          setEditPatientId(pId);
+          setIsEditMode(true);
+          window.history.replaceState(null, "", `/dashboard/patients/register?edit=${pId}`);
+        }
+        setNewPatient(savedPatient);
+        window.dispatchEvent(new CustomEvent("patient-created", { detail: savedPatient }));
+      }
+    } catch (err) {
+      console.error("Background ABHA patient save error:", err);
+    }
+  };
 
   const isFieldEnabled = (key: string) => {
     const f = intakeFields.find(item => item.key === key);
@@ -451,7 +622,7 @@ function RegisterPatientPage() {
 
       try {
         setAvailablePackages(getStoredPackages());
-      } catch (e) {}
+      } catch (e) { }
     })();
   }, []);
 
@@ -514,6 +685,10 @@ function RegisterPatientPage() {
           setHfrId(patientData.hfr_id || patientData.hfrId || "");
           setUhid(patientData.uhid || "");
           setPassportNumber(patientData.passport_number || patientData.passportNumber || "");
+          setAbhaNumber(patientData.abha_number || patientData.abhaNumber || "");
+          setAbhaAddress(patientData.abha_address || patientData.abhaAddress || "");
+          setIsAbhaVerified(Boolean(patientData.is_abha_verified || patientData.isAbhaVerified));
+          setAbhaProfilePhoto(patientData.abha_profile_photo || patientData.abhaProfilePhoto || null);
           setCorporateName(patientData.corporate_name || patientData.corporateName || "");
           setCorporatePlan(patientData.corporate_plan || patientData.corporatePlan || "");
           setGovPanel(patientData.gov_panel || patientData.govPanel || "");
@@ -535,7 +710,7 @@ function RegisterPatientPage() {
           let loadedBarcodes: Record<string, string> = {};
           if (patMeta?.vial_barcodes) {
             if (typeof patMeta.vial_barcodes === "string") {
-              try { loadedBarcodes = JSON.parse(patMeta.vial_barcodes); } catch {}
+              try { loadedBarcodes = JSON.parse(patMeta.vial_barcodes); } catch { }
             } else if (typeof patMeta.vial_barcodes === "object") {
               loadedBarcodes = { ...patMeta.vial_barcodes };
             }
@@ -602,7 +777,7 @@ function RegisterPatientPage() {
                 if (allReports.length > 0) {
                   patReport = allReports.find((r: any) => (r.patient_id === editId || r.patientId === editId)) || allReports[0];
                 }
-              } catch (e) {}
+              } catch (e) { }
             }
 
             if (patReport) {
@@ -640,7 +815,7 @@ function RegisterPatientPage() {
                 const billsRes = await fetchFromLaravel(`/bills?search=${patientData.custom_id || patientData.customId || editId}`);
                 const allBills = Array.isArray(billsRes) ? billsRes : (billsRes?.data || []);
                 patBill = allBills.find((b: any) => (b.patient_id === editId || b.patientId === editId)) || allBills[0] || null;
-              } catch (e) {}
+              } catch (e) { }
             }
 
             if (patBill) {
@@ -847,6 +1022,13 @@ function RegisterPatientPage() {
             hfr_id: hfrId.trim() || null,
             uhid: uhid.trim() || null,
             passport_number: passportNumber.trim() || null,
+            abha_number: abhaNumber.trim() || null,
+            abhaNumber: abhaNumber.trim() || null,
+            abha_address: abhaAddress.trim() || null,
+            abhaAddress: abhaAddress.trim() || null,
+            is_abha_verified: Boolean(isAbhaVerified),
+            isAbhaVerified: Boolean(isAbhaVerified),
+            abha_profile_photo: abhaProfilePhoto || null,
             corporate_name: corporateName.trim() || null,
             corporate_plan: corporatePlan.trim() || null,
             gov_panel: govPanel.trim() || null,
@@ -889,6 +1071,13 @@ function RegisterPatientPage() {
             hfrId: hfrId.trim() || null,
             uhid: uhid.trim() || null,
             passportNumber: passportNumber.trim() || null,
+            abha_number: abhaNumber.trim() || null,
+            abhaNumber: abhaNumber.trim() || null,
+            abha_address: abhaAddress.trim() || null,
+            abhaAddress: abhaAddress.trim() || null,
+            is_abha_verified: Boolean(isAbhaVerified),
+            isAbhaVerified: Boolean(isAbhaVerified),
+            abha_profile_photo: abhaProfilePhoto || null,
             corporateName: corporateName.trim() || null,
             corporatePlan: corporatePlan.trim() || null,
             govPanel: govPanel.trim() || null,
@@ -1411,9 +1600,8 @@ function RegisterPatientPage() {
             {steps.map((s, i) => (
               <React.Fragment key={s.n}>
                 <div className="flex flex-col items-center gap-1 shrink-0">
-                  <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
-                    s.done ? "gradient-primary text-primary-foreground shadow-md ring-2 ring-primary/20" : "bg-muted text-muted-foreground border border-border/90"
-                  }`}>
+                  <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-bold text-xs transition-all ${s.done ? "gradient-primary text-primary-foreground shadow-md ring-2 ring-primary/20" : "bg-muted text-muted-foreground border border-border/90"
+                    }`}>
                     {s.done && s.n !== (newPatient && !bookingSuccess ? 2 : s.n) ? <CheckCircle2 className="h-4 w-4" /> : s.n}
                   </div>
                   <span className={`text-[10px] sm:text-[11px] font-bold whitespace-nowrap ${s.done ? "text-primary" : "text-muted-foreground"}`}>{s.label}</span>
@@ -1427,10 +1615,10 @@ function RegisterPatientPage() {
 
           {/* Main Full-Width Intake Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            
+
             {/* Left 8 Cols: High-Contrast Seamless Form */}
             <div className="lg:col-span-8 space-y-6">
-              
+
               {isEditLocked && (
                 <div className="p-4 sm:p-5 rounded-2xl bg-rose-500/10 border-2 border-rose-500/30 text-rose-700 dark:text-rose-400 flex items-start gap-3 shadow-xs animate-fade-in">
                   <ShieldCheck className="h-5 w-5 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
@@ -1472,19 +1660,84 @@ function RegisterPatientPage() {
                 </div>
               )}
 
+              {/* Flabs-Style Patient Search removed - top global navbar search is active */}
+
               <form onSubmit={handleRegisterPatient} className="space-y-6 bg-card/80 p-6 sm:p-7 rounded-2xl border border-border/90 shadow-sm">
-                
+
                 {/* Section 1: Demographics */}
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between border-b border-border/80 pb-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-2.5">
                     <div className="flex items-center gap-2 text-sm font-bold text-foreground">
                       <User className="h-4 w-4 text-primary" />
                       <span>Patient Identity & Demographics</span>
                     </div>
-                    <span className="text-[10px] font-bold text-primary/80 uppercase tracking-widest bg-primary/10 px-2 py-0.5 rounded">
-                      Step 1
-                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setIsAbhaQrModalOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 transition-all shadow-2xs hover:shadow-xs cursor-pointer"
+                        title="Scan QR to Create ABHA Health ID"
+                      >
+                        <QrCode className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Create ABHA</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsAbhaModalOpen(true)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer ${isAbhaVerified
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                            : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-blue-600/25 hover:shadow-md"
+                          }`}
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        <span>{isAbhaVerified ? "ABHA Linked" : "Link Patient ABHA"}</span>
+                      </button>
+                      <span className="text-[10px] font-bold text-primary/80 uppercase tracking-widest bg-primary/10 px-2 py-0.5 rounded">
+                        Step 1
+                      </span>
+                    </div>
                   </div>
+
+                  {/* ABHA Verified Identity Card */}
+                  {isAbhaVerified && (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/30 text-foreground animate-fade-in shadow-xs gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-sm shrink-0">
+                          <ShieldCheck className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                              ABHA Identity Verified (ABDM M1)
+                            </span>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                              Govt. of India
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs mt-0.5">
+                            <span className="font-mono font-bold text-foreground">
+                              {abhaNumber ? abhaNumber.replace(/(\d{2})(\d{4})(\d{4})(\d{4})/, "$1-$2-$3-$4") : "ABHA Linked"}
+                            </span>
+                            {abhaAddress && (
+                              <span className="text-muted-foreground font-mono">
+                                ({abhaAddress})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => setIsAbhaModalOpen(true)}
+                          className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
+                        >
+                          View / Re-verify
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Title, First Name, Last Name */}
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
@@ -1541,7 +1794,7 @@ function RegisterPatientPage() {
 
                   {/* Age (Y/M/D) & Gender */}
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
-                    
+
                     {/* Age Breakdown */}
                     <div className="sm:col-span-7 space-y-1.5">
                       <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
@@ -1729,6 +1982,124 @@ function RegisterPatientPage() {
                       )}
                     </div>
                   )}
+
+                  {/* Government Digital Health Account (ABDM M1) Vault Module */}
+                  <div className="mt-5 p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-500/[0.07] via-teal-500/[0.04] to-card border border-emerald-500/30 shadow-xs space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-500/20 pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-9 w-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-xs shrink-0">
+                          <ShieldCheck className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-black uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+                              Ayushman Bharat Digital Health Account
+                            </span>
+                            <span className="text-[9.5px] font-black px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/30">
+                              Govt ABDM M1
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Unified digital health identifier for automatic report sync &amp; instant Aadhaar demographics.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                        {isAbhaVerified ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 rounded-xl">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>Verified &amp; Linked</span>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setIsAbhaModalOpen(true)}
+                            disabled={registering || (!!newPatient && !isEditMode)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            <span>Instant OTP KYC</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* 14-Digit ABHA Number Field */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between min-h-[20px]">
+                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>14-Digit ABHA ID</span>
+                            {isAbhaVerified && (
+                              <span className="text-[9.5px] font-bold text-emerald-600 dark:text-emerald-400">
+                                (Govt Verified)
+                              </span>
+                            )}
+                          </label>
+                          {abhaNumber && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(abhaNumber);
+                              }}
+                              className="text-[10px] text-primary hover:underline font-semibold cursor-pointer"
+                              title="Copy ABHA Number"
+                            >
+                              Copy ID
+                            </button>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            maxLength={17}
+                            className="w-full pl-4 pr-10 h-11 bg-background border border-emerald-500/40 dark:border-emerald-500/30 focus:border-emerald-600 rounded-xl text-sm font-mono font-bold text-foreground placeholder:text-muted-foreground/50 outline-none transition-all shadow-2xs"
+                            placeholder="e.g. 91-1234-5678-9012"
+                            value={abhaNumber}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/[^\d-]/g, "");
+                              setAbhaNumber(val);
+                            }}
+                            disabled={registering || (!!newPatient && !isEditMode)}
+                          />
+                          {isAbhaVerified && (
+                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-emerald-600 dark:text-emerald-400 pointer-events-none">
+                              <CheckCircle2 className="h-4 w-4" />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* ABHA Address (PHR Handle) Field */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between min-h-[20px]">
+                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                            ABHA PHR Address
+                          </label>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            Auto-syncs lab reports
+                          </span>
+                        </div>
+                        <div className="relative flex items-center">
+                          <input
+                            type="text"
+                            className="w-full pl-4 pr-16 h-11 bg-background border border-emerald-500/40 dark:border-emerald-500/30 focus:border-emerald-600 rounded-xl text-sm font-mono font-medium text-foreground placeholder:text-muted-foreground/50 outline-none transition-all shadow-2xs"
+                            placeholder="username"
+                            value={abhaAddress ? abhaAddress.replace(/@abdm$/, "") : ""}
+                            onChange={(e) => {
+                              const val = e.target.value.trim().replace(/@.*$/, "");
+                              setAbhaAddress(val ? `${val}@abdm` : "");
+                            }}
+                            disabled={registering || (!!newPatient && !isEditMode)}
+                          />
+                          <span className="absolute right-3 px-2 py-1 rounded bg-muted/80 border border-border/60 text-[10px] font-mono font-bold text-muted-foreground pointer-events-none">
+                            @abdm
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Section 2: Clinical Referrals & Sample Collection Logistics */}
@@ -1744,19 +2115,19 @@ function RegisterPatientPage() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
-                    
+
                     {/* Doctor Referral */}
                     {isFieldEnabled("refDoctor") && (
                       <div className="space-y-1.5">
-                        <div className="flex items-center justify-between min-h-[20px]">
-                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                        <div className="flex items-center justify-between min-h-[22px] h-[22px] gap-1">
+                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider truncate whitespace-nowrap">
                             Referred By {isFieldRequired("refDoctor") && <span className="text-rose-500 font-extrabold">*</span>}
                           </label>
                           <button
                             type="button"
                             onClick={() => setIsDoctorModalOpen(true)}
                             disabled={registering || (!!newPatient && !isEditMode)}
-                            className="inline-flex items-center gap-1 text-[10.5px] text-primary font-bold hover:underline cursor-pointer"
+                            className="inline-flex items-center gap-1 text-[10px] text-primary font-bold hover:underline cursor-pointer shrink-0"
                           >
                             <PlusCircle className="h-3 w-3" />
                             <span>+ Doctor</span>
@@ -1778,8 +2149,8 @@ function RegisterPatientPage() {
                     {/* Second Referral (if enabled) */}
                     {isFieldEnabled("secondReferral") && (
                       <div className="space-y-1.5">
-                        <div className="flex items-center justify-between min-h-[20px]">
-                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                        <div className="flex items-center justify-between min-h-[22px] h-[22px] gap-1">
+                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider truncate whitespace-nowrap">
                             Second Referral {isFieldRequired("secondReferral") && <span className="text-rose-500 font-extrabold">*</span>}
                           </label>
                         </div>
@@ -1798,15 +2169,15 @@ function RegisterPatientPage() {
                     {/* Collection Center: Only visible for Central Lab Admin / Staff. Completely hidden from CC and B2B portal */}
                     {currentUserRole !== "COLLECTION_CENTER" && currentUserRole !== "B2B" && isFieldEnabled("collectedAt") && (
                       <div className="space-y-1.5">
-                        <div className="flex items-center justify-between min-h-[20px]">
-                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                        <div className="flex items-center justify-between min-h-[22px] h-[22px] gap-1">
+                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider truncate whitespace-nowrap" title="Collection Center">
                             Collection Center {isFieldRequired("collectedAt") && <span className="text-rose-500 font-extrabold">*</span>}
                           </label>
                           <button
                             type="button"
                             onClick={() => setIsCollectionModalOpen(true)}
                             disabled={registering || (!!newPatient && !isEditMode)}
-                            className="inline-flex items-center gap-1 text-[10.5px] text-primary font-bold hover:underline cursor-pointer"
+                            className="inline-flex items-center gap-1 text-[10px] text-primary font-bold hover:underline cursor-pointer shrink-0"
                           >
                             <Building className="h-3 w-3" />
                             <span>+ Center</span>
@@ -1828,15 +2199,15 @@ function RegisterPatientPage() {
                     {/* Phlebotomist / Collector */}
                     {isFieldEnabled("collectedBy") && (
                       <div className="space-y-1.5">
-                        <div className="flex items-center justify-between min-h-[20px]">
-                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                        <div className="flex items-center justify-between min-h-[22px] h-[22px] gap-1">
+                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider truncate whitespace-nowrap">
                             Collected By {isFieldRequired("collectedBy") && <span className="text-rose-500 font-extrabold">*</span>}
                           </label>
                           <button
                             type="button"
                             onClick={() => setIsPhleboModalOpen(true)}
                             disabled={registering || (!!newPatient && !isEditMode)}
-                            className="inline-flex items-center gap-1 text-[10.5px] text-primary font-bold hover:underline cursor-pointer"
+                            className="inline-flex items-center gap-1 text-[10px] text-primary font-bold hover:underline cursor-pointer shrink-0"
                           >
                             <UserCheck className="h-3 w-3" />
                             <span>+ Staff</span>
@@ -1857,16 +2228,16 @@ function RegisterPatientPage() {
 
                     {/* Collection Date & Time */}
                     <div className="space-y-1.5">
-                      <div className="flex items-center justify-between min-h-[20px]">
-                        <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                      <div className="flex items-center justify-between min-h-[22px] h-[22px] gap-1">
+                        <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider truncate whitespace-nowrap">
                           Collection Date &amp; Time
                         </label>
                       </div>
                       <div className="relative">
-                        <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                         <input
                           type="datetime-local"
-                          className="w-full pl-10 pr-4 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-xs font-semibold focus:border-zinc-900 dark:focus:border-white focus:ring-1 outline-none text-foreground transition-all shadow-2xs"
+                          className="w-full pl-9 pr-1 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-xs font-semibold focus:border-zinc-900 dark:focus:border-white focus:ring-1 outline-none text-foreground transition-all shadow-2xs"
                           value={collectionDateTime}
                           onChange={(e) => setCollectionDateTime(e.target.value)}
                           disabled={registering || (!!newPatient && !isEditMode)}
@@ -2184,16 +2555,14 @@ function RegisterPatientPage() {
               {/* Interactive Test Catalog Banner */}
               <div
                 onClick={() => newPatient && setIsModalOpen(true)}
-                className={`p-6 rounded-2xl border-2 transition-all flex flex-col sm:flex-row items-center justify-between gap-4 ${
-                  newPatient
+                className={`p-6 rounded-2xl border-2 transition-all flex flex-col sm:flex-row items-center justify-between gap-4 ${newPatient
                     ? "bg-accent/60 border-primary cursor-pointer shadow-md hover:bg-accent/80"
                     : "bg-muted/30 border-dashed border-border/80 opacity-70 cursor-not-allowed"
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-4 text-center sm:text-left">
-                  <div className={`w-13 h-13 rounded-2xl flex items-center justify-center shrink-0 p-3.5 shadow-sm ${
-                    newPatient ? "gradient-primary text-primary-foreground" : "bg-muted text-muted-foreground border border-border"
-                  }`}>
+                  <div className={`w-13 h-13 rounded-2xl flex items-center justify-center shrink-0 p-3.5 shadow-sm ${newPatient ? "gradient-primary text-primary-foreground" : "bg-muted text-muted-foreground border border-border"
+                    }`}>
                     <FlaskConical className="h-6 w-6" />
                   </div>
                   <div>
@@ -2241,11 +2610,10 @@ function RegisterPatientPage() {
                       <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-muted text-foreground border border-border">
                         {specimenTubes.length} Tubes Required
                       </span>
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 border ${
-                        specimenTubes.every(t => vialBarcodes[t.tubeType]?.trim())
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 border ${specimenTubes.every(t => vialBarcodes[t.tubeType]?.trim())
                           ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
                           : "bg-amber-500/10 text-amber-600 border-amber-500/30"
-                      }`}>
+                        }`}>
                         {specimenTubes.every(t => vialBarcodes[t.tubeType]?.trim()) ? (
                           <>
                             <CheckCircle2 className="h-3.5 w-3.5" />
@@ -2291,11 +2659,10 @@ function RegisterPatientPage() {
                               </div>
                             </div>
 
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 ${
-                              isScanned
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 ${isScanned
                                 ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
                                 : "bg-amber-500/15 text-amber-600 border border-amber-500/30"
-                            }`}>
+                              }`}>
                               {isScanned ? (
                                 <>
                                   <Check className="h-3 w-3" />
@@ -2379,7 +2746,7 @@ function RegisterPatientPage() {
 
             {/* Right 4 Cols: Real-Time Billing & Invoicing Panel */}
             <div className="lg:col-span-4 space-y-5 lg:sticky lg:top-4">
-              
+
               <div className="rounded-2xl border border-border/90 bg-card shadow-sm overflow-hidden">
                 <div className="bg-muted/60 px-5 py-4 border-b border-border/80 flex items-center justify-between">
                   <h3 className="font-display text-sm font-bold text-foreground flex items-center gap-2">
@@ -2474,7 +2841,7 @@ function RegisterPatientPage() {
       ) : (
         /* Booking Confirmed State (Horizontal Full-Width Premium UI/UX Deck) */
         <div className="max-w-6xl w-full mx-auto space-y-6 animate-fade-in text-foreground pb-8">
-          
+
           {/* Top Hero Banner */}
           <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-primary/10 border border-emerald-500/30 rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
             <div className="flex flex-col sm:flex-row items-center sm:items-start md:items-center gap-4 text-center sm:text-left">
@@ -2509,7 +2876,7 @@ function RegisterPatientPage() {
 
           {/* 3-Column Landscape Information Deck */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-            
+
             {/* Column 1: Patient Identity (4 cols) */}
             <div className="lg:col-span-4 bg-card border border-border/90 rounded-2xl p-6 shadow-xs flex flex-col justify-between space-y-4">
               <div>
@@ -2621,13 +2988,12 @@ function RegisterPatientPage() {
                       <span className="text-rose-500 font-bold ml-1.5">(Due: ₹{(successDetails?.balanceDue || 0).toFixed(2)})</span>
                     )}
                   </span>
-                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                    (successDetails?.balanceDue || 0) <= 0
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${(successDetails?.balanceDue || 0) <= 0
                       ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
                       : (successDetails?.paidAmount || 0) > 0
-                      ? "bg-amber-500/15 text-amber-600 border border-amber-500/30"
-                      : "bg-rose-500/15 text-rose-600 border border-rose-500/30"
-                  }`}>
+                        ? "bg-amber-500/15 text-amber-600 border border-amber-500/30"
+                        : "bg-rose-500/15 text-rose-600 border border-rose-500/30"
+                    }`}>
                     {(successDetails?.balanceDue || 0) <= 0 ? "PAID FULL" : (successDetails?.paidAmount || 0) > 0 ? "PARTIAL" : "UNPAID"}
                   </span>
                 </div>
@@ -2816,11 +3182,10 @@ function RegisterPatientPage() {
 
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground font-semibold">Payment Status:</span>
-                  <span className={`text-xs font-extrabold px-3 py-1 rounded-full ${
-                    (successDetails?.balanceDue || 0) <= 0
+                  <span className={`text-xs font-extrabold px-3 py-1 rounded-full ${(successDetails?.balanceDue || 0) <= 0
                       ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
                       : "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
-                  }`}>
+                    }`}>
                     {(successDetails?.balanceDue || 0) <= 0 ? "PAID FULL (Cleared)" : `₹${(successDetails?.balanceDue || 0).toFixed(2)} UNPAID (Due)`}
                   </span>
                 </div>
@@ -2841,11 +3206,10 @@ function RegisterPatientPage() {
                   type="button"
                   onClick={() => handleApplyPaymentMode("CASH")}
                   disabled={isUpdatingPaymentMode}
-                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
-                    selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0
+                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0
                       ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                       : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="h-9 w-9 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -2868,11 +3232,10 @@ function RegisterPatientPage() {
                   type="button"
                   onClick={() => handleApplyPaymentMode("ONLINE")}
                   disabled={isUpdatingPaymentMode}
-                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
-                    selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0
+                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0
                       ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                       : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="h-9 w-9 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
@@ -2895,11 +3258,10 @@ function RegisterPatientPage() {
                   type="button"
                   onClick={() => handleApplyPaymentMode("UPI")}
                   disabled={isUpdatingPaymentMode}
-                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
-                    selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0
+                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0
                       ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                       : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="h-9 w-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
@@ -2922,11 +3284,10 @@ function RegisterPatientPage() {
                   type="button"
                   onClick={() => handleApplyPaymentMode("CARD")}
                   disabled={isUpdatingPaymentMode}
-                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
-                    selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0
+                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0
                       ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                       : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="h-9 w-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
@@ -2949,11 +3310,10 @@ function RegisterPatientPage() {
                   type="button"
                   onClick={() => handleApplyPaymentMode("UNPAID")}
                   disabled={isUpdatingPaymentMode}
-                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${
-                    (successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID"
+                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${(successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID"
                       ? "border-rose-500/50 bg-rose-500/5 ring-2 ring-rose-500/20"
                       : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="h-9 w-9 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
@@ -2993,7 +3353,7 @@ function RegisterPatientPage() {
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl">
           <DialogTitle className="sr-only">Diagnostic Test Directory</DialogTitle>
-          
+
           {/* Header */}
           <div className="flex items-center gap-3 px-6 py-4 border-b border-border/80 shrink-0 bg-card">
             <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground shadow-sm">
@@ -3052,11 +3412,10 @@ function RegisterPatientPage() {
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs custom-scrollbar">
                 <button
                   onClick={() => setActiveCategory("ALL")}
-                  className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${
-                    activeCategory === "ALL"
+                  className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${activeCategory === "ALL"
                       ? "bg-primary text-primary-foreground shadow-sm"
                       : "bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
+                    }`}
                 >
                   All Categories
                 </button>
@@ -3064,11 +3423,10 @@ function RegisterPatientPage() {
                   <button
                     key={cat}
                     onClick={() => setActiveCategory(cat)}
-                    className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${
-                      activeCategory === cat
+                    className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${activeCategory === cat
                         ? "bg-primary text-primary-foreground shadow-sm"
                         : "bg-muted text-muted-foreground hover:text-foreground"
-                    }`}
+                      }`}
                   >
                     {cat}
                   </button>
@@ -3120,11 +3478,10 @@ function RegisterPatientPage() {
                       <div
                         key={pkg.id}
                         onClick={() => handleTogglePackage(pkg)}
-                        className={`p-4 rounded-xl border text-xs cursor-pointer select-none transition-all flex flex-col justify-between gap-3 shadow-2xs ${
-                          isSelected
+                        className={`p-4 rounded-xl border text-xs cursor-pointer select-none transition-all flex flex-col justify-between gap-3 shadow-2xs ${isSelected
                             ? "bg-primary/10 border-primary ring-2 ring-primary/30 shadow-md"
                             : "bg-card border-border/90 hover:border-primary/50 hover:shadow-xs"
-                        }`}
+                          }`}
                       >
                         <div>
                           <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -3146,11 +3503,10 @@ function RegisterPatientPage() {
                         <div className="pt-2 border-t border-border/60">
                           <div className="flex items-center justify-between text-[11px]">
                             <span className="text-muted-foreground font-semibold">Includes {testCount} Investigations</span>
-                            <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
-                              isSelected
+                            <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${isSelected
                                 ? "bg-primary text-primary-foreground"
                                 : "bg-muted text-muted-foreground"
-                            }`}>
+                              }`}>
                               {isSelected ? "Selected" : "Select Package"}
                             </span>
                           </div>
@@ -3191,11 +3547,10 @@ function RegisterPatientPage() {
                         <div key={test.id} className="flex flex-col gap-1">
                           <div
                             onClick={() => handleToggleTest(test.id)}
-                            className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer select-none transition-all ${
-                              selected
+                            className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer select-none transition-all ${selected
                                 ? "bg-accent/80 border-primary shadow-sm ring-1 ring-primary/30"
                                 : "bg-card border-border/90 hover:border-primary/50"
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center gap-3 min-w-0">
                               <Checkbox checked={selected} onCheckedChange={() => handleToggleTest(test.id)} onClick={(e) => e.stopPropagation()} />
@@ -3227,9 +3582,8 @@ function RegisterPatientPage() {
                                   <div
                                     key={sub.id}
                                     onClick={() => { if (!selected) handleToggleTest(sub.id) }}
-                                    className={`flex items-center justify-between p-2 rounded-md border text-xs cursor-pointer ${
-                                      subSelected ? "bg-accent/50 border-primary/30" : "bg-card border-transparent hover:border-border"
-                                    } ${selected ? "opacity-60 cursor-not-allowed" : ""}`}
+                                    className={`flex items-center justify-between p-2 rounded-md border text-xs cursor-pointer ${subSelected ? "bg-accent/50 border-primary/30" : "bg-card border-transparent hover:border-border"
+                                      } ${selected ? "opacity-60 cursor-not-allowed" : ""}`}
                                   >
                                     <div className="flex items-center gap-2">
                                       <Checkbox checked={subSelected} disabled={selected} onCheckedChange={() => { if (!selected) handleToggleTest(sub.id) }} onClick={(e) => e.stopPropagation()} />
@@ -3649,7 +4003,7 @@ function RegisterPatientPage() {
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <DialogContent className="max-w-5xl w-[95vw] sm:max-w-5xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl">
           <DialogTitle className="sr-only">Patient Intake Field Rules</DialogTitle>
-          
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-border/80 bg-card shrink-0">
             <div>
@@ -3705,16 +4059,14 @@ function RegisterPatientPage() {
                   key={cat.id}
                   type="button"
                   onClick={() => setIntakeCategoryTab(cat.id)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all border inline-flex items-center gap-1.5 cursor-pointer select-none ${
-                    isActive
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all border inline-flex items-center gap-1.5 cursor-pointer select-none ${isActive
                       ? "bg-primary text-primary-foreground border-primary shadow-xs font-extrabold ring-1 ring-primary/20"
                       : "bg-background border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                  }`}
+                    }`}
                 >
                   <span>{cat.label}</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                    isActive ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
-                  }`}>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${isActive ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                    }`}>
                     {cat.count}
                   </span>
                 </button>
@@ -3731,11 +4083,10 @@ function RegisterPatientPage() {
                   return (
                     <div
                       key={field.key}
-                      className={`p-3.5 rounded-xl border transition-all space-y-2.5 shadow-2xs ${
-                        field.enabled
+                      className={`p-3.5 rounded-xl border transition-all space-y-2.5 shadow-2xs ${field.enabled
                           ? "bg-card border-primary/40 ring-1 ring-primary/10"
                           : "bg-muted/20 border-border/70 opacity-75"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -3749,11 +4100,10 @@ function RegisterPatientPage() {
                             Tag: {field.orderingName}
                           </span>
                         </div>
-                        <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
-                          field.enabled
+                        <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${field.enabled
                             ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
                             : "bg-muted text-muted-foreground border border-border"
-                        }`}>
+                          }`}>
                           {field.enabled ? "Active" : "Disabled"}
                         </span>
                       </div>
@@ -3770,9 +4120,8 @@ function RegisterPatientPage() {
                           <span className="truncate">Form</span>
                         </label>
 
-                        <label className={`flex items-center gap-1.5 select-none font-semibold ${
-                          field.enabled ? "cursor-pointer text-foreground" : "cursor-not-allowed text-muted-foreground opacity-50"
-                        }`}>
+                        <label className={`flex items-center gap-1.5 select-none font-semibold ${field.enabled ? "cursor-pointer text-foreground" : "cursor-not-allowed text-muted-foreground opacity-50"
+                          }`}>
                           <input
                             type="checkbox"
                             disabled={!field.enabled}
@@ -3886,6 +4235,20 @@ function RegisterPatientPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ABHA ABDM Link Modal */}
+      <AbhaLinkModal
+        open={isAbhaModalOpen}
+        onOpenChange={setIsAbhaModalOpen}
+        onVerified={handleAbhaVerified}
+        defaultPhone={phone}
+      />
+
+      {/* ABHA QR Poster Modal */}
+      <AbhaQrPosterModal
+        open={isAbhaQrModalOpen}
+        onOpenChange={setIsAbhaQrModalOpen}
+      />
 
     </div>
   );

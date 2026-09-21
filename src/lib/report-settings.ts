@@ -235,6 +235,7 @@ export interface ReportLayoutSettings {
   showSignatureOnly?: boolean;
   groupByDepartment?: boolean;
   departmentOrder?: string[];
+  separatePagePerTest?: boolean;
 }
 
 export const DEFAULT_DEPARTMENT_ORDER = [
@@ -374,6 +375,7 @@ export const defaultReportLayoutSettings: ReportLayoutSettings = {
   },
   signaturePrintOnEveryPage: false,
   showSignatureOnly: false,
+  separatePagePerTest: false,
 };
 
 export function normalizeReportSettings(raw: any): ReportLayoutSettings {
@@ -561,6 +563,10 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
   } else {
     res.departmentOrder = [...DEFAULT_DEPARTMENT_ORDER];
   }
+
+  res.separatePagePerTest = raw.separatePagePerTest !== undefined
+    ? !!raw.separatePagePerTest
+    : (raw.separate_page_per_test !== undefined ? !!raw.separate_page_per_test : false);
 
   return res;
 }

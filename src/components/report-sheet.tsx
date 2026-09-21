@@ -96,7 +96,7 @@ export interface ReportSheetData {
 export const A4_W = 794;
 export const A4_H = 1123;
 
-export interface ReportBlock { key: string; node: React.ReactNode; }
+export interface ReportBlock { key: string; node: React.ReactNode; isTestStart?: boolean; }
 
 export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
   const patient: any = report.patient || {};
@@ -464,6 +464,17 @@ export function buildReportBlocks(
   opts?: { hidePatientBlock?: boolean; hideInterpretation?: boolean }
 ): ReportBlock[] {
   const blocks: ReportBlock[] = [];
+  let isFirstMainTestPushed = false;
+  let pendingPageBreakForNextBlock = false;
+
+  const pushBlock = (block: ReportBlock) => {
+    if (pendingPageBreakForNextBlock) {
+      block.isTestStart = true;
+      pendingPageBreakForNextBlock = false;
+    }
+    blocks.push(block);
+  };
+
   const lab = (report.lab || {}) as any;
   const reportSettings = normalizeReportSettings(lab.report_settings || lab.reportSettings || (report as any).report_settings || (report as any).reportSettings);
   const typo = reportSettings.typography;
@@ -649,7 +660,11 @@ export function buildReportBlocks(
   });
 
   sortedCategories.forEach(([category, mainTests], catIdx) => {
-    const buildDepartmentHeaderNode = (suffix: string, isSeparateTest = false) => {
+    if (catIdx > 0 && isFirstMainTestPushed) {
+      pendingPageBreakForNextBlock = true;
+    }
+
+    const buildDepartmentHeaderNode = (suffix: string, isSeparateTest = false): ReportBlock | null => {
       if (reportSettings.fieldsToShow.departmentName === false) return null;
       const alignVal = String(typo.departmentNameAlignment || "").toLowerCase();
       const deptAlign = alignVal === "left" 
@@ -680,11 +695,11 @@ export function buildReportBlocks(
     // When department-wise grouping is OFF (default), show department header once per category
     if (!isDeptGroupingEnabled) {
       const headerBlock = buildDepartmentHeaderNode("group");
-      if (headerBlock) blocks.push(headerBlock);
+      if (headerBlock) pushBlock(headerBlock);
 
       // Health Package display directly under Department Header on the left
       if (resolvedPackageName && catIdx === 0) {
-        blocks.push({
+        pushBlock({
           key: `package-header-${category}`,
           node: (
             <div className="text-left mb-1.5 mt-0.5 flex items-center gap-1.5 select-none">
@@ -708,14 +723,20 @@ export function buildReportBlocks(
     sortedMainTests.forEach(([mainTestName, itemsList], testIdx) => {
       if (!itemsList || itemsList.length === 0) return;
 
+      if (testIdx > 0 && isFirstMainTestPushed) {
+        pendingPageBreakForNextBlock = true;
+      } else if (!isFirstMainTestPushed) {
+        isFirstMainTestPushed = true;
+      }
+
       // When department-wise grouping is ON, show department header before EACH test in this department!
       if (isDeptGroupingEnabled) {
         const headerBlock = buildDepartmentHeaderNode(`test-${testIdx}-${mainTestName}`, testIdx > 0 || catIdx > 0);
-        if (headerBlock) blocks.push(headerBlock);
+        if (headerBlock) pushBlock(headerBlock);
 
         // Health Package display under the very first department header
         if (resolvedPackageName && catIdx === 0 && testIdx === 0) {
-          blocks.push({
+          pushBlock({
             key: `package-header-${category}`,
             node: (
               <div className="text-left mb-1.5 mt-0.5 flex items-center gap-1.5 select-none">
@@ -740,7 +761,7 @@ export function buildReportBlocks(
         : mainTestName;
 
       // 2. Test Panel Title Header (e.g. * COMPLETE BLOOD COUNT (CBC))
-      blocks.push({
+      pushBlock({
         key: `header-${category}-${mainTestName}`,
         node: (
           <div 
@@ -778,7 +799,7 @@ export function buildReportBlocks(
       // 3. Custom Editor or Table Rows
       if (allCustomEditor) {
         itemsList.forEach((item) => {
-          blocks.push({
+          pushBlock({
             key: `custom-editor-${item.id}`,
             node: (
               <div 
@@ -800,7 +821,7 @@ export function buildReportBlocks(
         const col4Label = sp.interchangeColumns ? cl.unit : cl.refRange;
         const col5Label = sp.interchangeColumns ? cl.refRange : cl.unit;
 
-        blocks.push({
+        pushBlock({
           key: `tblhead-${category}-${mainTestName}`,
           node: (
             <table
@@ -1022,12 +1043,12 @@ export function buildReportBlocks(
         // Render each unit in exact sequential sorted order
         renderUnits.forEach((unit) => {
           if (unit.type === "item") {
-            blocks.push({
+            pushBlock({
               key: `row-${unit.item.id}`,
               node: renderSingleRow(unit.item, false),
             });
           } else {
-            blocks.push({
+            pushBlock({
               key: `subgroup-title-${mainTestName}-${unit.title}`,
               node: (
                 <div 
@@ -1040,7 +1061,7 @@ export function buildReportBlocks(
             });
 
             unit.items.forEach((subItem) => {
-              blocks.push({
+              pushBlock({
                 key: `row-${subItem.id}`,
                 node: renderSingleRow(subItem, true),
               });
@@ -1054,7 +1075,7 @@ export function buildReportBlocks(
       const hasSectionFindings = activeTestNotes.notes || activeTestNotes.remarks || activeTestNotes.advices;
 
       if (hasSectionFindings) {
-        blocks.push({
+        pushBlock({
           key: `findings-${category}-${mainTestName}`,
           node: (
             <div 
@@ -1103,7 +1124,7 @@ export function buildReportBlocks(
       );
 
       if (isInterpEnabled) {
-        blocks.push({
+        pushBlock({
           key: `interp-${category}-${mainTestName}`,
           node: (
             <div 
@@ -1124,7 +1145,7 @@ export function buildReportBlocks(
 
       // End of test divider line if removeLineAtEndOfTest is false
       if (!typo.removeLineAtEndOfTest) {
-        blocks.push({
+        pushBlock({
           key: `endline-${category}-${mainTestName}`,
           node: (
             <div 
@@ -1346,7 +1367,13 @@ export const PaginatedReportPreview = React.forwardRef<
         ? Math.max(75, measuredH - maxUserMarginTop)
         : measuredH;
 
-      if (current.length > 0 && used + h > effectiveUsableH) {
+      const shouldForceNewPage = Boolean(
+        reportSettings.separatePagePerTest &&
+        b.isTestStart &&
+        current.length > 0
+      );
+
+      if ((current.length > 0 && used + h > effectiveUsableH) || shouldForceNewPage) {
         result.push(current);
         current = [];
         used = 0;
@@ -1357,7 +1384,7 @@ export const PaginatedReportPreview = React.forwardRef<
 
     if (current.length) result.push(current);
     return result.length ? result : [[]];
-  }, [blocks, heights, effectiveUsableH, maxUserMarginTop]);
+  }, [blocks, heights, effectiveUsableH, maxUserMarginTop, reportSettings.separatePagePerTest]);
 
   React.useEffect(() => {
     onPageCount?.(pages.length);

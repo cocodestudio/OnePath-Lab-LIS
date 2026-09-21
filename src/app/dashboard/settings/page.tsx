@@ -1976,6 +1976,60 @@ function SettingsContent() {
             </div>
           </div>
 
+          {/* SECTION: MULTI-PAGE TEST SEPARATION / SEPARATE PAGE PER TEST */}
+          <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary" />
+                  <h2 className="font-display text-base font-bold text-foreground">
+                    Multi-Page Test Separation (1 Test Per Page)
+                  </h2>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    layoutSettings.separatePagePerTest
+                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                      : "bg-muted text-muted-foreground border border-border"
+                  }`}>
+                    {layoutSettings.separatePagePerTest ? "Active · Separate Page per Test" : "Continuous Flow (Default)"}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Configure whether each test starts on a clean separate page or flows continuously.
+                </p>
+              </div>
+            </div>
+
+            <label className="flex items-start sm:items-center gap-3.5 p-4 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!layoutSettings.separatePagePerTest}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setLayoutSettings(prev => ({
+                    ...prev,
+                    separatePagePerTest: checked,
+                  }));
+                }}
+                className="h-5 w-5 rounded border-border text-primary accent-primary cursor-pointer shrink-0 mt-0.5 sm:mt-0"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-xs sm:text-sm text-foreground">
+                    Print Each Test on a New Separate Page (Har Test Alag Single Page Par)
+                  </span>
+                  {layoutSettings.separatePagePerTest && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                      <Check className="h-3 w-3" /> Enabled
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                  Jab ye option tick hoga, toh har test (jaise CBC, LFT, KFT) aur uska clinical interpretation apne alag single page par print hoga. Agar kisi test ka interpretation bada hai toh agle page par continue hoga, aur agla test uske baad naye page se shuru hoga. By default ye option disabled rehta hai (reports continuous flow me aati hain).
+                </p>
+              </div>
+            </label>
+          </div>
+
           {/* SECTION: DEPARTMENT SEQUENCE & GROUPING PRIORITY */}
           <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">

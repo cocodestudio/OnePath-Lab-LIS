@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
+import { getStoredPackages, syncLocalPackagesWithBackend } from "@/lib/packages";
 
 // Interfaces
 interface CustomRateList {
@@ -238,10 +239,43 @@ export default function RateListPage() {
   // Fetch Rate List Details & Tests Matrix
   const loadRateListDetails = async (id: number) => {
     try {
+      // Sync any local packages with backend
+      syncLocalPackagesWithBackend().catch(() => {});
+
       const res = await fetchFromLaravel(`/rate-lists/${id}`, { skipCache: true });
       if (res && res.status === "success" && res.data) {
         setTestRates(res.data.tests || []);
-        setPackageRates(res.data.packages || []);
+        
+        // Merge backend packages with any locally stored packages as optimistic fallback
+        const backendPkgs: PackageRateItem[] = res.data.packages || [];
+        const localPkgs = getStoredPackages();
+        const map = new Map<string, PackageRateItem>();
+
+        backendPkgs.forEach((p) => {
+          map.set(p.id, p);
+        });
+
+        localPkgs.forEach((lp) => {
+          if (!map.has(lp.id)) {
+            const mrp = Number(lp.price || 0);
+            const defaultB2b = Math.round(mrp * 0.70);
+            map.set(lp.id, {
+              id: lp.id,
+              name: lp.name,
+              test_code: lp.code,
+              category: "Health Package",
+              description: lp.description,
+              tests_count: lp.tests?.length || lp.testIds?.length || 0,
+              mrp: mrp,
+              b2b_price_default: defaultB2b,
+              custom_price: null,
+              effective_price: defaultB2b,
+              is_overridden: false,
+            });
+          }
+        });
+
+        setPackageRates(Array.from(map.values()));
         setEditedRates({});
       }
     } catch (err) {

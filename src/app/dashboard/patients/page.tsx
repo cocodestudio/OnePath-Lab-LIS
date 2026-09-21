@@ -71,6 +71,13 @@ interface Patient {
   ownerName?: string | null;
   breed?: string | null;
   species?: string | null;
+  abha_number?: string | null;
+  abhaNumber?: string | null;
+  abha_address?: string | null;
+  abhaAddress?: string | null;
+  is_abha_verified?: boolean;
+  isAbhaVerified?: boolean;
+  abha_profile_photo?: string | null;
   created_at?: string;
   createdAt?: string;
   updated_at?: string;
@@ -408,10 +415,15 @@ export default function PatientsPage() {
     const patId = p.custom_id || p.customId || "";
     const patDate = (p.created_at || p.createdAt || "").slice(0, 10);
 
+    const patAbhaAddress = p.abha_address || p.abhaAddress || "";
+    const patAbhaNumber = p.abha_number || p.abhaNumber || "";
+
     const matchesSearch =
       patName.toLowerCase().includes(search.toLowerCase()) ||
       patPhone.includes(search) ||
-      patId.toLowerCase().includes(search.toLowerCase());
+      patId.toLowerCase().includes(search.toLowerCase()) ||
+      patAbhaAddress.toLowerCase().includes(search.toLowerCase()) ||
+      patAbhaNumber.toLowerCase().includes(search.toLowerCase());
 
     const matchesDate = filterDate ? patDate === filterDate : true;
 
@@ -666,8 +678,17 @@ export default function PatientsPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3.5 font-mono font-bold text-primary">
-                        {patId}
+                      <td className="px-5 py-3.5 font-mono">
+                        <div className="font-bold text-primary">{patId}</div>
+                        {(patient.is_abha_verified || patient.isAbhaVerified || patient.abha_number || patient.abhaNumber) && (
+                          <div
+                            className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 tracking-wide"
+                            title={`Ayushman Bharat Health Account (ABHA): ${patient.abha_number || patient.abhaNumber || "Verified ABDM M1"}`}
+                          >
+                            <ShieldCheck className="h-2.5 w-2.5" />
+                            <span>ABHA</span>
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-3.5 text-foreground font-mono">
                         {(() => {
@@ -886,6 +907,34 @@ export default function PatientsPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-4 rounded-xl border border-border/70 bg-background/60">
+                  <div className="sm:col-span-2 lg:col-span-3 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">
+                          ABHA Identity (Ayushman Bharat Digital Mission)
+                        </span>
+                        {(viewPatient.is_abha_verified || viewPatient.isAbhaVerified) && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-800 dark:text-emerald-200">
+                            Verified M1
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 mt-1 text-xs">
+                        <span className="font-mono font-bold text-foreground">
+                          {(viewPatient.abha_number || viewPatient.abhaNumber)
+                            ? (viewPatient.abha_number || viewPatient.abhaNumber)?.replace(/(\d{2})(\d{4})(\d{4})(\d{4})/, "$1-$2-$3-$4")
+                            : "Not Linked"}
+                        </span>
+                        {(viewPatient.abha_address || viewPatient.abhaAddress) && (
+                          <span className="font-mono text-muted-foreground">
+                            ({viewPatient.abha_address || viewPatient.abhaAddress})
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">Aadhaar / National ID</p>
                     <p className="font-mono font-bold text-foreground mt-0.5">

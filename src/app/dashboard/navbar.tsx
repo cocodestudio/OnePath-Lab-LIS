@@ -49,6 +49,20 @@ const formatNotifTime = (dateVal?: string) => {
   return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 };
 
+const formatFlabsDate = (dateVal?: string) => {
+  if (!dateVal) return "";
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return "";
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yy = String(d.getFullYear()).slice(-2);
+    return `Registered on ${dd}/${mm}/${yy}`;
+  } catch {
+    return "";
+  }
+};
+
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -217,7 +231,7 @@ export default function Navbar() {
         const bills = bRes.status === "fulfilled" ? (Array.isArray(bRes.value) ? bRes.value : bRes.value?.data || []) : [];
 
         setSearchResults({
-          patients: patients.slice(0, 4),
+          patients: patients.slice(0, 8),
           reports: reports.slice(0, 4),
           bills: bills.slice(0, 3),
         });
@@ -376,7 +390,7 @@ export default function Navbar() {
               onFocus={() => {
                 if (!isLocked) setIsSearchOpen(true);
               }}
-              placeholder={isLocked ? "Search locked (Subscription expired)" : "Search patients, reports..."}
+              placeholder={isLocked ? "Search locked (Subscription expired)" : "Search by Phone Number, Name, Patient ID, UHID, ABHA..."}
               className={`w-full h-9 sm:h-10 pl-8 sm:pl-10 pr-7 sm:pr-20 bg-background/90 hover:bg-background focus:bg-background border border-border/90 focus:border-primary rounded-xl text-xs sm:text-sm font-medium text-foreground outline-none transition-all shadow-xs placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-primary/15 truncate ${isLocked ? "opacity-60 cursor-not-allowed" : ""}`}
             />
 
@@ -421,31 +435,88 @@ export default function Navbar() {
                   {/* Patients Section - Hidden for Collection Center */}
                   {!isCollectionCenter && searchResults.patients.length > 0 && (
                     <div className="space-y-1">
-                      <div className="px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                        <Users className="h-3 w-3 text-primary" />
-                        <span>Patients ({searchResults.patients.length})</span>
+                      <div className="px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Users className="h-3 w-3 text-primary" />
+                          <span>Patients ({searchResults.patients.length})</span>
+                        </div>
+                        <span className="text-[9.5px] font-normal lowercase text-muted-foreground/75">click to edit patient</span>
                       </div>
-                      <div className="space-y-0.5">
-                        {searchResults.patients.map((p: any) => (
-                          <Link
-                            key={p.id}
-                            href={`/dashboard/patients`}
-                            onClick={() => setIsSearchOpen(false)}
-                            className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted/60 transition-colors text-xs"
-                          >
-                            <div>
-                              <p className="font-bold text-foreground">
-                                {p.title ? `${p.title} ` : ""}{p.full_name || p.fullName}
-                              </p>
-                              <p className="text-[11px] text-muted-foreground font-mono">
-                                ID: {p.custom_id || p.customId} · Ph: {p.phone || "N/A"}
-                              </p>
-                            </div>
-                            <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
-                              View Patient →
-                            </span>
-                          </Link>
-                        ))}
+                      <div className="divide-y divide-border/40 rounded-xl overflow-hidden bg-card/60">
+                        {searchResults.patients.map((p: any) => {
+                          const isAbha = Boolean(
+                            p.is_abha_verified ||
+                            p.isAbhaVerified ||
+                            p.abha_address ||
+                            p.abhaAddress ||
+                            p.abha_number ||
+                            p.abhaNumber
+                          );
+                          const prefix = p.designation || p.title ? `${p.designation || p.title} ` : "";
+                          const pName = p.name || p.full_name || p.fullName || "Patient";
+                          const gender = p.gender || "Male";
+                          const ageStr = p.age ? `${p.age} Year` : "";
+                          const demographic = [gender, ageStr].filter(Boolean).join(", ");
+                          const regDate = formatFlabsDate(p.created_at || p.createdAt);
+
+                          return (
+                            <Link
+                              key={p.id}
+                              href={`/dashboard/patients/register?edit=${p.id}`}
+                              onClick={() => {
+                                setIsSearchOpen(false);
+                                setSearchQuery("");
+                              }}
+                              className="block p-2.5 sm:p-3 hover:bg-muted/70 transition-colors cursor-pointer text-left group"
+                            >
+                              {/* Line 1: [Govt/ABDM Emblem] Name , Gender, Age */}
+                              <div className="flex items-center gap-2">
+                                {isAbha && (
+                                  <span
+                                    className="shrink-0 inline-flex items-center justify-center h-4 w-4 rounded-full overflow-hidden shadow-2xs"
+                                    title="ABDM Ayushman Bharat Digital Mission Verified"
+                                  >
+                                    <svg viewBox="0 0 100 100" className="h-4 w-4">
+                                      <circle cx="50" cy="50" r="48" fill="#ffffff" stroke="#cbd5e1" strokeWidth="3" />
+                                      <circle cx="50" cy="50" r="44" fill="#047857" />
+                                      <path d="M50 16 L50 84 M16 50 L84 50" stroke="#ffffff" strokeWidth="12" strokeLinecap="round" />
+                                      <circle cx="50" cy="50" r="16" fill="#ffffff" />
+                                      <circle cx="50" cy="50" r="8" fill="#f97316" />
+                                      <circle cx="50" cy="50" r="3" fill="#ffffff" />
+                                    </svg>
+                                  </span>
+                                )}
+                                <p className="font-bold text-foreground text-xs sm:text-[13px] truncate group-hover:text-primary transition-colors">
+                                  {prefix}{pName}{demographic ? ` , ${demographic}` : ""}
+                                </p>
+                              </div>
+
+                              {/* Line 2: Patient ID */}
+                              <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                                #{p.custom_id || p.customId || p.uhid || p.id?.slice(0, 8)}
+                              </div>
+
+                              {/* Line 3: ABHA Address on Left & Registration Date on Right */}
+                              <div className="flex items-center justify-between gap-2 mt-1 text-[11px]">
+                                {isAbha && (p.abha_address || p.abhaAddress) ? (
+                                  <span className="text-emerald-700 dark:text-emerald-400 font-semibold truncate">
+                                    {p.abha_address || p.abhaAddress}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground/70 text-[10.5px]">
+                                    {p.phone && p.phone !== "N/A" ? p.phone : ""}
+                                  </span>
+                                )}
+
+                                {regDate && (
+                                  <span className="text-muted-foreground text-[10.5px] shrink-0 font-medium">
+                                    {regDate}
+                                  </span>
+                                )}
+                              </div>
+                            </Link>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

@@ -16,7 +16,9 @@ import {
   getStoredPackages,
   addPackage,
   updatePackage,
-  deletePackage
+  deletePackage,
+  fetchPackagesFromApi,
+  syncLocalPackagesWithBackend
 } from "@/lib/packages";
 
 export default function PackagesPage() {
@@ -50,9 +52,21 @@ export default function PackagesPage() {
     loadTests();
   }, []);
 
-  const loadPackages = () => {
+  const loadPackages = async () => {
+    // 1. Instant local render
     const list = getStoredPackages();
     setPackages(list);
+
+    // 2. Fetch fresh packages from server & sync
+    try {
+      await syncLocalPackagesWithBackend();
+      const serverList = await fetchPackagesFromApi();
+      if (serverList && serverList.length > 0) {
+        setPackages(serverList);
+      }
+    } catch (err) {
+      console.warn("Failed to sync packages from server:", err);
+    }
   };
 
   const loadTests = async () => {

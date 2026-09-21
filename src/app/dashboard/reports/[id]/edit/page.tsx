@@ -132,6 +132,12 @@ interface Report {
     collected_by?: string;
     created_at?: string;
     createdAt?: string;
+    abhaNumber?: string;
+    abha_number?: string;
+    abhaAddress?: string;
+    abha_address?: string;
+    isAbhaVerified?: boolean;
+    is_abha_verified?: boolean;
   };
   bill?: {
     id?: string;
@@ -149,6 +155,14 @@ interface Report {
   testNotes?: Record<string, { notes?: string; remarks?: string; advices?: string }> | string | null;
   test_notes?: Record<string, { notes?: string; remarks?: string; advices?: string }> | string | null;
   lab?: any;
+  abdmStatus?: string;
+  abdm_status?: string;
+  abdmCareContextId?: string;
+  abdm_care_context_id?: string;
+  abdmSyncedAt?: string;
+  abdm_synced_at?: string;
+  abdmError?: string;
+  abdm_error?: string;
 }
 
 interface CalculationResult {
@@ -1665,7 +1679,7 @@ export default function ResultEntryPage() {
     const resolvedStatus = targetStatus || report?.status || "PENDING";
 
     try {
-      await fetchFromLaravel(`/reports/${reportId}`, {
+      const updateRes = await fetchFromLaravel(`/reports/${reportId}`, {
         method: "PUT",
         body: JSON.stringify({
           status: resolvedStatus,
@@ -1677,8 +1691,21 @@ export default function ResultEntryPage() {
       });
 
       let successMsg = "Diagnostic results saved successfully.";
-      if (targetStatus === "FINAL" || resolvedStatus === "FINAL") successMsg = "Report results saved & marked as FINAL.";
-      if (targetStatus === "APPROVED" || resolvedStatus === "APPROVED") successMsg = "Report results saved & APPROVED.";
+      if (targetStatus === "FINAL" || resolvedStatus === "FINAL") {
+        successMsg = "Report results saved & marked as FINAL.";
+      }
+      if (targetStatus === "APPROVED" || resolvedStatus === "APPROVED") {
+        const isAbdmLinked = updateRes?.abdm_status === "LINKED" || updateRes?.abdmStatus === "LINKED";
+        const hasAbha = report?.patient?.abhaAddress || (report?.patient as any)?.abha_address || report?.patient?.abhaNumber || (report?.patient as any)?.abha_number;
+
+        if (isAbdmLinked) {
+          successMsg = "Report APPROVED! Dispatched to Ayushman Bharat Digital Mission (ABDM M2).";
+        } else if (hasAbha) {
+          successMsg = "Report APPROVED! Synced to Ayushman Bharat Digital Mission (ABDM M2).";
+        } else {
+          successMsg = "Report results saved & APPROVED.";
+        }
+      }
 
       setSuccess(successMsg);
       toast.success("Success", successMsg);
@@ -1968,6 +1995,18 @@ export default function ResultEntryPage() {
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
                     <Boxes className="h-3 w-3" />
                     <span>Package: {activePackageName}</span>
+                  </span>
+                )}
+                {((report.patient as any)?.abhaAddress || (report.patient as any)?.abha_address || (report.patient as any)?.abhaNumber || (report.patient as any)?.abha_number) && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/25">
+                    <Shield className="h-3 w-3 text-emerald-600" />
+                    <span>ABHA: {(report.patient as any)?.abhaAddress || (report.patient as any)?.abha_address || (report.patient as any)?.abhaNumber || (report.patient as any)?.abha_number}</span>
+                  </span>
+                )}
+                {(report.abdmStatus === "LINKED" || (report as any)?.abdm_status === "LINKED") && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-teal-600 text-white shadow-2xs">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>ABDM M2 Synced</span>
                   </span>
                 )}
               </div>
@@ -2641,7 +2680,13 @@ export default function ResultEntryPage() {
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs"
               >
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
-                <span>{saving ? "Saving…" : "Approve"}</span>
+                <span>
+                  {saving
+                    ? "Saving…"
+                    : ((report?.patient as any)?.abhaAddress || (report?.patient as any)?.abha_address || (report?.patient as any)?.abhaNumber || (report?.patient as any)?.abha_number)
+                    ? "Approve & Sync ABDM"
+                    : "Approve"}
+                </span>
               </Button>
 
               <Button

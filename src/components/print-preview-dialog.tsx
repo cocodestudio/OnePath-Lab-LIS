@@ -40,6 +40,10 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
   const toast = useToast();
   const [useCustomLetterpad, setUseCustomLetterpad] = useState(true);
   const [showInterpretation, setShowInterpretation] = useState(true);
+  const [separatePagePerTest, setSeparatePagePerTest] = useState<boolean>(() => {
+    const rs = report?.lab?.report_settings || report?.lab?.reportSettings;
+    return Boolean(rs?.separatePagePerTest);
+  });
   const [excludedMainTests, setExcludedMainTests] = useState<string[]>([]);
   const [previewScale, setPreviewScale] = useState(0.8);
   const [totalPages, setTotalPages] = useState(1);
@@ -50,6 +54,15 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
       setPreviewScale(0.42);
     }
   }, []);
+
+  useEffect(() => {
+    if (report?.lab) {
+      const rs = report.lab.report_settings || report.lab.reportSettings;
+      if (rs && typeof rs.separatePagePerTest === "boolean") {
+        setSeparatePagePerTest(rs.separatePagePerTest);
+      }
+    }
+  }, [report]);
 
   // Top-level Parameter Blocks state (supports standalone parameters & full group blocks like DLC)
   const [blocksList, setBlocksList] = useState<TopLevelBlock[]>([]);
@@ -320,11 +333,25 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
       });
     });
 
+    const labObj = report.lab || {};
+    const rs = labObj.report_settings || labObj.reportSettings || {};
+
     return {
       ...report,
+      lab: {
+        ...labObj,
+        report_settings: {
+          ...rs,
+          separatePagePerTest,
+        },
+        reportSettings: {
+          ...rs,
+          separatePagePerTest,
+        },
+      },
       results: orderedResults,
     };
-  }, [report, blocksList, hiddenBlockIds, excludedMainTests]);
+  }, [report, blocksList, hiddenBlockIds, excludedMainTests, separatePagePerTest]);
 
   const availableMainTests = useMemo(() => {
     if (!report?.results) return [];
@@ -599,6 +626,24 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
                     </p>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
                       Show detailed medical interpretation table and notes at the end of report.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Separate Page per Test Switch */}
+                <label className="flex items-start gap-3 p-3 border border-border rounded-xl cursor-pointer hover:bg-accent/40 transition-colors bg-background shadow-xs">
+                  <Checkbox
+                    checked={separatePagePerTest}
+                    onCheckedChange={(v) => setSeparatePagePerTest(Boolean(v))}
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold text-foreground leading-none flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5 text-primary" />
+                      <span>Separate Page per Test</span>
+                    </p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Har test aur uska interpretation alag single page par start karega.
                     </p>
                   </div>
                 </label>

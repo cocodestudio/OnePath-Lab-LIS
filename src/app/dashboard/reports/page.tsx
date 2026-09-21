@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Printer, ChevronLeft, ChevronRight, Edit3, AlertTriangle,
-  Filter, X, Eye, Plus, Loader2, Clock, Wallet, CheckCircle2, Sparkles, IndianRupee, RefreshCw, Ban
+  Filter, X, Eye, Plus, Loader2, Clock, Wallet, CheckCircle2, Sparkles, IndianRupee, RefreshCw, Ban, Shield
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
@@ -29,13 +29,17 @@ interface Test {
 interface ReportTest { id: string; resultValue: string | null; isAbnormal: boolean; test: Test; }
 interface Report {
   id: string; customId: string; status: string; createdAt: string;
-  patient: { name: string; customId: string; phone: string; age: number; gender: string };
+  patient: { name: string; customId: string; phone: string; age: number; gender: string; abha_number?: string; abha_address?: string };
   bill: { customId: string; total: number; status: string };
   results: ReportTest[];
   is_b2b_paid?: boolean;
   isB2bPaid?: boolean;
   b2b_price?: number;
   b2bPrice?: number;
+  abdm_status?: string;
+  abdmStatus?: string;
+  abdm_care_context_id?: string;
+  abdmCareContextId?: string;
 }
 
 const DEFAULT_LAB = { name: "OnePath Lab Main", email: "info@onepathlab.com", address: "123 Healthcare Blvd, Medical District, Delhi", logoUrl: "/onepath-logo.png" };
@@ -538,6 +542,11 @@ export default function ReportsListPage() {
                           {rep.status !== "REJECTED" && !rep.meta?.sample_status && (rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && abnormalCount > 0 && (
                             <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-[9px] font-bold text-destructive uppercase tracking-wide whitespace-nowrap">
                               <AlertTriangle className="h-3 w-3" /> {abnormalCount} abnormal
+                            </span>
+                          )}
+                          {(rep.abdm_status === "LINKED" || rep.abdmStatus === "LINKED") && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-teal-500/10 px-2 py-0.5 text-[9px] font-extrabold text-teal-700 dark:text-teal-400 uppercase tracking-wide border border-teal-500/25 whitespace-nowrap" title="ABDM M2 Care Context Linked & FHIR Record Pushed">
+                              <Shield className="h-3 w-3 text-teal-600 dark:text-teal-400" /> ABDM M2 Synced
                             </span>
                           )}
                           {isB2B && rep.status !== "REJECTED" && (rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && (
