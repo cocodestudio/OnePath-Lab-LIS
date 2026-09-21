@@ -602,10 +602,12 @@ function RegisterPatientPage() {
         setAvailableTests(list);
       } catch (err) { console.error("Error fetching tests:", err); }
 
+      let activeLabName = "";
       try {
         const lab = await fetchFromLaravel("/lab");
         if (lab) {
           setLabInfo(lab);
+          activeLabName = (lab.name || "").trim();
           const rawSettings = lab?.report_settings || lab?.reportSettings;
           if (rawSettings) {
             const normalized = normalizeReportSettings(rawSettings);
@@ -619,6 +621,41 @@ function RegisterPatientPage() {
           }
         }
       } catch (err) { console.error("Error fetching lab defaults:", err); }
+
+      // Fetch Collection Centers & B2B Partner Labs added by user
+      try {
+        const ccRes = await fetchFromLaravel("/collection-centers");
+        const ccList = Array.isArray(ccRes) ? ccRes : (ccRes?.data || []);
+        const fetchedCenters: string[] = ccList
+          .map((c: any) => (c?.name || "").trim())
+          .filter((n: string) => Boolean(n) && n.toLowerCase() !== "main lab");
+
+        const targetLabName = activeLabName || storedUser?.lab_name || storedUser?.lab?.name || "";
+        let autoCcName = "";
+        if (targetLabName && targetLabName.toLowerCase() !== "main lab") {
+          autoCcName = /\bcc\b/i.test(targetLabName) ? targetLabName : `${targetLabName} CC`;
+        }
+
+        let localPoints: string[] = [];
+        const savedPointsRaw = localStorage.getItem("lis_collection_points");
+        if (savedPointsRaw) {
+          try { localPoints = JSON.parse(savedPointsRaw); } catch (e) { }
+        }
+
+        const mergedPoints = Array.from(
+          new Set([
+            "Main Lab",
+            autoCcName,
+            ...fetchedCenters,
+            ...defaultCollectionPoints,
+            ...localPoints,
+          ].filter(Boolean))
+        );
+
+        setCollectionPoints(mergedPoints);
+      } catch (err) {
+        console.error("Error fetching collection centers:", err);
+      }
 
       try {
         setAvailablePackages(getStoredPackages());
@@ -2185,10 +2222,10 @@ function RegisterPatientPage() {
                         </div>
                         <Select value={collectedAtSelect} onValueChange={setCollectedAtSelect} disabled={registering || (!!newPatient && !isEditMode)}>
                           <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
-                            <SelectValue />
+                            <SelectValue placeholder="Select Collection Center" />
                           </SelectTrigger>
                           <SelectContent>
-                            {collectionPoints.map((point) => (
+                            {Array.from(new Set(["Main Lab", ...collectionPoints, collectedAtSelect].filter(Boolean))).map((point) => (
                               <SelectItem key={point} value={point}>{point}</SelectItem>
                             ))}
                           </SelectContent>
@@ -2196,35 +2233,33 @@ function RegisterPatientPage() {
                       </div>
                     )}
 
-                    {/* Phlebotomist / Collector */}
-                    {isFieldEnabled("collectedBy") && (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between min-h-[22px] h-[22px] gap-1">
-                          <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider truncate whitespace-nowrap">
-                            Collected By {isFieldRequired("collectedBy") && <span className="text-rose-500 font-extrabold">*</span>}
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => setIsPhleboModalOpen(true)}
-                            disabled={registering || (!!newPatient && !isEditMode)}
-                            className="inline-flex items-center gap-1 text-[10px] text-primary font-bold hover:underline cursor-pointer shrink-0"
-                          >
-                            <UserCheck className="h-3 w-3" />
-                            <span>+ Staff</span>
-                          </button>
-                        </div>
-                        <Select value={collectedBySelect} onValueChange={setCollectedBySelect} disabled={registering || (!!newPatient && !isEditMode)}>
-                          <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {phlebotomists.map((phlebo) => (
-                              <SelectItem key={phlebo} value={phlebo}>{phlebo}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                    {/* Phlebotomist / Collector - Permanently visible so it never disappears upon center selection */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between min-h-[22px] h-[22px] gap-1">
+                        <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider truncate whitespace-nowrap">
+                          Collected By {isFieldRequired("collectedBy") && <span className="text-rose-500 font-extrabold">*</span>}
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsPhleboModalOpen(true)}
+                          disabled={registering || (!!newPatient && !isEditMode)}
+                          className="inline-flex items-center gap-1 text-[10px] text-primary font-bold hover:underline cursor-pointer shrink-0"
+                        >
+                          <UserCheck className="h-3 w-3" />
+                          <span>+ Staff</span>
+                        </button>
                       </div>
-                    )}
+                      <Select value={collectedBySelect} onValueChange={setCollectedBySelect} disabled={registering || (!!newPatient && !isEditMode)}>
+                        <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
+                          <SelectValue placeholder="Select Staff / Phlebotomist" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from(new Set(["Self / Lab Staff", ...phlebotomists, collectedBySelect].filter(Boolean))).map((phlebo) => (
+                            <SelectItem key={phlebo} value={phlebo}>{phlebo}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
                     {/* Collection Date & Time */}
                     <div className="space-y-1.5">

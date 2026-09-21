@@ -96,7 +96,7 @@ export const DEFAULT_INTAKE_FIELDS: IntakeFieldConfig[] = [
   { key: "refDoctor", label: "Referred By (Doctor)", orderingName: "Referred By", category: "Clinical & Referral", enabled: true, required: false, showOnReport: true },
   { key: "secondReferral", label: "Second Referral", orderingName: "Second Referral", category: "Clinical & Referral", enabled: false, required: false, showOnReport: false },
   { key: "collectedAt", label: "Collection Center / Branch", orderingName: "Collection Center", category: "Clinical & Referral", enabled: true, required: false, showOnReport: true },
-  { key: "collectedBy", label: "Sample Collected By", orderingName: "Collected At", category: "Clinical & Referral", enabled: true, required: false, showOnReport: false },
+  { key: "collectedBy", label: "Sample Collected By", orderingName: "Sample Collected By", category: "Clinical & Referral", enabled: true, required: false, showOnReport: false },
 
   { key: "aadhaarNo", label: "Aadhaar / National ID", orderingName: "Aadhaar No.", category: "Identification & Documents", enabled: false, required: false, showOnReport: false },
   { key: "insuranceNo", label: "Insurance Policy No.", orderingName: "Insurance No.", category: "Identification & Documents", enabled: false, required: false, showOnReport: false },
