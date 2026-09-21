@@ -388,6 +388,7 @@ export function renderDoctorSignature(
           <img
             src={resolvedUrl}
             alt={sig.name || "Doctor Signature"}
+            crossOrigin="anonymous"
             style={{
               width: "100%",
               height: "auto",
@@ -1551,16 +1552,10 @@ export const PaginatedReportPreview = React.forwardRef<
                   style={{
                     position: "absolute",
                     bottom: `${sigBottomOffset}px`,
-                    left: sigAlign === "left"
-                      ? `${sigHorizontalOffset}px`
-                      : (sigAlign === "center" ? "50%" : undefined),
-                    right: sigAlign === "right"
-                      ? `${sigHorizontalOffset}px`
-                      : undefined,
-                    transform: sigAlign === "center" ? "translateX(-50%)" : undefined,
+                    left: `${effectiveSettings.marginLeft}px`,
+                    width: `${contentWidth}px`,
                     zIndex: 10,
                     pointerEvents: "none",
-                    maxWidth: `${contentWidth}px`,
                   }}
                 >
                   {renderSignaturesGrid(signatureRows, enabledSignaturesList, globalShowSignatureOnly)}

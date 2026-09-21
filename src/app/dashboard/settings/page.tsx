@@ -481,7 +481,10 @@ function SettingsContent() {
         : [{ ...prev.doctorSignature }];
 
       if (list[sigIndex]) {
-        list[sigIndex] = { ...list[sigIndex], ...updates };
+        const willBeEnabled = updates.enabled !== undefined
+          ? updates.enabled
+          : (list[sigIndex].enabled || Boolean(updates.imageUrl || updates.name));
+        list[sigIndex] = { ...list[sigIndex], ...updates, enabled: willBeEnabled };
       }
 
       return {
@@ -807,6 +810,20 @@ function SettingsContent() {
     setIsSaving(true);
     setToast(null);
     try {
+      const cleanedSignatures = (layoutSettings.doctorSignatures && layoutSettings.doctorSignatures.length > 0 
+        ? layoutSettings.doctorSignatures 
+        : [layoutSettings.doctorSignature]
+      ).map((s) => ({
+        ...s,
+        enabled: s.enabled !== false && (s.enabled || Boolean(s.imageUrl || (s.name && !s.name.includes("Mukherjee")))),
+      }));
+
+      const payloadLayoutSettings = {
+        ...layoutSettings,
+        doctorSignature: cleanedSignatures[0] || layoutSettings.doctorSignature,
+        doctorSignatures: cleanedSignatures,
+      };
+
       const updatedLab = await fetchFromLaravel("/lab/letterhead", {
         method: "POST",
         body: JSON.stringify({
@@ -816,8 +833,8 @@ function SettingsContent() {
           print_margin_left: settings.marginLeft,
           print_margin_right: settings.marginRight,
           print_with_letterhead: settings.printWithLetterhead,
-          default_designation: layoutSettings.defaultDesignation,
-          report_settings: layoutSettings,
+          default_designation: payloadLayoutSettings.defaultDesignation,
+          report_settings: payloadLayoutSettings,
           bill_settings: billSettings,
         }),
       });
@@ -832,11 +849,12 @@ function SettingsContent() {
         printWithLetterhead: updatedLab.printWithLetterhead ?? updatedLab.print_with_letterhead ?? settings.printWithLetterhead,
       };
       setSettings(saved);
+      setLayoutSettings(payloadLayoutSettings);
 
       // Invalidate API cache so all open pages/reports immediately get fresh lab settings
       clearApiCache();
       try {
-        localStorage.setItem("lis_cached_report_settings", JSON.stringify(layoutSettings));
+        localStorage.setItem("lis_cached_report_settings", JSON.stringify(payloadLayoutSettings));
         window.dispatchEvent(new Event("lis_settings_updated"));
       } catch {}
 

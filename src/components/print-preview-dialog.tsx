@@ -334,7 +334,31 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
     });
 
     const labObj = report.lab || {};
-    const rs = labObj.report_settings || labObj.reportSettings || {};
+    const rawLabSettings = labObj.reportSettings ?? labObj.report_settings;
+    let rs: any = {};
+    if (typeof rawLabSettings === 'string') {
+      try {
+        rs = JSON.parse(rawLabSettings || '{}');
+      } catch {
+        rs = {};
+      }
+    } else if (rawLabSettings && typeof rawLabSettings === 'object') {
+      rs = { ...rawLabSettings };
+    }
+
+    if (!rs.doctorSignatures && !rs.doctor_signatures && !rs.doctorSignature && !rs.doctor_signature) {
+      try {
+        if (typeof window !== "undefined") {
+          const cached = localStorage.getItem("lis_cached_report_settings");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && typeof parsed === "object") {
+              rs = { ...parsed, ...rs };
+            }
+          }
+        }
+      } catch {}
+    }
 
     return {
       ...report,

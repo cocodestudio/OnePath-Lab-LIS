@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Users, FileText, Receipt, LogOut, Menu, X,
   FlaskConical, Settings, HelpCircle, LifeBuoy, Clock, TrendingUp,
-  Briefcase, ChevronDown, Wallet, Lock, Sparkles, ShieldAlert
+  Briefcase, ChevronDown, Wallet, Lock, Sparkles, ShieldAlert, Gift
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStoredUser, logout, fetchFromLaravel } from "@/lib/api-client";
@@ -49,6 +49,7 @@ const navigation: NavItem[] = [
   },
   { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
+  { name: "Refer & Earn", href: "/dashboard/refer", icon: Gift },
 ];
 
 export default function Sidebar() {

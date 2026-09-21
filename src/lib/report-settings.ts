@@ -379,7 +379,37 @@ export const defaultReportLayoutSettings: ReportLayoutSettings = {
 };
 
 export function normalizeReportSettings(raw: any): ReportLayoutSettings {
-  if (!raw || typeof raw !== "object") return { ...defaultReportLayoutSettings };
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = {};
+    }
+  }
+  if (!raw || typeof raw !== "object") {
+    raw = {};
+  }
+
+  // Fallback to cached settings in localStorage if raw has no doctor signatures configured
+  if (!raw.doctorSignatures && !raw.doctor_signatures && !raw.doctorSignature && !raw.doctor_signature) {
+    try {
+      if (typeof window !== "undefined") {
+        const cached = localStorage.getItem("lis_cached_report_settings");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && typeof parsed === "object") {
+            raw = {
+              ...parsed,
+              ...raw,
+              doctorSignatures: parsed.doctorSignatures || parsed.doctor_signatures || raw.doctorSignatures,
+              doctorSignature: parsed.doctorSignature || parsed.doctor_signature || raw.doctorSignature,
+              signatureSettings: parsed.signatureSettings || parsed.signature_settings || raw.signatureSettings,
+            };
+          }
+        }
+      }
+    } catch {}
+  }
 
   const res = {
     ...defaultReportLayoutSettings,
@@ -486,23 +516,33 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
   }
 
   const normalizeSingleSig = (rawSig: any, index = 0): DoctorSignatureConfig => {
+    const isExplicitlyDisabled = rawSig.enabled === false || rawSig.enabled === "false" || rawSig.enabled === 0 || rawSig.enabled === "0";
+    const isExplicitlyEnabled = rawSig.enabled === true || rawSig.enabled === "true" || rawSig.enabled === 1 || rawSig.enabled === "1";
+    const hasImage = Boolean(rawSig.imageUrl || rawSig.image_url);
+    const hasCustomName = Boolean(rawSig.name && !String(rawSig.name).includes("Mukherjee") && !String(rawSig.name).includes("Authorized Pathologist"));
+
+    // Automatically enabled if explicitly enabled OR if an image is uploaded OR if a custom doctor name was saved and not explicitly disabled
+    const isEnabled = isExplicitlyDisabled
+      ? false
+      : (isExplicitlyEnabled || hasImage || (hasCustomName && rawSig.enabled !== false));
+
     return {
       id: rawSig.id || `sig-${index + 1}`,
-      enabled: rawSig.enabled !== undefined ? !!rawSig.enabled : false,
+      enabled: isEnabled,
       imageUrl: rawSig.imageUrl || rawSig.image_url || null,
       name: rawSig.name || `Dr. ${index === 0 ? "S. K. Mukherjee" : "Authorized Pathologist"}`,
       designation: rawSig.designation || "Consultant Pathologist, MD",
       registrationNo: rawSig.registrationNo || rawSig.registration_no || "",
       alignment: rawSig.alignment || (index % 2 === 0 ? "left" : "right"),
       position: rawSig.position || (index % 2 === 0 ? "left" : "right"),
-      width: typeof rawSig.width === 'number' ? rawSig.width : 130,
+      width: typeof rawSig.width === 'number' && rawSig.width > 0 ? rawSig.width : 130,
       marginTop: typeof rawSig.marginTop === 'number' ? rawSig.marginTop : (typeof rawSig.margin_top === 'number' ? rawSig.margin_top : 0),
       marginBottom: typeof rawSig.marginBottom === 'number' ? rawSig.marginBottom : (typeof rawSig.margin_bottom === 'number' ? rawSig.margin_bottom : 0),
       marginLeft: typeof rawSig.marginLeft === 'number' ? rawSig.marginLeft : (typeof rawSig.margin_left === 'number' ? rawSig.margin_left : 0),
       marginRight: typeof rawSig.marginRight === 'number' ? rawSig.marginRight : (typeof rawSig.margin_right === 'number' ? rawSig.margin_right : 0),
       showSignatureOnly: rawSig.showSignatureOnly !== undefined 
-        ? !!rawSig.showSignatureOnly 
-        : (rawSig.show_signature_only !== undefined ? !!rawSig.show_signature_only : false),
+        ? (rawSig.showSignatureOnly === true || rawSig.showSignatureOnly === "true" || rawSig.showSignatureOnly === 1 || rawSig.showSignatureOnly === "1")
+        : (rawSig.show_signature_only === true || rawSig.show_signature_only === "true" || rawSig.show_signature_only === 1 || rawSig.show_signature_only === "1"),
     };
   };
 
@@ -514,6 +554,15 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
     const single = normalizeSingleSig(raw.doctorSignature || raw.doctor_signature, 0);
     res.doctorSignature = single;
     res.doctorSignatures = [single];
+  }
+
+  // Double check: If doctorSignature had an active image or was enabled, make sure res.doctorSignatures includes it
+  if (raw.doctorSignature || raw.doctor_signature) {
+    const single = normalizeSingleSig(raw.doctorSignature || raw.doctor_signature, 0);
+    if (single.enabled && (!res.doctorSignatures.some(s => s.enabled))) {
+      res.doctorSignatures[0] = { ...res.doctorSignatures[0], ...single, enabled: true };
+      res.doctorSignature = res.doctorSignatures[0];
+    }
   }
 
   const rawSigSettings = raw.signatureSettings || raw.signature_settings || {};

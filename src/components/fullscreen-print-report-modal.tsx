@@ -143,7 +143,8 @@ export function FullscreenPrintReportModal({
         .then((fresh) => {
           if (fresh) {
             setLiveLab(fresh);
-            const raw = typeof fresh.report_settings === 'string' ? JSON.parse(fresh.report_settings || '{}') : fresh.report_settings;
+            const freshRaw = fresh.reportSettings ?? fresh.report_settings;
+            const raw = typeof freshRaw === 'string' ? JSON.parse(freshRaw || '{}') : freshRaw;
             if (raw && typeof raw.separatePagePerTest === 'boolean') {
               setSeparatePagePerTest(raw.separatePagePerTest);
             }
@@ -211,9 +212,32 @@ export function FullscreenPrintReportModal({
       getReportPackage(report.customId) ||
       getReportPackage(report.patient?.customId);
 
-    const labReportSettings = typeof currentLab?.report_settings === 'string'
-      ? JSON.parse(currentLab.report_settings || '{}')
-      : (currentLab?.report_settings || {});
+    const rawLabSettings = currentLab?.reportSettings ?? currentLab?.report_settings;
+    let labReportSettings: any = {};
+    if (typeof rawLabSettings === 'string') {
+      try {
+        labReportSettings = JSON.parse(rawLabSettings || '{}');
+      } catch {
+        labReportSettings = {};
+      }
+    } else if (rawLabSettings && typeof rawLabSettings === 'object') {
+      labReportSettings = { ...rawLabSettings };
+    }
+
+    // If live lab settings are missing doctor signatures, check localStorage fallback
+    if (!labReportSettings.doctorSignatures && !labReportSettings.doctor_signatures && !labReportSettings.doctorSignature && !labReportSettings.doctor_signature) {
+      try {
+        if (typeof window !== "undefined") {
+          const cached = localStorage.getItem("lis_cached_report_settings");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && typeof parsed === "object") {
+              labReportSettings = { ...parsed, ...labReportSettings };
+            }
+          }
+        }
+      } catch {}
+    }
 
     const updatedLab = currentLab ? {
       ...currentLab,
