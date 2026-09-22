@@ -581,11 +581,6 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone }: 
                   OTP sent to patient's Aadhaar-linked mobile:{" "}
                   <strong className="text-slate-800 dark:text-slate-200">{maskedMobile}</strong>
                 </p>
-                {isSandbox && (
-                  <div className="inline-block px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 font-mono text-[10px]">
-                    Sandbox Demo Mode: Test OTP <strong>123456</strong>
-                  </div>
-                )}
               </div>
 
               {/* 6 Digit OTP Inputs */}

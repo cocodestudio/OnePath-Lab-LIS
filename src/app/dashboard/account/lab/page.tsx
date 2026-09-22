@@ -7,7 +7,8 @@ import {
   CreditCard, MessageSquare, FileText, Building2, CheckCircle2,
   AlertCircle, Download, Printer, Shield, ArrowRight, Sparkles,
   Loader2, RefreshCw, Eye, Plus, Check, Info, Phone, Mail, MapPin,
-  Upload, Trash2, Calendar, Zap, Receipt, Activity, TrendingUp, Lock
+  Upload, Trash2, Calendar, Zap, Receipt, Activity, TrendingUp, Lock,
+  Send, Clock, CheckCheck, Table2
 } from "lucide-react";
 import { fetchFromLaravel, getStoredUser, updateStoredUser, clearApiCache } from "@/lib/api-client";
 import { isSubscriptionExpired } from "@/lib/subscription";
@@ -105,7 +106,7 @@ const VOLUME_TIERS = [
 
 function LabAccountContent() {
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<"SUBSCRIPTION" | "SMS" | "INVOICES" | "CENTRE">("SUBSCRIPTION");
+  const [activeTab, setActiveTab] = useState<"SUBSCRIPTION" | "SMS" | "INVOICES" | "DISPATCH" | "CENTRE">("SUBSCRIPTION");
   const [lab, setLab] = useState<LabData | null>(null);
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,8 +114,19 @@ function LabAccountContent() {
   const [generatingInvoice, setGeneratingInvoice] = useState(false);
   const [invoiceNotice, setInvoiceNotice] = useState<{ text: string; type: "success" | "error" | "warning" } | null>(null);
 
-  // Direct PDF Download State
+  // Direct PDF Download & Email State
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null);
+  const [emailingInvoiceId, setEmailingInvoiceId] = useState<string | null>(null);
+
+  // Auto-Dispatch & Summaries State
+  const [dispatchSettings, setDispatchSettings] = useState({
+    emailEnabled: true,
+    whatsappEnabled: false,
+    frequency: "daily" as "daily" | "weekly" | "monthly" | "yearly",
+  });
+  const [loadingDispatchSettings, setLoadingDispatchSettings] = useState(false);
+  const [savingDispatchSettings, setSavingDispatchSettings] = useState(false);
+  const [dispatchSaveSuccess, setDispatchSaveSuccess] = useState(false);
 
   // Daily Patient Volume State
   const [selectedVolumeTier, setSelectedVolumeTier] = useState("1_50");
@@ -150,6 +162,7 @@ function LabAccountContent() {
     const tabParam = searchParams.get("tab")?.toLowerCase();
     if (tabParam === "sms") setActiveTab("SMS");
     else if (tabParam === "invoices") setActiveTab("INVOICES");
+    else if (tabParam === "dispatch" || tabParam === "summaries") setActiveTab("DISPATCH");
     else if (tabParam === "centre") setActiveTab("CENTRE");
     else setActiveTab("SUBSCRIPTION");
 
@@ -242,10 +255,99 @@ function LabAccountContent() {
         state: labRes.state || "",
         pincode: labRes.pincode || "",
       });
+
+      // Also fetch summary dispatch preferences
+      loadDispatchSettings();
     } catch (err) {
       console.error("Failed to load lab account data:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDispatchSettings = async () => {
+    try {
+      setLoadingDispatchSettings(true);
+      const res = await fetchFromLaravel("/lab/summary-dispatch/settings", { skipCache: true });
+      if (res && res.settings) {
+        const s = res.settings;
+        let freq: "daily" | "weekly" | "monthly" | "yearly" = "daily";
+        if (typeof s.frequency === "string" && ["daily", "weekly", "monthly", "yearly"].includes(s.frequency)) {
+          freq = s.frequency as any;
+        } else if (s.frequencies) {
+          if (s.frequencies.yearly) freq = "yearly";
+          else if (s.frequencies.monthly) freq = "monthly";
+          else if (s.frequencies.weekly) freq = "weekly";
+          else freq = "daily";
+        }
+
+        setDispatchSettings({
+          emailEnabled: s.email_enabled ?? true,
+          whatsappEnabled: s.whatsapp_enabled ?? false,
+          frequency: freq,
+        });
+      }
+    } catch (e) {
+      console.warn("Failed to load dispatch settings:", e);
+    } finally {
+      setLoadingDispatchSettings(false);
+    }
+  };
+
+  const handleSaveDispatchSettings = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    try {
+      setSavingDispatchSettings(true);
+      setDispatchSaveSuccess(false);
+
+      const payload = {
+        email_enabled: dispatchSettings.emailEnabled,
+        whatsapp_enabled: dispatchSettings.whatsappEnabled,
+        frequency: dispatchSettings.frequency,
+      };
+
+      const res = await fetchFromLaravel("/lab/summary-dispatch/settings", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      if (res && res.status === "success") {
+        setDispatchSaveSuccess(true);
+        setTimeout(() => setDispatchSaveSuccess(false), 4000);
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to save summary dispatch settings.");
+    } finally {
+      setSavingDispatchSettings(false);
+    }
+  };
+
+  const handleEmailInvoice = async (inv: InvoiceItem) => {
+    try {
+      setEmailingInvoiceId(inv.id);
+      const res = await fetchFromLaravel(`/lab/invoices/${inv.id}/email`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+
+      if (res && res.success) {
+        setInvoiceNotice({
+          type: "success",
+          text: res.message || `Invoice PDF successfully sent to your registered email!`,
+        });
+      } else {
+        setInvoiceNotice({
+          type: "error",
+          text: res?.message || "Failed to dispatch invoice email.",
+        });
+      }
+    } catch (err: any) {
+      setInvoiceNotice({
+        type: "error",
+        text: err.message || "Failed to send invoice email.",
+      });
+    } finally {
+      setEmailingInvoiceId(null);
     }
   };
 
@@ -759,6 +861,31 @@ function LabAccountContent() {
             </span>
           ) : null}
           {activeTab === "INVOICES" && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            if (isExpired) {
+              alert("Your laboratory trial/subscription has expired. Please choose a subscription plan and complete payment via PayU first.");
+              return;
+            }
+            if (!isCentreSaved) {
+              setActiveTab("CENTRE");
+            } else {
+              setActiveTab("DISPATCH");
+            }
+          }}
+          className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap flex items-center gap-1.5 ${
+            isExpired ? "opacity-60 cursor-not-allowed" : ""
+          } ${
+            activeTab === "DISPATCH" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Send className="h-3.5 w-3.5 text-primary" />
+          <span>Auto-Dispatch &amp; Summaries</span>
+          {activeTab === "DISPATCH" && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
           )}
         </button>
@@ -1327,23 +1454,46 @@ function LabAccountContent() {
                             ₹{invAmt.toFixed(2)}
                           </td>
                           <td className="py-3.5 px-4 text-right">
-                            <button
-                              onClick={() => handleDirectDownloadPdf(inv)}
-                              disabled={isDownloading}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold shadow-2xs hover:brightness-105 cursor-pointer disabled:opacity-50"
-                            >
-                              {isDownloading ? (
-                                <>
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  <span>Downloading...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Download className="h-3.5 w-3.5" />
-                                  <span>Download PDF</span>
-                                </>
-                              )}
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleEmailInvoice(inv)}
+                                disabled={emailingInvoiceId === inv.id}
+                                title="Send official GST Tax Invoice PDF directly to lab email"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted text-foreground text-xs font-semibold shadow-2xs cursor-pointer disabled:opacity-50 transition-colors"
+                              >
+                                {emailingInvoiceId === inv.id ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                    <span>Sending...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Mail className="h-3.5 w-3.5 text-primary" />
+                                    <span>Email PDF</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDirectDownloadPdf(inv)}
+                                disabled={isDownloading}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold shadow-2xs hover:brightness-105 cursor-pointer disabled:opacity-50 transition-all"
+                              >
+                                {isDownloading ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    <span>Downloading...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="h-3.5 w-3.5" />
+                                    <span>Download PDF</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1353,6 +1503,293 @@ function LabAccountContent() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ================= TAB: AUTO-DISPATCH & SUMMARIES ================= */}
+      {activeTab === "DISPATCH" && !isCentreSaved && (
+        <div className="p-8 sm:p-12 text-center rounded-2xl border-2 border-dashed border-amber-500/40 bg-amber-500/5 space-y-4 max-w-xl mx-auto my-8 animate-fade-in">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center mx-auto">
+            <Lock className="h-7 w-7" />
+          </div>
+          <h3 className="font-display text-xl font-bold text-foreground">Diagnostic Centre Profile Required</h3>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Please save your Diagnostic Centre profile (Centre Name, Contact Phone, and Address) under the <strong>Centre &amp; GST Profile</strong> tab first to enable automated dispatch.
+          </p>
+          <button
+            type="button"
+            onClick={() => setActiveTab("CENTRE")}
+            className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer mt-2"
+          >
+            <span>Complete Centre Profile Now</span>
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {activeTab === "DISPATCH" && isCentreSaved && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header Banner */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-display text-lg font-bold text-foreground">Auto-Dispatch &amp; Summaries</h3>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                  Email &bull; WhatsApp &bull; .CSV
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Configure automated periodic delivery of diagnostic summaries, revenue statistics, and complete patient audit ledgers (.csv) to your email and WhatsApp.
+              </p>
+            </div>
+          </div>
+
+          {dispatchSaveSuccess && (
+            <div className="flex items-center gap-2 p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold text-emerald-600 dark:text-emerald-400 animate-in fade-in">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>Summary dispatch settings and delivery channels saved successfully!</span>
+            </div>
+          )}
+
+          {/* Preferences Form */}
+          <form onSubmit={handleSaveDispatchSettings} className="space-y-6">
+            
+            {/* Card 1: Delivery Channels (Pure Toggle Buttons - No emails/numbers displayed) */}
+            <div className="bg-card border border-border/90 rounded-2xl p-6 sm:p-7 shadow-xs space-y-4">
+              <div className="flex items-center gap-2.5 pb-3 border-b border-border/60">
+                <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+                  <Send className="h-4 w-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-foreground">1. Delivery Channels</h4>
+                  <p className="text-[11px] text-muted-foreground">Toggle automated delivery channels ON or OFF.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Email Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => setDispatchSettings(prev => ({ ...prev, emailEnabled: !prev.emailEnabled }))}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer select-none flex items-center justify-between text-left ${
+                    dispatchSettings.emailEnabled 
+                      ? "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-xs" 
+                      : "border-border bg-muted/15 hover:bg-muted/30 opacity-75"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-xl ${dispatchSettings.emailEnabled ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                      <Mail className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-bold text-foreground block">Email</span>
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        {dispatchSettings.emailEnabled ? "Status: Enabled" : "Status: Disabled"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Switch indicator */}
+                  <div
+                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                      dispatchSettings.emailEnabled ? "bg-primary" : "bg-muted-foreground/30"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition duration-200 ease-in-out ${
+                        dispatchSettings.emailEnabled ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </div>
+                </button>
+
+                {/* WhatsApp Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => setDispatchSettings(prev => ({ ...prev, whatsappEnabled: !prev.whatsappEnabled }))}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer select-none flex items-center justify-between text-left ${
+                    dispatchSettings.whatsappEnabled 
+                      ? "border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500/20 shadow-xs" 
+                      : "border-border bg-muted/15 hover:bg-muted/30 opacity-75"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-xl ${dispatchSettings.whatsappEnabled ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"}`}>
+                      <MessageSquare className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-bold text-foreground block">WhatsApp</span>
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        {dispatchSettings.whatsappEnabled ? "Status: Enabled" : "Status: Disabled"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Switch indicator */}
+                  <div
+                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                      dispatchSettings.whatsappEnabled ? "bg-emerald-600" : "bg-muted-foreground/30"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition duration-200 ease-in-out ${
+                        dispatchSettings.whatsappEnabled ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Card 2: Schedule Frequency (Select One) */}
+            <div className="bg-card border border-border/90 rounded-2xl p-6 sm:p-7 shadow-xs space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
+                    <Clock className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground">2. Schedule Frequency (Select One)</h4>
+                    <p className="text-[11px] text-muted-foreground">Choose one delivery schedule for automated executive reports compilation.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                
+                {/* Daily Midnight Option */}
+                <div
+                  onClick={() => setDispatchSettings(prev => ({ ...prev, frequency: "daily" }))}
+                  className={`p-4 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
+                    dispatchSettings.frequency === "daily" 
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-xs" 
+                      : "border-border bg-card hover:bg-muted/30"
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">Daily Midnight</span>
+                      <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${
+                        dispatchSettings.frequency === "daily" ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                      }`}>
+                        {dispatchSettings.frequency === "daily" && <Check className="h-3 w-3 stroke-[3]" />}
+                      </div>
+                    </div>
+                    <span className="inline-block text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                      12:00 AM Sharp (Recommended)
+                    </span>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Every night at 12:00 AM, compiles today&apos;s total billing, collected revenue, patient count, tests, and attaches full CSV.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Weekly Option */}
+                <div
+                  onClick={() => setDispatchSettings(prev => ({ ...prev, frequency: "weekly" }))}
+                  className={`p-4 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
+                    dispatchSettings.frequency === "weekly" 
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-xs" 
+                      : "border-border bg-card hover:bg-muted/30"
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">Weekly Audit</span>
+                      <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${
+                        dispatchSettings.frequency === "weekly" ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                      }`}>
+                        {dispatchSettings.frequency === "weekly" && <Check className="h-3 w-3 stroke-[3]" />}
+                      </div>
+                    </div>
+                    <span className="inline-block text-[10px] font-bold text-sky-600 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
+                      Sunday Midnight
+                    </span>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Every Sunday midnight, compiles 7-day cumulative business metrics, collection ratios, and weekly audit ledger.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Monthly Option */}
+                <div
+                  onClick={() => setDispatchSettings(prev => ({ ...prev, frequency: "monthly" }))}
+                  className={`p-4 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
+                    dispatchSettings.frequency === "monthly" 
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-xs" 
+                      : "border-border bg-card hover:bg-muted/30"
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">Monthly Closure</span>
+                      <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${
+                        dispatchSettings.frequency === "monthly" ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                      }`}>
+                        {dispatchSettings.frequency === "monthly" && <Check className="h-3 w-3 stroke-[3]" />}
+                      </div>
+                    </div>
+                    <span className="inline-block text-[10px] font-bold text-purple-600 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                      1st of Each Month
+                    </span>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Dispatched on the 1st of every month for complete accounting closure, balance tracking, and ledger archiving.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Yearly Option */}
+                <div
+                  onClick={() => setDispatchSettings(prev => ({ ...prev, frequency: "yearly" }))}
+                  className={`p-4 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
+                    dispatchSettings.frequency === "yearly" 
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20 shadow-xs" 
+                      : "border-border bg-card hover:bg-muted/30"
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">Yearly Audit</span>
+                      <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${
+                        dispatchSettings.frequency === "yearly" ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                      }`}>
+                        {dispatchSettings.frequency === "yearly" && <Check className="h-3 w-3 stroke-[3]" />}
+                      </div>
+                    </div>
+                    <span className="inline-block text-[10px] font-bold text-indigo-600 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                      Annual Benchmark
+                    </span>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Annual diagnostic overview and financial audit for tax assessment, CA review, and growth analytics.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Save Action Footer */}
+            <div className="flex items-center justify-end pt-2">
+              <button
+                type="submit"
+                disabled={savingDispatchSettings}
+                className="px-7 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all shadow-md inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {savingDispatchSettings ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Saving Preferences...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 stroke-[2.5]" />
+                    <span>Save Dispatch Preferences</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+          </form>
         </div>
       )}
 

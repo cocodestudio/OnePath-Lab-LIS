@@ -20,6 +20,7 @@ import { InvoiceSheet, type InvoiceData } from "@/components/invoice-sheet";
 import { CollectionCentersTab } from "@/components/collection-centers-tab";
 import { PaymentGatewayTab } from "@/components/payment-gateway-tab";
 import { MachineIntegrationTab } from "@/components/machine-integration-tab";
+import { AbhaIntegrationSection } from "@/components/abha-integration-section";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import {
@@ -316,9 +317,11 @@ function optimizeLetterheadImage(file: File): Promise<string> {
 function SettingsContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab");
-  const [activeTab, setActiveTab] = useState<"letterhead" | "report-layout" | "bills-layout" | "machine-integration" | "collection-centers" | "payment-gateway" | "whatsapp-gateway">(
+  const [activeTab, setActiveTab] = useState<"letterhead" | "report-layout" | "bills-layout" | "machine-integration" | "collection-centers" | "payment-gateway">(
     (initialTab && ["letterhead", "report-layout", "bills-layout", "machine-integration", "collection-centers", "payment-gateway"].includes(initialTab))
       ? (initialTab as any)
+      : (initialTab === "abha" || initialTab === "abha-integration")
+      ? "report-layout"
       : "letterhead"
   );
   const [settings, setSettings] = useState<ExtendedPrintSettings>(defaultPrintSettings);
@@ -329,6 +332,12 @@ function SettingsContent() {
     const tab = searchParams.get("tab");
     if (tab && ["letterhead", "report-layout", "bills-layout", "machine-integration", "collection-centers", "payment-gateway"].includes(tab)) {
       setActiveTab(tab as any);
+    } else if (tab === "abha" || tab === "abha-integration") {
+      setActiveTab("report-layout");
+      setTimeout(() => {
+        const el = document.getElementById("abha-integration");
+        el?.scrollIntoView({ behavior: "smooth" });
+      }, 300);
     }
   }, [searchParams]);
 
@@ -3465,6 +3474,11 @@ function SettingsContent() {
                   />
                 </div>
               </div>
+            </div>
+
+            {/* SECTION 13: AYUSHMAN BHARAT (ABHA) & HFR INTEGRATION */}
+            <div id="abha-integration">
+              <AbhaIntegrationSection />
             </div>
           </div>
         )}

@@ -23,7 +23,22 @@ export function getStoredUser() {
 
 export function getStoredToken() {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("lis_token");
+  const lsToken = localStorage.getItem("lis_token");
+  if (lsToken && lsToken.trim()) return lsToken.trim();
+
+  // Check document.cookie fallback
+  try {
+    const match = document.cookie.match(/(?:^|;\s*)lis_token=([^;]+)/);
+    if (match && match[1]) {
+      const decoded = decodeURIComponent(match[1]).trim();
+      if (decoded) {
+        localStorage.setItem("lis_token", decoded);
+        return decoded;
+      }
+    }
+  } catch (_) {}
+
+  return null;
 }
 
 export function updateStoredUser(updates: Partial<any>) {
@@ -126,11 +141,15 @@ function cloneData(data: any): any {
   }
 }
 
-export async function fetchFromLaravel(endpoint: string, options: FetchFromLaravelOptions = {}) {
+export async function fetchFromLaravel<T = any>(endpoint: string, options: FetchFromLaravelOptions = {}): Promise<T> {
   const token = getStoredToken();
-  if (!token) throw new Error("Unauthorized");
-
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+
+  // Allow ABHA & public endpoints to proceed even if token isn't in localStorage yet
+  if (!token && !cleanEndpoint.includes("/abha/") && !cleanEndpoint.includes("/public/")) {
+    throw new Error("Unauthorized");
+  }
+
   const method = (options.method || "GET").toUpperCase();
   const isGet = method === "GET";
   const defaultTtl = options.cacheTtlMs ?? 60000; // 60s default cache TTL
@@ -153,7 +172,7 @@ export async function fetchFromLaravel(endpoint: string, options: FetchFromLarav
 
   const headers: Record<string, string> = {
     "Accept": "application/json",
-    "Authorization": `Bearer ${token}`,
+    ...(token ? { "Authorization": `Bearer ${token}` } : {}),
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers as Record<string, string> || {}),
   };
@@ -165,8 +184,18 @@ export async function fetchFromLaravel(endpoint: string, options: FetchFromLarav
       const response = await fetch(`${apiBase}${cleanEndpoint}`, { ...options, headers });
 
       if (response.status === 401) {
-        logout();
-        throw new Error("Session expired. Please log in again.");
+        if (!cleanEndpoint.includes("/abha/")) {
+          logout();
+          throw new Error("Session expired. Please log in again.");
+        }
+        // For ABHA endpoints, retry without Authorization header
+        const retryHeaders = { ...headers };
+        delete retryHeaders["Authorization"];
+        const retryRes = await fetch(`${apiBase}${cleanEndpoint}`, { ...options, headers: retryHeaders });
+        if (retryRes.ok) {
+          const retryText = await retryRes.text();
+          return retryText ? JSON.parse(retryText) : {};
+        }
       }
 
       if (response.status === 402) {
