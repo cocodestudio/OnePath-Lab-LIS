@@ -162,24 +162,14 @@ export function AbhaIntegrationSection({ onHfrUpdated }: AbhaIntegrationSectionP
   // -------------------------------------------------------------------
   // LINK EXISTING HFR VIA AADHAAR AUTH STATE
   // Step 1: In-Charge Aadhaar Auth (12 digits)
-  // Step 2: OTP Verification & Search on ABDM Registry
-  // Step 3_found: Display Registered Facility & Link button
-  // Step 3_not_found: Alert "No Registered Facility Found" with prompt to Onboard
   // -------------------------------------------------------------------
-  const [linkStep, setLinkStep] = useState<"1" | "2" | "3_found" | "3_not_found">("1");
-  const [linkAadhaar1, setLinkAadhaar1] = useState("");
-  const [linkAadhaar2, setLinkAadhaar2] = useState("");
-  const [linkAadhaar3, setLinkAadhaar3] = useState("");
-  const [linkOtpBoxes, setLinkOtpBoxes] = useState<string[]>(["", "", "", "", "", ""]);
-  const [linkTxnId, setLinkTxnId] = useState("");
-  const [linkMaskedPhone, setLinkMaskedPhone] = useState("");
-  const [linkResendTimer, setLinkResendTimer] = useState(45);
-  const [isSendingLinkOtp, setIsSendingLinkOtp] = useState(false);
-  const [isSearchingFacilities, setIsSearchingFacilities] = useState(false);
+  // LINK EXISTING HFR VIA DIRECT MANUAL ENTRY STATE
+  // -------------------------------------------------------------------
+  const [manualHfrId, setManualHfrId] = useState("");
+  const [manualFacilityName, setManualFacilityName] = useState("");
+  const [manualHprId, setManualHprId] = useState("");
   const [isLinkingFacility, setIsLinkingFacility] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
-  const [discoveredFacilities, setDiscoveredFacilities] = useState<any[]>([]);
-  const [verifiedOwnerName, setVerifiedOwnerName] = useState("");
 
   // Copy helper
   const [copiedHfr, setCopiedHfr] = useState(false);
@@ -192,15 +182,6 @@ export function AbhaIntegrationSection({ onHfrUpdated }: AbhaIntegrationSectionP
     }
     return () => clearInterval(timer);
   }, [isOnboardModalOpen, currentStep, resendTimer]);
-
-  // Timer for Link Existing HFR OTP resend
-  useEffect(() => {
-    let timer: any;
-    if (isLinkExistingModalOpen && linkStep === "2" && linkResendTimer > 0) {
-      timer = setInterval(() => setLinkResendTimer((t) => t - 1), 1000);
-    }
-    return () => clearInterval(timer);
-  }, [isLinkExistingModalOpen, linkStep, linkResendTimer]);
 
   useEffect(() => {
     loadDhisSummary();
@@ -482,131 +463,50 @@ export function AbhaIntegrationSection({ onHfrUpdated }: AbhaIntegrationSectionP
 
   // Open Link Existing HFR modal
   const handleOpenLinkModal = () => {
-    setLinkStep("1");
-    setLinkAadhaar1("");
-    setLinkAadhaar2("");
-    setLinkAadhaar3("");
-    setLinkOtpBoxes(["", "", "", "", "", ""]);
-    setLinkTxnId("");
-    setLinkMaskedPhone("");
-    setLinkResendTimer(45);
+    setManualHfrId(summary?.hfr_id || "");
+    setManualFacilityName(summary?.hfr_facility_name || summary?.lab_name || "");
+    setManualHprId(summary?.hpr_id || "");
     setLinkError(null);
-    setDiscoveredFacilities([]);
-    setVerifiedOwnerName("");
     setIsLinkExistingModalOpen(true);
   };
 
-  // Step 1 -> Step 2: Send Aadhaar OTP for Facility Link Verification
-  const handleSendLinkOtp = async () => {
+  // Submit direct manual HFR ID & Facility Name link
+  const handleLinkExistingFacilityDirect = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setLinkError(null);
-    const fullAadhaar = `${linkAadhaar1}${linkAadhaar2}${linkAadhaar3}`.replace(/\D/g, "");
-    if (fullAadhaar.length !== 12) {
-      setLinkError("Please enter a valid 12-digit Aadhaar number across the 3 boxes.");
+
+    const cleanHfr = manualHfrId.trim().toUpperCase();
+    if (!cleanHfr || cleanHfr.length < 3) {
+      setLinkError("Please enter a valid Health Facility ID (HFR ID), e.g. IN0710001234 or IN0310013231.");
       return;
     }
 
-    try {
-      setIsSendingLinkOtp(true);
-      const res = await fetchFromLaravel<any>("/abha/generate-otp", {
-        method: "POST",
-        body: JSON.stringify({
-          aadhaar_number: fullAadhaar,
-          auth_mode: "AADHAAR_OTP",
-        }),
-      });
+    const cleanFacilityName = manualFacilityName.trim() || summary?.lab_name || "Diagnostic Laboratory";
 
-      if (res && res.txn_id) {
-        setLinkTxnId(res.txn_id);
-        if (res.masked_mobile) {
-          setLinkMaskedPhone(res.masked_mobile);
-        }
-        setLinkResendTimer(45);
-        setLinkStep("2");
-      } else {
-        setLinkError(res?.message || "Failed to dispatch Aadhaar OTP.");
-      }
-    } catch (err: any) {
-      setLinkError(err?.message || "Error communicating with ABDM Gateway.");
-    } finally {
-      setIsSendingLinkOtp(false);
-    }
-  };
-
-  // Step 2 -> Step 3: Verify OTP & Search ABDM Registry for Registered Facilities
-  const handleVerifyAndSearchFacilities = async () => {
-    setLinkError(null);
-    const enteredOtp = linkOtpBoxes.join("").trim();
-    if (enteredOtp.length < 4) {
-      setLinkError("Please enter the 6-digit OTP received on your mobile.");
-      return;
-    }
-
-    try {
-      setIsSearchingFacilities(true);
-      const res = await fetchFromLaravel<any>("/abha/search-registered-facilities", {
-        method: "POST",
-        body: JSON.stringify({
-          txn_id: linkTxnId,
-          otp: enteredOtp,
-        }),
-      });
-
-      if (res && res.found && res.facilities && res.facilities.length > 0) {
-        setDiscoveredFacilities(res.facilities);
-        setVerifiedOwnerName(res.verified_name || "Authorized Representative");
-        setLinkStep("3_found");
-      } else {
-        setVerifiedOwnerName(res?.verified_name || "Authorized Representative");
-        setDiscoveredFacilities([]);
-        setLinkStep("3_not_found");
-      }
-    } catch (err: any) {
-      setLinkError(err?.message || "Failed to query ABDM registry for registered facilities.");
-    } finally {
-      setIsSearchingFacilities(false);
-    }
-  };
-
-  // Step 3_found: Link verified facility to LIS
-  const handleLinkDiscoveredFacility = async (fac: any) => {
     try {
       setIsLinkingFacility(true);
       const res = await fetchFromLaravel<any>("/abha/link-hfr", {
         method: "POST",
         body: JSON.stringify({
-          hfr_id: fac.hfr_id,
-          hpr_id: fac.hpr_id || undefined,
-          hfr_facility_name: fac.facility_name || undefined,
+          hfr_id: cleanHfr,
+          hfr_facility_name: cleanFacilityName,
+          hpr_id: manualHprId.trim() || undefined,
         }),
       });
 
       if (res && res.status === "success") {
-        showToast(`Facility "${fac.facility_name || fac.hfr_id}" linked successfully!`);
+        showToast(`Facility "${cleanFacilityName}" linked successfully!`);
         setIsLinkExistingModalOpen(false);
         await loadDhisSummary();
-        onHfrUpdated?.(fac.hfr_id, fac.facility_name);
+        onHfrUpdated?.(cleanHfr, cleanFacilityName);
       } else {
-        setLinkError(res?.message || "Failed to link facility.");
+        setLinkError(res?.message || res?.error || "Failed to link facility.");
       }
     } catch (err: any) {
       setLinkError(err?.message || "Error linking facility to LIS.");
     } finally {
       setIsLinkingFacility(false);
     }
-  };
-
-  // Step 3_not_found: Switch seamlessly to 8-step Onboarding with Aadhaar pre-filled
-  const handleSwitchToOnboardFromLink = () => {
-    setIsLinkExistingModalOpen(false);
-    setAadhaarBox1(linkAadhaar1);
-    setAadhaarBox2(linkAadhaar2);
-    setAadhaarBox3(linkAadhaar3);
-    setCurrentStep(2);
-    setFacilitySubTab("create");
-    setOtpBoxes(["", "", "", "", "", ""]);
-    setResendTimer(45);
-    setIsSandboxMode(false);
-    setIsOnboardModalOpen(true);
   };
 
   // Unlink
@@ -1691,10 +1591,10 @@ export function AbhaIntegrationSection({ onHfrUpdated }: AbhaIntegrationSectionP
               </div>
               <div>
                 <DialogTitle className="text-base font-bold text-foreground">
-                  Link Registered ABDM Health Facility
+                  Link Existing ABDM Health Facility (HFR)
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  Aadhaar e-KYC Verification &amp; ABDM HFR Registry Discovery
+                  Link your official Facility ID (HFR ID) registered on facility.abdm.gov.in
                 </DialogDescription>
               </div>
             </div>
@@ -1702,344 +1602,107 @@ export function AbhaIntegrationSection({ onHfrUpdated }: AbhaIntegrationSectionP
 
           {/* Error Banner */}
           {linkError && (
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 dark:text-red-400 font-semibold flex items-center gap-2 mt-2 animate-fade-in">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{linkError}</span>
+            <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 dark:text-red-400 font-semibold flex items-start gap-2 mt-2 animate-fade-in">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <span className="font-bold block">Unable to Link Facility</span>
+                <span className="text-[11px] leading-relaxed block">{linkError}</span>
+              </div>
             </div>
           )}
 
-          {/* ------------------------------------------------------------- */}
-          {/* STEP 1: ENTER AADHAAR                                         */}
-          {/* ------------------------------------------------------------- */}
-          {linkStep === "1" && (
-            <div className="space-y-4 pt-2 text-center animate-fade-in">
-              <div className="space-y-1">
-                <span className="inline-block px-3 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-extrabold uppercase tracking-wider border border-blue-500/20">
-                  Step 1 of 2: Aadhaar e-KYC
+          <form onSubmit={handleLinkExistingFacilityDirect} className="space-y-4 pt-2 text-left">
+            {/* HFR ID Field */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                <span>Health Facility Registry ID (HFR ID)*</span>
+                <span className="text-[10px] text-muted-foreground font-normal">e.g. IN0710001234 or IN0310013231</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={manualHfrId}
+                onChange={(e) => setManualHfrId(e.target.value.toUpperCase())}
+                placeholder="IN0710001234"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-background border border-border text-xs font-mono font-bold focus:border-blue-600 outline-none uppercase tracking-wide"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Enter the unique 10–14 character Health Facility ID issued by NHA upon registration.
+              </p>
+            </div>
+
+            {/* Facility Name Field */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground">
+                Registered Laboratory / Facility Name*
+              </label>
+              <input
+                type="text"
+                required
+                value={manualFacilityName}
+                onChange={(e) => setManualFacilityName(e.target.value)}
+                placeholder="e.g. OnePath Diagnostics & Path Lab"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-background border border-border text-xs font-semibold focus:border-blue-600 outline-none"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Facility name as registered on ABDM / State Clinical Establishment registry.
+              </p>
+            </div>
+
+            {/* In-Charge HPR ID Field (Optional) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                <span>In-Charge Doctor HPR ID (Optional)</span>
+                <span className="text-[10px] text-muted-foreground font-normal">Optional</span>
+              </label>
+              <input
+                type="text"
+                value={manualHprId}
+                onChange={(e) => setManualHprId(e.target.value)}
+                placeholder="doctor@hpr.abdm"
+                className="w-full px-3.5 py-2.5 rounded-xl bg-background border border-border text-xs font-semibold focus:border-blue-600 outline-none"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Optional Healthcare Professional ID of the authorized pathologist or doctor.
+              </p>
+            </div>
+
+            {/* DHIS Direct Benefit Transfer Notice */}
+            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-left text-xs text-emerald-900 dark:text-emerald-200 flex items-start gap-2.5">
+              <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <span className="font-bold block text-emerald-950 dark:text-emerald-200 text-[11px]">
+                  Direct DHIS Government Incentive Protection
                 </span>
-                <h4 className="text-sm font-bold text-foreground">
-                  Enter In-Charge / Owner's Aadhaar
-                </h4>
-                <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-                  Enter the 12-digit Aadhaar of the authorized representative who registered the facility on ABDM.
-                </p>
-              </div>
-
-              {/* 3 boxes for Aadhaar: [XXXX] [XXXX] [XXXX] */}
-              <div className="space-y-2 max-w-xs mx-auto">
-                <div className="grid grid-cols-3 gap-2.5">
-                  <input
-                    type="text"
-                    maxLength={4}
-                    value={linkAadhaar1}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, "");
-                      setLinkAadhaar1(val);
-                      if (val.length === 4) {
-                        document.getElementById("link-aadhaar-box-2")?.focus();
-                      }
-                    }}
-                    placeholder="XXXX"
-                    className="w-full h-11 rounded-xl bg-background border border-border text-center font-mono font-black text-sm tracking-widest focus:border-blue-600 outline-none"
-                  />
-                  <input
-                    id="link-aadhaar-box-2"
-                    type="text"
-                    maxLength={4}
-                    value={linkAadhaar2}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, "");
-                      setLinkAadhaar2(val);
-                      if (val.length === 4) {
-                        document.getElementById("link-aadhaar-box-3")?.focus();
-                      }
-                    }}
-                    placeholder="XXXX"
-                    className="w-full h-11 rounded-xl bg-background border border-border text-center font-mono font-black text-sm tracking-widest focus:border-blue-600 outline-none"
-                  />
-                  <input
-                    id="link-aadhaar-box-3"
-                    type="text"
-                    maxLength={4}
-                    value={linkAadhaar3}
-                    onChange={(e) => setLinkAadhaar3(e.target.value.replace(/\D/g, ""))}
-                    placeholder="XXXX"
-                    className="w-full h-11 rounded-xl bg-background border border-border text-center font-mono font-black text-sm tracking-widest focus:border-blue-600 outline-none"
-                  />
-                </div>
-                <p className="text-[11px] text-muted-foreground text-left">
-                  ⓘ The OTP will be sent to the mobile number registered with this Aadhaar.
-                </p>
-              </div>
-
-              {/* Official info badge */}
-              <div className="p-3 rounded-xl bg-muted/40 border border-border/80 text-left text-xs text-muted-foreground flex items-start gap-2.5">
-                <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                <div className="space-y-0.5">
-                  <span className="font-bold text-foreground text-[11px] block">
-                    Secure ABDM Authentication
-                  </span>
-                  <span className="text-[11px] leading-relaxed block">
-                    Manual ID entry is disabled to prevent mismatched health records. Your facility is verified directly against the National Health Authority (NHA) registry.
-                  </span>
-                </div>
-              </div>
-
-              {/* Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsLinkExistingModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSendLinkOtp}
-                  disabled={isSendingLinkOtp || (linkAadhaar1.length + linkAadhaar2.length + linkAadhaar3.length) !== 12}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  {isSendingLinkOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                  <span>{isSendingLinkOtp ? "Sending OTP..." : "Send Aadhaar OTP"}</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* ------------------------------------------------------------- */}
-          {/* STEP 2: VERIFY OTP & DISCOVER FACILITY                         */}
-          {/* ------------------------------------------------------------- */}
-          {linkStep === "2" && (
-            <div className="space-y-4 pt-2 text-center animate-fade-in">
-              <div className="space-y-1">
-                <span className="inline-block px-3 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-extrabold uppercase tracking-wider border border-blue-500/20">
-                  Step 2 of 2: Verify &amp; Search
+                <span className="text-[11px] leading-relaxed block opacity-90">
+                  Every patient report synced under this HFR ID is tagged with your lab's government facility code. All DHIS financial incentives (₹20 per report) are routed directly to your lab's PFMS-linked bank account.
                 </span>
-                <h4 className="text-sm font-bold text-foreground">
-                  Enter 6-Digit OTP
-                </h4>
-                <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-                  Enter the OTP received on mobile number linked with Aadhaar: <strong className="text-foreground">{linkMaskedPhone || "******"}</strong>
-                </p>
-              </div>
-
-              {/* 6 OTP Boxes */}
-              <div className="space-y-2">
-                <div className="grid grid-cols-6 gap-2 max-w-xs mx-auto">
-                  {linkOtpBoxes.map((digit, idx) => (
-                    <input
-                      key={idx}
-                      id={`link-otp-box-${idx}`}
-                      type="text"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, "");
-                        const newBoxes = [...linkOtpBoxes];
-                        newBoxes[idx] = val;
-                        setLinkOtpBoxes(newBoxes);
-                        if (val && idx < 5) {
-                          document.getElementById(`link-otp-box-${idx + 1}`)?.focus();
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Backspace" && !linkOtpBoxes[idx] && idx > 0) {
-                          document.getElementById(`link-otp-box-${idx - 1}`)?.focus();
-                        }
-                      }}
-                      className="w-full h-12 rounded-xl bg-background border border-border text-center font-mono font-black text-base focus:border-blue-600 outline-none"
-                    />
-                  ))}
-                </div>
-
-                <div className="flex items-center justify-between text-xs text-muted-foreground max-w-xs mx-auto pt-1">
-                  <span>
-                    {linkResendTimer > 0 ? (
-                      `Resend in 00:${linkResendTimer < 10 ? "0" : ""}${linkResendTimer}`
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleSendLinkOtp}
-                        className="text-blue-600 hover:underline font-bold cursor-pointer"
-                      >
-                        Resend OTP
-                      </button>
-                    )}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setLinkStep("1")}
-                    className="text-xs font-semibold text-muted-foreground hover:text-foreground"
-                  >
-                    Change Aadhaar
-                  </button>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setLinkStep("1")}
-                  className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted"
-                >
-                  Back
-                </button>
-                <button
-                  type="button"
-                  onClick={handleVerifyAndSearchFacilities}
-                  disabled={isSearchingFacilities || linkOtpBoxes.join("").length < 4}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  {isSearchingFacilities ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                  <span>{isSearchingFacilities ? "Searching ABDM Registry..." : "Verify & Search Facilities"}</span>
-                </button>
               </div>
             </div>
-          )}
 
-          {/* ------------------------------------------------------------- */}
-          {/* STEP 3_FOUND: REGISTERED FACILITY FOUND                        */}
-          {/* ------------------------------------------------------------- */}
-          {linkStep === "3_found" && (
-            <div className="space-y-4 pt-1 animate-fade-in text-left">
-              <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 flex items-center gap-2.5 text-xs font-semibold">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                <div>
-                  <span className="font-bold block text-emerald-950 dark:text-emerald-200">
-                    Registered Facility Found!
-                  </span>
-                  <span className="text-[11px] opacity-90">
-                    Aadhaar authenticated for <strong>{verifiedOwnerName}</strong>. Found {discoveredFacilities.length} registered health facility on ABDM.
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {discoveredFacilities.map((fac, idx) => (
-                  <div
-                    key={fac.hfr_id || idx}
-                    className="p-4 rounded-2xl bg-muted/40 border border-border/80 space-y-3 hover:border-blue-500/40 transition-all"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h4 className="text-sm font-black text-foreground">
-                          {fac.facility_name || "Diagnostic Laboratory"}
-                        </h4>
-                        <span className="text-xs text-muted-foreground block">
-                          {fac.facility_type || "Diagnostic Laboratory"} • {fac.system_of_medicine || "Modern Medicine"}
-                        </span>
-                      </div>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
-                        Active on HFR
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border/60">
-                      <div>
-                        <span className="text-[10px] text-muted-foreground block">HFR ID (Facility ID)</span>
-                        <span className="font-mono font-black text-emerald-600 dark:text-emerald-400">
-                          {fac.hfr_id}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-muted-foreground block">In-Charge (HPR)</span>
-                        <span className="font-semibold text-foreground truncate block">
-                          {fac.hpr_name || verifiedOwnerName}
-                        </span>
-                      </div>
-                      <div className="col-span-2">
-                        <span className="text-[10px] text-muted-foreground block">Registered Address</span>
-                        <span className="text-foreground text-[11px] truncate block">
-                          {fac.address || "Main Diagnostic Center"}, Pincode: {fac.pincode || "—"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 flex items-center justify-between border-t border-border/60">
-                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        <span>Eligible for ₹20 / Report DHIS DBT</span>
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => handleLinkDiscoveredFacility(fac)}
-                        disabled={isLinkingFacility}
-                        className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      >
-                        {isLinkingFacility ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5 stroke-[3]" />}
-                        <span>{isLinkingFacility ? "Linking..." : "Link Facility to LIS"}</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex justify-end pt-1">
-                <button
-                  type="button"
-                  onClick={() => setIsLinkExistingModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-border text-xs font-bold hover:bg-muted"
-                >
-                  Cancel
-                </button>
-              </div>
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/70">
+              <button
+                type="button"
+                onClick={() => setIsLinkExistingModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-border text-xs font-bold hover:bg-muted text-foreground transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isLinkingFacility || !manualHfrId.trim()}
+                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isLinkingFacility ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                <span>{isLinkingFacility ? "Linking Facility..." : "Link Facility & Activate DHIS"}</span>
+              </button>
             </div>
-          )}
-
-          {/* ------------------------------------------------------------- */}
-          {/* STEP 3_NOT_FOUND: NO REGISTERED FACILITY FOUND (POPUP ALERT)  */}
-          {/* ------------------------------------------------------------- */}
-          {linkStep === "3_not_found" && (
-            <div className="space-y-4 pt-1 animate-fade-in text-center">
-              <div className="h-14 w-14 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-600 dark:text-amber-400 mx-auto text-2xl">
-                ⚠️
-              </div>
-
-              <div className="space-y-1.5">
-                <h4 className="text-base font-black text-foreground">
-                  No Registered Health Facility (HFR) Found
-                </h4>
-                <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                  No active Health Facility is registered on the National ABDM Registry under the Aadhaar identity of{" "}
-                  <strong className="text-foreground">{verifiedOwnerName || "this representative"}</strong>.
-                </p>
-              </div>
-
-              {/* Requirement notice */}
-              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-left text-xs text-amber-900 dark:text-amber-200 space-y-1">
-                <span className="font-bold flex items-center gap-1.5">
-                  <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                  <span>ABDM Registration Required</span>
-                </span>
-                <p className="text-[11px] leading-relaxed text-amber-800/90 dark:text-amber-300/90 pl-5.5">
-                  Under National Health Authority rules, you cannot link an unregistered facility. Please onboard your facility on ABDM first to generate your official HFR ID.
-                </p>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setLinkStep("1")}
-                  className="w-full sm:flex-1 py-2.5 rounded-xl border border-border/80 text-xs font-bold hover:bg-muted text-foreground transition-all cursor-pointer"
-                >
-                  Try Another Aadhaar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSwitchToOnboardFromLink}
-                  className="w-full sm:flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <ShieldCheck className="h-4 w-4" />
-                  <span>Onboard Facility Now</span>
-                </button>
-              </div>
-            </div>
-          )}
+          </form>
         </DialogContent>
       </Dialog>
 
