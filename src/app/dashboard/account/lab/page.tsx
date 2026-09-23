@@ -671,6 +671,8 @@ function LabAccountContent() {
         try {
           localStorage.setItem("lis_cached_centre_profile", JSON.stringify(payload));
         } catch {}
+        clearApiCache("/lab");
+        window.dispatchEvent(new CustomEvent("centre-profile-updated", { detail: res }));
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 4000);
       }

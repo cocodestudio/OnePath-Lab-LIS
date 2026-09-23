@@ -14,6 +14,7 @@ import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { CollectionCenterOverview } from "@/components/collection-center-overview";
 import { B2BOverview } from "@/components/b2b-overview";
 import { DashboardShimmer } from "@/components/dashboard-shimmer";
+import { LabSetupProgress } from "@/components/lab-setup-progress";
 
 interface Stats {
   patientsToday: number;
@@ -89,14 +90,39 @@ export default function DashboardOverviewPage() {
     setIsMounted(true);
     const u = getStoredUser();
     setUser(u);
-    fetchFromLaravel("/lab").then((res) => {
-      if (res) setLabInfo(res);
-    }).catch(() => {});
+
+    const refreshLabInfo = () => {
+      fetchFromLaravel("/lab", { skipCache: true }).then((res) => {
+        if (res) setLabInfo(res);
+      }).catch(() => {});
+    };
+
+    refreshLabInfo();
+
+    const handleProfileUpdate = (e: any) => {
+      if (e?.detail) {
+        setLabInfo(e.detail);
+      } else {
+        refreshLabInfo();
+      }
+    };
+
+    window.addEventListener("centre-profile-updated", handleProfileUpdate);
+    window.addEventListener("focus", refreshLabInfo);
+
     if (u?.role === "COLLECTION_CENTER" || u?.role === "B2B") {
       setLoading(false);
-      return;
+      return () => {
+        window.removeEventListener("centre-profile-updated", handleProfileUpdate);
+        window.removeEventListener("focus", refreshLabInfo);
+      };
     }
     loadDashboardData();
+
+    return () => {
+      window.removeEventListener("centre-profile-updated", handleProfileUpdate);
+      window.removeEventListener("focus", refreshLabInfo);
+    };
   }, []);
 
   const loadDashboardData = async (forceRefresh = false) => {
@@ -196,6 +222,16 @@ export default function DashboardOverviewPage() {
           </button>
         </div>
       </div>
+
+      {/* Lab Setup Progress Banner (Setup your Lab - shown until 100% complete) */}
+      <LabSetupProgress
+        lab={labInfo}
+        onRefresh={() => {
+          fetchFromLaravel("/lab", { skipCache: true }).then((res) => {
+            if (res) setLabInfo(res);
+          }).catch(() => {});
+        }}
+      />
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
