@@ -847,11 +847,11 @@ export function buildReportBlocks(
               </colgroup>
               <thead>
                 <tr>
-                  <th style={{ padding: `${sp.columnHeader || 4}px 6px ${sp.columnHeader || 4}px 4px`, textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em" }}>{cl.testDescription}</th>
-                  <th style={{ padding: `${sp.columnHeader || 4}px 4px`, textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em" }}>{cl.result}</th>
-                  <th style={{ padding: `${sp.columnHeader || 4}px 2px`, textAlign: "center", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em" }}>{cl.flag}</th>
-                  <th style={{ padding: `${sp.columnHeader || 4}px 4px ${sp.columnHeader || 4}px 16px`, textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em" }}>{col4Label}</th>
-                  <th style={{ padding: `${sp.columnHeader || 4}px 4px ${sp.columnHeader || 4}px 12px`, textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em" }}>{col5Label}</th>
+                  <th style={{ width: `${cw.testDescription}%`, padding: `${sp.columnHeader || 4}px 6px ${sp.columnHeader || 4}px 4px`, textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{cl.testDescription}</th>
+                  <th style={{ width: `${cw.result}%`, padding: `${sp.columnHeader || 4}px 4px`, textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{cl.result}</th>
+                  <th style={{ width: `${cw.flag}%`, padding: `${sp.columnHeader || 4}px 2px`, textAlign: "center", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{cl.flag}</th>
+                  <th style={{ width: col4Width, padding: `${sp.columnHeader || 4}px 4px ${sp.columnHeader || 4}px 16px`, textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{col4Label}</th>
+                  <th style={{ width: col5Width, padding: `${sp.columnHeader || 4}px 4px ${sp.columnHeader || 4}px 12px`, textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{col5Label}</th>
                 </tr>
               </thead>
             </table>
@@ -942,11 +942,14 @@ export function buildReportBlocks(
                 <tr style={{ verticalAlign: vAlign }}>
                   <td 
                     style={{ 
+                      width: `${cw.testDescription}%`,
                       padding: `${paramPad} 6px ${paramPad} 4px`, 
                       fontSize: `${typo.testParameterFontSize || 10.5}px`, 
                       lineHeight: "1.4", 
                       fontWeight: flagsConf.boldOnlyResultAndFlag ? (typo.boldMultiTypeParameter ? "700" : "500") : (isAbnormal ? "700" : "500"), 
-                      color: "#000" 
+                      color: "#000",
+                      boxSizing: "border-box",
+                      wordBreak: "break-word"
                     }}
                   >
                     {isIndented && !typo.leftAlignSubParameters ? (
@@ -973,6 +976,7 @@ export function buildReportBlocks(
                   {/* VALUE */}
                   <td 
                     style={{ 
+                      width: `${cw.result}%`,
                       padding: `${paramPad} 4px`, 
                       fontSize: `${(typo.testParameterFontSize || 10.5) + 0.5}px`, 
                       lineHeight: "1.4", 
@@ -980,7 +984,9 @@ export function buildReportBlocks(
                       fontWeight: isAbnormal ? "700" : "400", 
                       color: isHighOrLow ? flagInfo.color : "#000", 
                       textAlign: "left", 
-                      verticalAlign: vAlign 
+                      verticalAlign: vAlign,
+                      boxSizing: "border-box",
+                      wordBreak: "break-word"
                     }}
                   >
                     {item.resultValue || "—"}
@@ -988,13 +994,15 @@ export function buildReportBlocks(
                   {/* FLAG */}
                   <td 
                     style={{ 
+                      width: `${cw.flag}%`,
                       padding: `${paramPad} 2px`, 
                       fontSize: `${typo.testParameterFontSize || 10.5}px`, 
                       lineHeight: "1.4", 
                       fontWeight: "800", 
                       color: flagInfo.color, 
                       textAlign: "center", 
-                      verticalAlign: vAlign 
+                      verticalAlign: vAlign,
+                      boxSizing: "border-box"
                     }}
                   >
                     {flagInfo.label}
@@ -1002,13 +1010,16 @@ export function buildReportBlocks(
                   {/* COL 4 (REF RANGE OR UNIT) */}
                   <td 
                     style={{ 
+                      width: col4Width,
                       padding: `${paramPad} 4px ${paramPad} 16px`, 
                       fontSize: `${typo.testParameterFontSize || 10.5}px`, 
                       lineHeight: "1.4", 
                       fontFamily: sp.interchangeColumns ? "inherit" : "monospace", 
                       color: sp.interchangeColumns ? "#52525b" : "#3f3f46", 
                       textAlign: "left", 
-                      verticalAlign: vAlign 
+                      verticalAlign: vAlign,
+                      boxSizing: "border-box",
+                      wordBreak: "break-word"
                     }}
                   >
                     {col4Content}
@@ -1016,13 +1027,16 @@ export function buildReportBlocks(
                   {/* COL 5 (UNIT OR REF RANGE) */}
                   <td 
                     style={{ 
+                      width: col5Width,
                       padding: `${paramPad} 4px ${paramPad} 12px`, 
                       fontSize: `${(typo.testParameterFontSize || 10.5) - (sp.interchangeColumns ? 0 : 0.5)}px`, 
                       lineHeight: "1.4", 
                       fontFamily: sp.interchangeColumns ? "monospace" : "inherit",
                       color: sp.interchangeColumns ? "#3f3f46" : "#52525b", 
                       textAlign: "left", 
-                      verticalAlign: vAlign 
+                      verticalAlign: vAlign,
+                      boxSizing: "border-box",
+                      wordBreak: "break-word"
                     }}
                   >
                     {col5Content}
@@ -1465,7 +1479,7 @@ export const PaginatedReportPreview = React.forwardRef<
         style={{
           position: "fixed",
           top: 0,
-          left: 0,
+          left: -99999,
           width: contentWidth,
           visibility: "hidden",
           opacity: 0,

@@ -208,6 +208,27 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
         clone.style.borderRadius = "0px";
       }
 
+      // Ensure all table borders and layouts are strictly fixed with 100% width
+      clone.querySelectorAll<HTMLTableElement>("table").forEach((tbl) => {
+        tbl.style.borderCollapse = "collapse";
+        tbl.style.tableLayout = "fixed";
+        tbl.style.width = "100%";
+
+        const cols = Array.from(tbl.querySelectorAll("colgroup col")) as HTMLElement[];
+        if (cols.length > 0) {
+          tbl.querySelectorAll("tr").forEach((row) => {
+            const cells = Array.from(row.children) as HTMLElement[];
+            cells.forEach((cell, idx) => {
+              if (cols[idx] && cols[idx].style.width) {
+                cell.style.width = cols[idx].style.width;
+                cell.style.maxWidth = cols[idx].style.width;
+                cell.style.boxSizing = "border-box";
+              }
+            });
+          });
+        }
+      });
+
       // Inline all images as data URLs asynchronously
       await inlineElementImagesAsync(clone);
 
@@ -239,9 +260,16 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
       background-color: #ffffff !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
+      font-family: Arial, "Helvetica Neue", Helvetica, "Segoe UI", Roboto, sans-serif !important;
     }
     table {
       border-collapse: collapse !important;
+      table-layout: fixed !important;
+      width: 100% !important;
+    }
+    th, td {
+      box-sizing: border-box !important;
+      word-break: break-word !important;
     }
     .report-print-page {
       width: 794px !important;
@@ -575,9 +603,25 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
       // Convert all images inside the clone to Base64 data URLs to eliminate any CORS or network issues
       await inlineElementImagesAsync(clone);
 
-      // Stabilize table borders so lines remain 100% straight and balanced
+      // Stabilize table borders and column layouts so lines remain 100% straight and balanced without overlap
       clone.querySelectorAll<HTMLTableElement>("table").forEach((tbl) => {
         tbl.style.borderCollapse = "collapse";
+        tbl.style.tableLayout = "fixed";
+        tbl.style.width = "100%";
+
+        const cols = Array.from(tbl.querySelectorAll("colgroup col")) as HTMLElement[];
+        if (cols.length > 0) {
+          tbl.querySelectorAll("tr").forEach((row) => {
+            const cells = Array.from(row.children) as HTMLElement[];
+            cells.forEach((cell, idx) => {
+              if (cols[idx] && cols[idx].style.width) {
+                cell.style.width = cols[idx].style.width;
+                cell.style.maxWidth = cols[idx].style.width;
+                cell.style.boxSizing = "border-box";
+              }
+            });
+          });
+        }
       });
 
       sandbox.innerHTML = "";
@@ -598,7 +642,7 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
         y: 0,
         scrollX: 0,
         scrollY: 0,
-        windowWidth: 794,
+        windowWidth: 1200,
         windowHeight: 1123,
       });
 
@@ -620,19 +664,20 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
 
 /**
  * Downloads a pixel-perfect Vector PDF directly to user's downloads folder.
- * Uses pristine client-side engine as primary for instant, flawless downloads identical to on-screen preview,
- * with graceful fallback to server engine if client encounters an error.
+ * Uses high-resolution Chromium server engine with full inlined CSS and images,
+ * producing 100% crisp vector PDFs with zero line disbalance or column overlap,
+ * with seamless fallback to pristine client engine if the server ever encounters an issue.
  */
 export async function downloadNativePdf({ printContainer, filename }: GeneratePdfOptions): Promise<void> {
   const safeFilename = filename || "LabReport.pdf";
   let pdfBlob: Blob;
 
   try {
-    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
-  } catch (clientErr) {
-    console.warn("Client engine encountered issue, executing server fallback:", clientErr);
     const html = await prepareReportHtmlAsync(printContainer);
     pdfBlob = await generateNativePdfBlob(html, safeFilename);
+  } catch (serverErr) {
+    console.warn("Server-side vector PDF engine unavailable or timed out, executing pristine client fallback:", serverErr);
+    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
   }
 
   // Trigger browser download
@@ -653,18 +698,18 @@ export async function downloadNativePdf({ printContainer, filename }: GeneratePd
 
 /**
  * Generates a pure PDF and returns it as a base64 Data URL for WhatsApp API dispatch.
- * Uses pristine client engine as primary for fast, identical-to-preview PDF generation.
+ * Uses full inlined HTML vector engine with seamless fallback to pristine client engine.
  */
 export async function getNativePdfBase64({ printContainer, filename }: GeneratePdfOptions): Promise<string> {
   const safeFilename = filename || "LabReport.pdf";
   let pdfBlob: Blob;
 
   try {
-    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
-  } catch (clientErr) {
-    console.warn("Client engine encountered issue, executing server fallback:", clientErr);
     const html = await prepareReportHtmlAsync(printContainer);
     pdfBlob = await generateNativePdfBlob(html, safeFilename);
+  } catch (serverErr) {
+    console.warn("Server-side PDF engine unavailable for WhatsApp, executing pristine client fallback:", serverErr);
+    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
   }
 
   return new Promise((resolve, reject) => {
