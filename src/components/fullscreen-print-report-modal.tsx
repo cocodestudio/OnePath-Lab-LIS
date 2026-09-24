@@ -12,10 +12,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
 import {
   X, Calendar, Printer, Download,
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
   ZoomIn, ZoomOut, RotateCcw, FileText, Loader2, Phone, Send,
+  Sparkles,
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import {
@@ -24,6 +26,7 @@ import {
   type ReportSheetData,
 } from "@/components/report-sheet";
 import { WhatsAppQrDialog } from "@/components/whatsapp-qr-dialog";
+import { AiReportGenerationModal } from "@/components/ai-report-generation-modal";
 import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
 import { getReportPackage } from "@/lib/packages";
@@ -88,6 +91,7 @@ export function FullscreenPrintReportModal({
   testNotes,
   printedInterpretations,
 }: FullscreenPrintReportModalProps) {
+  const router = useRouter();
   const toast = useToast();
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -104,6 +108,7 @@ export function FullscreenPrintReportModal({
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isPhonePromptOpen, setIsPhonePromptOpen] = useState(false);
+  const [isGeneratingAiReport, setIsGeneratingAiReport] = useState(false);
   const [customPhone, setCustomPhone] = useState("");
   const [savePhoneToProfile, setSavePhoneToProfile] = useState(true);
 
@@ -519,6 +524,29 @@ export function FullscreenPrintReportModal({
                 })}
               </div>
             </div>
+
+            {/* ✨ Generate AI Smart Report Button (Bottom Left) */}
+            <div className="p-3 border-t border-border/80 bg-background/50 shrink-0">
+              <Button
+                type="button"
+                onClick={() => {
+                  if (report?.id) {
+                    setIsGeneratingAiReport(true);
+                  }
+                }}
+                disabled={isGeneratingAiReport}
+                className="w-full h-11 relative overflow-hidden gap-2 font-bold text-xs bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 hover:from-sky-700 hover:via-indigo-700 hover:to-purple-700 text-white cursor-pointer shadow-md rounded-xl transition-all group disabled:opacity-75"
+              >
+                {isGeneratingAiReport ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                ) : (
+                  <Sparkles className="h-4 w-4 text-amber-300 animate-pulse group-hover:scale-110 transition-transform" />
+                )}
+                <span className="tracking-tight">
+                  {isGeneratingAiReport ? "Synthesizing AI Smart Report..." : "✨ Generate AI Smart Report"}
+                </span>
+              </Button>
+            </div>
           </div>
 
           {/* ═══════════════════════════════════════════════════════════════
@@ -890,6 +918,15 @@ export function FullscreenPrintReportModal({
           </DialogContent>
         </Dialog>
       </DialogContent>
+
+      <AiReportGenerationModal
+        isOpen={isGeneratingAiReport}
+        patientName={report?.patient?.name}
+        customId={report?.customId || report?.custom_id}
+        onComplete={() => {
+          router.push(`/dashboard/reports/${report.id}/smart-report`);
+        }}
+      />
     </Dialog>
   );
 }

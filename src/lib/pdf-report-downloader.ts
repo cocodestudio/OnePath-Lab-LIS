@@ -107,11 +107,30 @@ async function inlineElementImagesAsync(element: HTMLElement): Promise<void> {
  * eliminating all network dependencies in Headless Chrome in production environments.
  */
 export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promise<string> {
-  let pageElements = printContainer.querySelectorAll<HTMLElement>(".report-print-page");
-  if (!pageElements || pageElements.length === 0) {
-    pageElements = printContainer.querySelectorAll<HTMLElement>(".report-preview-page-card");
+  let pageArray: HTMLElement[] = [];
+  if (
+    printContainer.classList.contains("smart-report-a4-page") ||
+    printContainer.classList.contains("report-print-page")
+  ) {
+    pageArray = [printContainer];
+  } else {
+    const smartPages = printContainer.querySelectorAll<HTMLElement>(".smart-report-a4-page");
+    if (smartPages.length > 0) {
+      pageArray = Array.from(smartPages);
+    } else {
+      const reportPrintPages = printContainer.querySelectorAll<HTMLElement>(".report-print-page");
+      if (reportPrintPages.length > 0) {
+        pageArray = Array.from(reportPrintPages);
+      } else {
+        const previewCards = printContainer.querySelectorAll<HTMLElement>(".report-preview-page-card");
+        if (previewCards.length > 0) {
+          pageArray = Array.from(previewCards);
+        }
+      }
+    }
   }
-  if (!pageElements || pageElements.length === 0) {
+
+  if (!pageArray || pageArray.length === 0) {
     throw new Error("No printable report pages found to generate PDF.");
   }
 
@@ -167,7 +186,6 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
   }
 
   // 4. Clone and normalize each page element with async base64 images
-  const pageArray = Array.from(pageElements);
   const pagesHtml = await Promise.all(
     pageArray.map(async (el) => {
       const clone = el.cloneNode(true) as HTMLElement;
@@ -184,6 +202,11 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
       clone.style.overflow = "hidden";
       clone.style.boxSizing = "border-box";
       clone.style.backgroundColor = "#ffffff";
+      clone.style.boxShadow = "none";
+
+      if (el.classList.contains("smart-report-a4-page")) {
+        clone.style.borderRadius = "0px";
+      }
 
       // Inline all images as data URLs asynchronously
       await inlineElementImagesAsync(clone);
@@ -216,11 +239,9 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
       background-color: #ffffff !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
-      font-family: Arial, "Helvetica Neue", Helvetica, "Segoe UI", Roboto, sans-serif !important;
     }
     table {
       border-collapse: collapse !important;
-      table-layout: fixed !important;
     }
     .report-print-page {
       width: 794px !important;
@@ -238,6 +259,24 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
       box-sizing: border-box !important;
     }
     .report-print-page:last-child {
+      page-break-after: avoid !important;
+      break-after: avoid !important;
+    }
+    .smart-report-a4-page {
+      width: 794px !important;
+      height: 1123px !important;
+      min-height: 1123px !important;
+      max-height: 1123px !important;
+      margin: 0 auto !important;
+      position: relative !important;
+      overflow: hidden !important;
+      background-color: #ffffff !important;
+      transform: none !important;
+      page-break-after: always !important;
+      break-after: page !important;
+      box-sizing: border-box !important;
+    }
+    .smart-report-a4-page:last-child {
       page-break-after: avoid !important;
       break-after: avoid !important;
     }
@@ -369,6 +408,24 @@ export function prepareReportHtml(printContainer: HTMLElement): string {
       page-break-after: avoid !important;
       break-after: avoid !important;
     }
+    .smart-report-a4-page {
+      width: 794px !important;
+      height: 1123px !important;
+      min-height: 1123px !important;
+      max-height: 1123px !important;
+      margin: 0 auto !important;
+      position: relative !important;
+      overflow: hidden !important;
+      background-color: #ffffff !important;
+      transform: none !important;
+      page-break-after: always !important;
+      break-after: page !important;
+      box-sizing: border-box !important;
+    }
+    .smart-report-a4-page:last-child {
+      page-break-after: avoid !important;
+      break-after: avoid !important;
+    }
     .letterhead-bg-img {
       position: absolute !important;
       inset: 0 !important;
@@ -423,12 +480,45 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
   const { default: jsPDF } = await import("jspdf");
   const { default: html2canvas } = await import("html2canvas");
 
-  let pageElements = printContainer.querySelectorAll<HTMLElement>(".report-print-page");
-  if (!pageElements || pageElements.length === 0) {
-    pageElements = printContainer.querySelectorAll<HTMLElement>(".report-preview-page-card");
+  let pageList: HTMLElement[] = [];
+  if (
+    printContainer.classList.contains("smart-report-a4-page") ||
+    printContainer.classList.contains("report-print-page")
+  ) {
+    pageList = [printContainer];
+  } else {
+    const smartPages = printContainer.querySelectorAll<HTMLElement>(".smart-report-a4-page");
+    if (smartPages.length > 0) {
+      pageList = Array.from(smartPages);
+    } else {
+      const reportPrintPages = printContainer.querySelectorAll<HTMLElement>(".report-print-page");
+      if (reportPrintPages.length > 0) {
+        pageList = Array.from(reportPrintPages);
+      } else {
+        const previewCards = printContainer.querySelectorAll<HTMLElement>(".report-preview-page-card");
+        if (previewCards.length > 0) {
+          pageList = Array.from(previewCards);
+        }
+      }
+    }
   }
-  if (!pageElements || pageElements.length === 0) {
+
+  if (!pageList || pageList.length === 0) {
     throw new Error("No printable report pages found.");
+  }
+
+  // Ensure all web fonts are fully loaded
+  if (typeof document !== "undefined" && document.fonts) {
+    try {
+      await document.fonts.ready;
+    } catch {}
+  }
+
+  // Save current window scroll coordinates and scroll to (0,0) to eliminate html2canvas coordinate displacement bug
+  const origScrollX = typeof window !== "undefined" ? window.scrollX || window.pageXOffset || 0 : 0;
+  const origScrollY = typeof window !== "undefined" ? window.scrollY || window.pageYOffset || 0 : 0;
+  if (typeof window !== "undefined") {
+    window.scrollTo(0, 0);
   }
 
   const pdf = new jsPDF({
@@ -438,60 +528,52 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
     compress: true,
   });
 
-  // Clean isolated sandbox placed at origin behind page to eliminate modal transforms & subpixel offsets
+  // Top-layer isolated sandbox placed strictly at (0,0) with exact A4 dimensions
   const sandbox = document.createElement("div");
-  sandbox.style.position = "fixed";
-  sandbox.style.top = "0";
-  sandbox.style.left = "0";
-  sandbox.style.width = "794px";
-  sandbox.style.height = "1123px";
-  sandbox.style.overflow = "hidden";
-  sandbox.style.backgroundColor = "#ffffff";
-  sandbox.style.zIndex = "-99999";
-  sandbox.style.pointerEvents = "none";
-  sandbox.style.opacity = "1";
+  sandbox.style.setProperty("position", "fixed", "important");
+  sandbox.style.setProperty("top", "0px", "important");
+  sandbox.style.setProperty("left", "0px", "important");
+  sandbox.style.setProperty("width", "794px", "important");
+  sandbox.style.setProperty("height", "1123px", "important");
+  sandbox.style.setProperty("min-width", "794px", "important");
+  sandbox.style.setProperty("min-height", "1123px", "important");
+  sandbox.style.setProperty("overflow", "hidden", "important");
+  sandbox.style.setProperty("background-color", "#ffffff", "important");
+  sandbox.style.setProperty("z-index", "999999", "important");
+  sandbox.style.setProperty("pointer-events", "none", "important");
+  sandbox.style.setProperty("opacity", "1", "important");
+  sandbox.style.setProperty("margin", "0px", "important");
+  sandbox.style.setProperty("padding", "0px", "important");
+  sandbox.style.setProperty("border", "none", "important");
   document.body.appendChild(sandbox);
 
   try {
-    for (let i = 0; i < pageElements.length; i++) {
+    for (let i = 0; i < pageList.length; i++) {
       if (i > 0) pdf.addPage();
-      const el = pageElements[i];
+      const el = pageList[i];
 
       const clone = el.cloneNode(true) as HTMLElement;
-      clone.style.transform = "none";
-      clone.style.webkitTransform = "none";
-      clone.style.width = "794px";
-      clone.style.height = "1123px";
-      clone.style.minHeight = "1123px";
-      clone.style.maxHeight = "1123px";
-      clone.style.margin = "0";
-      clone.style.padding = "0";
-      clone.style.position = "relative";
-      clone.style.overflow = "hidden";
-      clone.style.boxSizing = "border-box";
-      clone.style.backgroundColor = "#ffffff";
+      clone.style.setProperty("transform", "none", "important");
+      clone.style.setProperty("-webkit-transform", "none", "important");
+      clone.style.setProperty("width", "794px", "important");
+      clone.style.setProperty("height", "1123px", "important");
+      clone.style.setProperty("min-height", "1123px", "important");
+      clone.style.setProperty("max-height", "1123px", "important");
+      clone.style.setProperty("margin", "0px", "important");
+      clone.style.setProperty("box-shadow", "none", "important");
+      clone.style.setProperty("position", "relative", "important");
+      clone.style.setProperty("overflow", "hidden", "important");
+      clone.style.setProperty("box-sizing", "border-box", "important");
+      clone.style.setProperty("background-color", "#ffffff", "important");
 
-      // Inline loaded images from original DOM element to guarantee 0 network latency and no missing bitmaps
-      const origImgs = el.querySelectorAll<HTMLImageElement>("img");
-      const cloneImgs = clone.querySelectorAll<HTMLImageElement>("img");
-      origImgs.forEach((origImg, idx) => {
-        const cloneImg = cloneImgs[idx];
-        if (!cloneImg) return;
-        try {
-          if (origImg.complete && origImg.naturalWidth > 0) {
-            const c = document.createElement("canvas");
-            c.width = origImg.naturalWidth;
-            c.height = origImg.naturalHeight;
-            const ctx = c.getContext("2d");
-            if (ctx) {
-              ctx.drawImage(origImg, 0, 0);
-              cloneImg.src = c.toDataURL("image/png");
-            }
-          }
-        } catch {
-          cloneImg.src = origImg.src;
-        }
-      });
+      if (el.classList.contains("smart-report-a4-page")) {
+        clone.style.setProperty("border-radius", "0px", "important");
+      } else {
+        clone.style.setProperty("padding", "0px", "important");
+      }
+
+      // Convert all images inside the clone to Base64 data URLs to eliminate any CORS or network issues
+      await inlineElementImagesAsync(clone);
 
       // Stabilize table borders so lines remain 100% straight and balanced
       clone.querySelectorAll<HTMLTableElement>("table").forEach((tbl) => {
@@ -505,7 +587,7 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
       await new Promise((r) => setTimeout(r, 60));
 
       const canvas = await html2canvas(clone, {
-        scale: 2, // Exact integer 2x DPI so 1px borders stay uniform
+        scale: 2, // Exact integer 2x DPI for crisp 1588x2246 resolution
         useCORS: true,
         allowTaint: true,
         logging: false,
@@ -516,7 +598,8 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
         y: 0,
         scrollX: 0,
         scrollY: 0,
-        windowWidth: 1200,
+        windowWidth: 794,
+        windowHeight: 1123,
       });
 
       // Lossless PNG: zero JPEG ringing or line blurring
@@ -527,6 +610,9 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
     if (sandbox.parentNode) {
       sandbox.parentNode.removeChild(sandbox);
     }
+    if (typeof window !== "undefined") {
+      window.scrollTo(origScrollX, origScrollY);
+    }
   }
 
   return pdf.output("blob");
@@ -534,19 +620,19 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
 
 /**
  * Downloads a pixel-perfect Vector PDF directly to user's downloads folder.
- * Uses high-resolution Chromium server engine with full inlined CSS and images,
- * with seamless fallback to pristine client engine if the server ever encounters an issue.
+ * Uses pristine client-side engine as primary for instant, flawless downloads identical to on-screen preview,
+ * with graceful fallback to server engine if client encounters an error.
  */
 export async function downloadNativePdf({ printContainer, filename }: GeneratePdfOptions): Promise<void> {
   const safeFilename = filename || "LabReport.pdf";
   let pdfBlob: Blob;
 
   try {
+    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
+  } catch (clientErr) {
+    console.warn("Client engine encountered issue, executing server fallback:", clientErr);
     const html = await prepareReportHtmlAsync(printContainer);
     pdfBlob = await generateNativePdfBlob(html, safeFilename);
-  } catch (serverErr) {
-    console.warn("Server-side vector PDF engine unavailable or timed out, executing pristine client fallback:", serverErr);
-    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
   }
 
   // Trigger browser download
@@ -567,18 +653,18 @@ export async function downloadNativePdf({ printContainer, filename }: GeneratePd
 
 /**
  * Generates a pure PDF and returns it as a base64 Data URL for WhatsApp API dispatch.
- * Uses full inlined HTML vector engine with seamless fallback to pristine client engine.
+ * Uses pristine client engine as primary for fast, identical-to-preview PDF generation.
  */
 export async function getNativePdfBase64({ printContainer, filename }: GeneratePdfOptions): Promise<string> {
   const safeFilename = filename || "LabReport.pdf";
   let pdfBlob: Blob;
 
   try {
+    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
+  } catch (clientErr) {
+    console.warn("Client engine encountered issue, executing server fallback:", clientErr);
     const html = await prepareReportHtmlAsync(printContainer);
     pdfBlob = await generateNativePdfBlob(html, safeFilename);
-  } catch (serverErr) {
-    console.warn("Server-side PDF engine unavailable for WhatsApp, executing pristine client fallback:", serverErr);
-    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
   }
 
   return new Promise((resolve, reject) => {
@@ -594,3 +680,4 @@ export async function getNativePdfBase64({ printContainer, filename }: GenerateP
     reader.readAsDataURL(pdfBlob);
   });
 }
+

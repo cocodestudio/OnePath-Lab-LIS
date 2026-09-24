@@ -17,6 +17,7 @@ import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
 import { TipTapEditor } from "@/components/tiptap-editor";
 import { PrintPreviewDialog } from "@/components/print-preview-dialog";
 import type { ReportSheetData, ReportTest } from "@/components/report-sheet";
+import { normalizeReportSettings } from "@/lib/report-settings";
 
 // Clinical Categorized Predefined Units
 const CATEGORIZED_UNITS: Record<string, string[]> = {
@@ -267,6 +268,18 @@ export default function TestMasterPage() {
   }, [dynamicCategories]);
 
   useEffect(() => { 
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_tests");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setTests(parsed);
+            setLoading(false);
+          }
+        }
+      } catch {}
+    }
     fetchTests(); 
     fetchFromLaravel("/lab")
       .then(data => setLabProfile(data))
@@ -280,7 +293,14 @@ export default function TestMasterPage() {
         setLoading(true);
       }
       const data = await fetchFromLaravel("/tests", { skipCache: isForce });
-      setTests(Array.isArray(data) ? data : []);
+      if (Array.isArray(data)) {
+        setTests(data);
+        try {
+          localStorage.setItem("lis_cached_tests", JSON.stringify(data));
+        } catch {}
+      } else {
+        setTests([]);
+      }
     } catch (err) {
       console.error("Failed to fetch tests:", err);
     } finally {
@@ -288,15 +308,17 @@ export default function TestMasterPage() {
     }
   };
 
-  const handleOpenSampleReport = async (test: Test) => {
+  const handleOpenSampleReport = (test: Test) => {
     let currentLab = labProfile;
-    try {
-      const fresh = await fetchFromLaravel("/lab");
-      if (fresh) {
-        currentLab = fresh;
-        setLabProfile(fresh);
-      }
-    } catch (e) {}
+    let cachedSettings: any = null;
+    let cachedLetterhead: string | null = null;
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("lis_cached_report_settings");
+        if (raw) cachedSettings = JSON.parse(raw);
+        cachedLetterhead = localStorage.getItem("lis_cached_letterhead");
+      } catch {}
+    }
 
     const results: ReportTest[] = [];
 
@@ -445,38 +467,78 @@ export default function TestMasterPage() {
       });
     }
 
-    const sampleReport: ReportSheetData = {
-      id: `sample-${test.id}`,
-      customId: `SAMPLE-${test.testCode || "TEST"}`,
-      status: "COMPLETED",
-      createdAt: new Date().toISOString(),
-      patient: {
-        name: "Rahul Sharma (Sample Patient)",
-        age: 32,
-        gender: "MALE",
-        phone: "+91 98765 43210",
-        refDoctor: "Dr. A. K. Verma, MD (Consultant Physician)",
-        customId: "PID-2026-9081",
-        address: "Civil Lines, New Delhi"
-      },
-      lab: {
-        name: currentLab?.name || "OnePath Diagnostic Reference Laboratory",
-        email: currentLab?.email || "info@onepathlab.com",
-        address: currentLab?.address || "Medical Enclave, Main Road, New Delhi",
-        logoUrl: "/onepath-logo.png",
-        printBgImage: "/letterhead.png",
-        printHeaderHeight: currentLab?.printHeaderHeight ?? currentLab?.print_header_height ?? 185,
-        printFooterHeight: currentLab?.printFooterHeight ?? currentLab?.print_footer_height ?? 95,
-        printMarginLeft: currentLab?.printMarginLeft ?? currentLab?.print_margin_left ?? 32,
-        printMarginRight: currentLab?.printMarginRight ?? currentLab?.print_margin_right ?? 32,
-        printWithLetterhead: true,
-      } as any,
-      printedInterpretations: JSON.stringify([test.id]),
-      results,
+    const buildSampleReport = (labData: any): ReportSheetData => {
+      const rawSettings = labData?.reportSettings || labData?.report_settings || cachedSettings;
+      const normalizedSettings = normalizeReportSettings(rawSettings);
+
+      const rawBg = labData?.printBgImage || labData?.print_bg_image || cachedLetterhead;
+      const cleanBg = getCleanLetterheadUrl(rawBg);
+
+      const headerH = labData?.printHeaderHeight ?? labData?.print_header_height ?? (cleanBg ? 185 : 40);
+      const footerH = labData?.printFooterHeight ?? labData?.print_footer_height ?? (cleanBg ? 95 : 40);
+      const marginL = labData?.printMarginLeft ?? labData?.print_margin_left ?? (cleanBg ? 32 : 40);
+      const marginR = labData?.printMarginRight ?? labData?.print_margin_right ?? (cleanBg ? 32 : 40);
+      const withLetterhead = Boolean(
+        labData?.printWithLetterhead ?? labData?.print_with_letterhead ?? Boolean(cleanBg)
+      );
+
+      return {
+        id: `sample-${test.id}`,
+        customId: `SAMPLE-${test.testCode || "TEST"}`,
+        status: "COMPLETED",
+        createdAt: new Date().toISOString(),
+        patient: {
+          name: "Rahul Sharma (Sample Patient)",
+          age: 32,
+          gender: "MALE",
+          phone: "+91 98765 43210",
+          refDoctor: "Dr. A. K. Verma, MD (Consultant Physician)",
+          customId: "PID-2026-9081",
+          address: "Civil Lines, New Delhi"
+        },
+        lab: {
+          name: labData?.name || "OnePath Diagnostic Reference Laboratory",
+          email: labData?.email || "info@onepathlab.com",
+          address: labData?.address || "Medical Enclave, Main Road, New Delhi",
+          phone: labData?.phone || "+91 98123 45678",
+          city: labData?.city || "New Delhi",
+          state: labData?.state || "Delhi",
+          pincode: labData?.pincode || "110001",
+          logoUrl: labData?.logoUrl || labData?.logo_url || "/onepath-logo.png",
+          printBgImage: cleanBg,
+          printHeaderHeight: headerH,
+          printFooterHeight: footerH,
+          printMarginLeft: marginL,
+          printMarginRight: marginR,
+          printWithLetterhead: withLetterhead,
+          report_settings: normalizedSettings,
+          reportSettings: normalizedSettings,
+          default_designation: labData?.default_designation || labData?.defaultDesignation || normalizedSettings.defaultDesignation || "MR.",
+        } as any,
+        printedInterpretations: JSON.stringify([test.id, test.testCode || "", "ALL"]),
+        testNotes: {
+          [test.id]: {
+            notes: test.notes || "",
+            remarks: test.comment || "",
+          }
+        },
+        results,
+      };
     };
 
-    setSampleReportData(sampleReport);
+    // Open instantly with currentLab or cached data (no lag on slow network)
+    setSampleReportData(buildSampleReport(currentLab));
     setSamplePreviewOpen(true);
+
+    // Refresh lab in background if needed
+    fetchFromLaravel("/lab")
+      .then(fresh => {
+        if (fresh) {
+          setLabProfile(fresh);
+          setSampleReportData(buildSampleReport(fresh));
+        }
+      })
+      .catch(() => {});
   };
 
   const handleOpenAddDialog = () => {
@@ -1196,9 +1258,56 @@ export default function TestMasterPage() {
 
       {/* Tests Table */}
       {loading ? (
-        <div className="py-24 flex flex-col items-center justify-center text-muted-foreground space-y-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm font-semibold">Loading Test Catalog...</p>
+        <div className="bg-card border border-border/90 rounded-xl shadow-xs overflow-hidden">
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-muted/50 text-[11px] font-bold text-muted-foreground uppercase border-b border-border/80">
+                <tr>
+                  <th className="py-3 px-4 w-10"></th>
+                  <th className="py-3 px-4 font-bold">TEST NAME</th>
+                  <th className="py-3 px-4 font-bold">CODE</th>
+                  <th className="py-3 px-4 font-bold">CATEGORY</th>
+                  <th className="py-3 px-4 font-bold">PARAMETERS</th>
+                  <th className="py-3 px-4 font-bold">PRICE</th>
+                  <th className="py-3 px-4 font-bold text-right">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i} className="animate-fade-in">
+                    <td className="py-3.5 px-4"><div className="h-4 w-4 rounded shimmer-gradient" /></td>
+                    <td className="py-3.5 px-4">
+                      <div className="h-4 w-44 rounded shimmer-gradient mb-1.5" />
+                      <div className="h-3 w-28 rounded shimmer-gradient" />
+                    </td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-16 rounded shimmer-gradient" /></td>
+                    <td className="py-3.5 px-4"><div className="h-5 w-24 rounded-full shimmer-gradient" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-16 rounded shimmer-gradient" /></td>
+                    <td className="py-3.5 px-4"><div className="h-4 w-14 rounded shimmer-gradient" /></td>
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <div className="h-7 w-7 rounded-md shimmer-gradient" />
+                        <div className="h-7 w-7 rounded-md shimmer-gradient" />
+                        <div className="h-7 w-7 rounded-md shimmer-gradient" />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="md:hidden p-4 space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="p-3.5 rounded-xl border border-border/70 space-y-2 bg-background/50">
+                <div className="h-4 w-40 rounded shimmer-gradient" />
+                <div className="h-3 w-24 rounded shimmer-gradient" />
+                <div className="flex justify-between items-center pt-2 border-t border-border/40">
+                  <div className="h-4 w-14 rounded shimmer-gradient" />
+                  <div className="h-6 w-20 rounded-md shimmer-gradient" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : filteredTests.length === 0 ? (
         <div className="py-20 text-center bg-card border border-border/80 rounded-xl p-8 space-y-3">

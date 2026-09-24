@@ -8,6 +8,7 @@ import {
   X, Lock, Shield, Sliders, Briefcase, Filter, Layers, Users
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
+import { useToast } from "@/components/ui/toast";
 
 interface CollectionCenter {
   id: string | number;
@@ -27,7 +28,15 @@ export function CollectionCentersTab() {
   const [centers, setCenters] = useState<CollectionCenter[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const { success: toastSuccess, error: toastError } = useToast();
+  const setToast = React.useCallback((input: { text: string; type: "success" | "error" } | null) => {
+    if (!input) return;
+    if (input.type === "success") {
+      toastSuccess(input.text);
+    } else {
+      toastError(input.text);
+    }
+  }, [toastSuccess, toastError]);
 
   // In-Page View Mode: "LIST" | "ADD" | "EDIT"
   const [viewMode, setViewMode] = useState<"LIST" | "ADD" | "EDIT">("LIST");
@@ -64,12 +73,7 @@ export function CollectionCentersTab() {
     loadCenters();
   }, []);
 
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
+
 
   const loadCenters = async () => {
     try {
@@ -226,19 +230,6 @@ export function CollectionCentersTab() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Toast Notification */}
-      {toast && (
-        <div
-          className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl border text-xs font-bold shadow-2xl flex items-center gap-2.5 transition-all ${
-            toast.type === "success"
-              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-              : "bg-destructive/10 border-destructive/30 text-destructive"
-          }`}
-        >
-          {toast.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          <span>{toast.text}</span>
-        </div>
-      )}
 
       {/* ========================================================================= */}
       {/* VIEW 1: FULL-WIDTH IN-PAGE "ADD PARTNER / USER" FORM                      */}

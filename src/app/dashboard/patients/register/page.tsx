@@ -507,16 +507,24 @@ function RegisterPatientPage() {
   };
 
   const isFieldEnabled = (key: string) => {
+    // Core demographic & referral fields must NEVER disappear from the patient intake form
+    if (key === "phone" || key === "address" || key === "name" || key === "ageGender" || key === "refDoctor") {
+      return true;
+    }
     const f = intakeFields.find(item => item.key === key);
-    return f ? f.enabled : false;
+    return f ? Boolean(f.enabled) : false;
   };
 
   const isFieldRequired = (key: string) => {
     const f = intakeFields.find(item => item.key === key);
-    return f ? f.enabled && f.required : false;
+    return f ? Boolean(f.enabled && f.required) : false;
   };
 
   const handleToggleTempIntakeField = (key: string, property: "enabled" | "required" | "showOnReport") => {
+    const isCore = key === "phone" || key === "address" || key === "name" || key === "ageGender" || key === "refDoctor";
+    if (property === "enabled" && isCore) {
+      return; // Core demographic fields cannot be hidden from the intake form
+    }
     setTempIntakeFields(prev => {
       return prev.map(item => {
         if (item.key !== key) return item;
@@ -533,14 +541,19 @@ function RegisterPatientPage() {
   const handleSaveIntakeRulesModal = async () => {
     try {
       setSavingIntakeRules(true);
-      setIntakeFields(tempIntakeFields);
-      localStorage.setItem("lis_intake_fields", JSON.stringify(tempIntakeFields));
+      const safeFields = tempIntakeFields.map(f => {
+        const isCore = f.key === "phone" || f.key === "address" || f.key === "name" || f.key === "ageGender" || f.key === "refDoctor";
+        return isCore ? { ...f, enabled: true } : f;
+      });
+      setIntakeFields(safeFields);
+      setTempIntakeFields(safeFields);
+      localStorage.setItem("lis_intake_fields", JSON.stringify(safeFields));
 
       if (labInfo) {
         const currentReportSettings = labInfo.report_settings || labInfo.reportSettings || {};
         const updatedReportSettings = {
           ...currentReportSettings,
-          intakeFields: tempIntakeFields,
+          intakeFields: safeFields,
         };
         await fetchFromLaravel("/lab", {
           method: "PUT",
@@ -548,6 +561,17 @@ function RegisterPatientPage() {
             report_settings: updatedReportSettings,
           }),
         });
+        try {
+          const cached = localStorage.getItem("lis_cached_report_settings");
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed && typeof parsed === "object") {
+              parsed.intakeFields = safeFields;
+              localStorage.setItem("lis_cached_report_settings", JSON.stringify(parsed));
+            }
+          }
+          window.dispatchEvent(new Event("lis_settings_updated"));
+        } catch {}
       }
       setIsSettingsOpen(false);
     } catch (e) {
@@ -574,10 +598,44 @@ function RegisterPatientPage() {
       try {
         const parsed = JSON.parse(savedIntake);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setIntakeFields(parsed);
-          setTempIntakeFields(parsed);
+          // Merge with DEFAULT_INTAKE_FIELDS to guarantee completeness and preserve defaults
+          const sanitized = DEFAULT_INTAKE_FIELDS.map(def => {
+            const found = parsed.find((item: any) => item.key === def.key || item.orderingName === def.orderingName);
+            if (!found) return { ...def };
+            const isCore = def.key === "phone" || def.key === "address" || def.key === "name" || def.key === "ageGender" || def.key === "refDoctor";
+            return {
+              ...def,
+              enabled: isCore ? true : (found.enabled !== undefined ? !!found.enabled : def.enabled),
+              required: found.required !== undefined ? !!found.required : def.required,
+              showOnReport: found.showOnReport !== undefined ? !!found.showOnReport : def.showOnReport,
+            };
+          });
+          setIntakeFields(sanitized);
+          setTempIntakeFields(sanitized);
         }
       } catch (e) { }
+    } else {
+      try {
+        const cachedReport = localStorage.getItem("lis_cached_report_settings");
+        if (cachedReport) {
+          const parsed = JSON.parse(cachedReport);
+          if (Array.isArray(parsed?.intakeFields)) {
+            const sanitized = DEFAULT_INTAKE_FIELDS.map(def => {
+              const found = parsed.intakeFields.find((item: any) => item.key === def.key || item.orderingName === def.orderingName);
+              if (!found) return { ...def };
+              const isCore = def.key === "phone" || def.key === "address" || def.key === "name" || def.key === "ageGender" || def.key === "refDoctor";
+              return {
+                ...def,
+                enabled: isCore ? true : (found.enabled !== undefined ? !!found.enabled : def.enabled),
+                required: found.required !== undefined ? !!found.required : def.required,
+                showOnReport: found.showOnReport !== undefined ? !!found.showOnReport : def.showOnReport,
+              };
+            });
+            setIntakeFields(sanitized);
+            setTempIntakeFields(sanitized);
+          }
+        }
+      } catch {}
     }
 
     const savedDocs = localStorage.getItem("lis_referral_doctors");
@@ -614,6 +672,9 @@ function RegisterPatientPage() {
             if (normalized.intakeFields && normalized.intakeFields.length > 0) {
               setIntakeFields(normalized.intakeFields);
               setTempIntakeFields(normalized.intakeFields);
+              try {
+                localStorage.setItem("lis_intake_fields", JSON.stringify(normalized.intakeFields));
+              } catch {}
             }
             if (normalized.defaultDesignation) {
               setDesignation(normalized.defaultDesignation);
@@ -4145,15 +4206,21 @@ function RegisterPatientPage() {
 
                       {/* 3 Checkboxes */}
                       <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/60 text-[11px]">
-                        <label className="flex items-center gap-1.5 cursor-pointer select-none font-semibold text-foreground">
-                          <input
-                            type="checkbox"
-                            checked={field.enabled}
-                            onChange={() => handleToggleTempIntakeField(field.key, "enabled")}
-                            className="h-3.5 w-3.5 rounded border-border text-primary accent-primary cursor-pointer shrink-0"
-                          />
-                          <span className="truncate">Form</span>
-                        </label>
+                        {(() => {
+                          const isCore = field.key === "phone" || field.key === "address" || field.key === "name" || field.key === "ageGender" || field.key === "refDoctor";
+                          return (
+                            <label className={`flex items-center gap-1.5 select-none font-semibold ${isCore ? "cursor-default text-muted-foreground" : "cursor-pointer text-foreground"}`} title={isCore ? "Core intake field (Always active on registration form)" : "Toggle field on form"}>
+                              <input
+                                type="checkbox"
+                                checked={isCore ? true : field.enabled}
+                                disabled={isCore}
+                                onChange={() => !isCore && handleToggleTempIntakeField(field.key, "enabled")}
+                                className="h-3.5 w-3.5 rounded border-border text-primary accent-primary cursor-pointer shrink-0 disabled:opacity-70"
+                              />
+                              <span className="truncate">Form {isCore && "🔒"}</span>
+                            </label>
+                          );
+                        })()}
 
                         <label className={`flex items-center gap-1.5 select-none font-semibold ${field.enabled ? "cursor-pointer text-foreground" : "cursor-not-allowed text-muted-foreground opacity-50"
                           }`}>

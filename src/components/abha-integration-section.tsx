@@ -45,6 +45,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { fetchFromLaravel } from "@/lib/api-client";
+import { useToast } from "@/components/ui/toast";
 
 export interface AbhaDhisMetrics {
   current_month_linked_reports: number;
@@ -102,7 +103,10 @@ export function AbhaIntegrationSection({ onHfrUpdated }: AbhaIntegrationSectionP
   const [summary, setSummary] = useState<AbhaDhisSummaryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const { success: toastSuccess, error: toastError } = useToast();
+  const setToastMessage = React.useCallback((msg: string | null) => {
+    if (msg) toastSuccess(msg);
+  }, [toastSuccess]);
 
   // Modals
   const [isOnboardModalOpen, setIsOnboardModalOpen] = useState(false);
@@ -519,7 +523,7 @@ export function AbhaIntegrationSection({ onHfrUpdated }: AbhaIntegrationSectionP
       await loadDhisSummary();
       onHfrUpdated?.(null, null);
     } catch (err: any) {
-      alert("Failed to unlink: " + err?.message);
+      toastError("Failed to unlink", err?.message || "");
     } finally {
       setIsLoading(false);
     }
@@ -529,13 +533,6 @@ export function AbhaIntegrationSection({ onHfrUpdated }: AbhaIntegrationSectionP
 
   return (
     <div className="w-full bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden relative">
-      {/* Toast Alert */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-foreground text-background px-4 py-2.5 rounded-xl shadow-lg text-xs font-bold flex items-center gap-2 animate-slide-up">
-          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
 
       {/* ======================================================================= */}
       {/* 1. FLABS STYLE SETTINGS BANNER (Slide 4 & Slide 13)                    */}

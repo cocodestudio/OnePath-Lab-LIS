@@ -98,7 +98,7 @@ export function AiGuideWidget() {
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + "px";
+      textareaRef.current.style.height = Math.max(46, Math.min(textareaRef.current.scrollHeight, 120)) + "px";
     }
   }, [input]);
 
@@ -108,6 +108,32 @@ export function AiGuideWidget() {
       setTimeout(() => textareaRef.current?.focus(), 220);
     }
   }, [isOpen, messages]);
+
+  // Listen for custom trigger events from the sidebar
+  useEffect(() => {
+    const handleToggle = () => setIsOpen((prev) => !prev);
+    const handleOpen = () => setIsOpen(true);
+    const handleClose = () => setIsOpen(false);
+
+    window.addEventListener("toggle-ai-guide", handleToggle);
+    window.addEventListener("open-ai-guide", handleOpen);
+    window.addEventListener("close-ai-guide", handleClose);
+
+    return () => {
+      window.removeEventListener("toggle-ai-guide", handleToggle);
+      window.removeEventListener("open-ai-guide", handleOpen);
+      window.removeEventListener("close-ai-guide", handleClose);
+    };
+  }, []);
+
+  // Broadcast open/close state to sidebar
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("ai-guide-state-changed", { detail: { isOpen } })
+      );
+    }
+  }, [isOpen]);
 
   const handleNavigate = (url: string) => {
     if (url && url.startsWith("/")) {
@@ -225,7 +251,7 @@ export function AiGuideWidget() {
           key={`link-${matchIndex}`}
           type="button"
           onClick={() => handleNavigate(url)}
-          className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 hover:underline mx-1 cursor-pointer"
+          className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 hover:underline mx-1 cursor-pointer"
         >
           <span>{label}</span>
           <ExternalLink className="h-3 w-3 inline opacity-70" />
@@ -268,7 +294,7 @@ export function AiGuideWidget() {
                 key={idx}
                 type="button"
                 onClick={() => handleNavigate(btn.url)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold text-xs transition-colors shadow-2xs cursor-pointer active:scale-95"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 font-semibold text-xs transition-colors shadow-2xs cursor-pointer active:scale-95"
               >
                 <span>{btn.label}</span>
                 <ArrowRight className="h-3 w-3" />
@@ -296,59 +322,10 @@ export function AiGuideWidget() {
       />
 
       {/* =========================================================================
-          1. FLOATING BOTTOM-RIGHT TRIGGER BUTTON (Lightweight, Professional Medical UI)
-      ========================================================================= */}
-      <div className="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-50 flex items-center gap-2.5">
-        {/* Helper Pill Banner when closed */}
-        {!isOpen && (
-          <div
-            onClick={() => setIsOpen(true)}
-            className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-md text-xs font-medium text-slate-700 dark:text-slate-200 cursor-pointer hover:border-blue-400/60 transition-all hover:-translate-x-1"
-          >
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-            </span>
-            <span>Need help? Ask LIS Guide</span>
-            <Sparkles className="h-3 w-3 text-amber-500" />
-          </div>
-        )}
-
-        {/* Lightweight Professional Trigger Button */}
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className={`h-11 sm:h-12 px-3.5 sm:px-4 rounded-full flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer select-none active:scale-95 border ${
-            isOpen
-              ? "bg-slate-100 text-slate-800 border-slate-300 dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-700"
-              : "bg-white dark:bg-zinc-900 text-slate-900 dark:text-slate-100 border-slate-200 dark:border-zinc-800 hover:border-blue-400 dark:hover:border-blue-600"
-          }`}
-          title="OnePath LIS Guide & Assistant"
-        >
-          {isOpen ? (
-            <>
-              <X className="h-4 w-4 text-slate-600 dark:text-slate-300" />
-              <span className="font-semibold text-xs">Close</span>
-            </>
-          ) : (
-            <>
-              <div className="w-7 h-7 rounded-full bg-blue-50 dark:bg-blue-950/70 border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                <Sparkles className="h-3.5 w-3.5" />
-              </div>
-              <div className="flex flex-col items-start text-left leading-none">
-                <span className="font-bold text-xs text-slate-900 dark:text-white">LIS Guide</span>
-                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Assistant</span>
-              </div>
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* =========================================================================
-          2. FLOATING SPLIT CHATBOX WINDOW (Smooth origin-bottom-right animation, fully responsive)
+          FLOATING CHATBOX WINDOW (Positioned at bottom-left adjacent to sidebar)
       ========================================================================= */}
       <div
-        className={`fixed bottom-20 sm:bottom-22 right-3 sm:right-6 z-50 w-[calc(100vw-24px)] sm:w-[420px] max-w-[440px] h-[calc(100dvh-110px)] sm:h-[580px] max-h-[720px] flex flex-col rounded-2xl border border-slate-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden origin-bottom-right transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`fixed bottom-4 sm:bottom-6 left-3 md:left-[268px] z-50 w-[calc(100vw-24px)] sm:w-[460px] md:w-[480px] max-w-[500px] h-[calc(100dvh-80px)] sm:h-[620px] max-h-[740px] flex flex-col rounded-2xl border border-slate-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden origin-bottom-left transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isOpen
             ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
             : "opacity-0 scale-90 translate-y-4 pointer-events-none"
@@ -357,7 +334,7 @@ export function AiGuideWidget() {
         {/* Header */}
         <div className="p-3.5 px-4 bg-slate-50/90 dark:bg-zinc-800/60 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
+            <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
               <Bot className="h-4 w-4" />
             </div>
             <div>
@@ -401,7 +378,7 @@ export function AiGuideWidget() {
               className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.role === "assistant" && (
-                <div className="w-6 h-6 rounded-md bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 flex items-center justify-center shrink-0 mt-0.5">
+                <div className="w-6 h-6 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 mt-0.5">
                   <Bot className="h-3.5 w-3.5" />
                 </div>
               )}
@@ -409,7 +386,7 @@ export function AiGuideWidget() {
               <div
                 className={`relative max-w-[88%] rounded-xl p-3 shadow-2xs ${
                   msg.role === "user"
-                    ? "bg-blue-600 text-white rounded-tr-xs font-medium text-xs"
+                    ? "bg-emerald-600 text-white rounded-tr-xs font-medium text-xs"
                     : "bg-white dark:bg-zinc-900 border border-slate-200/90 dark:border-zinc-800 text-slate-800 dark:text-zinc-100 rounded-tl-xs"
                 }`}
               >
@@ -420,7 +397,7 @@ export function AiGuideWidget() {
                 )}
                 <span
                   className={`block text-[9px] mt-1.5 text-right ${
-                    msg.role === "user" ? "text-blue-100/70" : "text-slate-400"
+                    msg.role === "user" ? "text-emerald-100/70" : "text-slate-400"
                   }`}
                 >
                   {msg.timestamp}
@@ -432,11 +409,11 @@ export function AiGuideWidget() {
           {/* Typing Loader */}
           {loading && (
             <div className="flex gap-2 items-center">
-              <div className="w-6 h-6 rounded-md bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 flex items-center justify-center shrink-0">
+              <div className="w-6 h-6 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
                 <Bot className="h-3.5 w-3.5" />
               </div>
               <div className="px-3 py-2 rounded-xl rounded-tl-xs bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-500 dark:text-slate-400 text-xs flex items-center gap-2 shadow-2xs">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
                 <span>OnePath AI is finding the guide...</span>
               </div>
             </div>
@@ -446,7 +423,7 @@ export function AiGuideWidget() {
           {messages.length <= 2 && (
             <div className="pt-2 space-y-2">
               <div className="flex items-center gap-1.5 text-[10.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">
-                <Compass className="h-3.5 w-3.5 text-blue-600" />
+                <Compass className="h-3.5 w-3.5 text-emerald-600" />
                 <span>Common Help Topics:</span>
               </div>
               <div className="grid grid-cols-1 gap-1.5">
@@ -457,13 +434,13 @@ export function AiGuideWidget() {
                       key={idx}
                       type="button"
                       onClick={() => handleSendMessage(faq.query)}
-                      className="w-full flex items-center justify-between p-2.5 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-blue-50/50 dark:hover:bg-zinc-800/70 hover:border-blue-300 dark:hover:border-zinc-700 text-left transition-all group cursor-pointer shadow-2xs"
+                      className="w-full flex items-center justify-between p-2.5 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50/50 dark:hover:bg-zinc-800/70 hover:border-emerald-300 dark:hover:border-zinc-700 text-left transition-all group cursor-pointer shadow-2xs"
                     >
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                        <Icon className="h-3.5 w-3.5 text-slate-400 group-hover:text-blue-600 shrink-0" />
+                      <div className="flex items-center gap-2 text-xs font-medium text-slate-800 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                        <Icon className="h-3.5 w-3.5 text-slate-400 group-hover:text-emerald-600 shrink-0" />
                         <span>{faq.label}</span>
                       </div>
-                      <ArrowRight className="h-3 w-3 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+                      <ArrowRight className="h-3 w-3 text-slate-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all shrink-0" />
                     </button>
                   );
                 })}
@@ -476,21 +453,21 @@ export function AiGuideWidget() {
 
         {/* Bottom Chat Input Form (Upgraded, Professional Textarea Container) */}
         <div className="p-3 bg-white dark:bg-zinc-900 border-t border-slate-200/80 dark:border-zinc-800 shrink-0">
-          <div className="relative flex flex-col rounded-xl border border-slate-200 dark:border-zinc-750 bg-slate-50/80 dark:bg-zinc-950/70 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/15 focus-within:bg-white dark:focus-within:bg-zinc-900 transition-all shadow-2xs">
+          <div className="relative flex flex-col rounded-xl border border-slate-200 dark:border-zinc-750 bg-slate-50/80 dark:bg-zinc-950/70 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/15 focus-within:bg-white dark:focus-within:bg-zinc-900 transition-all shadow-2xs">
             <textarea
               ref={textareaRef}
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask anything about OnePath LIS (e.g. 'How to register a patient', 'Report printing')..."
+              placeholder="Ask anything about OnePath LIS (Patients, Reports, Tests)..."
               disabled={loading}
-              className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1.5 text-xs leading-relaxed text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 focus:outline-none disabled:opacity-50 min-h-[38px] max-h-[110px]"
+              className="w-full resize-none bg-transparent px-3.5 pt-2.5 pb-2 text-xs sm:text-[13px] leading-5 text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none disabled:opacity-50 min-h-[46px] max-h-[120px]"
             />
-            <div className="flex items-center justify-between px-2.5 pb-2 pt-0.5 border-t border-slate-100 dark:border-zinc-800/60">
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                <Sparkles className="h-3 w-3 text-blue-500" />
-                <span className="font-medium">OnePath AI</span>
+            <div className="flex items-center justify-between px-3 pb-2 pt-1 border-t border-slate-100 dark:border-zinc-800/60">
+              <div className="flex items-center gap-1.5 text-[10.5px] text-slate-400">
+                <Sparkles className="h-3 w-3 text-emerald-600" />
+                <span className="font-medium text-slate-500 dark:text-slate-400">OnePath AI</span>
               </div>
               <div className="flex items-center gap-1.5">
                 {input.trim() && (
@@ -500,14 +477,14 @@ export function AiGuideWidget() {
                     className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
                     title="Clear input"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => handleSendMessage()}
                   disabled={!input.trim() || loading}
-                  className="h-7 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs flex items-center gap-1.5 shadow-2xs transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+                  className="h-7.5 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
                   title="Send message (Enter ↵)"
                 >
                   {loading ? (

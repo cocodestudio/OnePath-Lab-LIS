@@ -29,6 +29,14 @@ export default function TodaySamplesPage() {
         const u = JSON.parse(uStr);
         setCurrentUserRole(u.role || "");
       }
+      const cached = localStorage.getItem("lis_cached_today_samples");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setReports(parsed);
+          setLoading(false);
+        }
+      }
     } catch (e) {}
     loadData();
   }, []);
@@ -69,6 +77,9 @@ export default function TodaySamplesPage() {
         ? repList.filter((r: any) => isDateToday(r.created_at || r.createdAt || r.patient?.created_at || r.patient?.createdAt))
         : repList;
       setReports(finalReports);
+      try {
+        localStorage.setItem("lis_cached_today_samples", JSON.stringify(finalReports));
+      } catch {}
     } catch (err) {
       console.error("Error loading today's samples:", err);
     } finally {
@@ -305,7 +316,35 @@ export default function TodaySamplesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60 text-xs font-medium">
-              {filteredSamples.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 7 }).map((_, idx) => (
+                  <tr key={idx} className="animate-fade-in">
+                    <td className="py-4 px-5">
+                      <div className="h-4 w-28 rounded shimmer-gradient mb-1.5" />
+                      <div className="h-3 w-16 rounded shimmer-gradient" />
+                    </td>
+                    <td className="py-4 px-4 space-y-1">
+                      <div className="h-4 w-32 rounded shimmer-gradient" />
+                      <div className="h-3 w-20 rounded shimmer-gradient" />
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="h-4 w-40 rounded shimmer-gradient" />
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="h-4 w-24 rounded shimmer-gradient" />
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="h-6 w-24 rounded-full shimmer-gradient" />
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="h-6 w-16 rounded-full shimmer-gradient" />
+                    </td>
+                    <td className="py-4 px-5 text-right">
+                      <div className="h-7 w-20 rounded-xl shimmer-gradient ml-auto" />
+                    </td>
+                  </tr>
+                ))
+              ) : filteredSamples.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-16 text-center text-muted-foreground">
                     <FlaskConical className="h-9 w-9 mx-auto text-muted-foreground/40 mb-2" />

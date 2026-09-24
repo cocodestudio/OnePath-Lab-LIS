@@ -146,6 +146,75 @@ export function resolveSignatureUrl(url: string | null | undefined): string | nu
   return `${apiOrigin}${cleanPath}`;
 }
 
+export interface SmartReportSettings {
+  /** Cover page design template ID */
+  coverDesign:
+    | "template-1" | "template-2" | "template-3" | "template-4" // legacy
+    | "cover-classic" | "cover-modern" | "cover-tech" | "cover-wellness" | "cover-gradient" | "cover-minimal"; // new
+  /** Interior (pages 2–4) layout template ID */
+  interiorDesign?: "interior-clean" | "interior-premium" | "interior-accent" | "interior-card";
+  /** Back cover / exterior page template ID */
+  exteriorDesign?: "exterior-none" | "exterior-gradient" | "exterior-qr" | "exterior-minimal";
+  themeColor: string;
+  labName: string;
+  labAddress: string;
+  email: string;
+  emailAddress?: string;
+  logoUrl?: string | null;
+  showLogo?: boolean;
+  footerText: string;
+  aiGeneratedTag: boolean;
+  showAiTag?: boolean;
+  showHistoryGraph: boolean;
+  showExecutiveSummary: boolean;
+  showOrganHealth: boolean;
+  showOrganHealthGauges?: boolean;
+  showDietTips: boolean;
+  showDietLifestyleTips?: boolean;
+  disclaimer: string;
+  disclaimerText?: string;
+}
+
+export const defaultSmartReportSettings: SmartReportSettings = {
+  coverDesign: "cover-classic",
+  interiorDesign: "interior-clean",
+  exteriorDesign: "exterior-none",
+  themeColor: "#0284c7",
+  labName: "OnePath Diagnostics",
+  labAddress: "Main Healthcare Boulevard, Diagnostic Wing",
+  email: "care@onepathlab.com",
+  emailAddress: "care@onepathlab.com",
+  logoUrl: null,
+  showLogo: true,
+  footerText: "Certified Diagnostic Report • Powered by OnePath AI Clinical Insights",
+  aiGeneratedTag: true,
+  showAiTag: true,
+  showHistoryGraph: true,
+  showExecutiveSummary: true,
+  showOrganHealth: true,
+  showOrganHealthGauges: true,
+  showDietTips: true,
+  showDietLifestyleTips: true,
+  disclaimer: `1. Clinical Use Only
+• This report is intended for informational and analytical purposes only.
+• It should be used by qualified healthcare professionals for clinical correlation.
+• It is not a substitute for formal medical consultation, diagnosis, or treatment.
+
+2. No Diagnostic Claim
+• Information in this report, including AI-based insights and trend analyses, is suggestive in nature.
+• It must not be solely relied upon for diagnosis or treatment decisions.
+• Always consult a registered medical practitioner.`,
+  disclaimerText: `1. Clinical Use Only
+• This report is intended for informational and analytical purposes only.
+• It should be used by qualified healthcare professionals for clinical correlation.
+• It is not a substitute for formal medical consultation, diagnosis, or treatment.
+
+2. No Diagnostic Claim
+• Information in this report, including AI-based insights and trend analyses, is suggestive in nature.
+• It must not be solely relied upon for diagnosis or treatment decisions.
+• Always consult a registered medical practitioner.`,
+};
+
 export interface ReportLayoutSettings {
   defaultDesignation: string;
   flags: {
@@ -236,6 +305,7 @@ export interface ReportLayoutSettings {
   groupByDepartment?: boolean;
   departmentOrder?: string[];
   separatePagePerTest?: boolean;
+  smartReport?: SmartReportSettings;
 }
 
 export const DEFAULT_DEPARTMENT_ORDER = [
@@ -276,6 +346,7 @@ export const defaultReportLayoutSettings: ReportLayoutSettings = {
   groupByDepartment: true,
   departmentOrder: [...DEFAULT_DEPARTMENT_ORDER],
   intakeFields: DEFAULT_INTAKE_FIELDS,
+  smartReport: { ...defaultSmartReportSettings },
   typography: {
     departmentFontSize: 13,
     columnHeadingFontSize: 10,
@@ -457,9 +528,11 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
     res.intakeFields = DEFAULT_INTAKE_FIELDS.map(def => {
       const match = list.find((item: any) => item.key === def.key || item.orderingName === def.orderingName);
       if (!match) return { ...def };
+      // Core demographic and referral fields must never be automatically disabled
+      const isCoreDemographic = def.key === "phone" || def.key === "address" || def.key === "name" || def.key === "ageGender" || def.key === "refDoctor";
       return {
         ...def,
-        enabled: match.enabled !== undefined ? !!match.enabled : def.enabled,
+        enabled: isCoreDemographic ? true : (match.enabled !== undefined ? !!match.enabled : def.enabled),
         required: match.required !== undefined ? !!match.required : def.required,
         showOnReport: match.showOnReport !== undefined ? !!match.showOnReport : def.showOnReport,
       };
@@ -616,6 +689,30 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
   res.separatePagePerTest = raw.separatePagePerTest !== undefined
     ? !!raw.separatePagePerTest
     : (raw.separate_page_per_test !== undefined ? !!raw.separate_page_per_test : false);
+
+  if (raw.smartReport || raw.smart_report) {
+    const sr = raw.smartReport || raw.smart_report;
+    const finalDisclaimer = sr.disclaimer || sr.disclaimerText || defaultSmartReportSettings.disclaimer;
+    const finalEmail = sr.email || sr.emailAddress || defaultSmartReportSettings.email;
+    res.smartReport = {
+      ...defaultSmartReportSettings,
+      ...sr,
+      email: finalEmail,
+      emailAddress: finalEmail,
+      logoUrl: sr.logoUrl !== undefined ? sr.logoUrl : defaultSmartReportSettings.logoUrl,
+      showLogo: sr.showLogo !== undefined ? sr.showLogo : defaultSmartReportSettings.showLogo,
+      aiGeneratedTag: sr.aiGeneratedTag !== undefined ? sr.aiGeneratedTag : (sr.showAiTag !== undefined ? sr.showAiTag : defaultSmartReportSettings.aiGeneratedTag),
+      showAiTag: sr.showAiTag !== undefined ? sr.showAiTag : (sr.aiGeneratedTag !== undefined ? sr.aiGeneratedTag : defaultSmartReportSettings.showAiTag),
+      showOrganHealth: sr.showOrganHealth !== undefined ? sr.showOrganHealth : (sr.showOrganHealthGauges !== undefined ? sr.showOrganHealthGauges : defaultSmartReportSettings.showOrganHealth),
+      showOrganHealthGauges: sr.showOrganHealthGauges !== undefined ? sr.showOrganHealthGauges : (sr.showOrganHealth !== undefined ? sr.showOrganHealth : defaultSmartReportSettings.showOrganHealthGauges),
+      showDietTips: sr.showDietTips !== undefined ? sr.showDietTips : (sr.showDietLifestyleTips !== undefined ? sr.showDietLifestyleTips : defaultSmartReportSettings.showDietTips),
+      showDietLifestyleTips: sr.showDietLifestyleTips !== undefined ? sr.showDietLifestyleTips : (sr.showDietTips !== undefined ? sr.showDietTips : defaultSmartReportSettings.showDietLifestyleTips),
+      disclaimer: finalDisclaimer,
+      disclaimerText: finalDisclaimer,
+    };
+  } else {
+    res.smartReport = { ...defaultSmartReportSettings };
+  }
 
   return res;
 }

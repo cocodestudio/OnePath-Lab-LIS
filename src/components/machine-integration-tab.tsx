@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 
 interface Instrument {
   id: string;
@@ -58,7 +59,7 @@ export function MachineIntegrationTab() {
   const [loading, setLoading] = useState(true);
   const [isSimulating, setIsSimulating] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const { success: toastSuccess, error: toastError } = useToast();
 
   // Modals
   const [selectedResult, setSelectedResult] = useState<InstrumentResult | null>(null);
@@ -107,8 +108,11 @@ export function MachineIntegrationTab() {
   };
 
   const showToast = (text: string, type: "success" | "error" = "success") => {
-    setToast({ text, type });
-    setTimeout(() => setToast(null), 4000);
+    if (type === "success") {
+      toastSuccess(text);
+    } else {
+      toastError(text);
+    }
   };
 
   const handleSimulate = async (type: "HAEMATOLOGY" | "BIOCHEMISTRY") => {
@@ -215,17 +219,6 @@ export function MachineIntegrationTab() {
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
-      {/* Toast Notification */}
-      {toast && (
-        <div
-          className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-bold text-white transition-all ${
-            toast.type === "success" ? "bg-emerald-600" : "bg-rose-600"
-          }`}
-        >
-          {toast.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          <span>{toast.text}</span>
-        </div>
-      )}
 
       {/* ── Top Status Banner: Active LAN / TCP & Serial Cable Listener ── */}
       <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">

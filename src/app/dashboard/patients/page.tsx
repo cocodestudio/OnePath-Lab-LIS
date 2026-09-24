@@ -386,7 +386,17 @@ export default function PatientsPage() {
         const parsed = JSON.parse(savedPhlebo);
         if (Array.isArray(parsed) && parsed.length > 0) setPhlebotomists(parsed);
       }
+
+      const cachedPatients = localStorage.getItem("lis_cached_patients");
+      if (cachedPatients) {
+        const parsed = JSON.parse(cachedPatients);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setPatients(parsed);
+          setLoading(false);
+        }
+      }
     } catch (e) {}
+    fetchPatients();
   }, []);
 
   const fetchPatients = async (forceRefresh?: boolean | any) => {
@@ -398,6 +408,9 @@ export default function PatientsPage() {
       const data = await fetchFromLaravel("/patients", { skipCache: isForce });
       const list = Array.isArray(data) ? data : (data?.data || []);
       setPatients(list);
+      try {
+        localStorage.setItem("lis_cached_patients", JSON.stringify(list));
+      } catch {}
     } catch (err) {
       console.error("Failed to fetch patients:", err);
       if (patients.length === 0) setPatients([]);
@@ -617,11 +630,43 @@ export default function PatientsPage() {
       <div className="bg-card border border-border/80 rounded-xl shadow-xs overflow-hidden">
         <div className="table-responsive-container">
           {loading ? (
-            <div className="p-8 space-y-4">
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-xs text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border/80 bg-muted/30 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
+                    <th className="px-5 py-3.5">Patient Details</th>
+                    <th className="px-5 py-3.5">PID / ID</th>
+                    <th className="px-5 py-3.5">Barcode</th>
+                    <th className="px-5 py-3.5">Referred By</th>
+                    <th className="px-5 py-3.5">Collection Point</th>
+                    <th className="px-5 py-3.5">Registered</th>
+                    <th className="px-5 py-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {Array.from({ length: 7 }).map((_, idx) => (
+                    <tr key={idx} className="animate-fade-in">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-lg shimmer-gradient shrink-0" />
+                          <div className="space-y-1">
+                            <div className="h-4 w-32 rounded shimmer-gradient" />
+                            <div className="h-3 w-20 rounded shimmer-gradient" />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
+                      <td className="px-5 py-3.5"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
+                      <td className="px-5 py-3.5"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
+                      <td className="px-5 py-3.5"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
+                      <td className="px-5 py-3.5"><div className="h-4 w-16 rounded shimmer-gradient" /></td>
+                      <td className="px-5 py-3.5 text-right">
+                        <div className="h-7 w-20 rounded-lg shimmer-gradient ml-auto" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : currentRows.length === 0 ? (
             <div className="text-center py-16 px-4 space-y-3">

@@ -11,6 +11,7 @@ import {
   ChevronsLeft, ChevronsRight, HelpCircle, Lock
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
+import { useToast } from "@/components/ui/toast";
 
 interface Transaction {
   id: number;
@@ -66,7 +67,15 @@ export default function WalletPage() {
   const paidTxnId = searchParams.get("txnid");
   const paidAmount = searchParams.get("amount");
 
-  const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const { success: toastSuccess, error: toastError } = useToast();
+  const setToast = React.useCallback((input: { text: string; type: "success" | "error" } | null) => {
+    if (!input) return;
+    if (input.type === "success") {
+      toastSuccess(input.text);
+    } else {
+      toastError(input.text);
+    }
+  }, [toastSuccess, toastError]);
 
   useEffect(() => {
     loadWalletData();
@@ -88,12 +97,7 @@ export default function WalletPage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
+
 
   const loadWalletData = async (silent = false) => {
     try {
@@ -276,19 +280,6 @@ export default function WalletPage() {
 
   return (
     <div className="space-y-7 animate-fade-in pb-12 max-w-7xl mx-auto">
-      {/* Toast Notification */}
-      {toast && (
-        <div
-          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-5 py-3 rounded-xl shadow-2xl text-xs font-bold transition-all animate-bounce ${
-            toast.type === "success"
-              ? "bg-emerald-600 text-white"
-              : "bg-destructive text-destructive-foreground"
-          }`}
-        >
-          {toast.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          <span>{toast.text}</span>
-        </div>
-      )}
 
       {/* Payment Result Banners from PayU Callback */}
       {paymentStatus === "success" && (
@@ -995,7 +986,19 @@ export default function WalletPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  {paginatedTransactions.length === 0 ? (
+                  {loading ? (
+                    Array.from({ length: 6 }).map((_, idx) => (
+                      <tr key={idx} className="animate-fade-in">
+                        <td className="py-3.5 px-4"><div className="h-4 w-28 rounded shimmer-gradient" /></td>
+                        <td className="py-3.5 px-4"><div className="h-4 w-32 rounded shimmer-gradient" /></td>
+                        <td className="py-3.5 px-4"><div className="h-4 w-44 rounded shimmer-gradient" /></td>
+                        <td className="py-3.5 px-4"><div className="h-5 w-16 rounded-full shimmer-gradient" /></td>
+                        <td className="py-3.5 px-4 text-right"><div className="h-4 w-16 rounded shimmer-gradient ml-auto" /></td>
+                        <td className="py-3.5 px-4 text-right"><div className="h-4 w-16 rounded shimmer-gradient ml-auto" /></td>
+                        <td className="py-3.5 px-4 text-center"><div className="h-5 w-16 rounded-full shimmer-gradient mx-auto" /></td>
+                      </tr>
+                    ))
+                  ) : paginatedTransactions.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-14 text-center text-muted-foreground">
                         <Receipt className="h-10 w-10 mx-auto mb-2 opacity-35 text-purple-600" />

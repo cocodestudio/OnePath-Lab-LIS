@@ -1306,10 +1306,30 @@ export const PaginatedReportPreview = React.forwardRef<
     return Math.max(0, ...enabledSignaturesList.map((s: any) => Number(s.marginTop || 0)));
   }, [enabledSignaturesList]);
 
+  // Estimated fallback height to prevent clipping on initial frame or slow networks
+  const getEstimatedBlockHeight = (block: ReportBlock): number => {
+    const k = block.key || "";
+    if (k.startsWith("tblhead-")) return 28;
+    if (k.startsWith("header-")) return 34;
+    if (k.startsWith("department-header-")) return 30;
+    if (k.startsWith("subgroup-title-")) return 26;
+    if (k.startsWith("row-")) return 26;
+    if (k.startsWith("interp-")) return 220;
+    if (k.startsWith("findings-")) return 55;
+    if (k.startsWith("report-end-of-report-line")) return 30;
+    if (k.startsWith("report-signatures-footer")) return 90;
+    if (k.startsWith("endline-")) return 10;
+    return 26;
+  };
+
   // Measure block heights at natural (unscaled) content width with loop guard
   React.useLayoutEffect(() => {
     const measureHeights = () => {
-      const next = blocks.map((_, i) => measureRefs.current[i]?.offsetHeight ?? 0);
+      const next = blocks.map((_, i) => {
+        const el = measureRefs.current[i];
+        if (!el) return 0;
+        return el.getBoundingClientRect().height || el.offsetHeight || 0;
+      });
       setHeights(prev => {
         if (prev.length === next.length && prev.every((v, idx) => Math.abs(v - next[idx]) < 1)) {
           return prev;
@@ -1317,18 +1337,22 @@ export const PaginatedReportPreview = React.forwardRef<
         return next;
       });
       if (patientMeasureRef.current) {
-        const ph = patientMeasureRef.current.offsetHeight;
+        const ph = patientMeasureRef.current.getBoundingClientRect().height || patientMeasureRef.current.offsetHeight;
         if (ph > 0) setPatientH(prev => Math.abs(prev - ph) < 1 ? prev : ph);
       }
       if (sigMeasureRef.current) {
-        const mh = sigMeasureRef.current.offsetHeight;
+        const mh = sigMeasureRef.current.getBoundingClientRect().height || sigMeasureRef.current.offsetHeight;
         if (mh > 0) setSigH(prev => Math.abs(prev - mh) < 1 ? prev : mh);
       }
     };
 
     measureHeights();
-    const t = setTimeout(measureHeights, 60);
-    return () => clearTimeout(t);
+    const t1 = setTimeout(measureHeights, 60);
+    const t2 = setTimeout(measureHeights, 250);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [blocks, contentWidth]);
 
   const isFixedSig = reportSettings.signatureSettings?.positionMode !== "flow";
@@ -1356,14 +1380,14 @@ export const PaginatedReportPreview = React.forwardRef<
   );
 
   const pages = React.useMemo(() => {
-    if (heights.length !== blocks.length) return [blocks.map((_, i) => i)];
     const result: number[][] = [];
     let current: number[] = [];
     let used = 0;
 
     blocks.forEach((b, i) => {
       const isSig = b.key === "report-signatures-footer";
-      const measuredH = heights[i] || 0;
+      const measured = heights[i];
+      const measuredH = (measured && measured > 5) ? measured : getEstimatedBlockHeight(b);
       const h = isSig
         ? Math.max(75, measuredH - maxUserMarginTop)
         : measuredH;
@@ -1441,9 +1465,11 @@ export const PaginatedReportPreview = React.forwardRef<
         style={{
           position: "fixed",
           top: 0,
-          left: -99999,
+          left: 0,
           width: contentWidth,
           visibility: "hidden",
+          opacity: 0,
+          zIndex: -100,
           pointerEvents: "none",
           fontFamily: 'Arial, "Helvetica Neue", Helvetica, "Segoe UI", Roboto, sans-serif',
         }}

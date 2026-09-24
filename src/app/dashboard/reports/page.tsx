@@ -86,6 +86,18 @@ export default function ReportsListPage() {
 
   useEffect(() => {
     setCurrentUser(getStoredUser());
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_reports");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setReports(parsed);
+            setLoading(false);
+          }
+        }
+      } catch {}
+    }
     fetchReports();
   }, []);
 
@@ -115,6 +127,9 @@ export default function ReportsListPage() {
         setOutstandingLock(null);
         const list = Array.isArray(data) ? data : (data?.data || []);
         setReports(list);
+        try {
+          localStorage.setItem("lis_cached_reports", JSON.stringify(list));
+        } catch {}
       }
     } catch (err) {
       console.error("Error fetching reports:", err);
@@ -433,13 +448,30 @@ export default function ReportsListPage() {
       <div className="bg-card border border-border/70 rounded-xl shadow-card overflow-hidden">
         <div className="table-responsive-container">
           {loading ? (
-            <div className="flex flex-col gap-3 p-4">
-              <Skeleton className="h-10 w-full rounded-md" />
-              <Skeleton className="h-10 w-full rounded-md" />
-              <Skeleton className="h-10 w-full rounded-md" />
-              <Skeleton className="h-10 w-full rounded-md" />
-              <Skeleton className="h-10 w-full rounded-md" />
-            </div>
+            <table className="w-full min-w-[640px] text-left">
+              <thead>
+                <tr className="bg-muted/30 border-b border-border/60">
+                  {["Report ID", "Patient", "Received", "Tests", "Status", ""].map((h, i) => (
+                    <th key={h + i} className={`px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${i === 2 || i === 3 ? "hidden lg:table-cell" : ""} ${i === 5 ? "text-right" : ""}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/30">
+                {Array.from({ length: 7 }).map((_, idx) => (
+                  <tr key={idx} className="animate-fade-in">
+                    <td className="px-6 py-4"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
+                    <td className="px-6 py-4 space-y-1">
+                      <div className="h-4 w-32 rounded shimmer-gradient" />
+                      <div className="h-3 w-20 rounded shimmer-gradient" />
+                    </td>
+                    <td className="px-6 py-4 hidden lg:table-cell"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
+                    <td className="px-6 py-4 hidden lg:table-cell"><div className="h-4 w-36 rounded shimmer-gradient" /></td>
+                    <td className="px-6 py-4"><div className="h-6 w-20 rounded-full shimmer-gradient" /></td>
+                    <td className="px-6 py-4 text-right"><div className="h-7 w-24 rounded-lg shimmer-gradient ml-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : filteredReports.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-2">
               <Filter className="h-10 w-10 opacity-25" />

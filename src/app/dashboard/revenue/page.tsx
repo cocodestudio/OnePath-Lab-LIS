@@ -11,10 +11,12 @@ import {
 } from "lucide-react";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 
 type DateFilterType = "SPECIFIC_DATE" | "WEEKLY" | "MONTHLY" | "YEARLY" | "CUSTOM";
 
 export default function B2BRevenuePage() {
+  const toast = useToast();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<any[]>([]);
@@ -255,7 +257,7 @@ export default function B2BRevenuePage() {
   // Clean, professional CSV / Excel Table Export (Pure tabular format, without bill layout)
   const handleDownloadB2BStatementCSV = () => {
     if (filteredReports.length === 0) {
-      alert("No requisitions found for the selected period to generate statement.");
+      toast.warning("No Data Found", "No requisitions found for the selected period to generate statement.");
       return;
     }
 
@@ -633,22 +635,22 @@ export default function B2BRevenuePage() {
 
         <div className="table-responsive-container">
           {loading ? (
-            <div className="p-6 space-y-3 animate-pulse">
-              <div className="h-9 w-full bg-muted/40 rounded-lg mb-2" />
+            <div className="p-6 space-y-3 animate-fade-in">
+              <div className="h-9 w-full shimmer-gradient rounded-lg mb-2" />
               {[1, 2, 3, 4, 5, 6].map((i) => (
                 <div key={i} className="flex items-center justify-between py-3.5 border-b border-border/30 last:border-0 gap-4">
-                  <div className="h-4 w-24 bg-muted/70 rounded" />
-                  <div className="h-4 w-20 bg-muted/60 rounded" />
+                  <div className="h-4 w-24 shimmer-gradient rounded" />
+                  <div className="h-4 w-20 shimmer-gradient rounded" />
                   <div className="space-y-1 flex-1 max-w-[180px]">
-                    <div className="h-4 w-32 bg-muted/70 rounded" />
-                    <div className="h-3 w-20 bg-muted/50 rounded" />
+                    <div className="h-4 w-32 shimmer-gradient rounded" />
+                    <div className="h-3 w-20 shimmer-gradient rounded" />
                   </div>
-                  <div className="h-5 w-16 bg-muted/60 rounded-md" />
-                  <div className="h-4 w-16 bg-muted/70 rounded ml-auto" />
-                  <div className="h-4 w-16 bg-muted/60 rounded" />
-                  <div className="h-4 w-16 bg-muted/70 rounded" />
-                  <div className="h-5 w-14 bg-muted/60 rounded-full" />
-                  <div className="h-5 w-20 bg-muted/60 rounded-full" />
+                  <div className="h-5 w-16 shimmer-gradient rounded-md" />
+                  <div className="h-4 w-16 shimmer-gradient rounded ml-auto" />
+                  <div className="h-4 w-16 shimmer-gradient rounded" />
+                  <div className="h-4 w-16 shimmer-gradient rounded" />
+                  <div className="h-5 w-14 shimmer-gradient rounded-full" />
+                  <div className="h-5 w-20 shimmer-gradient rounded-full" />
                 </div>
               ))}
             </div>

@@ -18,6 +18,7 @@ import {
 import { SubscriptionTaxInvoiceSheet, type SubscriptionInvoiceData } from "@/components/subscription-tax-invoice";
 import { downloadSubscriptionTaxInvoicePdf } from "@/lib/download-invoice-pdf";
 import { submitPayuForm } from "@/lib/payu";
+import { useToast } from "@/components/ui/toast";
 
 interface LabData {
   id: string;
@@ -105,6 +106,7 @@ const VOLUME_TIERS = [
 ];
 
 function LabAccountContent() {
+  const toast = useToast();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<"SUBSCRIPTION" | "SMS" | "INVOICES" | "DISPATCH" | "CENTRE">("SUBSCRIPTION");
   const [lab, setLab] = useState<LabData | null>(null);
@@ -206,18 +208,40 @@ function LabAccountContent() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cachedLab = localStorage.getItem("lis_cached_lab");
+        const cachedCentre = localStorage.getItem("lis_cached_centre_profile");
+        if (cachedLab) {
+          const parsed = JSON.parse(cachedLab);
+          if (parsed && (parsed.name || parsed.id)) {
+            setLab(parsed);
+            setLoading(false);
+          }
+        }
+        if (cachedCentre) {
+          const parsed = JSON.parse(cachedCentre);
+          if (parsed) {
+            setCentreForm((prev) => ({ ...prev, ...parsed }));
+          }
+        }
+      } catch {}
+    }
     loadData();
   }, []);
 
   const loadData = async () => {
     try {
-      setLoading(true);
+      if (!lab) setLoading(true);
       const [labRes, invRes] = await Promise.all([
         fetchFromLaravel("/lab", { skipCache: true }),
         fetchFromLaravel("/lab/invoices", { skipCache: true }),
       ]);
 
       setLab(labRes);
+      try {
+        localStorage.setItem("lis_cached_lab", JSON.stringify(labRes));
+      } catch {}
       setInvoices(Array.isArray(invRes) ? invRes : []);
 
       const expired = isSubscriptionExpired(labRes, getStoredUser());
@@ -313,10 +337,11 @@ function LabAccountContent() {
 
       if (res && res.status === "success") {
         setDispatchSaveSuccess(true);
+        toast.success("Summary dispatch settings saved successfully!");
         setTimeout(() => setDispatchSaveSuccess(false), 4000);
       }
     } catch (err: any) {
-      alert(err.message || "Failed to save summary dispatch settings.");
+      toast.error("Failed to save summary dispatch settings", err.message || "");
     } finally {
       setSavingDispatchSettings(false);
     }
@@ -433,7 +458,7 @@ function LabAccountContent() {
   const handlePaySubscription = async (planType: "1year" | "6month") => {
     if (!isCentreSaved) {
       setActiveTab("CENTRE");
-      alert("Please complete and save your Diagnostic Centre details (Centre Name, Phone, and Address) under Centre & GST Profile first before purchasing a subscription plan.");
+      toast.warning("Profile Incomplete", "Please complete and save your Diagnostic Centre details (Centre Name, Phone, and Address) under Centre & GST Profile first before purchasing a subscription plan.");
       return;
     }
 
@@ -450,10 +475,10 @@ function LabAccountContent() {
       if (res && res.action_url && res.params) {
         submitPayuForm(res.action_url, res.params);
       } else {
-        alert(res?.error || res?.message || "Failed to initiate subscription payment session.");
+        toast.error("Payment Failed", res?.error || res?.message || "Failed to initiate subscription payment session.");
       }
     } catch (err: any) {
-      alert(err.message || "Failed to initiate payment with PayU.");
+      toast.error("Payment Error", err.message || "Failed to initiate payment with PayU.");
     } finally {
       setInitiatingPayment(null);
     }
@@ -463,7 +488,7 @@ function LabAccountContent() {
   const handlePayUsage = async () => {
     if (!isCentreSaved) {
       setActiveTab("CENTRE");
-      alert("Please complete and save your Diagnostic Centre details (Centre Name, Phone, and Address) under Centre & GST Profile first before paying usage settlements.");
+      toast.warning("Profile Incomplete", "Please complete and save your Diagnostic Centre details (Centre Name, Phone, and Address) under Centre & GST Profile first before paying usage settlements.");
       return;
     }
 
@@ -480,10 +505,10 @@ function LabAccountContent() {
       if (res && res.action_url && res.params) {
         submitPayuForm(res.action_url, res.params);
       } else {
-        alert(res?.error || res?.message || "Failed to initiate usage settlement payment.");
+        toast.error("Settlement Failed", res?.error || res?.message || "Failed to initiate usage settlement payment.");
       }
     } catch (err: any) {
-      alert(err.message || "Failed to initiate usage payment with PayU.");
+      toast.error("Payment Error", err.message || "Failed to initiate usage payment with PayU.");
     } finally {
       setInitiatingPayment(null);
     }
@@ -533,7 +558,7 @@ function LabAccountContent() {
       await downloadSubscriptionTaxInvoicePdf(mapped);
     } catch (e) {
       console.error("Direct invoice PDF download error:", e);
-      alert("Failed to download PDF. Please try again.");
+      toast.error("Download Error", "Failed to download PDF. Please try again.");
     } finally {
       setDownloadingInvoiceId(null);
     }
@@ -674,11 +699,12 @@ function LabAccountContent() {
         clearApiCache("/lab");
         window.dispatchEvent(new CustomEvent("centre-profile-updated", { detail: res }));
         setSaveSuccess(true);
+        toast.success("Diagnostic Centre profile updated successfully!");
         setTimeout(() => setSaveSuccess(false), 4000);
       }
     } catch (err: any) {
       console.error("Failed to update centre details:", err);
-      alert(err.message || "Failed to save centre details. Please check your connection.");
+      toast.error("Update Failed", err.message || "Failed to save centre details. Please check your connection.");
     } finally {
       setSavingCentre(false);
     }
@@ -691,11 +717,51 @@ function LabAccountContent() {
     return d.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
   };
 
-  if (loading) {
+  if (loading && !lab) {
     return (
-      <div className="py-24 flex flex-col items-center justify-center text-muted-foreground space-y-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm font-semibold">Loading Lab Account & Subscriptions...</p>
+      <div className="space-y-6 animate-fade-in pb-16">
+        {/* Header Shimmer */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
+          <div className="space-y-2">
+            <div className="h-4 w-32 rounded shimmer-gradient" />
+            <div className="h-7 w-64 rounded-lg shimmer-gradient" />
+            <div className="h-3 w-80 rounded shimmer-gradient" />
+          </div>
+          <div className="h-10 w-36 rounded-xl shimmer-gradient shrink-0" />
+        </div>
+
+        {/* Tab Pills Shimmer */}
+        <div className="flex items-center gap-2 p-1.5 bg-muted/50 rounded-2xl w-fit">
+          <div className="h-9 w-32 rounded-xl shimmer-gradient" />
+          <div className="h-9 w-36 rounded-xl shimmer-gradient" />
+          <div className="h-9 w-28 rounded-xl shimmer-gradient" />
+          <div className="h-9 w-32 rounded-xl shimmer-gradient" />
+        </div>
+
+        {/* 4 Stat Cards Shimmer */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="p-5 rounded-2xl border border-border/80 bg-card space-y-3 shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="h-3.5 w-24 rounded shimmer-gradient" />
+                <div className="h-8 w-8 rounded-lg shimmer-gradient" />
+              </div>
+              <div className="h-7 w-28 rounded-md shimmer-gradient" />
+              <div className="h-3 w-36 rounded shimmer-gradient" />
+            </div>
+          ))}
+        </div>
+
+        {/* Main Body Shimmer */}
+        <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-xs space-y-4">
+          <div className="h-5 w-48 rounded-md shimmer-gradient mb-2" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="h-12 rounded-xl shimmer-gradient" />
+            <div className="h-12 rounded-xl shimmer-gradient" />
+            <div className="h-12 rounded-xl shimmer-gradient" />
+            <div className="h-12 rounded-xl shimmer-gradient" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -837,7 +903,7 @@ function LabAccountContent() {
         <button
           onClick={() => {
             if (isExpired) {
-              alert("Your laboratory trial/subscription has expired. Please choose a subscription plan and complete payment via PayU first to unlock tax invoices.");
+              toast.warning("Subscription Expired", "Your laboratory trial/subscription has expired. Please choose a subscription plan and complete payment via PayU first to unlock tax invoices.");
               return;
             }
             if (!isCentreSaved) {
@@ -870,7 +936,7 @@ function LabAccountContent() {
         <button
           onClick={() => {
             if (isExpired) {
-              alert("Your laboratory trial/subscription has expired. Please choose a subscription plan and complete payment via PayU first.");
+              toast.warning("Subscription Expired", "Your laboratory trial/subscription has expired. Please choose a subscription plan and complete payment via PayU first.");
               return;
             }
             if (!isCentreSaved) {

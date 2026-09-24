@@ -8,11 +8,20 @@ import {
   Check
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
+import { useToast } from "@/components/ui/toast";
 
 export function PaymentGatewayTab() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const { success: toastSuccess, error: toastError } = useToast();
+  const setToast = React.useCallback((input: { text: string; type: "success" | "error" } | null) => {
+    if (!input) return;
+    if (input.type === "success") {
+      toastSuccess(input.text);
+    } else {
+      toastError(input.text);
+    }
+  }, [toastSuccess, toastError]);
 
   // Form State
   const [isEnabled, setIsEnabled] = useState(false);
@@ -26,12 +35,7 @@ export function PaymentGatewayTab() {
     loadSettings();
   }, []);
 
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 4500);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
+
 
   const loadSettings = async () => {
     try {
@@ -99,19 +103,6 @@ export function PaymentGatewayTab() {
 
   return (
     <div className="space-y-6">
-      {/* Toast Notification */}
-      {toast && (
-        <div
-          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-5 py-3 rounded-xl shadow-2xl text-xs font-bold transition-all animate-bounce ${
-            toast.type === "success"
-              ? "bg-emerald-600 text-white"
-              : "bg-destructive text-destructive-foreground"
-          }`}
-        >
-          {toast.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          <span>{toast.text}</span>
-        </div>
-      )}
 
       {/* Top Banner */}
       <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-xs relative overflow-hidden">

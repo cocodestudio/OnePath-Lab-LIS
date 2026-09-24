@@ -8,8 +8,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ReportSheet, type ReportSheetData, type PrintSettings } from "@/components/report-sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Edit, AlertCircle, Printer, AlertTriangle, Wallet, Loader2 } from "lucide-react";
+import { ArrowLeft, Edit, AlertCircle, Printer, AlertTriangle, Wallet, Loader2, Sparkles } from "lucide-react";
 import { PrintPreviewDialog } from "@/components/print-preview-dialog";
+import { AiReportGenerationModal } from "@/components/ai-report-generation-modal";
 import { fetchFromLaravel, getCleanLetterheadUrl, getStoredUser } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
 
@@ -34,6 +35,7 @@ export default function ReportDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDeducting, setIsDeducting] = useState(false);
+  const [isGeneratingSmartReport, setIsGeneratingSmartReport] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
 
   const isB2B = currentUser?.role === "B2B";
@@ -230,6 +232,25 @@ export default function ReportDetailPage() {
             </Link>
           )}
           <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (report?.id) {
+                setIsGeneratingSmartReport(true);
+              }
+            }}
+            disabled={isGeneratingSmartReport}
+            className="h-9 gap-1.5 cursor-pointer text-xs font-bold border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 shadow-2xs"
+          >
+            {isGeneratingSmartReport ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
+            )}
+            <span>{isGeneratingSmartReport ? "Synthesizing AI Report..." : "AI Smart Report"}</span>
+          </Button>
+          <Button
             onClick={triggerPrint}
             disabled={isDeducting}
             size="sm"
@@ -359,6 +380,18 @@ export default function ReportDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ✨ AI Smart Report Generation Modal */}
+      {report?.id && (
+        <AiReportGenerationModal
+          isOpen={isGeneratingSmartReport}
+          patientName={report?.patient?.name}
+          customId={report?.customId || (report as any)?.custom_id}
+          onComplete={() => {
+            router.push(`/dashboard/reports/${report.id}/smart-report`);
+          }}
+        />
       )}
     </div>
   );

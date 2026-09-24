@@ -162,6 +162,18 @@ export default function BillingPage() {
   useEffect(() => {
     const user = getStoredUser();
     if (user?.role) setCurrentUserRole(user.role);
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_bills");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setBills(parsed);
+            setLoading(false);
+          }
+        }
+      } catch {}
+    }
     fetchBills();
     fetchAvailableTests();
     try {
@@ -182,6 +194,9 @@ export default function BillingPage() {
       const billsList = Array.isArray(data) ? data : (data?.data || []);
       setBills(billsList);
       if (labRes) setLabData(labRes);
+      try {
+        localStorage.setItem("lis_cached_bills", JSON.stringify(billsList));
+      } catch {}
     } catch (err) {
       console.error("Error fetching bills:", err);
       if (bills.length === 0) setBills([]);
@@ -632,12 +647,36 @@ export default function BillingPage() {
             </thead>
             <tbody className="divide-y divide-border/60">
               {loading ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-muted-foreground">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary mb-2" />
-                    <span>Loading billing records…</span>
-                  </td>
-                </tr>
+                Array.from({ length: 7 }).map((_, idx) => (
+                  <tr key={idx} className="animate-fade-in">
+                    <td className="py-3.5 px-4">
+                      <div className="h-4 w-24 rounded shimmer-gradient mb-1" />
+                      <div className="h-3 w-16 rounded shimmer-gradient" />
+                    </td>
+                    <td className="py-3.5 px-4 space-y-1">
+                      <div className="h-4 w-36 rounded shimmer-gradient" />
+                      <div className="h-3 w-20 rounded shimmer-gradient" />
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="h-4 w-44 rounded shimmer-gradient" />
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="h-4 w-16 rounded shimmer-gradient ml-auto" />
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="h-4 w-16 rounded shimmer-gradient ml-auto" />
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="h-4 w-16 rounded shimmer-gradient ml-auto" />
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      <div className="h-5 w-16 rounded-full shimmer-gradient mx-auto" />
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="h-7 w-20 rounded-lg shimmer-gradient ml-auto" />
+                    </td>
+                  </tr>
+                ))
               ) : currentRows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-16 text-center text-muted-foreground">

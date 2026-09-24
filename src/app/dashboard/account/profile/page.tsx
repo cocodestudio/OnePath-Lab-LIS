@@ -12,6 +12,7 @@ import { fetchFromLaravel, getStoredUser, updateStoredUser } from "@/lib/api-cli
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 
 interface UserProfile {
   id: number;
@@ -38,7 +39,15 @@ function ProfileContent() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [savingField, setSavingField] = useState(false);
-  const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const { success: toastSuccess, error: toastError } = useToast();
+  const setToastMessage = React.useCallback((input: { text: string; type: "success" | "error" } | null) => {
+    if (!input) return;
+    if (input.type === "success") {
+      toastSuccess(input.text);
+    } else {
+      toastError(input.text);
+    }
+  }, [toastSuccess, toastError]);
 
   // Password reset OTP modal state
   const [isResetOpen, setIsResetOpen] = useState(false);
@@ -55,6 +64,13 @@ function ProfileContent() {
 
 
   useEffect(() => {
+    const stored = getStoredUser();
+    if (stored) {
+      setProfile(stored);
+      setEditName(stored.name || "");
+      setEditPhone(stored.phone || "");
+      setLoading(false);
+    }
     loadProfile();
   }, []);
 
@@ -198,11 +214,28 @@ function ProfileContent() {
     }
   };
 
-  if (loading) {
+  if (loading && !profile) {
     return (
-      <div className="py-24 flex flex-col items-center justify-center text-muted-foreground space-y-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm font-semibold">Loading Profile & Account Settings...</p>
+      <div className="w-full max-w-4xl mx-auto space-y-6 pb-16 px-4 sm:px-6 animate-fade-in">
+        <div className="flex items-center gap-8 border-b border-border pb-3.5">
+          <div className="h-6 w-24 rounded-lg shimmer-gradient" />
+          <div className="h-6 w-24 rounded-lg shimmer-gradient" />
+        </div>
+        <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-xs flex items-center gap-5">
+          <div className="w-20 h-20 rounded-full shimmer-gradient shrink-0" />
+          <div className="space-y-2 flex-1">
+            <div className="h-5 w-48 rounded-md shimmer-gradient" />
+            <div className="h-3.5 w-64 rounded shimmer-gradient" />
+            <div className="h-5 w-20 rounded-full shimmer-gradient" />
+          </div>
+        </div>
+        <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-xs space-y-4">
+          <div className="h-5 w-36 rounded-md shimmer-gradient" />
+          <div className="space-y-3">
+            <div className="h-10 rounded-xl shimmer-gradient" />
+            <div className="h-10 rounded-xl shimmer-gradient" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -212,19 +245,6 @@ function ProfileContent() {
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6 pb-16 px-4 sm:px-6 overflow-x-hidden animate-fade-in">
-      {/* Toast */}
-      {toastMessage && (
-        <div
-          className={`fixed bottom-6 right-6 z-[999999] px-4 py-3 rounded-xl shadow-lg border flex items-center gap-2.5 text-xs font-bold animate-slide-in ${
-            toastMessage.type === "success"
-              ? "bg-emerald-600 text-white border-emerald-500"
-              : "bg-destructive text-white border-destructive"
-          }`}
-        >
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          <span>{toastMessage.text}</span>
-        </div>
-      )}
 
       {/* Header Tabs */}
       <div className="flex items-center gap-8 border-b border-border text-sm font-semibold">

@@ -17,6 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
+import { useToast } from "@/components/ui/toast";
 
 const TIMING_OPTIONS = [
   "Morning (10:00 AM – 01:00 PM)",
@@ -60,6 +61,7 @@ const formatSafeDate = (dateVal?: string, full: boolean = false) => {
 };
 
 function SupportContent() {
+  const toast = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeView, setActiveView] = useState<SupportView>("HUB");
@@ -162,6 +164,7 @@ function SupportContent() {
       });
 
       setSubmitSuccess(`Your ticket ${res.customId || res.custom_id || ""} has been submitted successfully!`);
+      toast.success("Support Ticket Raised", `Ticket #${res.customId || res.custom_id || ""} submitted successfully!`);
       setSummary("");
       setDescription("");
       setSelectedTags([]);
@@ -172,7 +175,9 @@ function SupportContent() {
         setActiveView("HISTORY");
       }, 1500);
     } catch (err: any) {
-      setSubmitError(err.message || "Failed to submit support ticket. Please try again.");
+      const errMsg = err.message || "Failed to submit support ticket. Please try again.";
+      setSubmitError(errMsg);
+      toast.error("Submission Failed", errMsg);
     } finally {
       setSubmitting(false);
     }

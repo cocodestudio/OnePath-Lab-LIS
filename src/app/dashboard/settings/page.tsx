@@ -22,6 +22,7 @@ import { PaymentGatewayTab } from "@/components/payment-gateway-tab";
 import { MachineIntegrationTab } from "@/components/machine-integration-tab";
 import { AbhaIntegrationSection } from "@/components/abha-integration-section";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import {
   ALL_DESIGNATIONS,
@@ -343,7 +344,15 @@ function SettingsContent() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const { success: toastSuccess, error: toastError, toast: showGlobalToast } = useToast();
+  const setToast = React.useCallback((input: { text: string; type: "success" | "error" } | null) => {
+    if (!input) return;
+    if (input.type === "success") {
+      toastSuccess(input.text);
+    } else {
+      toastError(input.text);
+    }
+  }, [toastSuccess, toastError]);
   const [showWithLetterheadPreview, setShowWithLetterheadPreview] = useState(true);
   const [activePreset, setActivePreset] = useState<"standard" | "compact" | "preprinted" | "custom">("standard");
   const [previewScale, setPreviewScale] = useState<number>(0.55);
@@ -559,12 +568,25 @@ function SettingsContent() {
   };
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cachedSettings = localStorage.getItem("lis_cached_report_settings");
+        const cachedLetterhead = localStorage.getItem("lis_cached_letterhead");
+        if (cachedSettings) {
+          const parsed = normalizeReportSettings(JSON.parse(cachedSettings));
+          setLayoutSettings(parsed);
+          setIsLoading(false);
+        }
+        if (cachedLetterhead) {
+          setSettings(prev => ({ ...prev, bgImage: cachedLetterhead, printWithLetterhead: true }));
+        }
+      } catch {}
+    }
     fetchSettings();
   }, []);
 
   const fetchSettings = async () => {
     try {
-      setIsLoading(true);
       const lab = await fetchFromLaravel("/lab");
       if (lab) {
         let rawBg = lab.printBgImage || lab.print_bg_image || null;
@@ -593,6 +615,9 @@ function SettingsContent() {
           parsedLayout.defaultDesignation = lab.default_designation || lab.defaultDesignation;
         }
         setLayoutSettings(parsedLayout);
+        try {
+          localStorage.setItem("lis_cached_report_settings", JSON.stringify(parsedLayout));
+        } catch {}
 
         const parsedBill = normalizeBillSettings(lab.bill_settings || lab.billSettings);
         setBillSettings(parsedBill);
@@ -864,6 +889,9 @@ function SettingsContent() {
       clearApiCache();
       try {
         localStorage.setItem("lis_cached_report_settings", JSON.stringify(payloadLayoutSettings));
+        if (payloadLayoutSettings.intakeFields) {
+          localStorage.setItem("lis_intake_fields", JSON.stringify(payloadLayoutSettings.intakeFields));
+        }
         window.dispatchEvent(new Event("lis_settings_updated"));
       } catch {}
 
@@ -991,6 +1019,10 @@ function SettingsContent() {
   const [intakeCategoryFilter, setIntakeCategoryFilter] = useState<string>("ALL");
 
   const handleToggleIntakeField = (key: string, property: "enabled" | "required" | "showOnReport") => {
+    const isCore = key === "phone" || key === "address" || key === "name" || key === "ageGender" || key === "refDoctor";
+    if (property === "enabled" && isCore) {
+      return; // Core intake demographic fields cannot be disabled on the intake form
+    }
     setLayoutSettings(prev => {
       const currentList = prev.intakeFields && prev.intakeFields.length > 0 ? prev.intakeFields : DEFAULT_INTAKE_FIELDS;
       let nextOrdering = [...prev.patientDetailsOrder];
@@ -1124,28 +1156,39 @@ function SettingsContent() {
 
   if (isLoading) {
     return (
-      <div className="py-24 flex flex-col items-center justify-center text-muted-foreground space-y-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm font-semibold">Loading Lab, Report & Bill Designer...</p>
+      <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-fade-in">
+        {/* Header Shimmer */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
+          <div className="space-y-2">
+            <div className="h-7 w-64 rounded-lg shimmer-gradient" />
+            <div className="h-3.5 w-96 rounded shimmer-gradient" />
+          </div>
+          <div className="h-10 w-36 rounded-xl shimmer-gradient shrink-0" />
+        </div>
+        {/* Tabs Shimmer */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <div key={i} className="h-9 w-32 rounded-xl shimmer-gradient shrink-0" />
+          ))}
+        </div>
+        {/* Content & Preview Layout Shimmer */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-6 space-y-4">
+            <div className="h-44 rounded-2xl border border-border/80 bg-card p-6 shimmer-card-pulse" />
+            <div className="h-60 rounded-2xl border border-border/80 bg-card p-6 shimmer-card-pulse" />
+          </div>
+          <div className="lg:col-span-6">
+            <div className="h-[600px] rounded-2xl border border-border/80 bg-card p-6 shimmer-card-pulse flex items-center justify-center">
+              <div className="w-3/4 h-5/6 rounded-xl shimmer-gradient opacity-60" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-fade-in relative">
-      {/* Toast Notification */}
-      {toast && (
-        <div
-          className={`fixed bottom-6 right-6 z-[999999] px-5 py-3.5 rounded-xl shadow-2xl border flex items-center gap-3 text-xs font-bold animate-slide-in ${
-            toast.type === "success"
-              ? "bg-emerald-600 text-white border-emerald-500 shadow-emerald-900/30"
-              : "bg-destructive text-white border-destructive shadow-destructive/30"
-          }`}
-        >
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          <span>{toast.text}</span>
-        </div>
-      )}
 
       {/* Sticky Header Bar with Sub-Tabs and Save Button */}
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md pb-4 pt-1 border-b border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1902,15 +1945,23 @@ function SettingsContent() {
                       {/* 3 Interactive Option Checkboxes */}
                       <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/60 text-[11px]">
                         {/* 1. Show on Registration Form */}
-                        <label className="flex items-center gap-1.5 cursor-pointer select-none font-semibold text-foreground">
-                          <input
-                            type="checkbox"
-                            checked={field.enabled}
-                            onChange={() => handleToggleIntakeField(field.key, "enabled")}
-                            className="h-3.5 w-3.5 rounded border-border text-primary accent-primary cursor-pointer shrink-0"
-                          />
-                          <span className="truncate">Form</span>
-                        </label>
+                        {(() => {
+                          const isCore = field.key === "phone" || field.key === "address" || field.key === "name" || field.key === "ageGender" || field.key === "refDoctor";
+                          return (
+                            <label className={`flex items-center gap-1.5 select-none font-semibold ${
+                              isCore ? "cursor-default text-muted-foreground" : "cursor-pointer text-foreground"
+                            }`} title={isCore ? "Core intake field (Always active on registration form)" : "Toggle field on form"}>
+                              <input
+                                type="checkbox"
+                                checked={isCore ? true : field.enabled}
+                                disabled={isCore}
+                                onChange={() => !isCore && handleToggleIntakeField(field.key, "enabled")}
+                                className="h-3.5 w-3.5 rounded border-border text-primary accent-primary cursor-pointer shrink-0 disabled:opacity-70"
+                              />
+                              <span className="truncate">Form {isCore && "🔒"}</span>
+                            </label>
+                          );
+                        })()}
 
                         {/* 2. Mandatory Validation */}
                         <label className={`flex items-center gap-1.5 select-none font-semibold ${
@@ -2042,7 +2093,7 @@ function SettingsContent() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-xs sm:text-sm text-foreground">
-                    Print Each Test on a New Separate Page (Har Test Alag Single Page Par)
+                    Print Each Test on a Separate Page (1 Test Per Page)
                   </span>
                   {layoutSettings.separatePagePerTest && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
@@ -2051,7 +2102,7 @@ function SettingsContent() {
                   )}
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-                  Jab ye option tick hoga, toh har test (jaise CBC, LFT, KFT) aur uska clinical interpretation apne alag single page par print hoga. Agar kisi test ka interpretation bada hai toh agle page par continue hoga, aur agla test uske baad naye page se shuru hoga. By default ye option disabled rehta hai (reports continuous flow me aati hain).
+                  When enabled, each major diagnostic test panel (such as CBC, LFT, KFT) and its clinical interpretation starts on a new page. Multi-page interpretations flow naturally across pages, and subsequent tests begin cleanly on a new page. By default, tests flow continuously on the same page.
                 </p>
               </div>
             </label>

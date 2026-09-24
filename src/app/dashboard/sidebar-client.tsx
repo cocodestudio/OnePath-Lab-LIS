@@ -5,12 +5,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, Users, FileText, Receipt, LogOut, Menu, X,
+  LayoutDashboard, Users, FileText, Receipt, Menu, X,
   FlaskConical, Settings, HelpCircle, LifeBuoy, Clock, TrendingUp,
   Briefcase, ChevronDown, Wallet, Lock, Sparkles, ShieldAlert, Gift
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getStoredUser, logout, fetchFromLaravel } from "@/lib/api-client";
+import { getStoredUser, fetchFromLaravel } from "@/lib/api-client";
 import { isSubscriptionExpired } from "@/lib/subscription";
 
 interface NavChild {
@@ -22,6 +21,7 @@ interface NavItem {
   name: string;
   href?: string;
   icon: any;
+  badge?: string;
   children?: NavChild[];
 }
 
@@ -47,6 +47,7 @@ const navigation: NavItem[] = [
       { name: "Rate List", href: "/dashboard/ratelist" },
     ],
   },
+  { name: "Smart Report", href: "/dashboard/smart-report", icon: Sparkles, badge: "AI" },
   { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
   { name: "Refer & Earn", href: "/dashboard/refer", icon: Gift },
@@ -59,12 +60,23 @@ export default function Sidebar() {
   const [user, setUser] = useState<any>(null);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const [isAiGuideOpen, setIsAiGuideOpen] = useState(false);
   const [isLocked, setIsLocked] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       return sessionStorage.getItem("lis_subscription_locked") === "true";
     }
     return false;
   });
+
+  useEffect(() => {
+    const handleState = (e: any) => {
+      if (e?.detail?.isOpen !== undefined) {
+        setIsAiGuideOpen(e.detail.isOpen);
+      }
+    };
+    window.addEventListener("ai-guide-state-changed", handleState);
+    return () => window.removeEventListener("ai-guide-state-changed", handleState);
+  }, []);
 
   useEffect(() => {
     const checkLock = async () => {
@@ -379,6 +391,11 @@ export default function Sidebar() {
                   }`}
                 />
                 <span className="flex-1">{item.name}</span>
+                {item.badge && (
+                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide bg-emerald-600 text-white shadow-2xs">
+                    {item.badge}
+                  </span>
+                )}
               </div>
               {isLocked && <Lock className="h-3.5 w-3.5 text-rose-500/70" />}
             </Link>
@@ -388,27 +405,53 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="p-3.5 space-y-2.5 border-t border-border/60">
-        <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/40 border border-border/50">
-          <Avatar className="h-9 w-9 shrink-0">
-            {userAvatar && <AvatarImage src={userAvatar} alt={labDisplayName} className="object-cover" />}
-            <AvatarFallback className="gradient-primary text-primary-foreground text-[11px] font-bold">
-              {labDisplayName.slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-foreground truncate" title={labDisplayName}>{labDisplayName}</p>
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground truncate">
-              {isB2B ? "B2B Partner Lab" : isCollectionCenter ? "Collection Center" : (user?.role || "Staff")}
-            </p>
+        {/* LIS AI Assistant Button (Moved from bottom-right to bottom-left sidebar) */}
+        <button
+          type="button"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("toggle-ai-guide"));
+            if (typeof window !== "undefined" && window.innerWidth < 768) {
+              setIsOpen(false);
+            }
+          }}
+          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs group active:scale-[0.98] ${
+            isAiGuideOpen
+              ? "bg-primary text-primary-foreground border-primary shadow-sm"
+              : "bg-emerald-500/10 hover:bg-emerald-500/15 border-emerald-500/25 dark:border-emerald-500/35 text-foreground"
+          }`}
+          title="OnePath LIS AI Assistant & Guide"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-xs transition-transform group-hover:scale-105 ${
+                isAiGuideOpen
+                  ? "bg-white/20 text-white"
+                  : "bg-emerald-600 text-white"
+              }`}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+            </div>
+            <div className="flex flex-col text-left leading-tight min-w-0">
+              <span className="text-[12.5px] font-bold truncate">LIS AI Assistant</span>
+              <span
+                className={`text-[10px] font-medium truncate ${
+                  isAiGuideOpen ? "text-primary-foreground/85" : "text-muted-foreground"
+                }`}
+              >
+                {isAiGuideOpen ? "Click to Close" : "Interactive Lab Guide"}
+              </span>
+            </div>
           </div>
-          <button
-            onClick={() => logout()}
-            title="Sign out"
-            className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0 cursor-pointer"
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 transition-colors ${
+              isAiGuideOpen
+                ? "bg-white/20 text-white"
+                : "bg-emerald-600 text-white shadow-2xs group-hover:bg-emerald-700"
+            }`}
           >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+            {isAiGuideOpen ? "Active" : "Ask AI"}
+          </span>
+        </button>
       </div>
     </aside>
   );

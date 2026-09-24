@@ -7,14 +7,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { 
-  Printer, FileText, CheckCircle2, ChevronUp, ChevronDown, 
+import { useRouter } from "next/navigation";
+import {
+  Printer, FileText, CheckCircle2, ChevronUp, ChevronDown,
   Trash2, Eye, EyeOff, Save, Check, Loader2, Sparkles, Sliders, BookOpen,
   GripVertical, Layers, ChevronRight, Phone, Send, Download
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import { ReportSheet, PaginatedReportPreview, type PrintSettings, type ReportTest } from "@/components/report-sheet";
 import { WhatsAppQrDialog } from "@/components/whatsapp-qr-dialog";
+import { AiReportGenerationModal } from "@/components/ai-report-generation-modal";
 import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
 import { downloadNativePdf, getNativePdfBase64 } from "@/lib/pdf-report-downloader";
@@ -37,6 +39,7 @@ interface TopLevelBlock {
 const A4_W = 794;
 
 export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }: PrintPreviewDialogProps) {
+  const router = useRouter();
   const toast = useToast();
   const [useCustomLetterpad, setUseCustomLetterpad] = useState(true);
   const [showInterpretation, setShowInterpretation] = useState(true);
@@ -46,6 +49,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
   });
   const [excludedMainTests, setExcludedMainTests] = useState<string[]>([]);
   const [previewScale, setPreviewScale] = useState(0.8);
+  const [isGeneratingAiReport, setIsGeneratingAiReport] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
   const [mobileTab, setMobileTab] = useState<"preview" | "controls">("preview");
 
@@ -81,7 +85,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
 
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollListRef = useRef<HTMLDivElement>(null);
-  const printRef   = useRef<HTMLDivElement>(null);
+  const printRef = useRef<HTMLDivElement>(null);
 
   /* ── Build Top-Level Blocks from results ─────────────────── */
   const buildBlocksFromResults = (results: ReportTest[]): TopLevelBlock[] => {
@@ -157,8 +161,11 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
   /* ── reset & sync on open ─────────────────────────────────── */
   useEffect(() => {
     if (open && report) {
-      setUseCustomLetterpad(true);
+      const rs = report.lab?.report_settings || report.lab?.reportSettings;
+      const initialLetterhead = Boolean(report.lab?.printWithLetterhead ?? report.lab?.print_with_letterhead ?? true);
+      setUseCustomLetterpad(initialLetterhead);
       setShowInterpretation(true);
+      setSeparatePagePerTest(Boolean(rs?.separatePagePerTest));
       setExcludedMainTests([]);
       setHiddenBlockIds([]);
       setLayoutSavedSuccess(false);
@@ -175,12 +182,30 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
     if (!open) return;
     const update = () => {
       if (!containerRef.current) return;
-      const availW = containerRef.current.clientWidth - 80;
-      setPreviewScale(Math.min(1, availW / A4_W));
+      const cw = containerRef.current.clientWidth;
+      if (cw > 0) {
+        const availW = Math.max(300, cw - (window.innerWidth < 640 ? 20 : 64));
+        setPreviewScale(Math.min(1, Math.max(0.35, availW / A4_W)));
+      }
     };
+
     update();
+    const t1 = setTimeout(update, 50);
+    const t2 = setTimeout(update, 200);
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined" && containerRef.current) {
+      ro = new ResizeObserver(update);
+      ro.observe(containerRef.current);
+    }
+
     window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
   }, [open]);
 
   /* ── Drag & Drop Handlers with Auto-scroll ──────────── */
@@ -325,7 +350,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
       block.items.forEach(item => {
         let n = item.test.name;
         if (item.test.parent?.parent) n = item.test.parent.parent.name;
-        else if (item.test.parent)    n = item.test.parent.name;
+        else if (item.test.parent) n = item.test.parent.name;
 
         if (!excludedMainTests.includes(n)) {
           orderedResults.push(item);
@@ -357,7 +382,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
             }
           }
         }
-      } catch {}
+      } catch { }
     }
 
     return {
@@ -383,7 +408,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
     report.results.forEach((item: any) => {
       let n = item.test.name;
       if (item.test.parent?.parent) n = item.test.parent.parent.name;
-      else if (item.test.parent)    n = item.test.parent.name;
+      else if (item.test.parent) n = item.test.parent.name;
       names.add(n);
     });
     return Array.from(names);
@@ -401,8 +426,8 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
       bgImage,
       headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? 185,
       footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? 95,
-      marginLeft:   lab.printMarginLeft  ?? lab.print_margin_left  ?? 32,
-      marginRight:  lab.printMarginRight ?? lab.print_margin_right ?? 32,
+      marginLeft: lab.printMarginLeft ?? lab.print_margin_left ?? 32,
+      marginRight: lab.printMarginRight ?? lab.print_margin_right ?? 32,
     };
   }, [report, useCustomLetterpad]);
 
@@ -535,18 +560,16 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
               <button
                 type="button"
                 onClick={() => setMobileTab("preview")}
-                className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all ${
-                  mobileTab === "preview" ? "bg-background text-primary shadow-xs" : "text-muted-foreground"
-                }`}
+                className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all ${mobileTab === "preview" ? "bg-background text-primary shadow-xs" : "text-muted-foreground"
+                  }`}
               >
                 Preview Canvas
               </button>
               <button
                 type="button"
                 onClick={() => setMobileTab("controls")}
-                className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all ${
-                  mobileTab === "controls" ? "bg-background text-primary shadow-xs" : "text-muted-foreground"
-                }`}
+                className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all ${mobileTab === "controls" ? "bg-background text-primary shadow-xs" : "text-muted-foreground"
+                  }`}
               >
                 Reorder &amp; Controls
               </button>
@@ -577,7 +600,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
               ) : (
                 <>
                   <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current shrink-0" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
                   </svg>
                   <span>Send WhatsApp</span>
                 </>
@@ -620,7 +643,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
                   <Sliders className="h-3.5 w-3.5 text-primary" />
                   <span>Appearance & Sections</span>
                 </h3>
-                
+
                 {/* Letterhead Switch */}
                 <label className="flex items-start gap-3 p-3 border border-border rounded-xl cursor-pointer hover:bg-accent/40 transition-colors bg-background shadow-xs">
                   <Checkbox
@@ -667,7 +690,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
                       <span>Separate Page per Test</span>
                     </p>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Har test aur uska interpretation alag single page par start karega.
+                      Starts each test and its medical interpretation cleanly on a separate page.
                     </p>
                   </div>
                 </label>
@@ -685,7 +708,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
                   </span>
                 </div>
 
-                <div 
+                <div
                   ref={scrollListRef}
                   className="space-y-2 border border-border rounded-xl bg-background p-2 shadow-xs max-h-[380px] overflow-y-auto custom-scrollbar"
                 >
@@ -700,35 +723,33 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
                         onDragStart={(e) => handleDragStart(e, idx)}
                         onDragOver={(e) => handleDragOver(e, idx)}
                         onDrop={(e) => handleDrop(e, idx)}
-                        className={`rounded-lg border text-xs transition-all select-none ${
-                          draggedBlockIdx === idx
+                        className={`rounded-lg border text-xs transition-all select-none ${draggedBlockIdx === idx
                             ? "opacity-30 border-dashed border-primary bg-primary/5 scale-[0.98]"
-                            : isHidden 
-                            ? "bg-muted/40 border-dashed border-border/70 opacity-60" 
-                            : block.isGroup
-                            ? "bg-primary/5 border-primary/30 hover:border-primary/60 shadow-xs"
-                            : "bg-card border-border/80 hover:border-primary/40 shadow-xs"
-                        }`}
+                            : isHidden
+                              ? "bg-muted/40 border-dashed border-border/70 opacity-60"
+                              : block.isGroup
+                                ? "bg-primary/5 border-primary/30 hover:border-primary/60 shadow-xs"
+                                : "bg-card border-border/80 hover:border-primary/40 shadow-xs"
+                          }`}
                       >
                         {/* Block Header Row */}
                         <div className="flex items-center justify-between gap-2 p-2">
                           {/* Left: Drag Grip Handle, Sequence Badge & Title */}
                           <div className="flex items-center gap-2 min-w-0 flex-1">
                             {/* Drag Grip Handle */}
-                            <span 
+                            <span
                               className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground hover:text-foreground shrink-0 rounded transition-colors hover:bg-accent/60"
                               title="Hold and drag to reorder"
                             >
                               <GripVertical className="h-4 w-4" />
                             </span>
 
-                            <span className={`h-5 w-5 rounded-md flex items-center justify-center text-[10px] font-bold font-mono shrink-0 ${
-                              isHidden 
-                                ? "bg-muted text-muted-foreground" 
+                            <span className={`h-5 w-5 rounded-md flex items-center justify-center text-[10px] font-bold font-mono shrink-0 ${isHidden
+                                ? "bg-muted text-muted-foreground"
                                 : block.isGroup
-                                ? "bg-primary/20 text-primary font-extrabold"
-                                : "bg-primary/10 text-primary"
-                            }`}>
+                                  ? "bg-primary/20 text-primary font-extrabold"
+                                  : "bg-primary/10 text-primary"
+                              }`}>
                               {idx + 1}
                             </span>
 
@@ -744,13 +765,12 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
                                     <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                                   </button>
                                 )}
-                                <p className={`font-bold truncate text-[11.5px] leading-tight ${
-                                  isHidden 
-                                    ? "line-through text-muted-foreground" 
-                                    : block.isGroup 
-                                    ? "text-primary" 
-                                    : "text-foreground"
-                                }`} title={block.name}>
+                                <p className={`font-bold truncate text-[11.5px] leading-tight ${isHidden
+                                    ? "line-through text-muted-foreground"
+                                    : block.isGroup
+                                      ? "text-primary"
+                                      : "text-foreground"
+                                  }`} title={block.name}>
                                   {block.name}
                                 </p>
                               </div>
@@ -794,11 +814,10 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
                             <button
                               type="button"
                               onClick={() => toggleBlockVisibility(block.id)}
-                              className={`p-1 rounded cursor-pointer transition-colors ${
-                                isHidden
+                              className={`p-1 rounded cursor-pointer transition-colors ${isHidden
                                   ? "text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-950/40"
                                   : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                              }`}
+                                }`}
                               title={isHidden ? "Include in Report" : "Remove / Hide from Report"}
                             >
                               {isHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -845,7 +864,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
                           checked={!excludedMainTests.includes(testName)}
                           onCheckedChange={(checked) => {
                             if (checked) setExcludedMainTests(p => p.filter(t => t !== testName));
-                            else         setExcludedMainTests(p => [...p, testName]);
+                            else setExcludedMainTests(p => [...p, testName]);
                           }}
                         />
                         <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate select-none" title={testName}>
@@ -858,12 +877,35 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
               )}
 
             </div>
+
+            {/* ✨ Generate AI Smart Report Button (Bottom Left) */}
+            <div className="p-3 border-t border-border bg-background/60 shrink-0">
+              <Button
+                type="button"
+                onClick={() => {
+                  if (report?.id) {
+                    setIsGeneratingAiReport(true);
+                  }
+                }}
+                disabled={isGeneratingAiReport}
+                className="w-full h-11 relative overflow-hidden gap-2 font-bold text-xs bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 hover:from-sky-700 hover:via-indigo-700 hover:to-purple-700 text-white cursor-pointer shadow-md rounded-xl transition-all group disabled:opacity-75"
+              >
+                {isGeneratingAiReport ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                ) : (
+                  <Sparkles className="h-4 w-4 text-amber-300 animate-pulse group-hover:scale-110 transition-transform" />
+                )}
+                <span className="tracking-tight">
+                  {isGeneratingAiReport ? "Synthesizing AI Smart Report..." : "✨ Generate AI Smart Report"}
+                </span>
+              </Button>
+            </div>
           </div>
 
           {/* ── Preview Pane ── */}
           <div
             ref={containerRef}
-            className={`flex-1 overflow-auto sheet-pan-canvas bg-zinc-200 dark:bg-zinc-900/90 justify-center py-4 sm:py-8 px-2 sm:px-4 custom-scrollbar shadow-inner ${mobileTab === "preview" ? "flex" : "hidden md:flex"}`}
+            className={`flex-1 overflow-auto sheet-pan-canvas bg-zinc-200 dark:bg-zinc-900/90 justify-center items-start py-4 sm:py-8 px-2 sm:px-4 custom-scrollbar shadow-inner ${mobileTab === "preview" ? "flex" : "hidden md:flex"}`}
           >
             {printSettings && (
               <PaginatedReportPreview
@@ -973,6 +1015,15 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
           </DialogContent>
         </Dialog>
       </DialogContent>
+
+      <AiReportGenerationModal
+        isOpen={isGeneratingAiReport}
+        patientName={report?.patient?.name}
+        customId={report?.customId || report?.custom_id}
+        onComplete={() => {
+          router.push(`/dashboard/reports/${report.id}/smart-report`);
+        }}
+      />
     </Dialog>
   );
 }

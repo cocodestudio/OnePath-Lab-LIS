@@ -298,11 +298,29 @@ export default function Navbar() {
     router.push(targetLink);
   };
 
-  const clearAllNotifications = async () => {
+  const deleteNotification = async (id: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     try {
-      await fetchFromLaravel("/notifications/clear-all", { method: "DELETE" });
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+      await fetchFromLaravel(`/notifications/${id}`, { method: "DELETE" });
+    } catch (err) {
+      console.error("Failed to delete notification:", err);
+    }
+  };
+
+  const clearAllNotifications = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    try {
       setNotifications([]);
       setUnreadCount(0);
+      await fetchFromLaravel("/notifications/clear-all", { method: "DELETE" });
     } catch (err) {
       console.error("Failed to clear notifications:", err);
       setNotifications([]);
@@ -739,9 +757,19 @@ export default function Navbar() {
                           <p className="font-bold text-xs text-foreground truncate group-hover:text-primary transition-colors">
                             {notif.title}
                           </p>
-                          <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
-                            {timeStr}
-                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+                              {timeStr}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => deleteNotification(notif.id, e)}
+                              title="Delete notification"
+                              className="opacity-70 hover:opacity-100 p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all cursor-pointer"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
                         </div>
                         <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
                           {notif.message}
