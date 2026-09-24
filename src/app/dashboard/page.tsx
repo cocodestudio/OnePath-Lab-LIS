@@ -369,7 +369,7 @@ export default function DashboardOverviewPage() {
               <tbody>
                 {recentReports.length > 0 ? recentReports.map((rep) => {
                   const hasAbnormal = rep.results?.some((r) => r.isAbnormal);
-                  const testTypeString = rep.results?.map((r) => r.test.name).join(", ") || "Diagnostic Panel";
+                  const testTypeString = rep.results?.map((r) => r.test?.name || "Test").filter(Boolean).join(", ") || "Diagnostic Panel";
                   let pill = "bg-accent text-accent-foreground";
                   let statusLabel = rep.status === "PENDING" ? "In Review" : (rep.status === "FINAL" ? "Final" : (rep.status === "APPROVED" ? "Approved" : rep.status));
                   if (rep.status === "PENDING") pill = "bg-gold/15 text-gold";

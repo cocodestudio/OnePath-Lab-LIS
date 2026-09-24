@@ -45,9 +45,13 @@ function inlineElementImages(element: HTMLElement) {
   });
 }
 
+const inlinedImageCache = new Map<string, string>();
+let cachedStylesheetTags: string[] | null = null;
+let lastStylesheetFetch = 0;
+
 /**
  * Asynchronously inlines all images in the cloned element to Base64 data URLs.
- * Uses canvas when possible, and falls back to fetch(src) -> Blob -> Base64
+ * Uses cache and canvas when possible, and falls back to fetch(src) -> Blob -> Base64
  * to bypass CORS canvas taint on remote letterheads and signatures.
  */
 async function inlineElementImagesAsync(element: HTMLElement): Promise<void> {
@@ -57,6 +61,14 @@ async function inlineElementImagesAsync(element: HTMLElement): Promise<void> {
       try {
         const src = img.getAttribute("src") || img.src;
         if (!src || src.startsWith("data:")) return;
+
+        // Check memory cache first
+        if (inlinedImageCache.has(src)) {
+          const cached = inlinedImageCache.get(src)!;
+          img.src = cached;
+          img.setAttribute("src", cached);
+          return;
+        }
 
         // 1. Try canvas if image is already loaded and not tainted
         if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
@@ -69,6 +81,7 @@ async function inlineElementImagesAsync(element: HTMLElement): Promise<void> {
               ctx.drawImage(img, 0, 0);
               const dataUrl = canvas.toDataURL("image/png");
               if (dataUrl && dataUrl.startsWith("data:image/")) {
+                inlinedImageCache.set(src, dataUrl);
                 img.src = dataUrl;
                 img.setAttribute("src", dataUrl);
                 return;
@@ -90,6 +103,7 @@ async function inlineElementImagesAsync(element: HTMLElement): Promise<void> {
             reader.readAsDataURL(blob);
           });
           if (base64 && base64.startsWith("data:")) {
+            inlinedImageCache.set(src, base64);
             img.src = base64;
             img.setAttribute("src", base64);
           }
@@ -136,24 +150,32 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
 
   const styles: string[] = [];
 
-  // 1. Fetch and inline all external stylesheets directly from browser cache
-  const linkElements = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'));
-  await Promise.all(
-    linkElements.map(async (link) => {
-      if (!link.href) return;
-      try {
-        const res = await fetch(link.href, { cache: "force-cache" });
-        if (res.ok) {
-          const text = await res.text();
-          if (text && text.trim().length > 0) {
-            styles.push(`<style data-inlined="link" data-href="${link.href}">${text}</style>`);
-            return;
+  // 1. Fetch and inline all external stylesheets directly from browser cache (cached in memory)
+  if (cachedStylesheetTags && Date.now() - lastStylesheetFetch < 120000) {
+    styles.push(...cachedStylesheetTags);
+  } else {
+    const fetchedStyles: string[] = [];
+    const linkElements = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'));
+    await Promise.all(
+      linkElements.map(async (link) => {
+        if (!link.href) return;
+        try {
+          const res = await fetch(link.href, { cache: "force-cache" });
+          if (res.ok) {
+            const text = await res.text();
+            if (text && text.trim().length > 0) {
+              fetchedStyles.push(`<style data-inlined="link" data-href="${link.href}">${text}</style>`);
+              return;
+            }
           }
-        }
-      } catch {}
-      styles.push(link.outerHTML);
-    })
-  );
+        } catch {}
+        fetchedStyles.push(link.outerHTML);
+      })
+    );
+    cachedStylesheetTags = fetchedStyles;
+    lastStylesheetFetch = Date.now();
+    styles.push(...fetchedStyles);
+  }
 
   // 2. Collect all inline <style> tags
   document.querySelectorAll<HTMLStyleElement>("style").forEach((style) => {
@@ -475,34 +497,45 @@ export function prepareReportHtml(printContainer: HTMLElement): string {
  * Generates a native Vector PDF Blob using the Headless Chrome route.
  */
 export async function generateNativePdfBlob(html: string, filename: string): Promise<Blob> {
-  const res = await fetch("/api/reports/download-pdf", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ html, filename }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-  if (!res.ok) {
-    let errMessage = "Server returned an error generating PDF";
-    try {
-      const data = await res.json();
-      if (data?.error) errMessage = data.error;
-    } catch {
-      const text = await res.text();
-      if (text) errMessage = text;
+  try {
+    const res = await fetch("/api/reports/download-pdf", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ html, filename }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      let errMessage = "Server returned an error generating PDF";
+      try {
+        const data = await res.json();
+        if (data?.error) errMessage = data.error;
+      } catch {
+        const text = await res.text();
+        if (text) errMessage = text;
+      }
+      throw new Error(errMessage);
     }
-    throw new Error(errMessage);
-  }
 
-  return await res.blob();
+    return await res.blob();
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
 }
 
 /**
  * Pristine Client-Side PDF Generation Engine
- * Uses an isolated sandbox mounted directly to document.body,
+ * Uses an isolated sandbox placed strictly behind the document,
  * integer 2x DPI rendering, and lossless PNG compression so all table borders
- * and lines remain 100% straight and balanced without server or network dependencies.
+ * and lines remain 100% straight and balanced without any visual popups or screen jumping.
  */
 export async function generatePristineClientPdf(printContainer: HTMLElement, filename?: string): Promise<Blob> {
   const { default: jsPDF } = await import("jspdf");
@@ -538,15 +571,11 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
   // Ensure all web fonts are fully loaded
   if (typeof document !== "undefined" && document.fonts) {
     try {
-      await document.fonts.ready;
+      await Promise.race([
+        document.fonts.ready,
+        new Promise((r) => setTimeout(r, 400)),
+      ]);
     } catch {}
-  }
-
-  // Save current window scroll coordinates and scroll to (0,0) to eliminate html2canvas coordinate displacement bug
-  const origScrollX = typeof window !== "undefined" ? window.scrollX || window.pageXOffset || 0 : 0;
-  const origScrollY = typeof window !== "undefined" ? window.scrollY || window.pageYOffset || 0 : 0;
-  if (typeof window !== "undefined") {
-    window.scrollTo(0, 0);
   }
 
   const pdf = new jsPDF({
@@ -556,7 +585,7 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
     compress: true,
   });
 
-  // Top-layer isolated sandbox placed strictly at (0,0) with exact A4 dimensions
+  // Isolated sandbox placed strictly BEHIND the viewport (negative z-index) so it never flashes on screen
   const sandbox = document.createElement("div");
   sandbox.style.setProperty("position", "fixed", "important");
   sandbox.style.setProperty("top", "0px", "important");
@@ -567,7 +596,7 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
   sandbox.style.setProperty("min-height", "1123px", "important");
   sandbox.style.setProperty("overflow", "hidden", "important");
   sandbox.style.setProperty("background-color", "#ffffff", "important");
-  sandbox.style.setProperty("z-index", "999999", "important");
+  sandbox.style.setProperty("z-index", "-99999", "important");
   sandbox.style.setProperty("pointer-events", "none", "important");
   sandbox.style.setProperty("opacity", "1", "important");
   sandbox.style.setProperty("margin", "0px", "important");
@@ -627,8 +656,8 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
       sandbox.innerHTML = "";
       sandbox.appendChild(clone);
 
-      // Short delay for layout paint
-      await new Promise((r) => setTimeout(r, 60));
+      // Brief delay for layout paint
+      await new Promise((r) => setTimeout(r, 20));
 
       const canvas = await html2canvas(clone, {
         scale: 2, // Exact integer 2x DPI for crisp 1588x2246 resolution
@@ -654,9 +683,6 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
     if (sandbox.parentNode) {
       sandbox.parentNode.removeChild(sandbox);
     }
-    if (typeof window !== "undefined") {
-      window.scrollTo(origScrollX, origScrollY);
-    }
   }
 
   return pdf.output("blob");
@@ -675,8 +701,7 @@ export async function downloadNativePdf({ printContainer, filename }: GeneratePd
   try {
     const html = await prepareReportHtmlAsync(printContainer);
     pdfBlob = await generateNativePdfBlob(html, safeFilename);
-  } catch (serverErr) {
-    console.warn("Server-side vector PDF engine unavailable or timed out, executing pristine client fallback:", serverErr);
+  } catch (_serverErr) {
     pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
   }
 
@@ -707,8 +732,7 @@ export async function getNativePdfBase64({ printContainer, filename }: GenerateP
   try {
     const html = await prepareReportHtmlAsync(printContainer);
     pdfBlob = await generateNativePdfBlob(html, safeFilename);
-  } catch (serverErr) {
-    console.warn("Server-side PDF engine unavailable for WhatsApp, executing pristine client fallback:", serverErr);
+  } catch (_serverErr) {
     pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
   }
 

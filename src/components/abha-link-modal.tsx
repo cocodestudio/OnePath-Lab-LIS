@@ -687,7 +687,7 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone, de
               <div className="bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/50 rounded-xl p-2.5 text-left text-[11px] text-blue-700 dark:text-blue-300 flex items-start gap-2">
                 <Sparkles className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" />
                 <div className="leading-snug">
-                  <strong>OTP Guidance:</strong> Agar mobile par 2 OTP aaye hain (ek UIDAI/Aadhaar aur ek NHA), toh pehle <strong>UIDAI (Aadhaar)</strong> wala 6-digit OTP yahan enter karein.
+                  <strong>OTP Guidance:</strong> If you received two OTPs (one from UIDAI/Aadhaar and one from NHA), please enter the 6-digit <strong>UIDAI (Aadhaar)</strong> OTP here first.
                 </div>
               </div>
 
@@ -799,7 +799,7 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone, de
               <div className="bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/50 rounded-xl p-2.5 text-left text-[11px] text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
                 <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
                 <div className="leading-snug">
-                  <strong>Final Step:</strong> Yeh second OTP NHA (National Health Authority) ka hai. Ise enter karte hi patient ka official <strong>14-digit ABHA Number</strong> generate ho jayega.
+                  <strong>Final Step:</strong> This second OTP is from NHA (National Health Authority). Entering it will immediately generate and link the patient's official <strong>14-digit ABHA Number</strong>.
                 </div>
               </div>
 

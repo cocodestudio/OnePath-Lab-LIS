@@ -275,8 +275,6 @@ export default function PublicReportVerificationPage() {
       });
     } catch (err: any) {
       console.error("Public QR PDF download error:", err);
-      // Graceful fallback to browser print if server request fails
-      handleNativePrint();
     } finally {
       setIsDownloading(false);
     }

@@ -144,28 +144,66 @@ export function normalizeBillSettings(raw: any): BillLayoutSettings {
   };
 
   if (raw.heading) res.heading = raw.heading;
-  if (raw.headerImage !== undefined) res.headerImage = raw.headerImage || raw.header_image || null;
-  if (raw.footerImage !== undefined) res.footerImage = raw.footerImage || raw.footer_image || null;
-  if (raw.size) res.size = raw.size;
-  if (raw.headerHeight !== undefined) res.headerHeight = Number(raw.headerHeight ?? raw.header_height ?? 100);
-  if (raw.footerHeight !== undefined) res.footerHeight = Number(raw.footerHeight ?? raw.footer_height ?? 60);
+  const hImg = raw.headerImage ?? raw.header_image;
+  if (hImg !== undefined) res.headerImage = hImg || null;
 
-  if (raw.showBarcode !== undefined) res.showBarcode = Boolean(raw.showBarcode ?? raw.show_barcode);
-  if (raw.showPhone !== undefined) res.showPhone = Boolean(raw.showPhone ?? raw.show_phone);
-  if (raw.showPackageTests !== undefined) res.showPackageTests = Boolean(raw.showPackageTests ?? raw.show_package_tests);
-  if (raw.showB2BModal !== undefined) res.showB2BModal = Boolean(raw.showB2BModal ?? raw.show_b2b_modal);
-  if (raw.showQrCode !== undefined) res.showQrCode = Boolean(raw.showQrCode ?? raw.show_qr_code);
-  if (raw.showBilledBy !== undefined) res.showBilledBy = Boolean(raw.showBilledBy ?? raw.show_billed_by);
-  if (raw.showPaymentBreakdown !== undefined) res.showPaymentBreakdown = Boolean(raw.showPaymentBreakdown ?? raw.show_payment_breakdown);
-  if (raw.showSampleColumn !== undefined) res.showSampleColumn = Boolean(raw.showSampleColumn ?? raw.show_sample_column);
-  if (raw.showSampleCollectedBy !== undefined) res.showSampleCollectedBy = Boolean(raw.showSampleCollectedBy ?? raw.show_sample_collected_by);
-  if (raw.showPincode !== undefined) res.showPincode = Boolean(raw.showPincode ?? raw.show_pincode);
-  if (raw.showDistrict !== undefined) res.showDistrict = Boolean(raw.showDistrict ?? raw.show_district);
-  if (raw.showTown !== undefined) res.showTown = Boolean(raw.showTown ?? raw.show_town);
-  if (raw.showCollectionCenter !== undefined) res.showCollectionCenter = Boolean(raw.showCollectionCenter ?? raw.show_collection_center);
-  if (raw.showSecondReferral !== undefined) res.showSecondReferral = Boolean(raw.showSecondReferral ?? raw.show_second_referral);
-  if (raw.showHfrId !== undefined) res.showHfrId = Boolean(raw.showHfrId ?? raw.show_hfr_id);
-  if (raw.showTestCode !== undefined) res.showTestCode = Boolean(raw.showTestCode ?? raw.show_test_code);
+  const fImg = raw.footerImage ?? raw.footer_image;
+  if (fImg !== undefined) res.footerImage = fImg || null;
+
+  if (raw.size) res.size = raw.size;
+  const hHeight = raw.headerHeight ?? raw.header_height;
+  if (hHeight !== undefined && hHeight !== null && hHeight !== "") res.headerHeight = Number(hHeight);
+
+  const fHeight = raw.footerHeight ?? raw.footer_height;
+  if (fHeight !== undefined && fHeight !== null && fHeight !== "") res.footerHeight = Number(fHeight);
+
+  const showBarcode = raw.showBarcode ?? raw.show_barcode;
+  if (showBarcode !== undefined) res.showBarcode = Boolean(showBarcode);
+
+  const showPhone = raw.showPhone ?? raw.show_phone;
+  if (showPhone !== undefined) res.showPhone = Boolean(showPhone);
+
+  const showPackageTests = raw.showPackageTests ?? raw.show_package_tests;
+  if (showPackageTests !== undefined) res.showPackageTests = Boolean(showPackageTests);
+
+  const showB2BModal = raw.showB2BModal ?? raw.show_b2b_modal;
+  if (showB2BModal !== undefined) res.showB2BModal = Boolean(showB2BModal);
+
+  const showQrCode = raw.showQrCode ?? raw.show_qr_code;
+  if (showQrCode !== undefined) res.showQrCode = Boolean(showQrCode);
+
+  const showBilledBy = raw.showBilledBy ?? raw.show_billed_by;
+  if (showBilledBy !== undefined) res.showBilledBy = Boolean(showBilledBy);
+
+  const showPaymentBreakdown = raw.showPaymentBreakdown ?? raw.show_payment_breakdown;
+  if (showPaymentBreakdown !== undefined) res.showPaymentBreakdown = Boolean(showPaymentBreakdown);
+
+  const showSampleColumn = raw.showSampleColumn ?? raw.show_sample_column;
+  if (showSampleColumn !== undefined) res.showSampleColumn = Boolean(showSampleColumn);
+
+  const showSampleCollectedBy = raw.showSampleCollectedBy ?? raw.show_sample_collected_by;
+  if (showSampleCollectedBy !== undefined) res.showSampleCollectedBy = Boolean(showSampleCollectedBy);
+
+  const showPincode = raw.showPincode ?? raw.show_pincode;
+  if (showPincode !== undefined) res.showPincode = Boolean(showPincode);
+
+  const showDistrict = raw.showDistrict ?? raw.show_district;
+  if (showDistrict !== undefined) res.showDistrict = Boolean(showDistrict);
+
+  const showTown = raw.showTown ?? raw.show_town;
+  if (showTown !== undefined) res.showTown = Boolean(showTown);
+
+  const showCollectionCenter = raw.showCollectionCenter ?? raw.show_collection_center;
+  if (showCollectionCenter !== undefined) res.showCollectionCenter = Boolean(showCollectionCenter);
+
+  const showSecondReferral = raw.showSecondReferral ?? raw.show_second_referral;
+  if (showSecondReferral !== undefined) res.showSecondReferral = Boolean(showSecondReferral);
+
+  const showHfrId = raw.showHfrId ?? raw.show_hfr_id;
+  if (showHfrId !== undefined) res.showHfrId = Boolean(showHfrId);
+
+  const showTestCode = raw.showTestCode ?? raw.show_test_code;
+  if (showTestCode !== undefined) res.showTestCode = Boolean(showTestCode);
 
   if (raw.margins) {
     res.margins = {
@@ -195,8 +233,9 @@ export function normalizeBillSettings(raw: any): BillLayoutSettings {
     };
   }
 
-  if (raw.termsAndConditions !== undefined) {
-    res.termsAndConditions = raw.termsAndConditions ?? raw.terms_and_conditions ?? "";
+  const tc = raw.termsAndConditions ?? raw.terms_and_conditions;
+  if (tc !== undefined) {
+    res.termsAndConditions = tc ?? "";
   }
 
   if (Array.isArray(raw.signatures)) {

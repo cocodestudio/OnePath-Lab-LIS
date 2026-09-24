@@ -49,7 +49,7 @@ import {
   type AbnormalParameterAnalysis,
 } from "@/lib/smart-report-engine";
 import { useReactToPrint } from "react-to-print";
-import { getNativePdfBase64 } from "@/lib/pdf-report-downloader";
+import { downloadNativePdf, getNativePdfBase64 } from "@/lib/pdf-report-downloader";
 
 export default function SmartReportGeneratedPage() {
   const router = useRouter();
@@ -64,6 +64,9 @@ export default function SmartReportGeneratedPage() {
 
   // Zoom & Preview state
   const [zoomScale, setZoomScale] = useState<number>(0.85);
+
+  // PDF download state
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   // WhatsApp state
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
@@ -218,8 +221,28 @@ export default function SmartReportGeneratedPage() {
     },
   });
 
-  const handleDownloadPdf = () => {
-    handlePrint();
+  const handleDownloadPdf = async () => {
+    if (!reportContainerRef.current) return;
+    setIsDownloadingPdf(true);
+    toast.info("Preparing PDF", "Generating exact high-resolution vector PDF...");
+
+    try {
+      const pName = (report?.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const rCode = (report?.customId || "Report").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `AI_SmartReport_${rCode}_${pName}.pdf`;
+
+      await downloadNativePdf({
+        printContainer: reportContainerRef.current,
+        filename,
+      });
+
+      toast.success("Downloaded", `${filename} downloaded successfully!`);
+    } catch (err: any) {
+      console.error("Smart Report direct PDF download error:", err);
+      toast.error("Download Error", err?.message || "Failed to generate report PDF.");
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
   // Intercept Ctrl+P / Cmd+P to trigger Clean Report Print (Approach 1)
@@ -568,16 +591,32 @@ export default function SmartReportGeneratedPage() {
             )}
           </Button>
 
-          {/* Action 2: Download PDF / Print (Approach 1) */}
+          {/* Action 2: Download PDF (Direct Native Vector Engine) */}
+          <Button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={isDownloadingPdf}
+            className="h-10 px-4 gap-2 font-bold text-xs bg-emerald-700 hover:bg-emerald-800 text-white cursor-pointer shadow-md rounded-xl transition-all"
+            title="Download PDF"
+          >
+            {isDownloadingPdf ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            <span>{isDownloadingPdf ? "Downloading..." : "Download PDF"}</span>
+          </Button>
+
+          {/* Action 3: Print Report */}
           <Button
             type="button"
             onClick={() => handlePrint()}
-            className="h-10 px-4 gap-2 font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer shadow-md rounded-xl transition-all"
-            title="Download PDF or Print (Ctrl+P)"
+            className="h-10 px-3.5 gap-1.5 font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer shadow-md rounded-xl transition-all"
+            title="Print Report (Ctrl+P)"
           >
             <Printer className="h-4 w-4" />
-            <span>Download PDF / Print</span>
-            <span className="text-[10px] bg-primary-foreground/20 px-1.5 py-0.5 rounded font-mono font-medium hidden sm:inline">
+            <span className="hidden sm:inline">Print</span>
+            <span className="text-[10px] bg-primary-foreground/20 px-1.5 py-0.5 rounded font-mono font-medium hidden md:inline">
               Ctrl+P
             </span>
           </Button>

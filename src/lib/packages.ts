@@ -154,10 +154,12 @@ export function resolvePackageTestIds(pkg: LabPackage, availableTests: any[] = [
     }
   }
 
-  // 4. Any raw IDs that are already valid UUID format
-  for (const tid of rawIds) {
-    if (uuidRegex.test(tid) && !resolvedIds.includes(tid)) {
-      resolvedIds.push(tid);
+  // 4. Any raw IDs that are already valid UUID format (only fallback if availableTests was empty)
+  if (!Array.isArray(availableTests) || availableTests.length === 0) {
+    for (const tid of rawIds) {
+      if (uuidRegex.test(tid) && !resolvedIds.includes(tid)) {
+        resolvedIds.push(tid);
+      }
     }
   }
 

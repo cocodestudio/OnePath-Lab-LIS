@@ -55,7 +55,8 @@ export function logout(reason?: string) {
   if (typeof window !== "undefined") {
     sessionStorage.removeItem("lis_subscription_locked");
   }
-  document.cookie = "lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax; Secure;";
+  const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";
+  document.cookie = `lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax${isSecure ? "; Secure" : ""};`;
   if (reason === "suspended") {
     window.location.href = "/login?suspended=true";
   } else {

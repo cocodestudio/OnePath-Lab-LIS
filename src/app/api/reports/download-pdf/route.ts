@@ -111,6 +111,18 @@ export async function POST(req: NextRequest) {
       "--no-first-run",
       "--no-zygote",
       "--font-render-hinting=none",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--disable-sync",
+      "--disable-default-apps",
+      "--no-default-browser-check",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-breakpad",
+      "--disable-component-extensions-with-background-pages",
+      "--disable-ipc-flooding-protection",
+      "--mute-audio",
+      "--hide-scrollbars",
     ];
 
     try {
@@ -143,18 +155,11 @@ export async function POST(req: NextRequest) {
       deviceScaleFactor: 2,
     });
 
-    // Load full HTML content with network stabilization
-    try {
-      await page.setContent(html, {
-        waitUntil: ["domcontentloaded", "networkidle0"],
-        timeout: 25000,
-      });
-    } catch {
-      await page.setContent(html, {
-        waitUntil: "domcontentloaded",
-        timeout: 10000,
-      });
-    }
+    // Load full HTML content with fast DOM stabilization (all assets already inlined)
+    await page.setContent(html, {
+      waitUntil: "domcontentloaded",
+      timeout: 12000,
+    });
 
     // Ensure all compiled Next.js styles from local server disk are injected
     const localCss = getLocalStaticCss();
@@ -162,27 +167,17 @@ export async function POST(req: NextRequest) {
       await page.addStyleTag({ content: localCss });
     }
 
-    // Wait for web fonts and all pending images to complete layout paint
+    // Quick wait for font rendering
     await page.evaluate(async () => {
       if (document.fonts) {
         try {
-          await document.fonts.ready;
+          await Promise.race([
+            document.fonts.ready,
+            new Promise((r) => setTimeout(r, 600)),
+          ]);
         } catch {}
       }
-      const imgs = Array.from(document.images);
-      if (imgs.length > 0) {
-        await Promise.all(
-          imgs.map((img) => {
-            if (img.complete) return Promise.resolve();
-            return new Promise<void>((resolve) => {
-              img.onload = () => resolve();
-              img.onerror = () => resolve();
-              setTimeout(resolve, 3000);
-            });
-          })
-        );
-      }
-      await new Promise((r) => setTimeout(r, 60));
+      await new Promise((r) => setTimeout(r, 30));
     });
 
     // Export pure vector PDF matching A4 exactly (210mm x 297mm)

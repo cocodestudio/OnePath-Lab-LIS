@@ -152,8 +152,8 @@ export default function Navbar() {
           setTodaySales(`₹${val.toLocaleString("en-IN")}`);
         }
       }
-    } catch (err) {
-      console.error("Failed to load lab/sales navbar info:", err);
+    } catch (_err) {
+      // Silently catch background polling errors to maintain a pristine console
     }
   };
 
@@ -261,8 +261,8 @@ export default function Navbar() {
 
       setNotifications(list);
       setUnreadCount(unread);
-    } catch (err) {
-      console.error("Failed to load notifications:", err);
+    } catch (_err) {
+      // Silently catch background polling errors to maintain a pristine console
     }
   };
 

@@ -33,8 +33,7 @@ export function WhatsAppGatewayTab() {
       } else {
         setQrCodeData(null);
       }
-    } catch (err: any) {
-      console.error("Failed to check WhatsApp status:", err);
+    } catch (_err: any) {
       if (!silent) {
         toast.error("Connection Error", "Unable to connect to WhatsApp Gateway service.");
       }
@@ -49,17 +48,17 @@ export function WhatsAppGatewayTab() {
     checkStatus();
   }, [checkStatus]);
 
-  // Auto polling while waiting for QR scan
+  // Auto polling only when QR code is actively pending scan
   useEffect(() => {
-    if (statusData?.is_connected) return;
+    if (statusData?.is_connected || !qrCodeData) return;
 
     const interval = setInterval(() => {
       setAutoRefreshCount((c) => c + 1);
       checkStatus(true);
-    }, 6000);
+    }, 8000);
 
     return () => clearInterval(interval);
-  }, [statusData?.is_connected, checkStatus]);
+  }, [statusData?.is_connected, qrCodeData, checkStatus]);
 
   const isConnected = !!statusData?.is_connected;
   const rawStatus = (statusData?.status || "UNKNOWN").toUpperCase();

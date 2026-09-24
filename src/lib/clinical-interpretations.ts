@@ -184,7 +184,6 @@ export function getClinicalInterpretation(
     normalized.includes('CBC') || 
     normalized.includes('COMPLETE BLOOD') || 
     normalized.includes('HAEMATOLOGY') || 
-    normalized.includes('HEPATOLOGY') ||
     normalized.includes('CELL COUNTER') ||
     catNormalized.includes('HAEMATOLOGY') ||
     catNormalized.includes('HEMATOLOGY')
@@ -200,7 +199,13 @@ export function getClinicalInterpretation(
     return DEFAULT_INTERPRETATIONS.LIPID;
   }
 
-  if (normalized.includes('LFT') || normalized.includes('LIVER FUNCTION')) {
+  if (
+    normalized.includes('LFT') || 
+    normalized.includes('LIVER FUNCTION') || 
+    normalized.includes('HEPATOLOGY') ||
+    catNormalized.includes('HEPATOLOGY') ||
+    catNormalized.includes('LIVER')
+  ) {
     return DEFAULT_INTERPRETATIONS.LFT;
   }
 
