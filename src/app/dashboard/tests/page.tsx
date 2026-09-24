@@ -181,10 +181,36 @@ export interface SubTestState {
 
 export default function TestMasterPage() {
   const toast = useToast();
-  const [tests, setTests] = useState<Test[]>([]);
+  const [tests, setTests] = useState<Test[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_tests");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+    return [];
+  });
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_tests");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return false;
+          }
+        }
+      } catch {}
+    }
+    return true;
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTest, setEditingTest] = useState<Test | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Test | null>(null);
@@ -268,18 +294,6 @@ export default function TestMasterPage() {
   }, [dynamicCategories]);
 
   useEffect(() => { 
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem("lis_cached_tests");
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setTests(parsed);
-            setLoading(false);
-          }
-        }
-      } catch {}
-    }
     fetchTests(); 
     fetchFromLaravel("/lab")
       .then(data => setLabProfile(data))
@@ -298,7 +312,7 @@ export default function TestMasterPage() {
         try {
           localStorage.setItem("lis_cached_tests", JSON.stringify(data));
         } catch {}
-      } else {
+      } else if (isForce) {
         setTests([]);
       }
     } catch (err) {
@@ -1145,7 +1159,7 @@ export default function TestMasterPage() {
       }
       setDialogOpen(false);
       setEditingTest(null);
-      await fetchTests();
+      await fetchTests(true);
     } catch (err: any) {
       console.error("Save test error:", err);
       setError(err.message || "Failed to save test. Please check all fields.");
@@ -1162,7 +1176,7 @@ export default function TestMasterPage() {
       await fetchFromLaravel(`/tests/${deleteTarget.id}`, { method: "DELETE" });
       toast.success(`Deleted ${deleteTarget.name}`);
       setDeleteTarget(null);
-      fetchTests();
+      fetchTests(true);
     } catch (err: any) {
       toast.error(err.message || "Failed to delete test");
     } finally {
@@ -2765,7 +2779,7 @@ export default function TestMasterPage() {
           open={samplePreviewOpen}
           onOpenChange={setSamplePreviewOpen}
           report={sampleReportData}
-          onLayoutSaved={fetchTests}
+          onLayoutSaved={() => fetchTests(true)}
         />
       )}
     </div>
