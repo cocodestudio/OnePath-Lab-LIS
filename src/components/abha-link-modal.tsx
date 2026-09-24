@@ -54,11 +54,12 @@ interface AbhaLinkModalProps {
   onOpenChange: (open: boolean) => void;
   onVerified: (patient: AbhaVerifiedPatient) => void;
   defaultPhone?: string;
+  defaultName?: string;
 }
 
-export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone }: AbhaLinkModalProps) {
-  // Wizard steps: 1 = Input, 2 = OTP, 3 = Verified Card
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone, defaultName }: AbhaLinkModalProps) {
+  // Wizard steps: 1 = Input, 2 = Aadhaar OTP, "2B" = NHA Mobile OTP (for new users), 3 = Verified Card
+  const [step, setStep] = useState<1 | 2 | "2B" | 3>(1);
 
   // Mode: AADHAAR or MOBILE
   const [authType, setAuthType] = useState<"AADHAAR" | "MOBILE">("AADHAAR");
@@ -76,9 +77,13 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone }: 
   const input2Ref = useRef<HTMLInputElement>(null);
   const input3Ref = useRef<HTMLInputElement>(null);
 
-  // OTP state
+  // OTP state (Aadhaar UIDAI OTP)
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // NHA Mobile Verification OTP state (for new ABHA accounts)
+  const [nhaOtp, setNhaOtp] = useState(["", "", "", "", "", ""]);
+  const nhaOtpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // State
   const [loading, setLoading] = useState(false);
@@ -102,6 +107,7 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone }: 
       setPart3("");
       setMobileNumber(defaultPhone ? defaultPhone.replace(/\D/g, "").slice(-10) : "");
       setOtp(["", "", "", "", "", ""]);
+      setNhaOtp(["", "", "", "", "", ""]);
       setVerifiedPatient(null);
       setIsSandbox(false);
       setTimeout(() => input1Ref.current?.focus(), 150);
@@ -204,11 +210,11 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone }: 
     }
   };
 
-  // Step 2: Verify OTP
+  // Step 2: Verify Aadhaar OTP (UIDAI)
   const handleVerifyOtp = async () => {
     const fullOtp = otp.join("");
     if (fullOtp.length !== 6) {
-      setError("Please enter the complete 6-digit OTP.");
+      setError("Please enter the complete 6-digit Aadhaar OTP.");
       return;
     }
 
@@ -223,11 +229,81 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone }: 
 
     try {
       const effectiveMobile = mobileNumber.replace(/\D/g, "") || defaultPhone?.replace(/\D/g, "") || "";
-      const res = await fetchFromLaravel("/abha/verify-otp", {
+      const res = await fetchFromLaravel<any>("/abha/verify-otp", {
         method: "POST",
         body: JSON.stringify({
           txn_id: txnId,
           otp: fullOtp,
+          mobile: effectiveMobile || undefined,
+          patient_name: defaultName || undefined,
+        }),
+      });
+
+      if (res && res.status === "need_nha_otp") {
+        // NHA Mobile Verification OTP required for new ABHA registration
+        setStep("2B");
+        setNhaOtp(["", "", "", "", "", ""]);
+        if (res.patient_data?.phone) {
+          setMaskedMobile(res.patient_data.phone);
+        }
+        setTimeout(() => nhaOtpRefs.current[0]?.focus(), 200);
+      } else if (res && res.is_verified && res.patient_data) {
+        setVerifiedPatient(res.patient_data);
+        setIsSandbox(Boolean(res.is_sandbox));
+        setStep(3);
+      } else {
+        setError(res?.message || "Invalid Aadhaar OTP entered. If you received 2 OTPs, please ensure you entered the UIDAI OTP.");
+      }
+    } catch (err: any) {
+      setError(err?.message || "Error verifying OTP with ABDM Gateway.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Step 2B: Handle NHA OTP change
+  const handleNhaOtpChange = (index: number, val: string) => {
+    const digit = val.replace(/\D/g, "").slice(-1);
+    const newOtp = [...nhaOtp];
+    newOtp[index] = digit;
+    setNhaOtp(newOtp);
+    setError(null);
+
+    if (digit && index < 5) {
+      nhaOtpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleNhaOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !nhaOtp[index] && index > 0) {
+      nhaOtpRefs.current[index - 1]?.focus();
+    }
+  };
+
+  // Step 2B: Verify NHA Mobile OTP and Mint Official ABHA Card
+  const handleVerifyNhaOtp = async () => {
+    const fullNhaOtp = nhaOtp.join("");
+    if (fullNhaOtp.length !== 6) {
+      setError("Please enter the complete 6-digit NHA Mobile OTP.");
+      return;
+    }
+
+    if (!txnId) {
+      setError("Session expired. Please restart the verification.");
+      setStep(1);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const effectiveMobile = mobileNumber.replace(/\D/g, "") || defaultPhone?.replace(/\D/g, "") || "";
+      const res = await fetchFromLaravel<any>("/abha/verify-nha-otp", {
+        method: "POST",
+        body: JSON.stringify({
+          txn_id: txnId,
+          otp: fullNhaOtp,
           mobile: effectiveMobile || undefined,
         }),
       });
@@ -237,10 +313,10 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone }: 
         setIsSandbox(Boolean(res.is_sandbox));
         setStep(3);
       } else {
-        setError(res?.message || "Invalid OTP entered. Please try again.");
+        setError(res?.message || "Invalid NHA OTP entered. Please check the SMS received from NHA / ABDM.");
       }
     } catch (err: any) {
-      setError(err?.message || "Error verifying OTP with ABDM.");
+      setError(err?.message || "Error verifying NHA OTP with ABDM.");
     } finally {
       setLoading(false);
     }
@@ -310,38 +386,43 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone }: 
             </div>
           </div>
 
-          {/* Stepper Dots (1 -> 2 -> 3) */}
-          <div className="flex items-center gap-1.5">
-            <div
-              className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                step >= 1
-                  ? "bg-blue-600 text-white"
-                  : "bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-slate-400"
-              }`}
-            >
-              1
-            </div>
-            <div className={`w-3 h-0.5 ${step >= 2 ? "bg-blue-600" : "bg-slate-200 dark:bg-zinc-800"}`} />
-            <div
-              className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                step >= 2
-                  ? "bg-blue-600 text-white"
-                  : "bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-slate-400"
-              }`}
-            >
-              2
-            </div>
-            <div className={`w-3 h-0.5 ${step >= 3 ? "bg-blue-600" : "bg-slate-200 dark:bg-zinc-800"}`} />
-            <div
-              className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                step === 3
-                  ? "bg-emerald-600 text-white"
-                  : "bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-slate-400"
-              }`}
-            >
-              ✓
-            </div>
-          </div>
+          {/* Stepper Dots (1 -> 2 / 2B -> 3) */}
+          {(() => {
+            const stepNum = step === 1 ? 1 : (step === 2 || step === "2B") ? 2 : 3;
+            return (
+              <div className="flex items-center gap-1.5">
+                <div
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    stepNum >= 1
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-slate-400"
+                  }`}
+                >
+                  1
+                </div>
+                <div className={`w-3 h-0.5 ${stepNum >= 2 ? "bg-blue-600" : "bg-slate-200 dark:bg-zinc-800"}`} />
+                <div
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    stepNum >= 2
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-slate-400"
+                  }`}
+                >
+                  {step === "2B" ? "2B" : "2"}
+                </div>
+                <div className={`w-3 h-0.5 ${stepNum >= 3 ? "bg-blue-600" : "bg-slate-200 dark:bg-zinc-800"}`} />
+                <div
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    step === 3
+                      ? "bg-emerald-600 text-white"
+                      : "bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-slate-400"
+                  }`}
+                >
+                  ✓
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Modal Body */}
@@ -602,6 +683,14 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone }: 
                 ))}
               </div>
 
+              {/* 2-OTP Hint for Users */}
+              <div className="bg-blue-50/90 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/50 rounded-xl p-2.5 text-left text-[11px] text-blue-700 dark:text-blue-300 flex items-start gap-2">
+                <Sparkles className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" />
+                <div className="leading-snug">
+                  <strong>OTP Guidance:</strong> Agar mobile par 2 OTP aaye hain (ek UIDAI/Aadhaar aur ek NHA), toh pehle <strong>UIDAI (Aadhaar)</strong> wala 6-digit OTP yahan enter karein.
+                </div>
+              </div>
+
               {error && (
                 <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 text-xs space-y-2">
                   <div className="flex items-center gap-2 font-medium">
@@ -663,6 +752,92 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone }: 
                     <>
                       <CheckCircle2 className="h-4 w-4" />
                       <span>Verify &amp; Link ABHA</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* =========================================================================
+              STEP 2B: NHA MOBILE VERIFICATION OTP (FOR NEW UNREGISTERED PATIENTS)
+          ========================================================================= */}
+          {step === "2B" && (
+            <div className="space-y-4">
+              <div className="text-center space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 text-xs font-bold mb-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Aadhaar e-KYC Verified</span>
+                </div>
+                <h4 className="font-bold text-base text-slate-900 dark:text-white">
+                  Enter NHA Mobile OTP
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+                  NHA sent a verification OTP to <strong className="text-slate-800 dark:text-slate-200">{maskedMobile}</strong> to generate the new 14-digit ABHA Card.
+                </p>
+              </div>
+
+              {/* 6 Digit NHA OTP Inputs */}
+              <div className="flex items-center justify-center gap-2 py-2">
+                {nhaOtp.map((digit, idx) => (
+                  <input
+                    key={idx}
+                    ref={(el) => {
+                      nhaOtpRefs.current[idx] = el;
+                    }}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleNhaOtpChange(idx, e.target.value)}
+                    onKeyDown={(e) => handleNhaOtpKeyDown(idx, e)}
+                    className="w-11 h-12 text-center font-mono font-bold text-lg rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-zinc-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all shadow-2xs"
+                  />
+                ))}
+              </div>
+
+              <div className="bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-900/50 rounded-xl p-2.5 text-left text-[11px] text-emerald-800 dark:text-emerald-300 flex items-start gap-2">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+                <div className="leading-snug">
+                  <strong>Final Step:</strong> Yeh second OTP NHA (National Health Authority) ka hai. Ise enter karte hi patient ka official <strong>14-digit ABHA Number</strong> generate ho jayega.
+                </div>
+              </div>
+
+              {error && (
+                <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 font-medium">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              {/* Back to Step 2 */}
+              <div className="flex items-center justify-between px-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-medium cursor-pointer"
+                >
+                  ← Back to Aadhaar OTP
+                </button>
+              </div>
+
+              {/* Verify NHA OTP Button */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={handleVerifyNhaOtp}
+                  disabled={loading || nhaOtp.join("").length !== 6}
+                  className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Generating ABHA Card with NHA...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="h-4 w-4" />
+                      <span>Generate &amp; Link Official ABHA Card</span>
                     </>
                   )}
                 </button>

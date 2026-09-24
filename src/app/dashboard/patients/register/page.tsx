@@ -4344,6 +4344,7 @@ function RegisterPatientPage() {
         onOpenChange={setIsAbhaModalOpen}
         onVerified={handleAbhaVerified}
         defaultPhone={phone}
+        defaultName={`${firstName} ${lastName}`.trim()}
       />
 
       {/* ABHA QR Poster Modal */}
