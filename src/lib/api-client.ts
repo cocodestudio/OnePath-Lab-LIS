@@ -185,18 +185,18 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
       const response = await fetch(`${apiBase}${cleanEndpoint}`, { ...options, headers });
 
       if (response.status === 401) {
-        if (!cleanEndpoint.includes("/abha/")) {
-          logout();
-          throw new Error("Session expired. Please log in again.");
+        if (cleanEndpoint.includes("/abha/")) {
+          // For ABHA endpoints, retry without Authorization header
+          const retryHeaders = { ...headers };
+          delete retryHeaders["Authorization"];
+          const retryRes = await fetch(`${apiBase}${cleanEndpoint}`, { ...options, headers: retryHeaders });
+          if (retryRes.ok) {
+            const retryText = await retryRes.text();
+            return retryText ? JSON.parse(retryText) : {};
+          }
         }
-        // For ABHA endpoints, retry without Authorization header
-        const retryHeaders = { ...headers };
-        delete retryHeaders["Authorization"];
-        const retryRes = await fetch(`${apiBase}${cleanEndpoint}`, { ...options, headers: retryHeaders });
-        if (retryRes.ok) {
-          const retryText = await retryRes.text();
-          return retryText ? JSON.parse(retryText) : {};
-        }
+        // Do NOT abruptly wipe token and force redirect on transient 401s so active user work is never lost
+        throw new Error("Authentication failed or session expired. Please verify your login.");
       }
 
       if (response.status === 402) {

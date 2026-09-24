@@ -85,7 +85,7 @@ export default function SubscriptionGate() {
           }
         }
       } catch (err: any) {
-        if (err?.message?.toLowerCase().includes("suspended")) {
+        if (err?.status === 403 && err?.message?.toLowerCase().includes("suspended")) {
           logout("suspended");
           return;
         }
@@ -106,10 +106,10 @@ export default function SubscriptionGate() {
 
     checkSubscription();
 
-    // 3. Real-time background heartbeat (every 10s) to detect admin suspension immediately
+    // 3. Background heartbeat (every 2 mins) to verify subscription without exhausting network/CPU
     const heartbeatInterval = setInterval(() => {
       checkSubscription();
-    }, 10000);
+    }, 120000);
 
     return () => {
       window.removeEventListener("subscription-expired", expiredHandler);

@@ -587,7 +587,7 @@ function SettingsContent() {
 
   const fetchSettings = async () => {
     try {
-      const lab = await fetchFromLaravel("/lab");
+      const lab = await fetchFromLaravel("/lab?include_letterhead=1");
       if (lab) {
         let rawBg = lab.printBgImage || lab.print_bg_image || null;
         if (!rawBg) {
@@ -858,10 +858,10 @@ function SettingsContent() {
         doctorSignatures: cleanedSignatures,
       };
 
+      // Lightweight payload: only send settings and margins. Letterhead image is already permanently stored on upload/delete.
       const updatedLab = await fetchFromLaravel("/lab/letterhead", {
         method: "POST",
         body: JSON.stringify({
-          print_bg_image: settings.bgImage,
           print_header_height: settings.headerHeight,
           print_footer_height: settings.footerHeight,
           print_margin_left: settings.marginLeft,

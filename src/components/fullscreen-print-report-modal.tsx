@@ -144,7 +144,7 @@ export function FullscreenPrintReportModal({
       );
       setSeparatePagePerTest(initialSetting);
 
-      fetchFromLaravel("/lab", { skipCache: true })
+      fetchFromLaravel("/lab?include_letterhead=1", { skipCache: true })
         .then((fresh) => {
           if (fresh) {
             setLiveLab(fresh);
