@@ -309,7 +309,7 @@ export default function TestMasterPage() {
   };
 
   const handleOpenSampleReport = (test: Test) => {
-    let currentLab = labProfile;
+    const currentLab = labProfile;
     let cachedSettings: any = null;
     let cachedLetterhead: string | null = null;
     if (typeof window !== "undefined") {
