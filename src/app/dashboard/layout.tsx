@@ -3,10 +3,12 @@ import Navbar from "./navbar";
 import SubscriptionGate from "@/components/subscription-gate";
 import { DashboardScroller } from "@/components/dashboard-scroller";
 import { AiGuideWidget } from "@/components/ai-guide-widget";
+import { DashboardAuthGuard } from "@/components/dashboard-auth-guard";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
+      <DashboardAuthGuard />
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Navbar />

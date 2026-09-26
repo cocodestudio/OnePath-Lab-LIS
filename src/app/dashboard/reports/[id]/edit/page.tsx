@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/toast";
-import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
+import { fetchFromLaravel, getCleanLetterheadUrl, getStoredUser } from "@/lib/api-client";
 import {
   FlaskConical, ArrowLeft, Loader2, CheckCircle2, AlertTriangle,
   User, AlertCircle, TrendingUp, History, ExternalLink, ClipboardList, Plus, Trash2,
@@ -1092,6 +1092,12 @@ export default function ResultEntryPage() {
   const [loadingAvailableTests, setLoadingAvailableTests] = useState(false);
 
   useEffect(() => {
+    const user = getStoredUser();
+    if (user && ["RECEPTIONIST", "COLLECTION_CENTER", "B2B"].includes(user.role)) {
+      toast.error("Access Denied", "Clinical result entry and approval are restricted to central lab administration.");
+      router.push("/dashboard/reports");
+      return;
+    }
     if (reportId) {
       fetchReport();
     }

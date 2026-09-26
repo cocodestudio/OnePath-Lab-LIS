@@ -67,9 +67,26 @@ export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
-  const [user, setUser] = useState<any>(null);
-  const isB2B = user?.role === "B2B";
-  const isCollectionCenter = user?.role === "COLLECTION_CENTER";
+  const [user, setUser] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("lis_user");
+        if (raw) return JSON.parse(raw);
+        const roleMatch = document.cookie.match(/(?:^|;\s*)lis_role=([^;]+)/);
+        if (roleMatch && roleMatch[1]) {
+          return { role: decodeURIComponent(roleMatch[1]) };
+        }
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const normalizedRole = (user?.role || "").toUpperCase().trim();
+  const isB2B = normalizedRole === "B2B";
+  const isCollectionCenter = normalizedRole === "COLLECTION_CENTER" || normalizedRole === "COLLECTION_CENTRE";
+  const isReceptionist = normalizedRole === "RECEPTIONIST";
+  const isAdmin = normalizedRole === "ADMIN" || normalizedRole === "PATHOLOGIST" || normalizedRole === "SUPER_ADMIN" || normalizedRole === "LAB_ADMIN";
 
   // Global search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -568,7 +585,7 @@ export default function Navbar() {
                               </p>
                             </div>
                             <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">
-                              {(isCollectionCenter || isB2B) ? "View Reports →" : "Enter Results →"}
+                              {(isCollectionCenter || isB2B || isReceptionist) ? "View Reports →" : "Enter Results →"}
                             </span>
                           </Link>
                         ))}
@@ -883,7 +900,15 @@ export default function Navbar() {
                 <div className="h-5 w-5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center text-[10px]">
                   ₹
                 </div>
-                <span>{isB2B ? "Today's B2B Sale :" : "My today's total :"}</span>
+                <span>
+                  {isB2B
+                    ? "Today's B2B Sale :"
+                    : isCollectionCenter
+                    ? "Today's Collection :"
+                    : isReceptionist
+                    ? "Today's Counter :"
+                    : "My today's total :"}
+                </span>
               </div>
               <div>
                 <span className="font-mono">{todaySales}</span>
@@ -902,7 +927,7 @@ export default function Navbar() {
                 </Link>
               </DropdownMenuItem>
 
-              {!isB2B && !isCollectionCenter && (
+              {isAdmin && (
                 <DropdownMenuItem asChild>
                   <Link
                     href="/dashboard/account/lab"
@@ -928,7 +953,10 @@ export default function Navbar() {
             {/* Logout */}
             <div className="p-2 border-t border-border/80 bg-muted/20">
               <DropdownMenuItem
-                onSelect={() => logout()}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  logout();
+                }}
                 className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
               >
                 <LogOut className="h-4 w-4" />

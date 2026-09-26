@@ -218,7 +218,7 @@ function getDummyReportWithSettings(layoutSettings: ReportLayoutSettings, printS
 
 function getDummyInvoiceWithSettings(billSettings: BillLayoutSettings): InvoiceData {
   return {
-    customId: "INV-2026-8801",
+    customId: "OPL-INV-100001",
     createdAt: new Date().toISOString(),
     total: 1450,
     discount: 150,
@@ -229,7 +229,8 @@ function getDummyInvoiceWithSettings(billSettings: BillLayoutSettings): InvoiceD
     billedBy: "Kavita (Billing Desk)",
     sampleCollectedBy: "Rahul (Phlebotomist)",
     collectionCenter: "City Center Branch",
-    reportId: "REP-2026-9999",
+    reportId: "OPL-100001",
+    packageName: "Comprehensive Health Checkup (Full Body)",
     patient: {
       customId: "PID-2026-8888",
       name: "Rajesh Kumar",
@@ -237,9 +238,17 @@ function getDummyInvoiceWithSettings(billSettings: BillLayoutSettings): InvoiceD
       age: 42,
       gender: "Male",
       refDoctor: "Dr. Ananya Sharma",
+      secondReferral: "Dr. Sandeep Verma",
       address: "45 MG Road, Connaught Place, New Delhi",
       aadhaarNo: "XXXX-XXXX-1234",
       insuranceNo: "HDFC-ERGO-9921",
+      hfrId: "HFR-DEL-9812",
+      uhid: "UHID-DEL-00912",
+      corporateName: "Tata Consultancy Services (TCS)",
+      vialBarcode: "OPL-V-98231",
+      abhaNumber: "91-4523-8890-1234",
+      abhaAddress: "rajesh.kumar@abdm",
+      ownerName: "Rajesh Kumar",
     },
     lab: {
       name: "OnePath Pathology Laboratory",
@@ -325,24 +334,61 @@ function SettingsContent() {
       ? "report-layout"
       : "letterhead"
   );
-  const [settings, setSettings] = useState<ExtendedPrintSettings>(defaultPrintSettings);
-  const [layoutSettings, setLayoutSettings] = useState<ReportLayoutSettings>(defaultReportLayoutSettings);
-  const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
-
-  useEffect(() => {
-    const tab = searchParams.get("tab");
-    if (tab && ["letterhead", "report-layout", "bills-layout", "machine-integration", "collection-centers", "payment-gateway"].includes(tab)) {
-      setActiveTab(tab as any);
-    } else if (tab === "abha" || tab === "abha-integration") {
-      setActiveTab("report-layout");
-      setTimeout(() => {
-        const el = document.getElementById("abha-integration");
-        el?.scrollIntoView({ behavior: "smooth" });
-      }, 300);
+  const [settings, setSettings] = useState<ExtendedPrintSettings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cachedPrint = localStorage.getItem("lis_cached_print_settings");
+        const cachedLetterhead = localStorage.getItem("lis_cached_letterhead");
+        if (cachedPrint) {
+          const parsed = JSON.parse(cachedPrint);
+          if (cachedLetterhead && !parsed.bgImage) parsed.bgImage = cachedLetterhead;
+          return parsed;
+        } else if (cachedLetterhead) {
+          return { ...defaultPrintSettings, bgImage: cachedLetterhead, printWithLetterhead: true };
+        }
+      } catch {}
     }
-  }, [searchParams]);
+    return defaultPrintSettings;
+  });
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [layoutSettings, setLayoutSettings] = useState<ReportLayoutSettings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_report_settings");
+        if (cached) {
+          return normalizeReportSettings(JSON.parse(cached));
+        }
+      } catch {}
+    }
+    return defaultReportLayoutSettings;
+  });
+
+  const [billSettings, setBillSettings] = useState<BillLayoutSettings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_bill_settings");
+        if (cached) {
+          return normalizeBillSettings(JSON.parse(cached));
+        }
+      } catch {}
+    }
+    return defaultBillLayoutSettings;
+  });
+
+  const [isLoading, setIsLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        if (
+          localStorage.getItem("lis_cached_report_settings") ||
+          localStorage.getItem("lis_cached_print_settings") ||
+          localStorage.getItem("lis_cached_bill_settings")
+        ) {
+          return false;
+        }
+      } catch {}
+    }
+    return true;
+  });
   const [isSaving, setIsSaving] = useState(false);
   const { success: toastSuccess, error: toastError, toast: showGlobalToast } = useToast();
   const setToast = React.useCallback((input: { text: string; type: "success" | "error" } | null) => {
@@ -568,21 +614,13 @@ function SettingsContent() {
   };
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cachedSettings = localStorage.getItem("lis_cached_report_settings");
-        const cachedLetterhead = localStorage.getItem("lis_cached_letterhead");
-        if (cachedSettings) {
-          const parsed = normalizeReportSettings(JSON.parse(cachedSettings));
-          setLayoutSettings(parsed);
-          setIsLoading(false);
-        }
-        if (cachedLetterhead) {
-          setSettings(prev => ({ ...prev, bgImage: cachedLetterhead, printWithLetterhead: true }));
-        }
-      } catch {}
-    }
     fetchSettings();
+
+    const handleSync = () => {
+      fetchSettings();
+    };
+    window.addEventListener("lis_online_sync", handleSync);
+    return () => window.removeEventListener("lis_online_sync", handleSync);
   }, []);
 
   const fetchSettings = async () => {
@@ -601,14 +639,18 @@ function SettingsContent() {
             localStorage.setItem("lis_cached_letterhead", cleanBg);
           } catch {}
         }
-        setSettings({
+        const newPrintSettings: ExtendedPrintSettings = {
           bgImage: cleanBg,
           headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? 40,
           footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? 40,
           marginLeft: lab.printMarginLeft ?? lab.print_margin_left ?? 40,
           marginRight: lab.printMarginRight ?? lab.print_margin_right ?? 40,
           printWithLetterhead: lab.printWithLetterhead ?? lab.print_with_letterhead ?? (cleanBg ? true : false),
-        });
+        };
+        setSettings(newPrintSettings);
+        try {
+          localStorage.setItem("lis_cached_print_settings", JSON.stringify(newPrintSettings));
+        } catch {}
 
         const parsedLayout = normalizeReportSettings(lab.report_settings || lab.reportSettings);
         if (lab.default_designation || lab.defaultDesignation) {
@@ -621,6 +663,9 @@ function SettingsContent() {
 
         const parsedBill = normalizeBillSettings(lab.bill_settings || lab.billSettings);
         setBillSettings(parsedBill);
+        try {
+          localStorage.setItem("lis_cached_bill_settings", JSON.stringify(parsedBill));
+        } catch {}
       }
     } catch (error) {
       console.error("Failed to load settings:", error);
@@ -757,6 +802,20 @@ function SettingsContent() {
     }
   };
 
+  // Bill Dedicated Logo upload handler
+  const handleBillLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const base64Url = await optimizeLetterheadImage(file);
+      setBillSettings(prev => ({ ...prev, logoImage: base64Url, showLogo: true }));
+      setToast({ text: "Bill Logo uploaded! Click Save to confirm.", type: "success" });
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      setToast({ text: "Failed to process logo image.", type: "error" });
+    }
+  };
+
   // Bill Header & Footer Image upload handlers
   const handleBillHeaderUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -781,6 +840,20 @@ function SettingsContent() {
       setTimeout(() => setToast(null), 3000);
     } catch (err) {
       setToast({ text: "Failed to process image.", type: "error" });
+    }
+  };
+
+  // Bill Full Letterhead Stationery Background upload handler
+  const handleBillBgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const base64Url = await optimizeLetterheadImage(file);
+      setBillSettings(prev => ({ ...prev, bgImage: base64Url }));
+      setToast({ text: "Full Bill Stationery Background uploaded! Click Save to confirm.", type: "success" });
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      setToast({ text: "Failed to process background image.", type: "error" });
     }
   };
 
@@ -889,6 +962,8 @@ function SettingsContent() {
       clearApiCache();
       try {
         localStorage.setItem("lis_cached_report_settings", JSON.stringify(payloadLayoutSettings));
+        localStorage.setItem("lis_cached_print_settings", JSON.stringify(saved));
+        localStorage.setItem("lis_cached_bill_settings", JSON.stringify(billSettings));
         if (payloadLayoutSettings.intakeFields) {
           localStorage.setItem("lis_intake_fields", JSON.stringify(payloadLayoutSettings.intakeFields));
         }
@@ -3540,15 +3615,15 @@ function SettingsContent() {
           {/* Left Side: Controls & Customization */}
           <div className="lg:col-span-6 space-y-6">
             
-            {/* 1. Bill Heading & Header/Footer Graphics (Image 1) */}
+            {/* 1. Bill Branding & Logo Customization */}
             <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
               <div className="border-b border-border/80 pb-3">
                 <h2 className="font-display text-base font-bold text-foreground flex items-center gap-2">
                   <Receipt className="h-4 w-4 text-primary" />
-                  <span>Bill Branding & Header / Footer Graphics</span>
+                  <span>Bill Branding & Logo Configuration</span>
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Configure the invoice title and upload official stationery headers/footers.
+                  Configure bill title, upload dedicated bill logo, and control whether address details show alongside it.
                 </p>
               </div>
 
@@ -3564,67 +3639,130 @@ function SettingsContent() {
                 />
               </div>
 
-              {/* Header & Footer Upload Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                {/* Bill Header Upload */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-foreground block">Bill Header</label>
-                  {billSettings.headerImage ? (
-                    <div className="relative rounded-xl border border-border bg-muted/30 p-2.5 flex items-center justify-between gap-3">
-                      <div className="h-10 w-16 rounded overflow-hidden bg-white border border-border/80 shrink-0">
-                        <img src={billSettings.headerImage} alt="Header" className="h-full w-full object-cover" />
-                      </div>
-                      <span className="text-xs font-semibold text-foreground truncate">Bill Header</span>
-                      <button
-                        type="button"
-                        onClick={() => setBillSettings(prev => ({ ...prev, headerImage: null }))}
-                        className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
-                        title="Remove Header"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="border border-dashed border-border hover:border-primary/60 bg-background hover:bg-muted/40 transition-all rounded-xl p-3 flex items-center justify-center gap-2 text-xs font-bold text-foreground cursor-pointer shadow-2xs">
-                      <Upload className="h-4 w-4 text-primary" />
-                      <span>Click to Upload</span>
-                      <input type="file" accept="image/*" onChange={handleBillHeaderUpload} className="hidden" />
-                    </label>
-                  )}
+              {/* Dedicated Bill Logo Upload */}
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-foreground">Dedicated Bill Logo</label>
+                  <span className="text-[11px] text-muted-foreground">Appears at the top of invoice</span>
                 </div>
 
-                {/* Bill Footer Upload */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-foreground block">Bill Footer</label>
-                  {billSettings.footerImage ? (
-                    <div className="relative rounded-xl border border-border bg-muted/30 p-2.5 flex items-center justify-between gap-3">
-                      <div className="h-10 w-16 rounded overflow-hidden bg-white border border-border/80 shrink-0">
-                        <img src={billSettings.footerImage} alt="Footer" className="h-full w-full object-cover" />
-                      </div>
-                      <span className="text-xs font-semibold text-foreground truncate">Bill Footer</span>
-                      <button
-                        type="button"
-                        onClick={() => setBillSettings(prev => ({ ...prev, footerImage: null }))}
-                        className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
-                        title="Remove Footer"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                {billSettings.logoImage ? (
+                  <div className="relative rounded-xl border border-border bg-muted/30 p-3 flex items-center justify-between gap-4">
+                    <div className="h-12 w-24 rounded-lg overflow-hidden bg-white border border-border/80 shrink-0 flex items-center justify-center p-1">
+                      <img src={billSettings.logoImage} alt="Bill Logo" className="max-h-full max-w-full object-contain" />
                     </div>
-                  ) : (
-                    <label className="border border-dashed border-border hover:border-primary/60 bg-background hover:bg-muted/40 transition-all rounded-xl p-3 flex items-center justify-center gap-2 text-xs font-bold text-foreground cursor-pointer shadow-2xs">
-                      <Upload className="h-4 w-4 text-primary" />
-                      <span>Click to Upload</span>
-                      <input type="file" accept="image/*" onChange={handleBillFooterUpload} className="hidden" />
-                    </label>
-                  )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-foreground">Bill Logo Active</p>
+                      <p className="text-[11px] text-muted-foreground">Custom logo will be used on bills</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setBillSettings(prev => ({ ...prev, logoImage: null }))}
+                      className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
+                      title="Remove Bill Logo"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="border border-dashed border-border hover:border-primary/60 bg-background hover:bg-muted/40 transition-all rounded-xl p-3.5 flex items-center justify-center gap-2 text-xs font-bold text-foreground cursor-pointer shadow-2xs">
+                    <Upload className="h-4 w-4 text-primary" />
+                    <span>Upload Dedicated Bill Logo (PNG / JPG / WebP)</span>
+                    <input type="file" accept="image/*" onChange={handleBillLogoUpload} className="hidden" />
+                  </label>
+                )}
+
+                {/* Logo Visibility & Size Options */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <label className="flex items-center gap-2.5 p-2 rounded-xl border border-border/80 bg-background hover:bg-muted/40 transition-colors cursor-pointer select-none text-xs font-semibold text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={billSettings.showLogo}
+                      onChange={(e) => setBillSettings(prev => ({ ...prev, showLogo: e.target.checked }))}
+                      className="h-4 w-4 rounded border-border text-primary accent-primary cursor-pointer shrink-0"
+                    />
+                    <span>Show Logo on Bill</span>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 p-2 rounded-xl border border-border/80 bg-background hover:bg-muted/40 transition-colors cursor-pointer select-none text-xs font-semibold text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={billSettings.showLabAddress}
+                      onChange={(e) => setBillSettings(prev => ({ ...prev, showLabAddress: e.target.checked }))}
+                      className="h-4 w-4 rounded border-border text-primary accent-primary cursor-pointer shrink-0"
+                    />
+                    <span>Show Lab Address Details</span>
+                  </label>
+                </div>
+
+                {/* Logo Width Slider */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-foreground">Logo Size (Width)</span>
+                    <span className="font-mono font-bold text-primary px-2 py-0.5 bg-primary/10 rounded">
+                      {billSettings.logoWidth || 64} px
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="40"
+                    max="180"
+                    value={billSettings.logoWidth || 64}
+                    onChange={(e) => setBillSettings(prev => ({ ...prev, logoWidth: Number(e.target.value) }))}
+                    className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
                 </div>
               </div>
+            </div>
 
-              {/* Bill Size & Header/Footer Height */}
+            {/* 2. Stationery Background & Margins */}
+            <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
+              <div className="border-b border-border/80 pb-3">
+                <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-primary" />
+                  <span>Letterhead Stationery Background & Layout</span>
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Upload your pre-printed lab letterhead background (A4 / A5). The bill content will float neatly between the header and footer margins.
+                </p>
+              </div>
+
+              {/* Full Pre-Printed Letterhead Stationery Background Upload */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-foreground block">
+                  Official Letterhead Background (A4 / A5)
+                </label>
+                {billSettings.bgImage ? (
+                  <div className="relative rounded-xl border border-border bg-muted/30 p-3 flex items-center justify-between gap-4">
+                    <div className="h-14 w-20 rounded overflow-hidden bg-white border border-border/80 shrink-0 flex items-center justify-center p-1">
+                      <img src={billSettings.bgImage} alt="Background" className="h-full w-full object-contain" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-foreground">Letterhead Background Active</p>
+                      <p className="text-[11px] text-muted-foreground">Bills will print directly overlaid on this stationery</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setBillSettings(prev => ({ ...prev, bgImage: null }))}
+                      className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
+                      title="Remove Background"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="border border-dashed border-border hover:border-primary/60 bg-background hover:bg-muted/40 transition-all rounded-xl p-4 flex items-center justify-center gap-2.5 text-xs font-bold text-foreground cursor-pointer shadow-2xs">
+                    <Upload className="h-4 w-4 text-primary" />
+                    <span>Upload Letterhead Stationery Background (PNG / JPG / WebP)</span>
+                    <input type="file" accept="image/*" onChange={handleBillBgUpload} className="hidden" />
+                  </label>
+                )}
+              </div>
+
+              {/* Bill Size & Header/Footer Heights */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-border/80 items-end">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-foreground block">Bill Size</label>
+                  <label className="text-xs font-bold text-foreground block">Bill Page Size</label>
                   <div className="flex items-center gap-4 pt-1">
                     {(["A4", "A5"] as const).map(s => (
                       <label key={s} className="flex items-center gap-2 text-xs font-bold text-foreground cursor-pointer">
@@ -3642,28 +3780,30 @@ function SettingsContent() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground">Header Height</label>
+                  <label className="text-xs font-bold text-foreground">Header Height / Space (px)</label>
                   <input
                     type="number"
                     value={billSettings.headerHeight}
                     onChange={(e) => setBillSettings(prev => ({ ...prev, headerHeight: Number(e.target.value) }))}
                     className="w-full px-3.5 py-2 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none"
+                    placeholder="110"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground">Footer Height</label>
+                  <label className="text-xs font-bold text-foreground">Footer Height / Space (px)</label>
                   <input
                     type="number"
                     value={billSettings.footerHeight}
                     onChange={(e) => setBillSettings(prev => ({ ...prev, footerHeight: Number(e.target.value) }))}
                     className="w-full px-3.5 py-2 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none"
+                    placeholder="70"
                   />
                 </div>
               </div>
             </div>
 
-            {/* 2. Checkboxes Grid (Image 1) */}
+            {/* 3. Checkboxes Grid: Field Visibility Options */}
             <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
               <div className="border-b border-border/80 pb-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -3673,11 +3813,15 @@ function SettingsContent() {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
+                  { key: "showPackageName", label: "Show Health Package Name on Bill" },
+                  { key: "showVialBarcode", label: "Show Vial Barcode on Bill" },
+                  { key: "showAbhaId", label: "Show ABHA ID on Bill" },
+                  { key: "showUhid", label: "Show UHID on Bill" },
                   { key: "showBarcode", label: "Show Barcode On Bill" },
                   { key: "showPhone", label: "Show patient Phone number on bill" },
                   { key: "showPackageTests", label: "Show package tests in bill" },
                   { key: "showB2BModal", label: "Show B2B bill modal" },
-                  { key: "showQrCode", label: "QR code to download report" },
+                  { key: "showQrCode", label: "QR code on bill (Dynamic Scan)" },
                   { key: "showBilledBy", label: "Show Billed By" },
                   { key: "showPaymentBreakdown", label: "Show Payment Breakdown" },
                   { key: "showSampleColumn", label: "Show sample column" },
@@ -3715,17 +3859,20 @@ function SettingsContent() {
               </div>
             </div>
 
-            {/* 3. Bill Margins (Image 1) */}
+            {/* 4. Bill Margins */}
             <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
               <div className="border-b border-border/80 pb-3">
-                <h3 className="font-display font-bold text-sm text-foreground">Bill Margins</h3>
+                <h3 className="font-display font-bold text-sm text-foreground">Bill Page Margins & Spacing</h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Adjust printable margins to ensure content fits cleanly over any letterhead or plain paper.
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {/* Left Margin */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-foreground">Bill Left Margin</span>
+                    <span className="font-bold text-foreground">Left Margin</span>
                     <span className="font-mono font-bold text-primary px-2 py-0.5 bg-primary/10 rounded">
                       {billSettings.margins.left} px
                     </span>
@@ -3746,7 +3893,7 @@ function SettingsContent() {
                 {/* Right Margin */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-foreground">Bill Right Margin</span>
+                    <span className="font-bold text-foreground">Right Margin</span>
                     <span className="font-mono font-bold text-primary px-2 py-0.5 bg-primary/10 rounded">
                       {billSettings.margins.right} px
                     </span>
@@ -3764,10 +3911,52 @@ function SettingsContent() {
                   />
                 </div>
 
-                {/* Patient Details Bottom Spacing */}
+                {/* Top Margin */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-foreground">Patient Details Spacing</span>
+                    <span className="font-bold text-foreground">Top Margin (Plain)</span>
+                    <span className="font-mono font-bold text-primary px-2 py-0.5 bg-primary/10 rounded">
+                      {billSettings.margins.top || 16} px
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="80"
+                    value={billSettings.margins.top || 16}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setBillSettings(prev => ({ ...prev, margins: { ...prev.margins, top: val } }));
+                    }}
+                    className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                  />
+                </div>
+
+                {/* Bottom Margin */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-foreground">Bottom Margin (Plain)</span>
+                    <span className="font-mono font-bold text-primary px-2 py-0.5 bg-primary/10 rounded">
+                      {billSettings.margins.bottom || 16} px
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="80"
+                    value={billSettings.margins.bottom || 16}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setBillSettings(prev => ({ ...prev, margins: { ...prev.margins, bottom: val } }));
+                    }}
+                    className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                  />
+                </div>
+
+                {/* Patient Details Bottom Spacing */}
+                <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-foreground">Patient Box Spacing</span>
                     <span className="font-mono font-bold text-primary px-2 py-0.5 bg-primary/10 rounded">
                       {billSettings.margins.patientDetailsBottomSpacing} px
                     </span>

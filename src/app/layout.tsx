@@ -13,6 +13,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ToastProvider } from "@/components/ui/toast";
 import { TopProgressBar } from "@/components/top-progress-bar";
 import { SmoothScrolling } from "@/components/smooth-scrolling";
+import { NetworkStatusBanner } from "@/components/network-status-banner";
 
 const geist = localFont({
   src: "./fonts/GeistVF.woff",
@@ -170,6 +171,7 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${geist.variable} ${geistMono.variable} font-sans h-full bg-background text-foreground antialiased overflow-x-hidden`}
       >
+        <NetworkStatusBanner />
         <TopProgressBar />
         <ThemeProvider defaultTheme="light" storageKey="onepath-theme">
           <ToastProvider>

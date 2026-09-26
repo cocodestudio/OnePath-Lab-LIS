@@ -3,23 +3,26 @@ export const ALL_BILL_ORDERING_FIELDS = [
   "Day wise ID",
   "Bill Date",
   "Patient ID",
+  "UHID",
   "Name",
   "Age/Gender",
-  "Owner Name",
   "Contact No.",
-  "Aadhaar no.",
-  "Insurance no.",
+  "ABHA ID",
+  "Vial Barcode",
+  "Referred By",
+  "Second Referral",
   "Address",
-  "HFR ID",
   "Pincode",
   "District",
   "Town",
-  "Referred By",
-  "Second Referral",
-  "Corporate Name",
-  "GSTIN",
   "Payment Mode",
   "Collection Center",
+  "Corporate / Panel",
+  "HFR ID",
+  "Aadhaar no.",
+  "Insurance no.",
+  "GSTIN",
+  "Owner Name",
 ] as const;
 
 export interface BillSignature {
@@ -31,12 +34,22 @@ export interface BillSignature {
 
 export interface BillLayoutSettings {
   heading: string;
+  logoImage: string | null;
+  showLogo: boolean;
+  showLabAddress: boolean;
+  logoWidth: number;
   headerImage: string | null;
   footerImage: string | null;
+  bgImage: string | null;
+  headerPlacement: "background" | "inline";
   size: "A4" | "A5";
   headerHeight: number;
   footerHeight: number;
   showBarcode: boolean;
+  showVialBarcode: boolean;
+  showAbhaId: boolean;
+  showUhid: boolean;
+  showPackageName: boolean;
   showPhone: boolean;
   showPackageTests: boolean;
   showB2BModal: boolean;
@@ -53,6 +66,8 @@ export interface BillLayoutSettings {
   showHfrId: boolean;
   showTestCode: boolean;
   margins: {
+    top: number;
+    bottom: number;
     left: number;
     right: number;
     patientDetailsBottomSpacing: number;
@@ -75,19 +90,29 @@ export interface BillLayoutSettings {
 
 export const defaultBillLayoutSettings: BillLayoutSettings = {
   heading: "Invoice-cum-receipt",
+  logoImage: null,
+  showLogo: true,
+  showLabAddress: true,
+  logoWidth: 64,
   headerImage: null,
   footerImage: null,
+  bgImage: null,
+  headerPlacement: "background",
   size: "A4",
-  headerHeight: 100,
-  footerHeight: 60,
+  headerHeight: 110,
+  footerHeight: 70,
   showBarcode: true,
+  showVialBarcode: true,
+  showAbhaId: true,
+  showUhid: false,
+  showPackageName: true,
   showPhone: true,
   showPackageTests: false,
   showB2BModal: false,
   showQrCode: true,
   showBilledBy: true,
   showPaymentBreakdown: true,
-  showSampleColumn: false,
+  showSampleColumn: true,
   showSampleCollectedBy: false,
   showPincode: false,
   showDistrict: false,
@@ -97,8 +122,10 @@ export const defaultBillLayoutSettings: BillLayoutSettings = {
   showHfrId: false,
   showTestCode: true,
   margins: {
-    left: 20,
-    right: 20,
+    top: 16,
+    bottom: 16,
+    left: 24,
+    right: 24,
     patientDetailsBottomSpacing: 8,
   },
   fieldOrdering: [
@@ -108,6 +135,8 @@ export const defaultBillLayoutSettings: BillLayoutSettings = {
     "Name",
     "Age/Gender",
     "Contact No.",
+    "ABHA ID",
+    "Vial Barcode",
     "Referred By",
     "Payment Mode",
   ],
@@ -144,11 +173,29 @@ export function normalizeBillSettings(raw: any): BillLayoutSettings {
   };
 
   if (raw.heading) res.heading = raw.heading;
+  const logo = raw.logoImage ?? raw.logo_image;
+  if (logo !== undefined) res.logoImage = logo || null;
+
+  const showLogo = raw.showLogo ?? raw.show_logo;
+  if (showLogo !== undefined) res.showLogo = Boolean(showLogo);
+
+  const showLabAddr = raw.showLabAddress ?? raw.show_lab_address;
+  if (showLabAddr !== undefined) res.showLabAddress = Boolean(showLabAddr);
+
+  const lWidth = raw.logoWidth ?? raw.logo_width;
+  if (lWidth !== undefined && lWidth !== null && lWidth !== "") res.logoWidth = Number(lWidth);
+
   const hImg = raw.headerImage ?? raw.header_image;
   if (hImg !== undefined) res.headerImage = hImg || null;
 
   const fImg = raw.footerImage ?? raw.footer_image;
   if (fImg !== undefined) res.footerImage = fImg || null;
+
+  const bgImg = raw.bgImage ?? raw.bg_image;
+  if (bgImg !== undefined) res.bgImage = bgImg || null;
+
+  const hPlacement = raw.headerPlacement ?? raw.header_placement;
+  if (hPlacement === "inline" || hPlacement === "background") res.headerPlacement = hPlacement;
 
   if (raw.size) res.size = raw.size;
   const hHeight = raw.headerHeight ?? raw.header_height;
@@ -159,6 +206,18 @@ export function normalizeBillSettings(raw: any): BillLayoutSettings {
 
   const showBarcode = raw.showBarcode ?? raw.show_barcode;
   if (showBarcode !== undefined) res.showBarcode = Boolean(showBarcode);
+
+  const showVialBarcode = raw.showVialBarcode ?? raw.show_vial_barcode;
+  if (showVialBarcode !== undefined) res.showVialBarcode = Boolean(showVialBarcode);
+
+  const showAbhaId = raw.showAbhaId ?? raw.show_abha_id;
+  if (showAbhaId !== undefined) res.showAbhaId = Boolean(showAbhaId);
+
+  const showUhid = raw.showUhid ?? raw.show_uhid;
+  if (showUhid !== undefined) res.showUhid = Boolean(showUhid);
+
+  const showPackageName = raw.showPackageName ?? raw.show_package_name;
+  if (showPackageName !== undefined) res.showPackageName = Boolean(showPackageName);
 
   const showPhone = raw.showPhone ?? raw.show_phone;
   if (showPhone !== undefined) res.showPhone = Boolean(showPhone);

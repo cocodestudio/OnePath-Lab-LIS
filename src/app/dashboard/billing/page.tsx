@@ -9,7 +9,7 @@ import {
   Phone, Eye, Download, Sparkles, Plus, Trash2, PlusCircle, Check, Stethoscope,
   Building2, BadgeCheck, Boxes
 } from "lucide-react";
-import { getStoredPackages, type LabPackage } from "@/lib/packages";
+import { getStoredPackages, getReportPackage, type LabPackage } from "@/lib/packages";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog";
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { InvoiceSheet } from "@/components/invoice-sheet";
+import { normalizeBillSettings, type BillLayoutSettings } from "@/lib/bill-settings";
 import { printInvoiceElement } from "@/lib/print-invoice";
 
 interface Patient {
@@ -75,60 +76,139 @@ interface Bill {
 function getMainBillItems(
   bill: Bill | null,
   allTestsMap?: Map<string, any>
-): { id?: string; name: string; code?: string; category?: string; price: number }[] {
-  if (!bill || !bill.reports || bill.reports.length === 0) {
-    return [{ name: "Diagnostic Investigation Panel", code: "T-PANEL", price: Number(bill?.total || 0), category: "Pathology" }];
+): { id?: string; name: string; code?: string; category?: string; sampleType?: string; price: number; barcode?: string }[] {
+  if (!bill) return [];
+
+  const itemsMap = new Map<string, { id?: string; name: string; code?: string; category?: string; sampleType?: string; price: number; barcode?: string }>();
+
+  const billBarcode = (bill.patient as any)?.vial_barcode || (bill.patient as any)?.vialBarcode || (bill.patient as any)?.meta?.vial_barcode || (bill.patient as any)?.meta?.vialBarcode || "";
+
+  if (bill.reports && bill.reports.length > 0) {
+    bill.reports.forEach((r) => {
+      if (r.results && r.results.length > 0) {
+        r.results.forEach((res) => {
+          if (res.test) {
+            // Resolve top-level parent test
+            let testObj = (res.test.id && allTestsMap?.get(res.test.id)) || res.test;
+
+            // Climb up parent hierarchy until top-level main panel is reached
+            while (testObj) {
+              const parentId = testObj.parentId || testObj.parent_id || testObj.parent?.id;
+              if (!parentId) break;
+              const parentObj = allTestsMap?.get(parentId) || testObj.parent;
+              if (!parentObj) break;
+              testObj = parentObj;
+            }
+
+            const panelKey = testObj.id || testObj.name;
+            if (testObj && !itemsMap.has(panelKey)) {
+              itemsMap.set(panelKey, {
+                id: testObj.id,
+                name: testObj.name,
+                code: testObj.code || (testObj as any).testCode || (testObj as any).test_code || `T-${(testObj.name || "").substring(0, 3).toUpperCase()}`,
+                category: testObj.category,
+                sampleType: (testObj as any).sampleType || (testObj as any).sample_type || (testObj as any).sample || undefined,
+                price: Number(testObj.price || 0),
+                barcode: billBarcode,
+              });
+            }
+          }
+        });
+      }
+    });
   }
-
-  const itemsMap = new Map<string, { id?: string; name: string; code?: string; category?: string; price: number }>();
-
-  bill.reports.forEach((r) => {
-    if (r.results && r.results.length > 0) {
-      r.results.forEach((res) => {
-        if (res.test) {
-          // Resolve top-level parent test
-          let testObj = (res.test.id && allTestsMap?.get(res.test.id)) || res.test;
-
-          // Climb up parent hierarchy until top-level main panel is reached
-          while (testObj) {
-            const parentId = testObj.parentId || testObj.parent_id || testObj.parent?.id;
-            if (!parentId) break;
-            const parentObj = allTestsMap?.get(parentId) || testObj.parent;
-            if (!parentObj) break;
-            testObj = parentObj;
-          }
-
-          const panelKey = testObj.id || testObj.name;
-          if (testObj && !itemsMap.has(panelKey)) {
-            itemsMap.set(panelKey, {
-              id: testObj.id,
-              name: testObj.name,
-              code: testObj.code || (testObj as any).testCode || (testObj as any).test_code || `T-${(testObj.name || "").substring(0, 3).toUpperCase()}`,
-              category: testObj.category || "General Pathology",
-              price: Number(testObj.price || 0),
-            });
-          }
-        }
-      });
-    }
-  });
 
   const list = Array.from(itemsMap.values());
+  const grandTotal = Number(bill.total || 0) + Number(bill.discount || 0);
+
   if (list.length === 0) {
-    return [{ id: "T-DEF", code: "T-PANEL", name: "Diagnostic Investigation Panel", price: Number(bill.total || 0), category: "Pathology" }];
+    // Check if package name or stored report package exists
+    const pkgName = (bill.reports && (
+      (bill.reports[0] as any)?.package_name ||
+      (bill.reports[0] as any)?.packageName
+    )) || (bill as any)?.packageName || (bill as any)?.package_name || getReportPackage(bill.custom_id) || getReportPackage(bill.id) || null;
+
+    return [{
+      id: "T-DEF",
+      code: "T-PANEL",
+      name: pkgName || "Diagnostic Investigation Panel",
+      price: grandTotal > 0 ? grandTotal : Number(bill.total || 0),
+      category: "Pathology",
+      sampleType: undefined,
+      barcode: billBarcode,
+    }];
   }
+
+  // If there's only 1 item and its price is 0, assign the grand total
+  if (list.length === 1 && list[0].price === 0 && grandTotal > 0) {
+    list[0].price = grandTotal;
+  }
+
   return list;
+}
+
+function formatBillDate(dStr: string | null | undefined): string {
+  try {
+    if (!dStr) return "—";
+    const d = new Date(dStr);
+    if (isNaN(d.getTime())) return dStr;
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const day = String(d.getDate()).padStart(2, "0");
+    const mon = months[d.getMonth()];
+    const yr = d.getFullYear();
+    return `${day} ${mon} ${yr}`;
+  } catch {
+    return dStr || "—";
+  }
+}
+
+// Helper: Resolve Bill Invoice Number safely across custom_id, customId, or id
+function getBillInvoiceNo(bill: Bill | any | null | undefined): string {
+  if (!bill) return "—";
+  return (
+    bill.custom_id ||
+    bill.customId ||
+    (bill.id ? `OPL-INV-${String(bill.id).slice(0, 6).toUpperCase()}` : "—")
+  );
+}
+
+function normalizeBillObj(b: any): Bill {
+  const invNo = b.custom_id || b.customId || (b.id ? `OPL-INV-${String(b.id).slice(0, 6).toUpperCase()}` : "");
+  return {
+    ...b,
+    custom_id: invNo,
+    customId: invNo,
+    paid_amount: b.paid_amount ?? b.paidAmount ?? 0,
+    created_at: b.created_at || b.createdAt,
+    createdAt: b.createdAt || b.created_at,
+    patient: b.patient ? {
+      ...b.patient,
+      custom_id: b.patient.custom_id || b.patient.customId || "",
+      customId: b.patient.customId || b.patient.custom_id || "",
+      ref_doctor: b.patient.ref_doctor || b.patient.refDoctor || "Self",
+    } : b.patient
+  };
 }
 
 export default function BillingPage() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [labData, setLabData] = useState<any>(null);
+  const [billSettings, setBillSettings] = useState<BillLayoutSettings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_bill_settings");
+        if (cached) return normalizeBillSettings(JSON.parse(cached));
+      } catch {}
+    }
+    return normalizeBillSettings({});
+  });
   const [allRawTests, setAllRawTests] = useState<Test[]>([]);
   const [availableMainTests, setAvailableMainTests] = useState<Test[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [filterDate, setFilterDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [loading, setLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 
@@ -158,42 +238,83 @@ export default function BillingPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
   const isB2B = currentUserRole === "B2B";
+  const isCollectionCenter = currentUserRole === "COLLECTION_CENTER";
 
   useEffect(() => {
+    setIsMounted(true);
     const user = getStoredUser();
     if (user?.role) setCurrentUserRole(user.role);
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem("lis_cached_bills");
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setBills(parsed);
-            setLoading(false);
-          }
+
+    // Safely hydrate from localStorage after mount to completely prevent SSR hydration mismatches
+    try {
+      const cachedLab = localStorage.getItem("lis_cached_lab");
+      if (cachedLab) setLabData(JSON.parse(cachedLab));
+
+      const cachedBillSettings = localStorage.getItem("lis_cached_bill_settings");
+      if (cachedBillSettings) {
+        setBillSettings(normalizeBillSettings(JSON.parse(cachedBillSettings)));
+      }
+
+      const cachedTests = localStorage.getItem("lis_cached_tests");
+      if (cachedTests) {
+        const parsed = JSON.parse(cachedTests);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAllRawTests(parsed);
+          setAvailableMainTests(parsed.filter((t: any) => !t.parentId && !t.parent_id));
         }
-      } catch {}
-    }
+      }
+
+      const cachedBills = localStorage.getItem("lis_cached_bills");
+      if (cachedBills) {
+        const parsed = JSON.parse(cachedBills);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setBills(parsed.map(normalizeBillObj));
+          setLoading(false);
+        }
+      }
+    } catch {}
+
     fetchBills();
     fetchAvailableTests();
     try {
       setAvailablePackages(getStoredPackages());
     } catch (e) {}
+
+    const handleSync = () => {
+      fetchBills(true);
+      fetchAvailableTests();
+    };
+    window.addEventListener("lis_online_sync", handleSync);
+    return () => window.removeEventListener("lis_online_sync", handleSync);
   }, []);
 
   const fetchBills = async (forceRefresh?: boolean | any) => {
     const isForce = forceRefresh === true;
     try {
-      if (isForce || bills.length === 0) {
+      if (isForce && bills.length === 0) {
         setLoading(true);
       }
       const [data, labRes] = await Promise.all([
         fetchFromLaravel("/bills", { skipCache: isForce }),
         fetchFromLaravel("/lab").catch(() => null),
       ]);
-      const billsList = Array.isArray(data) ? data : (data?.data || []);
+      const rawList = Array.isArray(data) ? data : (data?.data || []);
+      const billsList = rawList.map(normalizeBillObj);
       setBills(billsList);
-      if (labRes) setLabData(labRes);
+      if (labRes) {
+        setLabData(labRes);
+        const rawBill = labRes.bill_settings || labRes.billSettings;
+        if (rawBill) {
+          const parsedBill = normalizeBillSettings(rawBill);
+          setBillSettings(parsedBill);
+          try {
+            localStorage.setItem("lis_cached_bill_settings", JSON.stringify(parsedBill));
+          } catch {}
+        }
+        try {
+          localStorage.setItem("lis_cached_lab", JSON.stringify(labRes));
+        } catch {}
+      }
       try {
         localStorage.setItem("lis_cached_bills", JSON.stringify(billsList));
       } catch {}
@@ -390,7 +511,7 @@ export default function BillingPage() {
 
   const handlePrintWindow = () => {
     if (invoicePrintRef.current) {
-      printInvoiceElement(invoicePrintRef.current, `Invoice_${selectedBillForInvoice?.custom_id || "Receipt"}`);
+      printInvoiceElement(invoicePrintRef.current, `Invoice_${getBillInvoiceNo(selectedBillForInvoice)}`);
     } else {
       window.print();
     }
@@ -402,8 +523,8 @@ export default function BillingPage() {
   const filteredBills = safeBills.filter((b) => {
     if (!b || !b.patient) return false;
     const patName = b.patient.name || "";
-    const patId = b.patient.custom_id || "";
-    const billId = b.custom_id || "";
+    const patId = b.patient.custom_id || (b.patient as any)?.customId || "";
+    const billId = getBillInvoiceNo(b);
     const phone = b.patient.phone || "";
     const billDate = (b.createdAt || b.created_at || "").slice(0, 10);
 
@@ -689,11 +810,7 @@ export default function BillingPage() {
                 </tr>
               ) : (
                 currentRows.map((bill) => {
-                  const billDate = new Date((bill.createdAt || bill.created_at) as string || Date.now()).toLocaleDateString("en-IN", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric"
-                  });
+                  const billDate = formatBillDate((bill.createdAt || bill.created_at) as string);
                   const isBillPaid = bill.status === "PAID";
                   const due = isBillPaid ? 0 : Math.max(0, (Number(bill.total) || 0) - (Number(bill.paid_amount) || 0));
                   const displayPaid = isBillPaid ? (Number(bill.total) || 0) : (Number(bill.paid_amount) || 0);
@@ -702,8 +819,8 @@ export default function BillingPage() {
                   return (
                     <tr key={bill.id} className="hover:bg-muted/30 transition-colors">
                       <td className="py-3.5 px-4">
-                        <span className="font-mono font-bold text-foreground block">{bill.custom_id}</span>
-                        <span className="text-[10px] text-muted-foreground">{billDate}</span>
+                        <span className="font-mono font-bold text-foreground block">{getBillInvoiceNo(bill)}</span>
+                        <span className="text-[10px] text-muted-foreground" suppressHydrationWarning>{billDate}</span>
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -774,14 +891,16 @@ export default function BillingPage() {
                             <Printer className="h-4 w-4" />
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditDialog(bill)}
-                            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-primary cursor-pointer transition-colors"
-                            title="Edit Invoice & Panels"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
+                          {!isCollectionCenter && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditDialog(bill)}
+                              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-primary cursor-pointer transition-colors"
+                              title="Edit Invoice & Panels"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -840,11 +959,11 @@ export default function BillingPage() {
                     Tax Invoice Preview
                   </h3>
                   <span className="font-mono bg-primary/15 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                    {selectedBillForInvoice?.custom_id}
+                    {getBillInvoiceNo(selectedBillForInvoice)}
                   </span>
                 </div>
                 <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
-                  Patient: <strong className="text-foreground">{selectedBillForInvoice?.patient?.name}</strong> · PID: <span className="font-mono">{selectedBillForInvoice?.patient?.custom_id}</span>
+                  Patient: <strong className="text-foreground">{selectedBillForInvoice?.patient?.name}</strong> · PID: <span className="font-mono">{selectedBillForInvoice?.patient?.custom_id || (selectedBillForInvoice?.patient as any)?.customId}</span>
                 </p>
               </div>
             </div>
@@ -865,9 +984,10 @@ export default function BillingPage() {
             {selectedBillForInvoice && (
               <div ref={invoicePrintRef} className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 bg-white max-w-full print:shadow-none print:ring-0 print:border-none print:p-0 print:m-0 print:w-full">
                 <InvoiceSheet
+                  settings={billSettings}
                   invoice={{
                     id: selectedBillForInvoice.id,
-                    customId: selectedBillForInvoice.custom_id,
+                    customId: getBillInvoiceNo(selectedBillForInvoice),
                     createdAt: (selectedBillForInvoice.createdAt || selectedBillForInvoice.created_at) as string || new Date().toISOString(),
                     total: Number(selectedBillForInvoice.total || 0),
                     discount: Number(selectedBillForInvoice.discount || 0),
@@ -875,29 +995,43 @@ export default function BillingPage() {
                       ? Number(selectedBillForInvoice.total || 0)
                       : Number(selectedBillForInvoice.paid_amount ?? (selectedBillForInvoice as any).paidAmount ?? 0),
                     status: selectedBillForInvoice.status || "UNPAID",
-                    paymentMode: "CASH / UPI",
+                    paymentMode: (selectedBillForInvoice as any).payment_mode || (selectedBillForInvoice as any).paymentMode || "CASH / UPI",
                     billedBy: "Accounts / Billing Desk",
+                    packageName: (selectedBillForInvoice.reports && (
+                      (selectedBillForInvoice.reports[0] as any)?.package_name ||
+                      (selectedBillForInvoice.reports[0] as any)?.packageName
+                    )) || (selectedBillForInvoice as any)?.packageName || (selectedBillForInvoice as any)?.package_name || getReportPackage(getBillInvoiceNo(selectedBillForInvoice)) || getReportPackage(selectedBillForInvoice.id) || (selectedBillForInvoice.patient?.custom_id ? getReportPackage(selectedBillForInvoice.patient.custom_id) : null) || null,
                     patient: {
                       customId: selectedBillForInvoice.patient?.custom_id || (selectedBillForInvoice.patient as any)?.customId || "",
                       name: selectedBillForInvoice.patient?.name || "",
                       phone: selectedBillForInvoice.patient?.phone || "",
                       age: selectedBillForInvoice.patient?.age || 0,
                       gender: selectedBillForInvoice.patient?.gender || "",
-                      refDoctor: selectedBillForInvoice.patient?.ref_doctor || (selectedBillForInvoice.patient as any)?.refDoctor || "",
+                      refDoctor: selectedBillForInvoice.patient?.ref_doctor || (selectedBillForInvoice.patient as any)?.refDoctor || "Self",
+                      secondReferral: (selectedBillForInvoice.patient as any)?.second_referral || (selectedBillForInvoice.patient as any)?.secondReferral || "",
                       address: selectedBillForInvoice.patient?.address || "",
+                      aadhaarNo: (selectedBillForInvoice.patient as any)?.aadhaar_no || (selectedBillForInvoice.patient as any)?.aadhaarNo || "",
+                      insuranceNo: (selectedBillForInvoice.patient as any)?.insurance_no || (selectedBillForInvoice.patient as any)?.insuranceNo || "",
+                      hfrId: (selectedBillForInvoice.patient as any)?.hfr_id || (selectedBillForInvoice.patient as any)?.hfrId || "",
+                      uhid: (selectedBillForInvoice.patient as any)?.uhid || (selectedBillForInvoice.patient as any)?.meta?.uhid || "",
+                      corporateName: (selectedBillForInvoice.patient as any)?.corporate_name || (selectedBillForInvoice.patient as any)?.corporateName || (selectedBillForInvoice.patient as any)?.gov_panel || (selectedBillForInvoice.patient as any)?.govPanel || "",
+                      vialBarcode: (selectedBillForInvoice.patient as any)?.vial_barcode || (selectedBillForInvoice.patient as any)?.vialBarcode || (selectedBillForInvoice.patient as any)?.meta?.vial_barcode || (selectedBillForInvoice.patient as any)?.meta?.vialBarcode || "",
+                      abhaNumber: (selectedBillForInvoice.patient as any)?.abha_number || (selectedBillForInvoice.patient as any)?.abhaNumber || (selectedBillForInvoice.patient as any)?.meta?.abha_number || "",
+                      abhaAddress: (selectedBillForInvoice.patient as any)?.abha_address || (selectedBillForInvoice.patient as any)?.abhaAddress || (selectedBillForInvoice.patient as any)?.meta?.abha_address || "",
+                      ownerName: (selectedBillForInvoice.patient as any)?.owner_name || (selectedBillForInvoice.patient as any)?.ownerName || "",
                     },
                     lab: {
                       name: labData?.name || labData?.centre_name || selectedBillForInvoice.lab?.name || "OnePath Pathology Laboratory",
                       email: labData?.email || selectedBillForInvoice.lab?.email || "support@onepathlab.com",
                       address: labData?.address || selectedBillForInvoice.lab?.address || "Medical Diagnostic Center",
                       phone: labData?.phone || (selectedBillForInvoice.lab as any)?.phone || "",
-                      logoUrl: labData?.logo_url || (selectedBillForInvoice.lab as any)?.logo_url || (selectedBillForInvoice.lab as any)?.logoUrl || "/onepath-logo.png",
+                      logoUrl: billSettings.logoImage || labData?.logo_url || (selectedBillForInvoice.lab as any)?.logo_url || (selectedBillForInvoice.lab as any)?.logoUrl || "/onepath-logo.png",
                       pincode: labData?.pincode || (selectedBillForInvoice.lab as any)?.pincode || "",
                       city: labData?.city || (selectedBillForInvoice.lab as any)?.city || "",
                       district: labData?.district || labData?.city || "",
                       state: labData?.state || (selectedBillForInvoice.lab as any)?.state || "",
-                      gstin: labData?.gstin || (selectedBillForInvoice.lab as any)?.gstin || "",
-                      bill_settings: labData?.bill_settings || (selectedBillForInvoice.lab as any)?.bill_settings || (selectedBillForInvoice.lab as any)?.billSettings,
+                      gstin: billSettings.gst?.number || labData?.gstin || (selectedBillForInvoice.lab as any)?.gstin || "",
+                      bill_settings: billSettings,
                     },
                     tests: invoiceMainItems.map(item => ({
                       id: item.id || item.name,
@@ -905,6 +1039,8 @@ export default function BillingPage() {
                       code: (item as any).code || (item as any).testCode || (item as any).test_code || `T-${(item.name || "").substring(0, 3).toUpperCase()}`,
                       price: Number(item.price || 0),
                       category: item.category,
+                      sampleType: (item as any).sampleType || (item as any).sample_type || undefined,
+                      barcode: (item as any).barcode || (selectedBillForInvoice.patient as any)?.vial_barcode || (selectedBillForInvoice.patient as any)?.vialBarcode || "",
                     })),
                   }}
                 />
@@ -931,11 +1067,11 @@ export default function BillingPage() {
                     Edit Invoice & Diagnostic Panels
                   </h3>
                   <span className="font-mono bg-primary/15 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                    {editingBill?.custom_id}
+                    {getBillInvoiceNo(editingBill)}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Patient: <strong className="text-foreground">{editingBill?.patient?.name}</strong> · PID: <span className="font-mono">{editingBill?.patient?.custom_id}</span> · Ref: Dr. {editingBill?.patient?.ref_doctor || "Self"}
+                  Patient: <strong className="text-foreground">{editingBill?.patient?.name}</strong> · PID: <span className="font-mono">{editingBill?.patient?.custom_id || (editingBill?.patient as any)?.customId}</span> · Ref: Dr. {editingBill?.patient?.ref_doctor || "Self"}
                 </p>
               </div>
             </div>

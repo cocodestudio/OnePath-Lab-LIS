@@ -47,7 +47,18 @@ const DEFAULT_LAB = { name: "OnePath Lab Main", email: "info@onepathlab.com", ad
 export default function ReportsListPage() {
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [reports, setReports] = useState<any[]>([]);
+  const [reports, setReports] = useState<any[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_reports");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
   const [outstandingLock, setOutstandingLock] = useState<{
     isLocked: boolean;
     outstandingBalance: number;
@@ -61,7 +72,8 @@ export default function ReportsListPage() {
 
   const isB2B = currentUser?.role === "B2B";
   const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER";
-  const isPartnerOrCC = isCollectionCenter || isB2B;
+  const isReceptionist = currentUser?.role === "RECEPTIONIST";
+  const isPartnerOrCC = isCollectionCenter || isB2B || isReceptionist;
 
   const shiftDate = (days: number) => {
     const base = filterDate ? new Date(filterDate) : new Date();
@@ -80,25 +92,30 @@ export default function ReportsListPage() {
     repCode?: string;
   } | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-
-  useEffect(() => {
-    setCurrentUser(getStoredUser());
+  const [loading, setLoading] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       try {
         const cached = localStorage.getItem("lis_cached_reports");
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setReports(parsed);
-            setLoading(false);
-          }
+          if (Array.isArray(parsed) && parsed.length > 0) return false;
         }
       } catch {}
     }
+    return true;
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  useEffect(() => {
+    setCurrentUser(getStoredUser());
     fetchReports();
+
+    const handleSync = () => {
+      fetchReports(true);
+    };
+    window.addEventListener("lis_online_sync", handleSync);
+    return () => window.removeEventListener("lis_online_sync", handleSync);
   }, []);
 
   useEffect(() => {
@@ -112,7 +129,7 @@ export default function ReportsListPage() {
   const fetchReports = async (forceRefresh?: boolean | any) => {
     const isForce = forceRefresh === true;
     try {
-      if (isForce || reports.length === 0) {
+      if (isForce && reports.length === 0) {
         setLoading(true);
       }
       const data = await fetchFromLaravel("/reports", { skipCache: isForce });
@@ -281,11 +298,11 @@ export default function ReportsListPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.2em] mb-1.5">
-            {isCollectionCenter ? "Diagnostic Archives" : "Diagnostics"}
+            {isCollectionCenter ? "Diagnostic Archives" : isReceptionist ? "Patient Reports" : "Diagnostics"}
           </p>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">Reports</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {isCollectionCenter
+            {isCollectionCenter || isReceptionist
               ? "View authorized clinical reports and print diagnostic sheets for your patients."
               : "Enter test results, review findings, and issue diagnostic patient reports."}
           </p>

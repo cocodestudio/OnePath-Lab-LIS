@@ -5,22 +5,213 @@ import Link from "next/link";
 import {
   Clock, FlaskConical, Search, PlusCircle, RefreshCw, CheckCircle2,
   Copy, Check, FileText, ArrowRight, ShieldCheck, IndianRupee,
-  Filter, AlertCircle, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight, User
+  Filter, AlertCircle, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight, User,
+  Barcode, Edit2, Lock, Printer, Receipt, X, Loader2, SlidersHorizontal, Sparkles, CheckCheck, Plus
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
+import { BarcodeSVG } from "@/components/barcode-svg";
+
+interface TubeConfigItem {
+  tubeType: string;
+  capColor: string;
+  capName: string;
+  badgeBg: string;
+  badgeBorder: string;
+  badgeText: string;
+  title: string;
+  specimenType: string;
+  additive: string;
+  department: string;
+}
+
+const TUBE_CONFIG: Record<string, TubeConfigItem> = {
+  EDTA: {
+    tubeType: "EDTA",
+    capColor: "#8b5cf6",
+    capName: "Lavender / Purple Top",
+    badgeBg: "bg-purple-500/10",
+    badgeBorder: "border-purple-500/30",
+    badgeText: "text-purple-600 dark:text-purple-400",
+    title: "EDTA Vacutainer",
+    specimenType: "Whole Blood (EDTA)",
+    additive: "K2/K3 EDTA Anticoagulant",
+    department: "Hematology (CBC, ESR, HbA1c, Blood Group)",
+  },
+  SST: {
+    tubeType: "SST",
+    capColor: "#f59e0b",
+    capName: "Gold / Red Top",
+    badgeBg: "bg-amber-500/10",
+    badgeBorder: "border-amber-500/30",
+    badgeText: "text-amber-600 dark:text-amber-400",
+    title: "SST / Plain Serum Vacutainer",
+    specimenType: "Serum (Clotted Blood)",
+    additive: "Clot Activator & Gel Separator",
+    department: "Biochemistry & Serology (LFT, KFT, Lipids)",
+  },
+  FLUORIDE: {
+    tubeType: "FLUORIDE",
+    capColor: "#64748b",
+    capName: "Grey Top",
+    badgeBg: "bg-slate-500/10",
+    badgeBorder: "border-slate-500/30",
+    badgeText: "text-slate-600 dark:text-slate-400",
+    title: "Sodium Fluoride Vacutainer",
+    specimenType: "Fluoride Plasma / Blood",
+    additive: "Sodium Fluoride + Pot. Oxalate",
+    department: "Glucose / Sugar (FBS, PPBS, GTT)",
+  },
+  CITRATE: {
+    tubeType: "CITRATE",
+    capColor: "#0284c7",
+    capName: "Light Blue Top",
+    badgeBg: "bg-sky-500/10",
+    badgeBorder: "border-sky-500/30",
+    badgeText: "text-sky-600 dark:text-sky-400",
+    title: "Sodium Citrate 3.2% Vacutainer",
+    specimenType: "Citrated Plasma",
+    additive: "Buffered Sodium Citrate 1:9",
+    department: "Coagulation Studies (PT/INR, APTT)",
+  },
+  URINE: {
+    tubeType: "URINE",
+    capColor: "#eab308",
+    capName: "Yellow Container",
+    badgeBg: "bg-yellow-500/10",
+    badgeBorder: "border-yellow-500/30",
+    badgeText: "text-yellow-600 dark:text-yellow-400",
+    title: "Sterile Urine Container",
+    specimenType: "Clean Catch Spot Urine",
+    additive: "Sterile Preservative-Free",
+    department: "Clinical Pathology (Routine & Microscopy)",
+  },
+  STOOL: {
+    tubeType: "STOOL",
+    capColor: "#92400e",
+    capName: "Brown Container",
+    badgeBg: "bg-orange-500/10",
+    badgeBorder: "border-orange-500/30",
+    badgeText: "text-orange-700 dark:text-orange-400",
+    title: "Stool Specimen Container",
+    specimenType: "Stool Specimen",
+    additive: "Sterile Container",
+    department: "Parasitology & Occult Blood",
+  },
+};
+
+function detectTubesForReport(report: any): string[] {
+  const detected = new Set<string>();
+  const p = report.patient || {};
+  let meta = p.meta || {};
+  if (typeof meta === "string") {
+    try { meta = JSON.parse(meta); } catch {}
+  }
+  let vb = meta.vial_barcodes || {};
+  if (typeof vb === "string") {
+    try { vb = JSON.parse(vb); } catch {}
+  }
+  if (vb && typeof vb === "object") {
+    Object.keys(vb).forEach((k) => {
+      const up = k.toUpperCase();
+      if (TUBE_CONFIG[up]) detected.add(up);
+    });
+  }
+
+  // Scan tests
+  const tests = report.results?.map((r: any) => r.test?.name?.toLowerCase() || "").filter(Boolean) || [];
+  tests.forEach((tName: string) => {
+    if (tName.includes("cbc") || tName.includes("esr") || tName.includes("hba1c") || tName.includes("hemoglobin") || tName.includes("blood group") || tName.includes("malar")) {
+      detected.add("EDTA");
+    }
+    if (tName.includes("lft") || tName.includes("kft") || tName.includes("rft") || tName.includes("lipid") || tName.includes("bilirubin") || tName.includes("thyroid") || tName.includes("tsh") || tName.includes("vitamin") || tName.includes("crp") || tName.includes("calcium") || tName.includes("uric") || tName.includes("widal") || tName.includes("dengue") || tName.includes("hiv") || tName.includes("hbsag") || tName.includes("electrolyte")) {
+      detected.add("SST");
+    }
+    if (tName.includes("sugar") || tName.includes("glucose") || tName.includes("fbs") || tName.includes("ppbs") || tName.includes("gtt")) {
+      detected.add("FLUORIDE");
+    }
+    if (tName.includes("pt") || tName.includes("inr") || tName.includes("aptt") || tName.includes("coag") || tName.includes("dimer")) {
+      detected.add("CITRATE");
+    }
+    if (tName.includes("urine") || tName.includes("upt") || tName.includes("microalbumin")) {
+      detected.add("URINE");
+    }
+    if (tName.includes("stool") || tName.includes("occult")) {
+      detected.add("STOOL");
+    }
+  });
+
+  if (detected.size === 0) {
+    detected.add("EDTA");
+    detected.add("SST");
+  }
+
+  return Array.from(detected);
+}
 
 export default function TodaySamplesPage() {
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState<"ALL" | "COLLECTED" | "TRANSIT" | "READY" | "PAID" | "DUE">("ALL");
+  const [stageFilter, setStageFilter] = useState<"ALL" | "REGISTERED" | "COLLECTED" | "TRANSIT" | "READY" | "PAID" | "DUE">("ALL");
   const [copiedBarcode, setCopiedBarcode] = useState<string | null>(null);
+
+  // Status & Barcoding Modal State
+  const [statusModalReport, setStatusModalReport] = useState<any | null>(null);
+  const [modalStage, setModalStage] = useState<"REGISTERED" | "COLLECTED" | "IN_TRANSIT">("REGISTERED");
+  const [activeTubeTypes, setActiveTubeTypes] = useState<string[]>([]);
+  const [tubeBarcodeInputs, setTubeBarcodeInputs] = useState<Record<string, string>>({});
+  const [savingStatusModal, setSavingStatusModal] = useState(false);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
 
   const [currentUserRole, setCurrentUserRole] = useState<string>("");
+
+  const isDateToday = (dateStr?: string) => {
+    if (!dateStr) return false;
+    let d: Date;
+    if (dateStr.includes(" ") && !dateStr.includes("T")) {
+      d = new Date(dateStr.replace(" ", "T"));
+    } else {
+      d = new Date(dateStr);
+    }
+    if (isNaN(d.getTime())) {
+      const todayIso = new Date().toISOString().split("T")[0];
+      return dateStr.startsWith(todayIso);
+    }
+    const now = new Date();
+    return (
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear()
+    );
+  };
+
+  const isReportFromToday = (r: any) => {
+    if (!r) return false;
+    const p = r.patient || {};
+    const meta = typeof p.meta === "object" ? p.meta : {};
+    const repMeta = typeof r.meta === "object" ? r.meta : {};
+
+    const rawDates = [
+      r.created_at,
+      r.createdAt,
+      p.created_at,
+      p.createdAt,
+      meta.collected_time,
+      meta.registered_at,
+      repMeta.collected_time,
+    ].filter(Boolean);
+
+    if (rawDates.length === 0) return false;
+    return rawDates.some((dateVal) => isDateToday(String(dateVal)));
+  };
 
   useEffect(() => {
     try {
@@ -33,29 +224,16 @@ export default function TodaySamplesPage() {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setReports(parsed);
-          setLoading(false);
+          const todayOnly = parsed.filter(isReportFromToday);
+          if (todayOnly.length > 0) {
+            setReports(todayOnly);
+            setLoading(false);
+          }
         }
       }
     } catch (e) {}
     loadData();
   }, []);
-
-  const isDateToday = (dateStr?: string) => {
-    if (!dateStr) return false;
-    const safeStr = dateStr.includes(" ") && !dateStr.includes("T") ? dateStr.replace(" ", "T") : dateStr;
-    const d = new Date(safeStr);
-    if (isNaN(d.getTime())) {
-      const todayStr = new Date().toISOString().split("T")[0];
-      return dateStr.startsWith(todayStr);
-    }
-    const now = new Date();
-    return (
-      d.getDate() === now.getDate() &&
-      d.getMonth() === now.getMonth() &&
-      d.getFullYear() === now.getFullYear()
-    );
-  };
 
   const loadData = async (forceRefresh?: boolean | any) => {
     const isForce = forceRefresh === true;
@@ -63,19 +241,11 @@ export default function TodaySamplesPage() {
       if (isForce || reports.length === 0) {
         setLoading(true);
       }
-      const res = await fetchFromLaravel("/reports", { skipCache: isForce }).catch(() => []);
+      const res = await fetchFromLaravel("/reports?today=true&limit=100", { skipCache: isForce }).catch(() => []);
       const repList = Array.isArray(res) ? res : (res?.data || []);
       
-      let role = currentUserRole;
-      if (!role && typeof window !== "undefined") {
-        try {
-          role = JSON.parse(localStorage.getItem("lis_user") || "{}")?.role || "";
-        } catch (e) {}
-      }
-      const isPartner = role === "COLLECTION_CENTER" || role === "B2B";
-      const finalReports = isPartner
-        ? repList.filter((r: any) => isDateToday(r.created_at || r.createdAt || r.patient?.created_at || r.patient?.createdAt))
-        : repList;
+      // Strictly show only today's samples on the Today Samples page
+      const finalReports = repList.filter(isReportFromToday);
       setReports(finalReports);
       try {
         localStorage.setItem("lis_cached_today_samples", JSON.stringify(finalReports));
@@ -108,11 +278,25 @@ export default function TodaySamplesPage() {
     !isReportApproved(r) &&
     (r.status === "IN_TRANSIT" || r.status === "PROCESSING");
 
+  const isReportCollected = (r: any) =>
+    !isReportRejected(r) &&
+    !isReportApproved(r) &&
+    !isReportTransit(r) &&
+    (r.status === "COLLECTED" || r.meta?.sample_status === "COLLECTED" || r.patient?.meta?.sample_status === "COLLECTED");
+
+  const isReportRegistered = (r: any) =>
+    !isReportRejected(r) &&
+    !isReportApproved(r) &&
+    !isReportTransit(r) &&
+    !isReportCollected(r);
+
   // Counts
   const totalCount = reports.length;
-  const readyCount = reports.filter(isReportApproved).length;
+  const registeredCount = reports.filter(isReportRegistered).length;
+  const collectedCount = reports.filter(isReportCollected).length;
   const transitCount = reports.filter(isReportTransit).length;
-  const collectedCount = reports.filter((r) => !isReportRejected(r) && !isReportApproved(r) && !isReportTransit(r)).length;
+  const readyCount = reports.filter(isReportApproved).length;
+
   const paidCount = reports.filter((r) => {
     const isB2B = currentUserRole === "B2B";
     const b2bPrice = r.b2b_price !== undefined ? Number(r.b2b_price) : (r.b2bPrice !== undefined ? Number(r.b2bPrice) : null);
@@ -141,9 +325,10 @@ export default function TodaySamplesPage() {
         ? Boolean(r.is_b2b_paid || r.isB2bPaid || (Number(r.bill?.paid_amount || 0) >= b2bPrice && b2bPrice > 0))
         : Boolean(Number(r.bill?.total || 0) > 0 && Number(r.bill?.paid_amount || 0) >= Number(r.bill?.total || 0));
 
-      if (stageFilter === "READY") return isReportApproved(r);
+      if (stageFilter === "REGISTERED") return isReportRegistered(r);
+      if (stageFilter === "COLLECTED") return isReportCollected(r);
       if (stageFilter === "TRANSIT") return isReportTransit(r);
-      if (stageFilter === "COLLECTED") return !isReportRejected(r) && !isReportApproved(r) && !isReportTransit(r);
+      if (stageFilter === "READY") return isReportApproved(r);
       if (stageFilter === "PAID") return isPaid;
       if (stageFilter === "DUE") return !isPaid;
       return true;
@@ -164,6 +349,119 @@ export default function TodaySamplesPage() {
     return filteredSamples.slice(start, start + pageSize);
   }, [filteredSamples, safeCurrentPage, pageSize]);
 
+  // Open the Status & Barcoding Window
+  const handleOpenStatusModal = (rep: any) => {
+    setStatusModalReport(rep);
+    const p = rep.patient || {};
+    let meta = p.meta || {};
+    if (typeof meta === "string") {
+      try { meta = JSON.parse(meta); } catch {}
+    }
+    let vb = meta.vial_barcodes || {};
+    if (typeof vb === "string") {
+      try { vb = JSON.parse(vb); } catch {}
+    }
+
+    const repStatus = String(rep.status || "").toUpperCase();
+    const sampleStatus = String(meta?.sample_status || "").toUpperCase();
+    let currentStage: "REGISTERED" | "COLLECTED" | "IN_TRANSIT" = "REGISTERED";
+    if (repStatus === "IN_TRANSIT" || repStatus === "PROCESSING") {
+      currentStage = "IN_TRANSIT";
+    } else if (sampleStatus === "COLLECTED" || repStatus === "COLLECTED") {
+      currentStage = "COLLECTED";
+    } else {
+      currentStage = "REGISTERED";
+    }
+    setModalStage(currentStage);
+
+    const tubes = detectTubesForReport(rep);
+    setActiveTubeTypes(tubes);
+
+    const barcodeMap: Record<string, string> = {};
+    tubes.forEach((t) => {
+      barcodeMap[t] = String(vb[t] || vb[t.toLowerCase()] || "");
+    });
+
+    const singleVial = String(p.vial_barcode || p.vialBarcode || meta.vial_barcode || "").trim();
+    if (singleVial && tubes.length > 0 && !Object.values(barcodeMap).some(Boolean)) {
+      barcodeMap[tubes[0]] = singleVial.split(",")[0].trim();
+    }
+
+    setTubeBarcodeInputs(barcodeMap);
+  };
+
+  const handleAutoGenerateTubeBarcode = (tubeType: string) => {
+    const p = statusModalReport?.patient || {};
+    const pid = String(p.custom_id || p.customId || statusModalReport?.custom_id || "OPL").replace(/[^a-zA-Z0-9]/g, "");
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const generated = `${pid}-${tubeType}-${randomNum}`;
+    setTubeBarcodeInputs((prev) => ({ ...prev, [tubeType]: generated }));
+  };
+
+  const handleSaveStatusAndBarcodes = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!statusModalReport?.patient?.id) return;
+    
+    if (isReportApproved(statusModalReport)) {
+      toast.error(
+        "Status Update Locked",
+        "This diagnostic report has already been approved and verified by the central laboratory. Status updates are locked."
+      );
+      return;
+    }
+
+    const patId = statusModalReport.patient.id;
+    const repId = statusModalReport.id;
+
+    try {
+      setSavingStatusModal(true);
+      const cleanedBarcodes: Record<string, string> = {};
+      Object.entries(tubeBarcodeInputs).forEach(([k, v]) => {
+        if (v && v.trim()) cleanedBarcodes[k] = v.trim();
+      });
+      const joinedBarcodeString = Object.values(cleanedBarcodes).join(",");
+
+      // 1. Update Patient Demographics & Barcodes
+      await fetchFromLaravel(`/patients/${patId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          vial_barcode: joinedBarcodeString || null,
+          vial_barcodes: cleanedBarcodes,
+          meta: {
+            vial_barcodes: cleanedBarcodes,
+            vial_barcode: joinedBarcodeString || null,
+            sample_status: modalStage,
+            collected_at: "Collection Center Station",
+            collected_time: new Date().toISOString(),
+          },
+        }),
+      });
+
+      // 2. Update Report Status if moving to COLLECTED or IN_TRANSIT
+      if (modalStage !== "REGISTERED") {
+        await fetchFromLaravel(`/reports/${repId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            status: modalStage,
+          }),
+        }).catch(() => {});
+      }
+
+      toast.success(
+        "Status & Barcodes Synchronized",
+        `Sample stage set to ${modalStage} with ${Object.keys(cleanedBarcodes).length} container barcode(s) attached.`
+      );
+
+      // Refresh list
+      await loadData(true);
+      setStatusModalReport(null);
+    } catch (err: any) {
+      toast.error("Failed to update status", err.message || "An error occurred");
+    } finally {
+      setSavingStatusModal(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in pb-10">
       {/* ── Header Deck ── */}
@@ -171,28 +469,24 @@ export default function TodaySamplesPage() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
-              Sample Intake Log
+              Collection Center Intake
             </span>
             <span className="text-xs text-muted-foreground font-mono">
-              {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+              Today's Intake: {totalCount} Samples
             </span>
           </div>
-          <h1 className="font-display text-2xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
-            <Clock className="h-6 w-6 text-primary" />
-            <span>Today's Samples</span>
-            <span className="text-sm font-bold px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground font-mono">
-              {totalCount}
-            </span>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+            Sample Intake &amp; Phlebotomy Log
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Complete list of all patient vials, barcodes, clinical test stages and payment clearance status.
+            Receive receptionist-registered patients, tag color vacutainer barcodes, and update sample collection stage.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
-            onClick={loadData}
+            onClick={() => loadData(true)}
             disabled={loading}
             className="px-3.5 py-2.5 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground text-xs font-bold shadow-xs hover:bg-muted/60 transition-colors flex items-center gap-2 cursor-pointer"
           >
@@ -200,13 +494,15 @@ export default function TodaySamplesPage() {
             <span>Refresh</span>
           </button>
 
-          <Link
-            href="/dashboard/patients/register"
-            className="px-5 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center gap-2 ring-inset-top"
-          >
-            <PlusCircle className="h-4 w-4" />
-            <span>New Sample Entry</span>
-          </Link>
+          {currentUserRole !== "COLLECTION_CENTER" && (
+            <Link
+              href="/dashboard/patients/register"
+              className="px-5 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center gap-2 ring-inset-top cursor-pointer"
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span>New Sample Entry</span>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -228,10 +524,22 @@ export default function TodaySamplesPage() {
 
           <button
             type="button"
+            onClick={() => setStageFilter("REGISTERED")}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+              stageFilter === "REGISTERED"
+                ? "bg-amber-500 text-white shadow-xs"
+                : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Registered ({registeredCount})
+          </button>
+
+          <button
+            type="button"
             onClick={() => setStageFilter("COLLECTED")}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
               stageFilter === "COLLECTED"
-                ? "bg-amber-500 text-white shadow-xs"
+                ? "bg-sky-500 text-white shadow-xs"
                 : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -259,7 +567,7 @@ export default function TodaySamplesPage() {
                 : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
-            Approved / Ready ({readyCount})
+            Approved ({readyCount})
           </button>
 
           <button
@@ -312,7 +620,7 @@ export default function TodaySamplesPage() {
                 <th className="py-3.5 px-4">Collection Time</th>
                 <th className="py-3.5 px-4">Processing Stage</th>
                 <th className="py-3.5 px-4">Payment Clearance</th>
-                <th className="py-3.5 px-5 text-right">Actions</th>
+                <th className="py-3.5 px-5 text-right">Status &amp; Barcodes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60 text-xs font-medium">
@@ -340,7 +648,7 @@ export default function TodaySamplesPage() {
                       <div className="h-6 w-16 rounded-full shimmer-gradient" />
                     </td>
                     <td className="py-4 px-5 text-right">
-                      <div className="h-7 w-20 rounded-xl shimmer-gradient ml-auto" />
+                      <div className="h-7 w-28 rounded-xl shimmer-gradient ml-auto" />
                     </td>
                   </tr>
                 ))
@@ -350,15 +658,8 @@ export default function TodaySamplesPage() {
                     <FlaskConical className="h-9 w-9 mx-auto text-muted-foreground/40 mb-2" />
                     <p className="font-bold text-foreground text-sm">No samples found</p>
                     <p className="text-xs text-muted-foreground mt-0.5 max-w-sm mx-auto">
-                      {search ? `No samples matching "${search}"` : "No samples have been registered yet today."}
+                      {search ? `No samples matching "${search}"` : "No intake samples available."}
                     </p>
-                    <Link
-                      href="/dashboard/patients/register"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 mt-4 rounded-xl gradient-primary text-primary-foreground text-xs font-bold shadow-md hover:brightness-105 transition-all cursor-pointer ring-inset-top"
-                    >
-                      <PlusCircle className="h-3.5 w-3.5" />
-                      <span>Intake First Sample</span>
-                    </Link>
                   </td>
                 </tr>
               ) : (
@@ -366,10 +667,10 @@ export default function TodaySamplesPage() {
                   const sampleBarcode = item.custom_id || item.customId || `OP-${item.id.slice(0, 8)}`;
                   const p = item.patient || {};
                   const testsStr = item.tests || (Array.isArray(item.results) ? item.results.map((r: any) => r.test?.name).filter(Boolean).join(", ") : "Diagnostic Test Panel");
-                  const stage = item.status || "IN_TRANSIT";
                   const isRejected = isReportRejected(item);
                   const isApproved = isReportApproved(item);
                   const isTransit = isReportTransit(item);
+                  const isCollected = isReportCollected(item);
 
                   const isB2BUser = currentUserRole === "B2B";
                   const rawB2bPrice = item.b2b_price !== undefined ? Number(item.b2b_price) : (item.b2bPrice !== undefined ? Number(item.b2bPrice) : null);
@@ -422,11 +723,11 @@ export default function TodaySamplesPage() {
                       </td>
 
                       {/* Collection Time */}
-                      <td className="py-4 px-4 text-muted-foreground text-[11px]">
+                      <td suppressHydrationWarning className="py-4 px-4 text-muted-foreground text-[11px]">
                         {colTime}
                       </td>
 
-                      {/* Sample Stage Badge */}
+                      {/* Sample Stage Badge (Dynamic: Default Registered -> Collected -> Central Lab -> Approved) */}
                       <td className="py-4 px-4">
                         {isRejected ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
@@ -438,11 +739,15 @@ export default function TodaySamplesPage() {
                           </span>
                         ) : isTransit ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                            <Clock className="h-3 w-3" /> Processing
+                            <Clock className="h-3 w-3" /> Central Hub
+                          </span>
+                        ) : isCollected ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                            <FlaskConical className="h-3 w-3" /> Collected
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                            <FlaskConical className="h-3 w-3" /> Collected
+                            <Clock className="h-3 w-3" /> Registered
                           </span>
                         )}
                       </td>
@@ -470,26 +775,17 @@ export default function TodaySamplesPage() {
                         )}
                       </td>
 
-                      {/* Actions */}
+                      {/* Status & Barcode Action Button (Replaced old Actions Column) */}
                       <td className="py-4 px-5 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Link
-                            href={`/dashboard/patients`}
-                            className="p-1.5 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                            title="View Patient Profile"
-                          >
-                            <User className="h-3.5 w-3.5" />
-                          </Link>
-                          {isApproved && currentUserRole !== "B2B" && (
-                            <Link
-                              href={`/dashboard/reports/${item.id}`}
-                              className="p-1.5 rounded-lg border border-border bg-card text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                              title="View Report"
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                            </Link>
-                          )}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenStatusModal(item)}
+                          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground font-bold text-xs shadow-xs hover:shadow transition-all cursor-pointer group"
+                          title="Open Specimen Status & Tube Barcode Window"
+                        >
+                          <SlidersHorizontal className="h-3.5 w-3.5 group-hover:rotate-45 transition-transform" />
+                          <span>Status / Barcodes</span>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -499,44 +795,33 @@ export default function TodaySamplesPage() {
           </table>
         </div>
 
-        {/* ── Table Pagination Bar ── */}
-        {filteredSamples.length > 0 && (
-          <div className="px-6 py-3.5 border-t border-border/60 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <span>Showing</span>
-              <span className="font-bold text-foreground">
-                {(safeCurrentPage - 1) * pageSize + 1}
-              </span>
-              <span>to</span>
-              <span className="font-bold text-foreground">
-                {Math.min(safeCurrentPage * pageSize, filteredSamples.length)}
-              </span>
-              <span>of</span>
-              <span className="font-bold text-foreground">{filteredSamples.length}</span>
-              <span>samples</span>
+        {/* ── Pagination Deck ── */}
+        {!loading && filteredSamples.length > 0 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-border/80 bg-muted/20 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span>Show</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="h-8 px-2 rounded-lg bg-card border border-border text-foreground font-semibold outline-none cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span>per page · Total {filteredSamples.length} samples</span>
             </div>
 
-            <div className="flex items-center gap-3">
-              {/* Rows per page selector */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-muted-foreground text-[11px]">Rows:</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setCurrentPage(1);
-                  }}
-                  className="h-8 px-2 rounded-lg bg-card border border-border text-xs font-bold text-foreground outline-none focus:border-primary cursor-pointer"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
+            <div className="flex items-center gap-4">
+              <span className="font-medium">
+                Page <strong className="text-foreground">{safeCurrentPage}</strong> of <strong className="text-foreground">{totalPages}</strong>
+              </span>
 
-              {/* Page buttons */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setCurrentPage(1)}
@@ -556,9 +841,8 @@ export default function TodaySamplesPage() {
                   <span>Prev</span>
                 </button>
 
-                {/* Numbered Page Buttons */}
-                <div className="flex items-center gap-1 px-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }).map((_, i) => {
                     let pageNum = i + 1;
                     if (totalPages > 5 && safeCurrentPage > 3) {
                       pageNum = safeCurrentPage - 2 + i;
@@ -606,6 +890,370 @@ export default function TodaySamplesPage() {
           </div>
         )}
       </div>
+
+      {/* ── State of the Art Status & Specimen Barcoding Window (Best UI/UX) ── */}
+      <Dialog open={!!statusModalReport} onOpenChange={() => setStatusModalReport(null)}>
+        <DialogContent className="max-w-3xl w-full rounded-2xl bg-card border border-border/80 shadow-2xl p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Specimen Status &amp; Tube Barcoding</DialogTitle>
+          
+          {statusModalReport && (() => {
+            const isModalApproved = Boolean(isReportApproved(statusModalReport));
+
+            return (
+            <form onSubmit={handleSaveStatusAndBarcodes} className="flex flex-col max-h-[85vh]">
+              {/* Modal Header (Clean single close button) */}
+              <div className="px-6 py-4 border-b border-border/80 bg-muted/20 flex items-center justify-between pr-14">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl gradient-primary text-primary-foreground flex items-center justify-center shadow-xs shrink-0">
+                    <SlidersHorizontal className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-base font-bold text-foreground">
+                      Specimen Status &amp; Tube Barcoding
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Tag physical color vacutainer barcodes and advance specimen processing stage.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Scrollable Body */}
+              <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+                {/* 1. Patient Summary Card */}
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-sm text-foreground">
+                        {statusModalReport.patient?.name || "Patient"}
+                      </span>
+                      <span className="font-mono text-xs font-bold bg-muted px-2 py-0.5 rounded border border-border text-foreground">
+                        {statusModalReport.patient?.custom_id || statusModalReport.patient?.customId || "PID-—"}
+                      </span>
+                      {statusModalReport.patient?.gender && (
+                        <span className="text-xs text-muted-foreground font-medium">
+                          {statusModalReport.patient?.age ? `${statusModalReport.patient.age}y` : ""} · {statusModalReport.patient.gender}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Ref Doctor: <strong className="text-foreground">{statusModalReport.patient?.ref_doctor || "Self"}</strong> · Sample ID: <span className="font-mono">{statusModalReport.custom_id || statusModalReport.customId}</span>
+                    </p>
+                  </div>
+
+                  <div className="text-right sm:self-center">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground block">
+                      Investigation Panel
+                    </span>
+                    <span className="text-xs font-semibold text-foreground max-w-xs truncate block">
+                      {statusModalReport.results?.map((r: any) => r.test?.name).filter(Boolean).join(", ") || statusModalReport.package_name || "Diagnostic Panel"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Report Approved Lockdown Banner */}
+                {isModalApproved && (
+                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 flex items-start gap-3 shadow-xs animate-fade-in">
+                    <ShieldCheck className="h-5 w-5 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+                    <div className="space-y-1 text-xs">
+                      <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                        <span>Report Approved & Finalized — Status Update Locked</span>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-mono font-extrabold uppercase">
+                          {statusModalReport.status || "APPROVED"}
+                        </span>
+                      </h4>
+                      <p className="leading-relaxed text-muted-foreground">
+                        This patient&apos;s diagnostic investigation report has already been reviewed, approved, and authorized by the central laboratory. Further specimen stage modifications are locked.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Processing Stage Selector */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                        <span>Specimen Collection Stage</span>
+                        {isModalApproved && (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/30 text-[10px] font-bold">
+                            Locked
+                          </span>
+                        )}
+                      </label>
+                      <p className="text-[11px] text-muted-foreground">
+                        {isModalApproved 
+                          ? "Status is finalized and locked by Central Lab administration." 
+                          : "By default registered by front-desk receptionist. Advance to Collected once phlebotomy is finished."}
+                      </p>
+                    </div>
+
+                    {/* Quick Button to Mark Collected (only if not approved) */}
+                    {!isModalApproved && modalStage !== "COLLECTED" && (
+                      <button
+                        type="button"
+                        onClick={() => setModalStage("COLLECTED")}
+                        className="px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <CheckCheck className="h-3.5 w-3.5" />
+                        <span>Quick Mark as Collected</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 ${isModalApproved ? "opacity-60 pointer-events-none cursor-not-allowed" : ""}`}>
+                    {/* Stage 1: REGISTERED */}
+                    <div
+                      onClick={() => setModalStage("REGISTERED")}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                        modalStage === "REGISTERED"
+                          ? "bg-amber-500/10 border-amber-500 shadow-xs"
+                          : "bg-card border-border/80 hover:bg-muted/40 hover:border-amber-500/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-700 dark:text-amber-400">1. Registered</span>
+                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+                          modalStage === "REGISTERED" ? "border-amber-500 bg-amber-500" : "border-muted-foreground"
+                        }`}>
+                          {modalStage === "REGISTERED" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Default reception registration; awaiting tube draw.
+                      </p>
+                    </div>
+
+                    {/* Stage 2: COLLECTED */}
+                    <div
+                      onClick={() => setModalStage("COLLECTED")}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                        modalStage === "COLLECTED"
+                          ? "bg-sky-500/10 border-sky-500 shadow-xs"
+                          : "bg-card border-border/80 hover:bg-muted/40 hover:border-sky-500/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-sky-700 dark:text-sky-400">2. Collected</span>
+                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+                          modalStage === "COLLECTED" ? "border-sky-500 bg-sky-500" : "border-muted-foreground"
+                        }`}>
+                          {modalStage === "COLLECTED" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Phlebotomy drawn &amp; labeled with barcode.
+                      </p>
+                    </div>
+
+                    {/* Stage 3: IN_TRANSIT */}
+                    <div
+                      onClick={() => setModalStage("IN_TRANSIT")}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
+                        modalStage === "IN_TRANSIT"
+                          ? "bg-blue-500/10 border-blue-500 shadow-xs"
+                          : "bg-card border-border/80 hover:bg-muted/40 hover:border-blue-500/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-blue-700 dark:text-blue-400">3. Central Testing</span>
+                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+                          modalStage === "IN_TRANSIT" ? "border-blue-500 bg-blue-500" : "border-muted-foreground"
+                        }`}>
+                          {modalStage === "IN_TRANSIT" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Dispatched to central testing laboratory.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Color-Coded Vacutainers & Barcode Inputs */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-xs font-bold text-foreground uppercase tracking-wider">
+                        Color-Coded Specimen Vacutainers &amp; Barcodes
+                      </label>
+                      <p className="text-[11px] text-muted-foreground">
+                        Scan physical tube stickers or type barcodes for each diagnostic container.
+                      </p>
+                    </div>
+
+                    {/* Add extra tube button */}
+                    <div className="flex items-center gap-2">
+                      <select
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val && !activeTubeTypes.includes(val)) {
+                            setActiveTubeTypes((prev) => [...prev, val]);
+                          }
+                          e.target.value = "";
+                        }}
+                        className="text-xs font-bold bg-muted/60 border border-border rounded-xl px-2.5 py-1 text-foreground outline-none cursor-pointer"
+                        defaultValue=""
+                      >
+                        <option value="" disabled>+ Add Tube Type</option>
+                        {Object.keys(TUBE_CONFIG).map((k) => (
+                          <option key={k} value={k} disabled={activeTubeTypes.includes(k)}>
+                            {TUBE_CONFIG[k].title} ({TUBE_CONFIG[k].capName})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {activeTubeTypes.map((tubeKey) => {
+                      const tube = TUBE_CONFIG[tubeKey] || {
+                        tubeType: tubeKey,
+                        capColor: "#6366f1",
+                        capName: `${tubeKey} Tube`,
+                        badgeBg: "bg-indigo-500/10",
+                        badgeBorder: "border-indigo-500/30",
+                        badgeText: "text-indigo-600 dark:text-indigo-400",
+                        title: `${tubeKey} Vacutainer`,
+                        specimenType: "Lab Specimen",
+                        additive: "Standard Container",
+                        department: "Diagnostic Testing",
+                      };
+
+                      const currentBarcodeVal = tubeBarcodeInputs[tubeKey] || "";
+
+                      return (
+                        <div
+                          key={tubeKey}
+                          className="bg-card border border-border/80 rounded-2xl p-4 space-y-3 shadow-xs hover:border-primary/30 transition-all"
+                        >
+                          {/* Tube Card Header */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <span
+                                className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 shadow-xs ring-2 ring-white dark:ring-zinc-900"
+                                style={{ backgroundColor: tube.capColor }}
+                              />
+                              <div>
+                                <h4 className="font-bold text-xs text-foreground leading-tight">
+                                  {tube.title}
+                                </h4>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {tube.capName} · {tube.specimenType}
+                                </span>
+                              </div>
+                            </div>
+
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${tube.badgeBg} ${tube.badgeBorder} ${tube.badgeText}`}>
+                              {tube.tubeType}
+                            </span>
+                          </div>
+
+                          {/* Tube Specs info */}
+                          <div className="p-2 rounded-lg bg-muted/40 border border-border/50 text-[10px] text-muted-foreground flex items-center justify-between gap-2">
+                            <span className="truncate">Additive: <strong className="text-foreground/80">{tube.additive}</strong></span>
+                            <span className="truncate max-w-[140px] text-right font-medium">{tube.department}</span>
+                          </div>
+
+                          {/* Barcode Input & Auto Generate */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[11px] font-bold text-foreground">
+                                Tube Barcode Number
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => handleAutoGenerateTubeBarcode(tubeKey)}
+                                className="text-[10px] font-bold text-primary hover:underline cursor-pointer flex items-center gap-1"
+                              >
+                                <Sparkles className="h-2.5 w-2.5" /> Auto Fill
+                              </button>
+                            </div>
+
+                            <div className="relative">
+                              <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                              <Input
+                                type="text"
+                                value={currentBarcodeVal}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setTubeBarcodeInputs((prev) => ({ ...prev, [tubeKey]: val }));
+                                }}
+                                placeholder="Scan with barcode gun or type..."
+                                className="pl-9 pr-8 h-9 text-xs font-mono font-bold"
+                              />
+                              {currentBarcodeVal && (
+                                <button
+                                  type="button"
+                                  onClick={() => setTubeBarcodeInputs((prev) => ({ ...prev, [tubeKey]: "" }))}
+                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Live SVG Barcode Preview */}
+                          {currentBarcodeVal ? (
+                            <div className="p-2 bg-white rounded-xl border border-zinc-200 flex flex-col items-center justify-center">
+                              <BarcodeSVG value={currentBarcodeVal} width={1.05} height={24} fontSize={8} />
+                            </div>
+                          ) : (
+                            <div className="p-2 rounded-xl border border-dashed border-border/80 text-center text-[10px] text-muted-foreground">
+                              Awaiting barcode scan for {tube.tubeType}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer Controls */}
+              <div className="px-6 py-4 border-t border-border/80 bg-muted/20 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <span>Real-time LIS analyzer and tracking synchronization</span>
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setStatusModalReport(null)}
+                    className="text-xs cursor-pointer"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={savingStatusModal || isModalApproved}
+                    className={`font-bold text-xs gap-1.5 shadow-md ring-inset-top ${
+                      isModalApproved
+                        ? "bg-muted text-muted-foreground border border-border cursor-not-allowed"
+                        : "gradient-primary text-primary-foreground cursor-pointer"
+                    }`}
+                  >
+                    {savingStatusModal ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : isModalApproved ? (
+                      <Lock className="h-3.5 w-3.5 text-amber-500" />
+                    ) : (
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    )}
+                    <span>{isModalApproved ? "Status Locked (Report Approved)" : "Save Barcodes & Update Status"}</span>
+                  </Button>
+                </div>
+              </div>
+            </form>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

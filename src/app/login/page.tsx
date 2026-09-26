@@ -20,13 +20,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
 
-  // Check if redirected due to admin suspension
+  // Check if redirected due to admin suspension and trap back button
   React.useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("suspended") === "true") {
         setError("Your account has been suspended. Please contact support@onepathlab.com.");
       }
+      try {
+        window.history.pushState(null, "", window.location.href);
+        const handlePopState = () => {
+          window.history.pushState(null, "", window.location.href);
+        };
+        window.addEventListener("popstate", handlePopState);
+        return () => window.removeEventListener("popstate", handlePopState);
+      } catch {}
     }
   }, []);
 
@@ -116,6 +124,7 @@ export default function LoginPage() {
       sessionStorage.removeItem("lis_subscription_locked");
       const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";
       document.cookie = `lis_token=${token}; path=/; max-age=86400; SameSite=Lax${isSecure ? "; Secure" : ""}`;
+      document.cookie = `lis_role=${encodeURIComponent(user?.role || "")}; path=/; max-age=86400; SameSite=Lax${isSecure ? "; Secure" : ""}`;
 
       router.push("/dashboard");
       router.refresh();
@@ -278,7 +287,7 @@ export default function LoginPage() {
                 }`}
               >
                 <FlaskConical className={`h-3.5 w-3.5 shrink-0 transition-colors ${loginType === "ADMIN" ? "text-emerald-600" : "text-slate-400"}`} />
-                <span className="truncate">Admin</span>
+                <span className="truncate">Admin / Staff</span>
               </button>
               <button
                 type="button"

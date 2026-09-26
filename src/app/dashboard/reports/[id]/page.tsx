@@ -40,7 +40,8 @@ export default function ReportDetailPage() {
 
   const isB2B = currentUser?.role === "B2B";
   const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER";
-  const isPartnerOrCC = isCollectionCenter || isB2B;
+  const isReceptionist = currentUser?.role === "RECEPTIONIST";
+  const isPartnerOrCC = isCollectionCenter || isB2B || isReceptionist;
 
   const [printSettings, setPrintSettings] = useState<PrintSettings>(defaultPrintSettings);
   const [showPrintOptions, setShowPrintOptions] = useState(false);
@@ -90,7 +91,18 @@ export default function ReportDetailPage() {
   }, [reportId]);
 
   const triggerPrint = async () => {
-    // Only B2B accounts are subject to wallet deduction on print; CC bypasses payment
+    if (!report) return;
+    const isFinal = report.status === "FINAL" || report.status === "APPROVED" || report.status === "COMPLETED";
+    if (isPartnerOrCC && !isFinal) {
+      toast({
+        variant: "info",
+        title: "Report Not Finalized",
+        description: `Report #${report.customId || "Pending"} has not been finalized by the central lab yet. Printing is locked until final approval.`
+      });
+      return;
+    }
+
+    // Only B2B accounts are subject to wallet deduction on print; CC and Receptionist bypass payment
     if (isB2B) {
       try {
         setIsDeducting(true);

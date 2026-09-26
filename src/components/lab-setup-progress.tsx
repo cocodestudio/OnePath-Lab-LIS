@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -40,12 +40,36 @@ export function LabSetupProgress({
   lab: any;
   onRefresh?: () => void;
 }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const { percentage, isComplete } = useMemo(() => {
-    return evaluateLabSetupProgress(lab);
+    if (!lab) {
+      if (typeof window !== "undefined") {
+        try {
+          const cached = localStorage.getItem("lis_cached_lab");
+          if (cached) {
+            return evaluateLabSetupProgress(JSON.parse(cached));
+          }
+        } catch {}
+      }
+      return { percentage: 100, isComplete: true }; // Default to hidden while loading to avoid glitch
+    }
+    const result = evaluateLabSetupProgress(lab);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("lis_lab_setup_complete", String(result.isComplete));
+        localStorage.setItem("lis_cached_lab", JSON.stringify(lab));
+      } catch {}
+    }
+    return result;
   }, [lab]);
 
-  // If 100% complete, hide completely from UI
-  if (isComplete) {
+  // If not mounted on client yet, or 100% complete, hide completely from UI
+  if (!mounted || isComplete) {
     return null;
   }
 

@@ -49,18 +49,58 @@ export function updateStoredUser(updates: Partial<any>) {
 }
 
 export function logout(reason?: string) {
+  // 1. Immediately cover the entire viewport with an impenetrable overlay
+  // This guarantees 0ms visual leakage of the Admin layout or other UI while state tears down
+  if (typeof window !== "undefined") {
+    try {
+      let shield = document.getElementById("lis-logout-shield");
+      if (!shield) {
+        shield = document.createElement("div");
+        shield.id = "lis-logout-shield";
+        shield.style.position = "fixed";
+        shield.style.inset = "0";
+        shield.style.width = "100vw";
+        shield.style.height = "100vh";
+        shield.style.zIndex = "2147483647";
+        shield.style.backgroundColor = document.documentElement.classList.contains("dark") ? "#090d16" : "#ffffff";
+        shield.style.display = "flex";
+        shield.style.flexDirection = "column";
+        shield.style.alignItems = "center";
+        shield.style.justifyContent = "center";
+        shield.style.pointerEvents = "all";
+        shield.innerHTML = `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:14px;font-family:system-ui,-apple-system,sans-serif;">
+            <div style="width:34px;height:34px;border:3px solid rgba(16,185,129,0.25);border-top:3px solid #10b981;border-radius:50%;animation:lis-spin 0.6s linear infinite;"></div>
+            <p style="font-size:12px;font-weight:600;color:#64748b;letter-spacing:0.04em;text-transform:uppercase;">Logging out...</p>
+          </div>
+          <style>
+            @keyframes lis-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+          </style>
+        `;
+        document.body.appendChild(shield);
+      }
+    } catch {}
+  }
+
   clearApiCache();
   localStorage.removeItem("lis_token");
   localStorage.removeItem("lis_user");
   if (typeof window !== "undefined") {
-    sessionStorage.removeItem("lis_subscription_locked");
+    try {
+      sessionStorage.clear();
+      sessionStorage.setItem("lis_logged_out", "true");
+    } catch {}
   }
   const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";
   document.cookie = `lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax${isSecure ? "; Secure" : ""};`;
-  if (reason === "suspended") {
-    window.location.href = "/login?suspended=true";
-  } else {
-    window.location.href = "/login";
+  document.cookie = `lis_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax${isSecure ? "; Secure" : ""};`;
+
+  const targetUrl = reason === "suspended" ? "/login?suspended=true" : "/login";
+  if (typeof window !== "undefined") {
+    try {
+      window.history.replaceState(null, "", targetUrl);
+    } catch {}
+    window.location.replace(targetUrl);
   }
 }
 

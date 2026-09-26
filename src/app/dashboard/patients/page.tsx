@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
-import { fetchFromLaravel } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredToken, getAuthBaseUrl, updateStoredUser } from "@/lib/api-client";
 import { ALL_DESIGNATIONS } from "@/lib/report-settings";
 import { BarcodeSVG } from "@/components/barcode-svg";
 
@@ -293,22 +293,80 @@ function getPatientVialList(patient: any): TubeDisplayInfo[] {
 
 export default function PatientsPage() {
   const toast = useToast();
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [patients, setPatients] = useState<Patient[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_patients");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
   const [search, setSearch] = useState("");
   const [filterDate, setFilterDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_patients");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return false;
+        }
+      } catch {}
+    }
+    return true;
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const uStr = localStorage.getItem("lis_user");
+        if (uStr) return JSON.parse(uStr);
+      } catch {}
+    }
+    return null;
+  });
+
+  const isB2B = currentUser?.role === "B2B" || currentUser?.role === "COLLECTION_CENTER" || currentUser?.role === "RECEPTIONIST";
+  const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER";
+
+  const canEditDemographics = (() => {
+    // If not a Collection Centre (e.g. Admin, Receptionist, etc.), keep existing edit rights
+    if (!isCollectionCenter) return true;
+    const perms = currentUser?.permissions;
+    if (Array.isArray(perms)) {
+      return perms.includes("can_edit_demographics");
+    }
+    if (typeof perms === "object" && perms !== null) {
+      return Boolean(perms.can_edit_demographics);
+    }
+    return false;
+  })();
 
   useEffect(() => {
-    try {
-      const uStr = localStorage.getItem("lis_user");
-      if (uStr) setCurrentUser(JSON.parse(uStr));
-    } catch (e) {}
+    const token = getStoredToken();
+    if (token) {
+      const authBase = getAuthBaseUrl();
+      fetch(`${authBase}/user`, {
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`
+        }
+      })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.user) {
+          setCurrentUser(data.user);
+          updateStoredUser(data.user);
+        }
+      })
+      .catch(() => {});
+    }
   }, []);
-
-  const isB2B = currentUser?.role === "B2B" || currentUser?.role === "COLLECTION_CENTER";
 
   const [barcodeModalPatient, setBarcodeModalPatient] = useState<Patient | null>(null);
   const [copiedBarcode, setCopiedBarcode] = useState<string | null>(null);
@@ -329,9 +387,42 @@ export default function PatientsPage() {
   };
 
   // Referral & Collection Dropdown Lists
-  const [doctorsList, setDoctorsList] = useState<string[]>(defaultDoctors);
-  const [collectionPoints, setCollectionPoints] = useState<string[]>(defaultCollectionPoints);
-  const [phlebotomists, setPhlebotomists] = useState<string[]>(defaultPhlebotomists);
+  const [doctorsList, setDoctorsList] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const savedDocs = localStorage.getItem("lis_referral_doctors");
+        if (savedDocs) {
+          const parsed = JSON.parse(savedDocs);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return defaultDoctors;
+  });
+  const [collectionPoints, setCollectionPoints] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const savedPoints = localStorage.getItem("lis_collection_points");
+        if (savedPoints) {
+          const parsed = JSON.parse(savedPoints);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return defaultCollectionPoints;
+  });
+  const [phlebotomists, setPhlebotomists] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const savedPhlebo = localStorage.getItem("lis_phlebotomists");
+        if (savedPhlebo) {
+          const parsed = JSON.parse(savedPhlebo);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return defaultPhlebotomists;
+  });
 
   const shiftDate = (days: number) => {
     const base = filterDate ? new Date(filterDate) : new Date();
@@ -368,41 +459,17 @@ export default function PatientsPage() {
   useEffect(() => {
     fetchPatients();
 
-    try {
-      const savedDocs = localStorage.getItem("lis_referral_doctors");
-      if (savedDocs) {
-        const parsed = JSON.parse(savedDocs);
-        if (Array.isArray(parsed) && parsed.length > 0) setDoctorsList(parsed);
-      }
-
-      const savedPoints = localStorage.getItem("lis_collection_points");
-      if (savedPoints) {
-        const parsed = JSON.parse(savedPoints);
-        if (Array.isArray(parsed) && parsed.length > 0) setCollectionPoints(parsed);
-      }
-
-      const savedPhlebo = localStorage.getItem("lis_phlebotomists");
-      if (savedPhlebo) {
-        const parsed = JSON.parse(savedPhlebo);
-        if (Array.isArray(parsed) && parsed.length > 0) setPhlebotomists(parsed);
-      }
-
-      const cachedPatients = localStorage.getItem("lis_cached_patients");
-      if (cachedPatients) {
-        const parsed = JSON.parse(cachedPatients);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setPatients(parsed);
-          setLoading(false);
-        }
-      }
-    } catch (e) {}
-    fetchPatients();
+    const handleSync = () => {
+      fetchPatients(true);
+    };
+    window.addEventListener("lis_online_sync", handleSync);
+    return () => window.removeEventListener("lis_online_sync", handleSync);
   }, []);
 
   const fetchPatients = async (forceRefresh?: boolean | any) => {
     const isForce = forceRefresh === true;
     try {
-      if (isForce || patients.length === 0) {
+      if (isForce && patients.length === 0) {
         setLoading(true);
       }
       const data = await fetchFromLaravel("/patients", { skipCache: isForce });
@@ -549,6 +616,14 @@ export default function PatientsPage() {
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">Patients Registry</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Directory of all registered laboratory patients & demographics.</p>
         </div>
+        {currentUser?.role !== "COLLECTION_CENTER" && (
+          <Link href="/dashboard/patients/register">
+            <Button size="sm" className="gradient-primary text-primary-foreground font-bold text-xs gap-2 shadow-xs cursor-pointer ring-inset-top">
+              <UserPlus className="h-4 w-4" />
+              <span>Register Patient</span>
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Filter / Search Ribbon */}
@@ -754,9 +829,6 @@ export default function PatientsPage() {
                                   </span>
                                 )}
                               </button>
-                              <span className="text-[11px] text-muted-foreground font-mono truncate max-w-[110px]" title={patBarcode}>
-                                {patBarcode}
-                              </span>
                             </div>
                           );
                         })()}
@@ -782,6 +854,11 @@ export default function PatientsPage() {
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
                           {(() => {
+                            // Hide edit button for Collection Centre unless Admin explicitly granted demographic edit access
+                            if (isCollectionCenter && !canEditDemographics) {
+                              return null;
+                            }
+
                             const isReportApproved = Boolean(
                               (patient as any).reports?.some((r: any) => 
                                 ["APPROVED", "FINAL", "COMPLETED"].includes(String(r.status || "").toUpperCase())

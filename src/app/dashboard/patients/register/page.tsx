@@ -19,7 +19,7 @@ import {
 import {
   Dialog, DialogContent, DialogTitle
 } from "@/components/ui/dialog";
-import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser, getStoredToken, getAuthBaseUrl, updateStoredUser } from "@/lib/api-client";
 import {
   ALL_DESIGNATIONS,
   DEFAULT_INTAKE_FIELDS,
@@ -28,6 +28,7 @@ import {
 } from "@/lib/report-settings";
 import { getStoredPackages, type LabPackage, saveReportPackage, resolvePackageTestIds } from "@/lib/packages";
 import { InvoiceSheet } from "@/components/invoice-sheet";
+import { normalizeBillSettings, type BillLayoutSettings } from "@/lib/bill-settings";
 import { printInvoiceElement } from "@/lib/print-invoice";
 import { AbhaLinkModal, type AbhaVerifiedPatient } from "@/components/abha-link-modal";
 import { AbhaQrPosterModal } from "@/components/abha-qr-poster-modal";
@@ -202,14 +203,38 @@ function RegisterPatientPage() {
   const [existingReport, setExistingReport] = useState<any>(null);
   const [existingBill, setExistingBill] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
+  const [currentUserPermissions, setCurrentUserPermissions] = useState<any[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const u = getStoredUser();
+        return Array.isArray(u?.permissions) ? u.permissions : [];
+      } catch {}
+    }
+    return [];
+  });
   const isB2B = currentUserRole === "B2B";
+  const isCollectionCenter = currentUserRole === "COLLECTION_CENTER";
+  const isReceptionist = currentUserRole === "RECEPTIONIST";
+  const isRestrictedRole = isB2B || isCollectionCenter || isReceptionist;
+
+  const canEditDemographics = (() => {
+    if (!isCollectionCenter) return true;
+    if (Array.isArray(currentUserPermissions)) {
+      return currentUserPermissions.includes("can_edit_demographics");
+    }
+    if (typeof currentUserPermissions === "object" && currentUserPermissions !== null) {
+      return Boolean((currentUserPermissions as any).can_edit_demographics);
+    }
+    return false;
+  })();
 
   const isApprovedReport = existingReport && (
     existingReport.status === "APPROVED" ||
     existingReport.status === "FINAL" ||
     existingReport.status === "COMPLETED"
   );
-  const isEditLocked = isEditMode && isB2B && Boolean(isApprovedReport);
+  const isCcEditLocked = isEditMode && isCollectionCenter && !canEditDemographics;
+  const isEditLocked = (isEditMode && isRestrictedRole && Boolean(isApprovedReport)) || isCcEditLocked;
 
   // Multi-Vial Barcode Mapping: tubeType => barcode string
   const [vialBarcodes, setVialBarcodes] = useState<Record<string, string>>({});
@@ -290,6 +315,15 @@ function RegisterPatientPage() {
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [labInfo, setLabInfo] = useState<any>(null);
+  const [billSettings, setBillSettings] = useState<BillLayoutSettings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_bill_settings");
+        if (cached) return normalizeBillSettings(JSON.parse(cached));
+      } catch {}
+    }
+    return normalizeBillSettings({});
+  });
   const registerPrintRef = useRef<HTMLDivElement>(null);
 
   // Collection Center Specific Fields & PayU Gate
@@ -335,6 +369,8 @@ function RegisterPatientPage() {
     discount: number;
     paidAmount: number;
     balanceDue: number;
+    paymentStatus?: string;
+    paymentMode?: string;
     patientName: string;
     patientAge?: number;
     patientGender?: string;
@@ -343,7 +379,7 @@ function RegisterPatientPage() {
     refDoctor?: string;
     collectedAt?: string;
     packageName?: string | null;
-    tests?: Array<{ id: string; name: string; category: string; price: number }>;
+    tests?: Array<{ id: string; name: string; category?: string; price: number; sampleType?: string; code?: string }>;
     vialBarcodes?: Record<string, string>;
   } | null>(null);
 
@@ -586,11 +622,32 @@ function RegisterPatientPage() {
     const storedUser = getStoredUser();
     if (storedUser) {
       setCurrentUserRole(storedUser.role || "STAFF");
+      setCurrentUserPermissions(Array.isArray(storedUser.permissions) ? storedUser.permissions : []);
       if (storedUser.role === "COLLECTION_CENTER" || storedUser.role === "B2B") {
         const centerName = storedUser.lab_name || storedUser.labName || storedUser.name || (storedUser.role === "B2B" ? "B2B Partner" : "Collection Center");
         setCollectedAtSelect(centerName);
         setCollectedBySelect(storedUser.name || centerName);
       }
+    }
+
+    const token = getStoredToken();
+    if (token) {
+      const authBase = getAuthBaseUrl();
+      fetch(`${authBase}/user`, {
+        headers: {
+          "Accept": "application/json",
+          "Authorization": `Bearer ${token}`
+        }
+      })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.user) {
+          updateStoredUser(data.user);
+          setCurrentUserRole(data.user.role || "STAFF");
+          setCurrentUserPermissions(Array.isArray(data.user.permissions) ? data.user.permissions : []);
+        }
+      })
+      .catch(() => {});
     }
 
     const savedIntake = localStorage.getItem("lis_intake_fields");
@@ -679,6 +736,14 @@ function RegisterPatientPage() {
             if (normalized.defaultDesignation) {
               setDesignation(normalized.defaultDesignation);
             }
+          }
+          const rawBillSettings = lab?.bill_settings || lab?.billSettings;
+          if (rawBillSettings) {
+            const normalizedBill = normalizeBillSettings(rawBillSettings);
+            setBillSettings(normalizedBill);
+            try {
+              localStorage.setItem("lis_cached_bill_settings", JSON.stringify(normalizedBill));
+            } catch {}
           }
         }
       } catch (err) { console.error("Error fetching lab defaults:", err); }
@@ -1037,7 +1102,11 @@ function RegisterPatientPage() {
     setRegisterError(null);
 
     if (isEditLocked) {
-      setRegisterError("This patient's report has already been approved by the central lab. Editing is locked.");
+      setRegisterError(
+        isCcEditLocked
+          ? "Editing patient demographics is restricted for Collection Centres. Please contact the Central Lab Administrator to grant edit access."
+          : "This patient's report has already been approved by the central lab. Editing is locked."
+      );
       return;
     }
 
@@ -1406,11 +1475,26 @@ function RegisterPatientPage() {
       }
 
       const invoiceTests = selectedTestObjects.length > 0
-        ? selectedTestObjects.map(t => ({ id: t.id, name: t.name, category: t.category, price: Number(t.price) || 0 }))
-        : (selectedPackage?.tests || []).map((t: any) => ({ id: t.id, name: t.name, category: t.category || "General", price: Number(t.price) || 0 }));
+        ? selectedTestObjects.map(t => ({
+            id: t.id,
+            name: t.name,
+            category: t.category,
+            price: Number(t.price) || 0,
+            code: (t as any).testCode || (t as any).test_code || (t as any).code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
+            sampleType: (t as any).sampleType || (t as any).sample_type || undefined,
+          }))
+        : (selectedPackage?.tests || []).map((t: any) => ({
+            id: t.id,
+            name: t.name,
+            category: t.category || "General",
+            price: Number(t.price) || 0,
+            code: t.code || t.testCode || t.test_code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
+            sampleType: t.sampleType || t.sample_type || undefined,
+          }));
 
       setBookingSuccess(true);
-      setSelectedPaymentMode(computedStatus === "PAID" ? "CASH" : "UNPAID");
+      const initialMode = computedStatus === "PAID" ? (selectedPaymentMode !== "UNPAID" ? selectedPaymentMode : "CASH") : "UNPAID";
+      setSelectedPaymentMode(initialMode as any);
       setPaymentUpdateMessage(null);
       setSuccessDetails({
         patientCustomId: assignedPatientCustomId,
@@ -1421,6 +1505,8 @@ function RegisterPatientPage() {
         discount: computedDiscount,
         paidAmount: computedPaid,
         balanceDue: computedBalance,
+        paymentStatus: computedStatus,
+        paymentMode: initialMode,
         patientName: newPatient.name,
         patientAge: newPatient.age,
         patientGender: newPatient.gender,
@@ -1505,6 +1591,7 @@ function RegisterPatientPage() {
         balanceDue: 0,
         paidAmount: prev.total,
         paymentStatus: "PAID",
+        paymentMode: "CASH",
       }));
     } catch (err: any) {
       console.error("Payment approval error:", err);
@@ -1718,17 +1805,21 @@ function RegisterPatientPage() {
             <div className="lg:col-span-8 space-y-6">
 
               {isEditLocked && (
-                <div className="p-4 sm:p-5 rounded-2xl bg-rose-500/10 border-2 border-rose-500/30 text-rose-700 dark:text-rose-400 flex items-start gap-3 shadow-xs animate-fade-in">
-                  <ShieldCheck className="h-5 w-5 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                <div className={`p-4 sm:p-5 rounded-2xl ${isCcEditLocked ? "bg-amber-500/10 border-2 border-amber-500/30 text-amber-700 dark:text-amber-400" : "bg-rose-500/10 border-2 border-rose-500/30 text-rose-700 dark:text-rose-400"} flex items-start gap-3 shadow-xs animate-fade-in`}>
+                  <ShieldCheck className={`h-5 w-5 shrink-0 mt-0.5 ${isCcEditLocked ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"}`} />
                   <div className="space-y-1 text-xs">
                     <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
-                      <span>Report Approved & Finalized — Patient Editing Locked</span>
-                      <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-mono font-extrabold uppercase">
-                        {existingReport?.status || "FINAL"}
-                      </span>
+                      <span>{isCcEditLocked ? "Patient Demographics Editing Disabled" : "Report Approved & Finalized — Patient Editing Locked"}</span>
+                      {!isCcEditLocked && (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-mono font-extrabold uppercase">
+                          {existingReport?.status || "FINAL"}
+                        </span>
+                      )}
                     </h4>
                     <p className="leading-relaxed text-muted-foreground">
-                      This patient&apos;s diagnostic investigation report has already been reviewed, approved, and finalized by the central laboratory administration. Modification of patient demographics and clinical investigations is strictly locked for B2B partner accounts.
+                      {isCcEditLocked
+                        ? "Collection Centre accounts do not have permission to edit patient demographics by default. If you need to make corrections, please contact the Central Lab Administrator to grant edit access in the lab management settings."
+                        : "This patient's diagnostic investigation report has already been reviewed, approved, and finalized by the central laboratory administration. Modification of patient demographics and clinical investigations is strictly locked for partner accounts."}
                     </p>
                   </div>
                 </div>
@@ -2623,7 +2714,7 @@ function RegisterPatientPage() {
                     {isEditLocked ? (
                       <div className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 font-bold text-xs shadow-xs">
                         <Lock className="h-4 w-4 shrink-0 text-amber-600" />
-                        <span>Demographics Locked — Report is {existingReport?.status || "APPROVED"}</span>
+                        <span>{isCcEditLocked ? "Demographics Editing Locked — Collection Centre Restricted" : `Demographics Locked — Report is ${existingReport?.status || "APPROVED"}`}</span>
                       </div>
                     ) : (
                       <button
@@ -2881,14 +2972,32 @@ function RegisterPatientPage() {
 
                 {/* Totals & Quick Pay */}
                 <div className="p-5 bg-muted/40 border-t border-border/80 space-y-3.5">
-                  <div className="space-y-1.5 text-xs">
+                  <div className="space-y-2 text-xs">
                     <div className="flex justify-between text-muted-foreground font-medium">
                       <span>Gross Subtotal</span>
                       <span className="font-mono font-bold text-foreground">₹{subtotal.toFixed(2)}</span>
                     </div>
+
+                    {/* Concession / Discount Input */}
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/60">
+                      <span className="text-muted-foreground font-medium">Discount Concession</span>
+                      <div className="flex items-center gap-1">
+                        <span className="font-mono text-muted-foreground">₹</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={subtotal}
+                          placeholder="0"
+                          value={discount === "0" ? "" : discount}
+                          onChange={(e) => setDiscount(e.target.value)}
+                          className="w-20 px-2 py-1 bg-background border border-border/80 rounded-md font-mono text-xs font-bold text-right outline-none focus:border-primary text-foreground"
+                        />
+                      </div>
+                    </div>
+
                     {parsedDiscount > 0 && (
                       <div className="flex justify-between text-destructive font-semibold">
-                        <span>Discount Concession</span>
+                        <span>Concession Applied</span>
                         <span className="font-mono">-₹{parsedDiscount.toFixed(2)}</span>
                       </div>
                     )}
@@ -2898,6 +3007,91 @@ function RegisterPatientPage() {
                     <span className="font-bold text-sm text-foreground">Net Payable</span>
                     <span className="font-display text-2xl font-bold text-primary font-mono">₹{grandTotal.toFixed(2)}</span>
                   </div>
+
+                  {/* Payment Mode & Status Selection at Registration */}
+                  {!isB2B && grandTotal > 0 && (
+                    <div className="space-y-2 pt-2 border-t border-border/60">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                          Payment Settlement
+                        </label>
+                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                          parsedPaid >= grandTotal
+                            ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
+                            : parsedPaid > 0
+                            ? "bg-amber-500/15 text-amber-600 border border-amber-500/30"
+                            : "bg-rose-500/15 text-rose-600 border border-rose-500/30"
+                        }`}>
+                          {parsedPaid >= grandTotal ? "PAID FULL" : parsedPaid > 0 ? "PARTIAL" : "UNPAID"}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPaidAmount(grandTotal.toString());
+                            setSelectedPaymentMode("CASH");
+                          }}
+                          className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer text-center ${
+                            selectedPaymentMode === "CASH" && parsedPaid >= grandTotal
+                              ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/50 shadow-2xs font-extrabold"
+                              : "bg-muted/40 text-muted-foreground border-border/80 hover:bg-muted"
+                          }`}
+                        >
+                          Paid (Cash)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPaidAmount(grandTotal.toString());
+                            setSelectedPaymentMode("UPI");
+                          }}
+                          className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer text-center ${
+                            selectedPaymentMode === "UPI" && parsedPaid >= grandTotal
+                              ? "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/50 shadow-2xs font-extrabold"
+                              : "bg-muted/40 text-muted-foreground border-border/80 hover:bg-muted"
+                          }`}
+                        >
+                          Paid (UPI)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPaidAmount("0");
+                            setSelectedPaymentMode("UNPAID");
+                          }}
+                          className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer text-center ${
+                            parsedPaid === 0 || selectedPaymentMode === "UNPAID"
+                              ? "bg-rose-500/20 text-rose-700 dark:text-rose-400 border-rose-500/50 shadow-2xs font-extrabold"
+                              : "bg-muted/40 text-muted-foreground border-border/80 hover:bg-muted"
+                          }`}
+                        >
+                          Due / Unpaid
+                        </button>
+                      </div>
+
+                      {/* Advance / Received Input if custom or partial */}
+                      <div className="flex items-center justify-between text-[11px] pt-1">
+                        <span className="text-muted-foreground font-medium">Received (₹):</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={grandTotal}
+                          placeholder="0"
+                          value={paidAmount === "0" ? "" : paidAmount}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setPaidAmount(val);
+                            if (Number(val) > 0 && selectedPaymentMode === "UNPAID") {
+                              setSelectedPaymentMode("CASH");
+                            }
+                          }}
+                          className="w-24 px-2 py-1 bg-background border border-border/80 rounded-md font-mono text-xs font-bold text-right outline-none focus:border-primary text-foreground"
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <button
                     type="button"
@@ -3125,8 +3319,8 @@ function RegisterPatientPage() {
                     <ArrowRight className="h-4 w-4 text-primary group-hover:translate-x-0.5 transition-transform" />
                   </button>
 
-                  {/* Action 2: Enter Diagnostic Results (Admin/Tech) OR Register Next Sample (Collection Center / B2B) */}
-                  {(currentUserRole === "COLLECTION_CENTER" || currentUserRole === "B2B") ? (
+                  {/* Action 2: Enter Diagnostic Results (Admin/Tech) OR Register Next Sample (Receptionist / Collection Center / B2B) */}
+                  {(currentUserRole === "COLLECTION_CENTER" || currentUserRole === "B2B" || currentUserRole === "RECEPTIONIST") ? (
                     <button
                       type="button"
                       onClick={handleResetFlow}
@@ -3790,17 +3984,28 @@ function RegisterPatientPage() {
           <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 bg-zinc-100 dark:bg-zinc-900/60 flex justify-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">
             <div ref={registerPrintRef} className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 bg-white max-w-full print:shadow-none print:ring-0 print:border-none print:p-0 print:m-0 print:w-full">
               <InvoiceSheet
+                settings={billSettings}
                 invoice={{
                   id: successDetails?.billId,
                   customId: successDetails?.billCustomId || "INV-001",
                   createdAt: new Date().toISOString(),
-                  total: grandTotal,
-                  discount: parsedDiscount,
-                  paidAmount: parsedPaid,
-                  status: balanceDue <= 0 ? "PAID" : (parsedPaid > 0 ? "PARTIAL" : "UNPAID"),
-                  paymentMode: "CASH / UPI",
+                  total: Number(successDetails?.total ?? grandTotal),
+                  discount: Number(successDetails?.discount ?? parsedDiscount),
+                  paidAmount: Number(
+                    successDetails?.paymentStatus === "PAID"
+                      ? (successDetails?.total ?? grandTotal)
+                      : (successDetails?.paidAmount ?? parsedPaid ?? 0)
+                  ),
+                  status: (
+                    successDetails?.paymentStatus === "PAID" ||
+                    (Number(successDetails?.balanceDue ?? balanceDue) <= 0 && Number(successDetails?.paidAmount ?? parsedPaid) > 0)
+                  )
+                    ? "PAID"
+                    : (Number(successDetails?.paidAmount ?? parsedPaid) > 0 ? "PARTIAL" : "UNPAID"),
+                  paymentMode: successDetails?.paymentMode || selectedPaymentMode || "CASH / UPI",
                   billedBy: "Billing / Reception Desk",
                   reportId: successDetails?.reportId,
+                  packageName: successDetails?.packageName || selectedPackage?.name || null,
                   patient: {
                     customId: successDetails?.patientCustomId || newPatient?.customId || "",
                     name: successDetails?.patientName || newPatient?.name || "",
@@ -3808,27 +4013,38 @@ function RegisterPatientPage() {
                     age: Number(ageYears) || newPatient?.age || 0,
                     gender: gender || newPatient?.gender || "Male",
                     refDoctor: refDoctorSelect || newPatient?.refDoctor || "Self",
+                    secondReferral: secondReferral || (newPatient as any)?.secondReferral || "",
                     address: address || newPatient?.address || "",
+                    aadhaarNo: aadhaarNo || (newPatient as any)?.aadhaarNo || "",
+                    insuranceNo: insuranceNo || (newPatient as any)?.insuranceNo || "",
+                    hfrId: hfrId || (newPatient as any)?.hfrId || "",
+                    uhid: uhid || (newPatient as any)?.uhid || "",
+                    corporateName: corporateName || (newPatient as any)?.corporateName || govPanel || "",
+                    vialBarcode: Object.values(vialBarcodes).find(Boolean) || (newPatient as any)?.vialBarcode || (newPatient as any)?.vial_barcode || "",
+                    abhaNumber: abhaNumber || (newPatient as any)?.abhaNumber || "",
+                    abhaAddress: abhaAddress || (newPatient as any)?.abhaAddress || "",
                   },
                   lab: {
                     name: labInfo?.name || labInfo?.centre_name || labInfo?.centreName || "OnePath Pathology Laboratory",
                     email: labInfo?.email || "support@onepathlab.com",
                     address: labInfo?.address || "Medical Diagnostic Center",
                     phone: labInfo?.phone || "",
-                    logoUrl: labInfo?.logo_url || labInfo?.logoUrl || "/onepath-logo.png",
+                    logoUrl: billSettings.logoImage || labInfo?.logo_url || labInfo?.logoUrl || "/onepath-logo.png",
                     pincode: labInfo?.pincode || "",
                     city: labInfo?.city || "",
                     district: labInfo?.district || labInfo?.city || "",
                     state: labInfo?.state || "",
-                    gstin: labInfo?.gstin || "",
-                    bill_settings: labInfo?.bill_settings || labInfo?.billSettings,
+                    gstin: billSettings.gst?.number || labInfo?.gstin || "",
+                    bill_settings: billSettings,
                   },
-                  tests: selectedTestObjects.map(t => ({
+                  tests: (successDetails?.tests && successDetails.tests.length > 0 ? successDetails.tests : selectedTestObjects).map((t: any) => ({
                     id: t.id,
                     name: t.name,
-                    code: (t as any).testCode || (t as any).test_code || (t as any).code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
+                    code: t.code || t.testCode || t.test_code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
                     price: Number(t.price || 0),
                     category: t.category,
+                    sampleType: t.sampleType || t.sample_type || undefined,
+                    barcode: Object.values(vialBarcodes).find(Boolean) || (newPatient as any)?.vialBarcode || (newPatient as any)?.vial_barcode || "",
                   })),
                 }}
               />

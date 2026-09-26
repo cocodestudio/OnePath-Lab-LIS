@@ -66,6 +66,7 @@ function StatCard({
 }
 
 export default function DashboardOverviewPage() {
+  const [isMounted, setIsMounted] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [stats, setStats] = useState<Stats>({
     patientsToday: 0,
@@ -82,8 +83,6 @@ export default function DashboardOverviewPage() {
   const [chartData, setChartData] = useState<ChartItem[]>([]);
   const [recentReports, setRecentReports] = useState<RecentReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isMounted, setIsMounted] = useState(false);
-
   const [labInfo, setLabInfo] = useState<any>(null);
 
   useEffect(() => {
@@ -91,9 +90,27 @@ export default function DashboardOverviewPage() {
     const u = getStoredUser();
     setUser(u);
 
+    // Read client-side cached data on mount
+    try {
+      const cachedStats = localStorage.getItem("lis_cached_dashboard_stats");
+      if (cachedStats) setStats(JSON.parse(cachedStats));
+      const cachedCharts = localStorage.getItem("lis_cached_dashboard_charts");
+      if (cachedCharts) setChartData(JSON.parse(cachedCharts));
+      const cachedReports = localStorage.getItem("lis_cached_dashboard_recent_reports");
+      if (cachedReports) setRecentReports(JSON.parse(cachedReports));
+      const cachedLab = localStorage.getItem("lis_cached_lab");
+      if (cachedLab) setLabInfo(JSON.parse(cachedLab));
+      if (cachedStats) setLoading(false);
+    } catch {}
+
     const refreshLabInfo = () => {
-      fetchFromLaravel("/lab", { skipCache: true }).then((res) => {
-        if (res) setLabInfo(res);
+      fetchFromLaravel("/lab").then((res) => {
+        if (res) {
+          setLabInfo(res);
+          try {
+            localStorage.setItem("lis_cached_lab", JSON.stringify(res));
+          } catch {}
+        }
       }).catch(() => {});
     };
 
@@ -102,19 +119,29 @@ export default function DashboardOverviewPage() {
     const handleProfileUpdate = (e: any) => {
       if (e?.detail) {
         setLabInfo(e.detail);
+        try {
+          localStorage.setItem("lis_cached_lab", JSON.stringify(e.detail));
+        } catch {}
       } else {
         refreshLabInfo();
       }
     };
 
+    const handleOnlineSync = () => {
+      refreshLabInfo();
+      loadDashboardData(true);
+    };
+
     window.addEventListener("centre-profile-updated", handleProfileUpdate);
     window.addEventListener("focus", refreshLabInfo);
+    window.addEventListener("lis_online_sync", handleOnlineSync);
 
     if (u?.role === "COLLECTION_CENTER" || u?.role === "B2B") {
       setLoading(false);
       return () => {
         window.removeEventListener("centre-profile-updated", handleProfileUpdate);
         window.removeEventListener("focus", refreshLabInfo);
+        window.removeEventListener("lis_online_sync", handleOnlineSync);
       };
     }
     loadDashboardData();
@@ -122,12 +149,14 @@ export default function DashboardOverviewPage() {
     return () => {
       window.removeEventListener("centre-profile-updated", handleProfileUpdate);
       window.removeEventListener("focus", refreshLabInfo);
+      window.removeEventListener("lis_online_sync", handleOnlineSync);
     };
   }, []);
 
   const loadDashboardData = async (forceRefresh = false) => {
     try {
-      if (forceRefresh || (!stats.totalPatients && !recentReports.length)) {
+      const hasExistingData = stats.totalPatients > 0 || recentReports.length > 0;
+      if (forceRefresh && !hasExistingData) {
         setLoading(true);
       }
       const [analytics, reports] = await Promise.all([
@@ -142,7 +171,7 @@ export default function DashboardOverviewPage() {
       const pendReports = analytics?.pendingReports ?? Math.max(0, totReports - compReports);
       const todayPend = analytics?.todayPendingReports ?? Math.max(0, todayReps - todayComp);
 
-      setStats({
+      const newStats: Stats = {
         patientsToday: analytics?.todayPatients ?? 0,
         totalPatients: analytics?.totalPatients ?? 0,
         todayReports: todayReps,
@@ -153,14 +182,26 @@ export default function DashboardOverviewPage() {
         completedReports: compReports,
         revenue: analytics?.todayRevenue ?? 0,
         totalRevenue: analytics?.totalRevenue ?? 0,
-      });
+      };
+
+      setStats(newStats);
+      try {
+        localStorage.setItem("lis_cached_dashboard_stats", JSON.stringify(newStats));
+      } catch {}
 
       if (Array.isArray(analytics?.reportsOverTime)) {
         setChartData(analytics.reportsOverTime);
+        try {
+          localStorage.setItem("lis_cached_dashboard_charts", JSON.stringify(analytics.reportsOverTime));
+        } catch {}
       }
 
       const reportsList = Array.isArray(reports) ? reports : reports?.data ?? [];
-      setRecentReports(reportsList.slice(0, 6));
+      const slicedReports = reportsList.slice(0, 6);
+      setRecentReports(slicedReports);
+      try {
+        localStorage.setItem("lis_cached_dashboard_recent_reports", JSON.stringify(slicedReports));
+      } catch {}
     } catch (err) {
       console.error("Dashboard load error:", err);
     } finally {
@@ -168,7 +209,7 @@ export default function DashboardOverviewPage() {
     }
   };
 
-  if (loading) {
+  if (!isMounted || (loading && !stats.totalPatients && !stats.totalReports && !recentReports.length)) {
     return <DashboardShimmer />;
   }
 
@@ -210,7 +251,7 @@ export default function DashboardOverviewPage() {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.2em] mb-1.5">Overview</p>
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">
+          <h1 suppressHydrationWarning className="font-display text-3xl font-semibold tracking-tight text-foreground">
             Welcome back, {labDisplayName}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Here's what's happening today in your laboratory.</p>

@@ -6,9 +6,10 @@ import {
   Sparkles, Bot, X, Send, RotateCcw,
   ArrowRight, ExternalLink, HelpCircle,
   FlaskConical, Users, FileText, Settings,
-  Cpu, Receipt, Layers, Compass, Loader2
+  Cpu, Receipt, Layers, Compass, Loader2,
+  Clock, Activity, Wallet, Boxes
 } from "lucide-react";
-import { fetchFromLaravel } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 
 interface ChatMessage {
   id: string;
@@ -17,7 +18,110 @@ interface ChatMessage {
   timestamp: string;
 }
 
-const FAQ_SUGGESTIONS = [
+// 1. Collection Center Portal Options
+const CC_FAQ_SUGGESTIONS = [
+  {
+    icon: Clock,
+    label: "Today's Samples Intake",
+    query: "How do I take in today's samples and check registered patients?",
+  },
+  {
+    icon: Layers,
+    label: "Tag Vacutainer Tube Barcodes",
+    query: "How to enter or scan barcodes for EDTA, SST, Fluoride, Citrate tubes?",
+  },
+  {
+    icon: Compass,
+    label: "Update Status to Collected / Hub",
+    query: "How do I change sample status to Collected and In Transit to Central Hub?",
+  },
+  {
+    icon: Users,
+    label: "View Center Patients",
+    query: "How to view registered patients for my collection center?",
+  },
+  {
+    icon: Receipt,
+    label: "Print Billing Receipts",
+    query: "How to print patient payment receipts and check due balances?",
+  },
+  {
+    icon: HelpCircle,
+    label: "Why Can't I Edit Test Results?",
+    query: "Can I enter test results or approve reports from Collection Centre portal?",
+  },
+];
+
+// 2. Receptionist Portal Options
+const RECEPTIONIST_FAQ_SUGGESTIONS = [
+  {
+    icon: Users,
+    label: "Patient Registration & Barcode",
+    query: "How do I register a new patient and print vial barcodes?",
+  },
+  {
+    icon: Activity,
+    label: "Track Samples (4-Step Progress)",
+    query: "How do I search and track sample progress (Registered -> Collected -> Testing -> Approved)?",
+  },
+  {
+    icon: Receipt,
+    label: "Billing Desk & Payments",
+    query: "How to collect cash or UPI payments and print patient receipts?",
+  },
+  {
+    icon: Sparkles,
+    label: "ABHA ID QR Poster",
+    query: "How to open the ABHA ID QR poster for patient mobile scan?",
+  },
+  {
+    icon: Users,
+    label: "View Registered Patients",
+    query: "How to search and view patient records in the directory?",
+  },
+  {
+    icon: HelpCircle,
+    label: "Can Receptionist Enter Test Results?",
+    query: "Can receptionists enter lab test results or doctor signatures?",
+  },
+];
+
+// 3. B2B Partner Portal Options
+const B2B_FAQ_SUGGESTIONS = [
+  {
+    icon: Users,
+    label: "B2B Patient Booking",
+    query: "How do I register a referral patient at B2B contracted rates?",
+  },
+  {
+    icon: Wallet,
+    label: "Prepaid Wallet Recharge",
+    query: "How to check wallet balance and recharge via PayU or UPI?",
+  },
+  {
+    icon: HelpCircle,
+    label: "Wallet Lock on Reports",
+    query: "Why is my report download locked when wallet balance is negative?",
+  },
+  {
+    icon: Clock,
+    label: "Track B2B Samples",
+    query: "How to monitor samples dispatched to the central lab?",
+  },
+  {
+    icon: FileText,
+    label: "Download Final Reports",
+    query: "How to download and print approved test reports for my patients?",
+  },
+  {
+    icon: Layers,
+    label: "B2B Contracted Rate List",
+    query: "How to view the contracted B2B test price list?",
+  },
+];
+
+// 4. Lab Administrator / Pathologist / Super Admin Options
+const ADMIN_FAQ_SUGGESTIONS = [
   {
     icon: Users,
     label: "Patient Registration",
@@ -58,7 +162,25 @@ const FAQ_SUGGESTIONS = [
     label: "ABHA ID & ABDM Poster",
     query: "How to create ABHA ID and use the QR poster?",
   },
+  {
+    icon: Boxes,
+    label: "Inventory & Reagents",
+    query: "How to manage pathology inventory, stock in new lots, and log daily consumption?",
+  },
 ];
+
+function getWelcomeMessage(role: string): string {
+  if (role === "COLLECTION_CENTER") {
+    return "👋 **Welcome to Collection Centre Assistant**\n\nMain aapko Collection Centre portal ke features (Today's Samples intake, physical tube barcodes tag karna, status update karna, aur receipts print karna) me guide karne ke liye trained hoon.\n\nNeeche diye options chunein ya apna sawal poochhein:";
+  }
+  if (role === "RECEPTIONIST") {
+    return "👋 **Welcome to Front Desk Assistant**\n\nMain aapko Receptionist portal ke features (Patient Registration, Track Samples 4-stage tracking, Billing Desk aur ABHA ID poster) me guide karne ke liye trained hoon.\n\nNeeche diye options chunein ya apna sawal poochhein:";
+  }
+  if (role === "B2B") {
+    return "👋 **Welcome to B2B Partner Assistant**\n\nMain aapko B2B Partner portal ke features (B2B patient booking, prepaid wallet recharge, report tracking aur downloads) me guide karne ke liye trained hoon.\n\nNeeche diye options chunein ya apna sawal poochhein:";
+  }
+  return "👋 **Welcome to OnePath LIS Assistant**\n\nI can guide you step-by-step through any feature, workflow, or configuration in OnePath LIS.\n\nSelect a quick topic below or type your question in English or Hindi:";
+}
 
 export function AiGuideWidget() {
   const router = useRouter();
@@ -74,16 +196,37 @@ export function AiGuideWidget() {
     return true;
   }, [pathname]);
 
+  const getInitialRole = () => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = getStoredUser();
+        let r = (stored?.role || "").toUpperCase().trim();
+        if (r === "COLLECTION_CENTRE") r = "COLLECTION_CENTER";
+        if (r) return r;
+        const roleMatch = document.cookie.match(/(?:^|;\s*)lis_role=([^;]+)/);
+        if (roleMatch && roleMatch[1]) {
+          let cr = decodeURIComponent(roleMatch[1]).toUpperCase().trim();
+          if (cr === "COLLECTION_CENTRE") cr = "COLLECTION_CENTER";
+          if (cr) return cr;
+        }
+      } catch {
+        return "ADMIN";
+      }
+    }
+    return "ADMIN";
+  };
+
+  const [mounted, setMounted] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [userRole, setUserRole] = useState<string>(getInitialRole);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
       id: "welcome-1",
       role: "assistant",
-      content:
-        "👋 **Welcome to OnePath LIS Assistant**\n\nI can guide you step-by-step through any feature, workflow, or configuration in OnePath LIS.\n\nSelect a quick topic below or type your question in English or Hindi:",
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      content: getWelcomeMessage(getInitialRole()),
+      timestamp: "",
     },
   ]);
 
@@ -94,7 +237,24 @@ export function AiGuideWidget() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Auto-resize textarea according to content
+  // Auto-resize textarea according to content & sync role
+  useEffect(() => {
+    setMounted(true);
+    const stored = getStoredUser();
+    let r = (stored?.role || "ADMIN").toUpperCase().trim();
+    if (r === "COLLECTION_CENTRE") r = "COLLECTION_CENTER";
+    setUserRole(r);
+
+    setMessages([
+      {
+        id: "welcome-1",
+        role: "assistant",
+        content: getWelcomeMessage(r),
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      },
+    ]);
+  }, []);
+
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -104,10 +264,62 @@ export function AiGuideWidget() {
 
   useEffect(() => {
     if (isOpen) {
+      const stored = getStoredUser();
+      let r = (stored?.role || "ADMIN").toUpperCase().trim();
+      if (r === "COLLECTION_CENTRE") r = "COLLECTION_CENTER";
+      if (r !== userRole) {
+        setUserRole(r);
+      }
       scrollToBottom();
       setTimeout(() => textareaRef.current?.focus(), 220);
     }
-  }, [isOpen, messages]);
+  }, [isOpen]);
+
+  // Contextual information based on current active portal role
+  const portalInfo = useMemo(() => {
+    if (userRole === "COLLECTION_CENTER") {
+      return {
+        title: "Collection Centre Guide",
+        badge: "CC Portal",
+        subtitle: "Intake, Vacutainer Barcodes & Receipts",
+        placeholder: "Ask about Today's Samples, Tube Barcodes, Status...",
+        footer: "Collection Centre Portal",
+      };
+    }
+    if (userRole === "RECEPTIONIST") {
+      return {
+        title: "Front Desk Guide",
+        badge: "Receptionist",
+        subtitle: "Patient Booking, Track Samples & Billing",
+        placeholder: "Ask about Patient Registration, Track Samples, Billing...",
+        footer: "Front Desk Receptionist Portal",
+      };
+    }
+    if (userRole === "B2B") {
+      return {
+        title: "B2B Partner Guide",
+        badge: "B2B Partner",
+        subtitle: "Patient Booking, Wallet Recharge & Reports",
+        placeholder: "Ask about B2B Booking, Wallet Recharge, Reports...",
+        footer: "B2B Partner Portal",
+      };
+    }
+    return {
+      title: "OnePath LIS Guide",
+      badge: "Active",
+      subtitle: "Interactive Lab Assistant & Navigator",
+      placeholder: "Ask anything about OnePath LIS (Patients, Reports, Tests)...",
+      footer: "LIS Admin & Lab Operations",
+    };
+  }, [userRole]);
+
+  // Dynamic FAQs based on current active portal role
+  const activeFaqs = useMemo(() => {
+    if (userRole === "COLLECTION_CENTER") return CC_FAQ_SUGGESTIONS;
+    if (userRole === "RECEPTIONIST") return RECEPTIONIST_FAQ_SUGGESTIONS;
+    if (userRole === "B2B") return B2B_FAQ_SUGGESTIONS;
+    return ADMIN_FAQ_SUGGESTIONS;
+  }, [userRole]);
 
   // Listen for custom trigger events from the sidebar
   useEffect(() => {
@@ -172,6 +384,7 @@ export function AiGuideWidget() {
         body: JSON.stringify({
           query: textToSend,
           history: historyPayload,
+          role: userRole,
         }),
       });
 
@@ -189,7 +402,7 @@ export function AiGuideWidget() {
         },
       ]);
     } catch (err: any) {
-      const fallbackAnswer = getClientFallbackAnswer(textToSend);
+      const fallbackAnswer = getClientFallbackAnswer(textToSend, userRole);
       setMessages((prev) => [
         ...prev,
         {
@@ -216,8 +429,7 @@ export function AiGuideWidget() {
       {
         id: "welcome-" + Date.now(),
         role: "assistant",
-        content:
-          "👋 **Welcome to OnePath LIS Assistant**\n\nI can guide you step-by-step through any feature, workflow, or configuration in OnePath LIS.\n\nSelect a quick topic below or type your question in English or Hindi:",
+        content: getWelcomeMessage(userRole),
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       },
     ]);
@@ -306,7 +518,7 @@ export function AiGuideWidget() {
     );
   };
 
-  if (!shouldShowGuide) {
+  if (!mounted || !shouldShowGuide) {
     return null;
   }
 
@@ -339,13 +551,13 @@ export function AiGuideWidget() {
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">OnePath LIS Guide</span>
+                <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">{portalInfo.title}</span>
                 <span className="px-1.5 py-0.2 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-semibold text-[9px] border border-emerald-200 dark:border-emerald-800">
-                  Active
+                  {portalInfo.badge}
                 </span>
               </div>
               <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
-                Interactive Lab Assistant &amp; Navigator
+                {portalInfo.subtitle}
               </p>
             </div>
           </div>
@@ -396,11 +608,12 @@ export function AiGuideWidget() {
                   renderMessageContent(msg.content)
                 )}
                 <span
+                  suppressHydrationWarning
                   className={`block text-[9px] mt-1.5 text-right ${
                     msg.role === "user" ? "text-emerald-100/70" : "text-slate-400"
                   }`}
                 >
-                  {msg.timestamp}
+                  {msg.timestamp || "Just now"}
                 </span>
               </div>
             </div>
@@ -427,7 +640,7 @@ export function AiGuideWidget() {
                 <span>Common Help Topics:</span>
               </div>
               <div className="grid grid-cols-1 gap-1.5">
-                {FAQ_SUGGESTIONS.map((faq, idx) => {
+                {activeFaqs.map((faq, idx) => {
                   const Icon = faq.icon;
                   return (
                     <button
@@ -460,7 +673,7 @@ export function AiGuideWidget() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask anything about OnePath LIS (Patients, Reports, Tests)..."
+              placeholder={portalInfo.placeholder}
               disabled={loading}
               className="w-full resize-none bg-transparent px-3.5 pt-2.5 pb-2 text-xs sm:text-[13px] leading-5 text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none disabled:opacity-50 min-h-[46px] max-h-[120px]"
             />
@@ -501,7 +714,7 @@ export function AiGuideWidget() {
           </div>
 
           <div className="mt-1.5 flex items-center justify-between px-1 text-[9.5px] text-slate-400">
-            <span>LIS Admin &amp; Lab Operations</span>
+            <span>{portalInfo.footer}</span>
             <span>Press <strong>Enter ↵</strong> to send</span>
           </div>
         </div>
@@ -511,8 +724,11 @@ export function AiGuideWidget() {
 }
 
 // Client-side fallback knowledge generator (Bilingual Hindi/Hinglish & English)
-function getClientFallbackAnswer(query: string): string {
+function getClientFallbackAnswer(query: string, role: string = "ADMIN"): string {
   const q = (query || "").trim().toLowerCase();
+  const normalizedRole = (role || "ADMIN").toUpperCase().trim() === "COLLECTION_CENTRE"
+    ? "COLLECTION_CENTER"
+    : (role || "ADMIN").toUpperCase().trim();
 
   // Accurately check for Hindi without false positives on English words (like 'me', 'se', 'ho', 'par')
   const hasDevanagari = /[\u0900-\u097F]/.test(q);
@@ -534,8 +750,8 @@ function getClientFallbackAnswer(query: string): string {
   for (const tk of techKeywords) {
     if (q.includes(tk)) {
       return isHindi
-        ? "OnePath LIS ek proprietary aur secure enterprise laboratory information system hai. Iska internal codebase, architecture aur backend technology details confidential hain.\n\nMain sirf OnePath LIS ke software features aur lab operations (jaise Patient Registration, Test Master, Report Print, 1-Test-Per-Page, Letterhead Margins aur Billing) me aapki madad kar sakta hoon. LIS features se juda koi sawal ho to batayein!"
-        : "OnePath LIS is a proprietary, secure enterprise laboratory information system. Internal engineering, codebase, and backend architecture details are confidential.\n\nI am here strictly to assist you with using OnePath LIS software features—such as Patient Registration, Report Formatting, 1-Test-Per-Page layout, Test Master, Letterhead Margins, and Billing. How can I assist you with your lab operations today?";
+        ? "OnePath LIS ek proprietary aur secure enterprise laboratory information system hai. Iska internal codebase, architecture aur backend technology details confidential hain.\n\nMain sirf OnePath LIS ke software features aur portal operations me aapki madad kar sakta hoon. Portal features se juda koi sawal ho to batayein!"
+        : "OnePath LIS is a proprietary, secure enterprise laboratory information system. Internal engineering, codebase, and backend architecture details are confidential.\n\nI am here strictly to assist you with using OnePath LIS portal features. How can I assist you with your operations today?";
     }
   }
 
@@ -543,11 +759,365 @@ function getClientFallbackAnswer(query: string): string {
   for (const w of unrelated) {
     if (q.includes(w)) {
       return isHindi
-        ? "Main OnePath LIS Assistant hoon aur sirf OnePath Laboratory Information System ke features, settings, reports aur lab operations me aapki madad kar sakta hoon. LIS se juda koi sawal ho to batayein!"
-        : "I am the OnePath LIS Assistant and can only help with OnePath Laboratory Information System features, settings, workflows, B2B, and lab operations. How can I assist you with the LIS today?";
+        ? "Main OnePath LIS Assistant hoon aur sirf aapke portal ke features, workflows aur lab operations me aapki madad kar sakta hoon. Apne portal se juda koi sawal ho to batayein!"
+        : "I am the OnePath LIS Assistant and can only help with your portal features, workflows, and lab operations. How can I assist you with the portal today?";
     }
   }
 
+  // ==========================================
+  // ROLE 1: COLLECTION CENTER (CC) PORTAL
+  // ==========================================
+  if (normalizedRole === "COLLECTION_CENTER") {
+    // Out of scope for CC: Result entry, doctor signs, machine bridge, test master
+    if (q.includes("result") || q.includes("parinam") || q.includes("enter result") || q.includes("doctor sign") || q.includes("signature") || q.includes("machine") || q.includes("analyzer") || q.includes("sysmex") || q.includes("mindray") || q.includes("test master") || q.includes("approve report") || q.includes("ai suggestion")) {
+      return isHindi
+        ? "Yeh feature Collection Centre portal me uplabdh nahi hai. Test result entry, clinical interpretation remarks, report approval, doctor digital signatures aur analyzer machines Central Laboratory / Pathologist dwara manage kiye jaate hain.\n\nCollection Centre portal me aap sirf:\n1. **[Today's Samples](/dashboard/today-samples)** me aaj ke samples intake karna\n2. Color-coded vacutainer tube barcodes (EDTA, SST, Fluoride, Citrate) tag karna\n3. Sample status ko 'Collected' aur 'Central Hub' update karna\n4. **[Billing Desk](/dashboard/billing)** se payment receipts print karna\nkar sakte hain."
+        : "This feature is not available in the Collection Centre portal. Entering test results, doctor signatures, clinical AI remarks, report approvals, and analyzer machine interfacing are managed exclusively by the Central Laboratory / Pathologists.\n\nIn your Collection Centre portal, you can:\n1. Intake today's specimens in [Open Today's Samples](/dashboard/today-samples)\n2. Tag color-coded vacutainer tube barcodes (EDTA purple, SST gold, etc.)\n3. Advance sample stage from Registered -> Collected -> Central Hub\n4. Print patient payment receipts in [Open Billing Desk](/dashboard/billing).";
+    }
+
+    // Greetings & Identity for CC
+    if (q.includes("kon ho") || q.includes("kaun ho") || q.includes("who are you") || q.includes("kya kar sakte") || q.includes("help") || q.includes("namaste") || q.includes("hello") || q.includes("hi") || q.includes("suno")) {
+      return isHindi
+        ? "Namaste! Main **OnePath Collection Centre Assistant** hoon. Main Collection Centre portal me aapki madad ke liye trained hoon:\n\n"
+          + "1. **[Today's Samples](/dashboard/today-samples)** – Aaj ke registered patients ka intake aur sample list check karna.\n"
+          + "2. **Status / Tube Barcodes** – Vials par physical barcode sticker scan/enter karna (EDTA Purple, SST Gold, Fluoride Grey, Citrate Blue, Urine Yellow, Stool Brown).\n"
+          + "3. **Sample Stage Update** – Status ko Registered se badal kar **Collected** aur **Central Hub (In Transit)** mark karna.\n"
+          + "4. **[Patients List](/dashboard/patients)** – Apne center ke sabhi registered marizon ki list dekhna.\n"
+          + "5. **[Billing Desk](/dashboard/billing)** – Patient payment status (Paid / Due) dekhna aur print receipt nikalna.\n\n"
+          + "*Note: Test result entry aur report approval Central Lab dwara handle kiye jaate hain.*"
+        : "Hello! I am the **OnePath Collection Centre Assistant**. I am dedicated strictly to helping you navigate the Collection Centre portal:\n\n"
+          + "- [Open Today's Samples](/dashboard/today-samples): Review today's patient arrivals and intake specimens\n"
+          + "- **Tag Tube Barcodes**: Click 'Status / Barcodes' to scan/type physical barcodes for required color vacutainers (EDTA purple, SST gold, Fluoride grey, Citrate blue, Urine yellow, Stool brown)\n"
+          + "- **Update Sample Stage**: Transition status from Registered -> Collected -> Central Hub (In Transit)\n"
+          + "- [Open Patients](/dashboard/patients): Search and view patients registered under this collection center\n"
+          + "- [Open Billing Desk](/dashboard/billing): View patient payment dues and print billing receipts\n\n"
+          + "*Note: Entering test results, doctor signatures, and machine interfacing are restricted to the Central Laboratory / Pathologist.*";
+    }
+
+    // Barcodes, Vacutainer Tubes & Status Update
+    if (q.includes("barcode") || q.includes("tube") || q.includes("vial") || q.includes("color") || q.includes("edta") || q.includes("sst") || q.includes("fluoride") || q.includes("citrate") || q.includes("status") || q.includes("collected") || q.includes("hub") || q.includes("transit")) {
+      return isHindi
+        ? "Vacutainer Tube Barcodes tag aur status update karne ke steps:\n\n"
+          + "1. **[Today's Samples](/dashboard/today-samples)** me patient ke aage **'Status / Barcodes'** par click karein.\n"
+          + "2. Popup window me prescribed tests ke hisab se required tubes aur unke standard colors dikhenge:\n"
+          + "   - **EDTA (Purple)**: Whole Blood / CBC / HbA1c\n"
+          + "   - **SST (Gold / Yellow)**: Serum Clot Activator / LFT / KFT / Lipid\n"
+          + "   - **Fluoride (Grey)**: Blood Sugar / Glucose\n"
+          + "   - **Citrate (Light Blue)**: PT / INR / Coagulation\n"
+          + "   - **Urine (Yellow Container)** / **Stool (Brown Container)**\n"
+          + "3. Har tube ke samne physical barcode sticker ka number type ya scan karein.\n"
+          + "4. Dropdown se Status update karein:\n"
+          + "   - **Collected**: Phlebotomy complete ho gayi hai.\n"
+          + "   - **Central Hub**: Sample batch banakar main lab bhej diya gaya hai (In Transit).\n"
+          + "5. **'Save Status & Barcodes'** dabayein.\n\n"
+          + "*Dhyan dein: Agar report Central Lab se Final Approve ho chuki hai, to status update locked ho jata hai.*"
+        : "Steps to tag vacutainer barcodes and advance sample stage:\n\n"
+          + "1. In [Open Today's Samples](/dashboard/today-samples), click **'Status / Barcodes'** on the patient row.\n"
+          + "2. The popup lists required vials with color-coded badges:\n"
+          + "   - **EDTA (Purple)**: Whole Blood / CBC / HbA1c\n"
+          + "   - **SST (Gold)**: Serum Clot Activator / LFT / KFT / Lipid\n"
+          + "   - **Fluoride (Grey)**: Blood Sugar / Glucose\n"
+          + "   - **Citrate (Blue)**: Coagulation / PT / INR\n"
+          + "   - **Urine (Yellow)** / **Stool (Brown)**\n"
+          + "3. Scan or enter the barcode sticker for each required tube.\n"
+          + "4. Set the sample stage dropdown:\n"
+          + "   - **Collected**: Phlebotomy completed at center\n"
+          + "   - **Central Hub**: Dispatched in transit to main laboratory\n"
+          + "5. Click **'Save Status & Barcodes'**.\n\n"
+          + "*Note: If the report has already been Approved by the central pathologist, status updating is locked.*";
+    }
+
+    // Today's Samples Intake
+    if (q.includes("today") || q.includes("aaj") || q.includes("sample") || q.includes("intake")) {
+      return isHindi
+        ? "Today's Samples intake karne ke steps:\n\n"
+          + "1. Sidebar me **'Today Samples'** par click karein ya direct jayein: [Open Today's Samples](/dashboard/today-samples).\n"
+          + "2. Yahan sirf aaj ke registered samples dikhenge.\n"
+          + "3. Patient details aur tests verify karein, fir **'Status / Barcodes'** dabakar tubes tag karein aur sample ko 'Collected' ya 'Central Hub' mark karein."
+        : "Steps to intake today's specimens:\n\n"
+          + "1. Click **'Today Samples'** in the sidebar or go to [Open Today's Samples](/dashboard/today-samples).\n"
+          + "2. Only specimens registered today are shown in this view.\n"
+          + "3. Verify patient demographics and tests, then click **'Status / Barcodes'** to tag vials and move to Collected or Central Hub.";
+    }
+
+    // Billing & Receipts for CC
+    if (q.includes("bill") || q.includes("payment") || q.includes("receipt") || q.includes("rasid") || q.includes("due") || q.includes("print")) {
+      return isHindi
+        ? "Billing receipt print karne ke steps:\n\n"
+          + "1. Sidebar se **'Billing'** me jayein: [Open Billing Desk](/dashboard/billing).\n"
+          + "2. Patient ka Total, Paid aur Balance Due check karein.\n"
+          + "3. Receipt print karne ke liye **'Print'** button par click karein.\n\n"
+          + "*Note: Collection Centre portal me bills edit karna allowed nahi hai, sirf receipts print ki ja sakti hain.*"
+        : "To print billing receipts:\n\n"
+          + "1. Go to **Dashboard > Billing**: [Open Billing Desk](/dashboard/billing).\n"
+          + "2. Review patient total, paid amount, and outstanding due balance.\n"
+          + "3. Click the **'Print'** action to print the receipt on thermal or A4.\n\n"
+          + "*Note: Editing invoice amounts or granting discounts is restricted to Admin.*";
+    }
+
+    // Patients list for CC
+    if (q.includes("patient") || q.includes("mariz") || q.includes("mareez")) {
+      return isHindi
+        ? "Collection Centre ke patients dekhne ke steps:\n\n"
+          + "1. Sidebar se **'Patients'** me jayein: [Open Patients](/dashboard/patients).\n"
+          + "2. Yahan aapke center ke sabhi registered marizon ki list dikhegi.\n"
+          + "3. Name, Phone ya PID se search kar sakte hain.\n"
+          + "*Note: Patient demographic details edit karna Admin dwara manage hota hai.*"
+        : "To view patient records in Collection Centre portal:\n\n"
+          + "1. Go to **Dashboard > Patients**: [Open Patients](/dashboard/patients).\n"
+          + "2. View all patients registered under your center.\n"
+          + "3. Search by Name, Mobile number, or PID.";
+    }
+
+    // Default CC response
+    return isHindi
+      ? "Main OnePath Collection Centre Assistant hoon! Main aapko Collection Centre portal ke features me guide kar sakta hoon:\n\n"
+        + "- [Open Today's Samples](/dashboard/today-samples) – Aaj ke samples intake karna\n"
+        + "- **Status / Barcodes** – EDTA, SST, Fluoride tube barcodes tag karna\n"
+        + "- **Sample Status** – Collected aur Central Hub status update karna\n"
+        + "- [Open Billing Desk](/dashboard/billing) – Payment receipt print karna\n"
+        + "- [Open Patients](/dashboard/patients) – Center ke mariz dekhna\n\n"
+        + "Aap Hindi ya English me koi bhi sawal pooch sakte hain!"
+      : "Welcome to the OnePath Collection Centre Assistant! I can guide you through all features in your Collection Centre portal:\n\n"
+        + "- [Open Today's Samples](/dashboard/today-samples): Today's sample intake\n"
+        + "- **Status / Barcodes**: Tag EDTA, SST, Fluoride tube barcodes\n"
+        + "- **Sample Stages**: Update status to Collected or Central Hub (In Transit)\n"
+        + "- [Open Billing Desk](/dashboard/billing): Print patient billing receipts\n"
+        + "- [Open Patients](/dashboard/patients): View patients registered at this center.";
+  }
+
+  // ==========================================
+  // ROLE 2: RECEPTIONIST (FRONT DESK) PORTAL
+  // ==========================================
+  if (normalizedRole === "RECEPTIONIST") {
+    // Out of scope for Receptionist: Result entry, doctor signs, machine bridge, test master
+    if (q.includes("result") || q.includes("parinam") || q.includes("doctor sign") || q.includes("signature") || q.includes("machine") || q.includes("analyzer") || q.includes("sysmex") || q.includes("mindray") || q.includes("test master") || q.includes("formula") || q.includes("ai suggestion")) {
+      return isHindi
+        ? "Yeh feature Front Desk Receptionist portal ke scope me nahi hai. Test result daalna, clinical remarks, doctor digital signatures aur analyzer machines Central Laboratory / Pathologist dwara handle kiye jaate hain.\n\nReceptionist portal me aap:\n1. **[Patient Registration](/dashboard/patients/register)** – Naye mariz register aur barcode print\n2. **[Track Samples](/dashboard/track-samples)** – Sample status search & 4-step progress track karna\n3. **[Billing Desk](/dashboard/billing)** – Cash/UPI payment lena aur receipt print karna\n4. Final Approved reports print karna\n5. ABHA ID QR poster display karna\nkar sakte hain."
+        : "This feature is not part of the Front Desk Receptionist portal. Entering test results, doctor signatures, clinical AI remarks, and analyzer machine interfacing are handled by Lab Technicians and Pathologists.\n\nIn the Receptionist portal, you can:\n1. Register walk-ins & print barcodes in [Open Patient Registration](/dashboard/patients/register)\n2. Track 4-step sample progress in [Open Track Samples](/dashboard/track-samples)\n3. Collect cash/UPI payments in [Open Billing Desk](/dashboard/billing)\n4. Print verified approved reports\n5. Display ABHA ID QR posters for patients.";
+    }
+
+    // Greetings & Identity for Receptionist
+    if (q.includes("kon ho") || q.includes("kaun ho") || q.includes("who are you") || q.includes("kya kar sakte") || q.includes("help") || q.includes("namaste") || q.includes("hello") || q.includes("hi") || q.includes("suno")) {
+      return isHindi
+        ? "Namaste! Main **OnePath Receptionist Assistant** hoon. Main Front Desk Receptionist portal me aapki madad ke liye trained hoon:\n\n"
+          + "1. **[Patient Registration](/dashboard/patients/register)** – Naye mariz book karna, test select karna aur barcode nikalna.\n"
+          + "2. **[Track Samples](/dashboard/track-samples)** – Search criteria se sample dhoondna aur 4-step live progress (Registered -> Collected -> Testing -> Approved) track karna.\n"
+          + "3. **[Billing Desk](/dashboard/billing)** – Cash/UPI payments receive karna aur print receipts nikalna.\n"
+          + "4. **ABHA ID QR Poster** – Top navbar me 'Create ABHA ID' se patient ke liye QR poster open karna.\n"
+          + "5. **[Patients Directory](/dashboard/patients)** – Registered marizon ka record dhoondna.\n\n"
+          + "*Note: Test result entry aur doctor signatures Central Lab / Pathologist dwara manage hote hain.*"
+        : "Hello! I am the **OnePath Receptionist Assistant**. I am dedicated strictly to helping you navigate the Front Desk Receptionist portal:\n\n"
+          + "- [Open Patient Registration](/dashboard/patients/register): Register walk-in patients, select tests, and print vial barcodes\n"
+          + "- [Open Track Samples](/dashboard/track-samples): Search and track live 4-step progress (Registered -> Collected -> Testing -> Approved) and print approved reports\n"
+          + "- [Open Billing Desk](/dashboard/billing): Collect cash or UPI payments and print thermal/A4 receipts\n"
+          + "- **ABHA ID Poster**: Open patient QR scan poster from the top navbar button\n"
+          + "- [Open Patients Directory](/dashboard/patients): Search and view registered patient history\n\n"
+          + "*Note: Entering test results, doctor digital signatures, and machine interfacing are handled by Lab Technicians / Pathologists.*";
+    }
+
+    // Track Samples (4-step progress, search dropdown, approved reports)
+    if (q.includes("track") || q.includes("progress") || q.includes("stage") || q.includes("kaha tak") || q.includes("approved") || q.includes("testing") || q.includes("search sample")) {
+      return isHindi
+        ? "Track Samples use karne ke steps:\n\n"
+          + "1. Sidebar me **'Track Samples'** par click karein ya direct jayein: [Open Track Samples](/dashboard/track-samples).\n"
+          + "2. Search Dropdown se select karein ki kis zariye search karna hai:\n"
+          + "   - **Name**: Patient ka naam\n"
+          + "   - **Phone**: Mobile number\n"
+          + "   - **Patient ID (PID)**\n"
+          + "   - **Report ID**\n"
+          + "   - **Barcode No**\n"
+          + "   - **ABHA ID**\n"
+          + "3. Value daal kar Search dabayein. Search hone par patient ki live details aayengi:\n"
+          + "   - **4-Step Animated Progress Bar**: Registered ➔ Collected ➔ Testing ➔ Approved.\n"
+          + "   - **Vacutainer Tube Barcodes**: EDTA, SST, etc. ke colored badges.\n"
+          + "   - **Print Report Button**: Report finalize hone par 'Print Report' button active ho jayega jisse direct vector print nikal sakte hain."
+        : "Steps to track samples and print verified reports:\n\n"
+          + "1. Go to **Dashboard > Track Samples**: [Open Track Samples](/dashboard/track-samples).\n"
+          + "2. Select your search criteria from the dropdown:\n"
+          + "   - **Name**: Patient name\n"
+          + "   - **Phone**: Mobile number\n"
+          + "   - **Patient ID (PID)**\n"
+          + "   - **Report ID**\n"
+          + "   - **Barcode No**\n"
+          + "   - **ABHA ID**\n"
+          + "3. Enter the value and click Search. The tracking card displays:\n"
+          + "   - **4-Stage Animated Progress Bar**: Registered ➔ Collected ➔ Testing ➔ Approved\n"
+          + "   - **Color-Coded Tube Barcodes**: EDTA purple, SST gold, etc.\n"
+          + "   - **Print Report Button**: Once status is Approved, click 'Print Report' to print directly.";
+    }
+
+    // Patient Registration & Barcodes for Receptionist
+    if (q.includes("patient") || q.includes("mariz") || q.includes("mareez") || q.includes("register") || q.includes("booking") || q.includes("barcode") || q.includes("sticker") || q.includes("jode")) {
+      return isHindi
+        ? "Naye patient ko register karne aur barcode nikalne ke steps:\n\n"
+          + "1. Sidebar me **'+ Add Patient'** dabayein ya jayein: [Open Patient Registration](/dashboard/patients/register).\n"
+          + "2. Patient ka Name, Age, Gender, Mobile Number, aur Ref Doctor select karein.\n"
+          + "3. Prescribed Tests ya Health Packages select karein (rate apne aap calculate hoga).\n"
+          + "4. Billing details confirm karein aur **'Register & Save'** dabayein.\n"
+          + "5. Save hote hi unique Lab PID aur vial barcode sticker generate ho jayega jise aap print karke collection tubes par laga sakte hain."
+        : "To register a patient and print vial barcodes:\n\n"
+          + "1. Click **'+ Add Patient'** in the sidebar or go to [Open Patient Registration](/dashboard/patients/register).\n"
+          + "2. Fill in patient demographics (Name, Age, Gender, Phone, Referring Doctor).\n"
+          + "3. Select prescribed Tests or Health Packages from the searchable list.\n"
+          + "4. Review billing details and click **'Register & Save'**.\n"
+          + "5. A unique Lab PID and barcode sticker will be generated ready for printing.";
+    }
+
+    // Billing Desk & Payments for Receptionist
+    if (q.includes("bill") || q.includes("payment") || q.includes("receipt") || q.includes("rasid") || q.includes("cash") || q.includes("upi")) {
+      return isHindi
+        ? "Billing Desk se payments collect karne ke steps:\n\n"
+          + "1. Sidebar se **'Billing'** me jayein: [Open Billing Desk](/dashboard/billing).\n"
+          + "2. Patient ka pending balance check karein.\n"
+          + "3. Cash ya UPI se payment receive karein aur receipt print karein (Thermal ya A4 format me)."
+        : "To manage Billing and collect payments:\n\n"
+          + "1. Go to **Dashboard > Billing**: [Open Billing Desk](/dashboard/billing).\n"
+          + "2. Review patient invoice and outstanding due balance.\n"
+          + "3. Record cash or UPI payment and print thermal or A4 receipts.";
+    }
+
+    // ABHA ID & ABDM for Receptionist
+    if (q.includes("abha") || q.includes("abdm") || q.includes("ayushman") || q.includes("health id")) {
+      return isHindi
+        ? "ABHA ID QR Poster dikhane ke steps:\n\n"
+          + "1. Top navbar me **'Create ABHA ID'** button dabayein – patient ke scan karne ke liye QR poster open ho jayega.\n"
+          + "2. Patient mobile se scan karke apna official Ayushman Bharat Health Account (ABHA ID) bana sakte hain.\n"
+          + "3. Patient Registration me **'Link via ABHA'** se Aadhaar OTP verify karke record link kar sakte hain."
+        : "To use ABHA ID & ABDM in Receptionist portal:\n\n"
+          + "1. In the top navbar, click **'Create ABHA ID'** to display the QR poster for patient mobile scan.\n"
+          + "2. Patients scan the QR code to create their official ABHA health account.\n"
+          + "3. In Patient Registration, click **'Link via ABHA'** to verify with Aadhaar OTP.";
+    }
+
+    // Default Receptionist response
+    return isHindi
+      ? "Main OnePath Front Desk Receptionist Assistant hoon! Main aapko in features me guide kar sakta hoon:\n\n"
+        + "- [Open Patient Registration](/dashboard/patients/register) – Naye mariz aur sample booking\n"
+        + "- [Open Track Samples](/dashboard/track-samples) – Sample ka 4-step progress track karna aur report print karna\n"
+        + "- [Open Billing Desk](/dashboard/billing) – Cash/UPI payment lena aur receipts nikalna\n"
+        + "- [Open Patients](/dashboard/patients) – Registered marizon ka record dekhna\n"
+        + "- **Create ABHA ID** – Top navbar se patient QR poster dikhana\n\n"
+        + "Aap Hindi ya English me koi bhi sawal pooch sakte hain!"
+      : "Welcome to the OnePath Receptionist Assistant! I can guide you through all Front Desk features:\n\n"
+        + "- [Open Patient Registration](/dashboard/patients/register): Register patients and print barcodes\n"
+        + "- [Open Track Samples](/dashboard/track-samples): Track 4-stage progress and print approved reports\n"
+        + "- [Open Billing Desk](/dashboard/billing): Collect cash/UPI payments and print receipts\n"
+        + "- [Open Patients](/dashboard/patients): Search registered patients\n"
+        + "- **Create ABHA ID**: Open QR poster from the top navbar.";
+  }
+
+  // ==========================================
+  // ROLE 3: B2B PARTNER PORTAL
+  // ==========================================
+  if (normalizedRole === "B2B") {
+    // Out of scope for B2B: Central lab settings, doctor signs, test master editing, machine bridge
+    if (q.includes("result") || q.includes("parinam") || q.includes("doctor sign") || q.includes("signature") || q.includes("machine") || q.includes("analyzer") || q.includes("test master") || q.includes("add test") || q.includes("letterhead")) {
+      return isHindi
+        ? "Yeh feature B2B Partner portal ke scope me nahi hai. Central lab settings, doctor signatures, test master editing aur machine interfacing Central Laboratory dwara manage kiye jaate hain.\n\nB2B portal me aap sirf:\n1. Apne referral patients ki booking karna\n2. Prepaid wallet balance check aur recharge karna\n3. Final approved reports download aur print karna\n4. Contracted rate list dekhna\nkar sakte hain."
+        : "This feature is not available in the B2B Partner portal. Central laboratory settings, doctor signatures, test master editing, and analyzer machine interfacing are managed exclusively by the Central Laboratory.\n\nIn the B2B Portal, you can:\n1. Book referral patients at B2B rates\n2. Check and recharge your prepaid wallet in [Open B2B Wallet](/dashboard/wallet)\n3. Download finalized PDF reports in [Open Reports](/dashboard/reports)\n4. View your contracted rate list in [Open Rate List](/dashboard/ratelist).";
+    }
+
+    // Greetings & Identity for B2B
+    if (q.includes("kon ho") || q.includes("kaun ho") || q.includes("who are you") || q.includes("kya kar sakte") || q.includes("help") || q.includes("namaste") || q.includes("hello") || q.includes("hi") || q.includes("suno")) {
+      return isHindi
+        ? "Namaste! Main **OnePath B2B Partner Assistant** hoon. Main B2B Portal me aapki madad ke liye trained hoon:\n\n"
+          + "1. **[B2B Patient Booking](/dashboard/patients/register)** – Apne referral patients ko contracted B2B rate par book karna.\n"
+          + "2. **[B2B Wallet & Payments](/dashboard/wallet)** – Apna prepaid wallet balance dekhna, transactions track karna aur PayU/UPI se online recharge karna.\n"
+          + "3. **Wallet Balance Lock Rule** – Agar wallet balance negative ya unpaid hota hai, to final reports download hona ruk jata hai jab tak recharge na ho.\n"
+          + "4. **[Today's Samples](/dashboard/today-samples) & [Reports](/dashboard/reports)** – Main lab bheje gaye samples track karna aur approved reports download karna.\n"
+          + "5. **[Contracted Rate List](/dashboard/ratelist)** – B2B ke liye agreed test prices check karna.\n\n"
+          + "*Note: Doctor signatures aur test master settings Central Laboratory dwara manage hoti hain.*"
+        : "Hello! I am the **OnePath B2B Partner Assistant**. I am dedicated strictly to helping you navigate the B2B Partner Portal:\n\n"
+          + "- [Open Patient Registration](/dashboard/patients/register): Book referral patients at contracted B2B rates\n"
+          + "- [Open B2B Wallet & Payments](/dashboard/wallet): Check current balance, view transaction ledger, and recharge via PayU or UPI\n"
+          + "- **Report Download Lock**: If your wallet has an unpaid negative balance, final report downloads are locked until wallet recharge\n"
+          + "- [Open Today's Samples](/dashboard/today-samples) & [Open Reports](/dashboard/reports): Monitor dispatched specimens and download approved PDF reports\n"
+          + "- [Open Rate List](/dashboard/ratelist): Check your contracted test pricing\n\n"
+          + "*Note: Doctor digital signatures and test master configuration are not part of the B2B portal.*";
+    }
+
+    // B2B Wallet & Recharge
+    if (q.includes("wallet") || q.includes("recharge") || q.includes("balance") || q.includes("payu") || q.includes("ledger")) {
+      return isHindi
+        ? "B2B Wallet recharge karne ke steps:\n\n"
+          + "1. Sidebar se **'Wallet & Payments'** me jayein: [Open B2B Wallet](/dashboard/wallet).\n"
+          + "2. Yahan aapka current balance aur transaction history dikhegi.\n"
+          + "3. **'Recharge Wallet'** par click karein aur amount enter karein.\n"
+          + "4. PayU ya UPI se secure online payment complete karein. Payment hote hi balance turant update ho jayega!"
+        : "To recharge your B2B prepaid wallet:\n\n"
+          + "1. Go to **Dashboard > Wallet & Payments**: [Open B2B Wallet](/dashboard/wallet).\n"
+          + "2. Review your balance and transaction history.\n"
+          + "3. Click **'Recharge Wallet'** and enter the desired amount.\n"
+          + "4. Complete the online payment via PayU or UPI. Your balance reflects immediately.";
+    }
+
+    // Report Lock Rule for B2B
+    if (q.includes("lock") || q.includes("unpaid") || q.includes("negative") || q.includes("kyu nahi khul rahi") || q.includes("download nahi")) {
+      return isHindi
+        ? "Report Lock hone ka karan aur solution:\n\n"
+          + "OnePath LIS me B2B policy ke mutabik agar aapka wallet balance negative ho jata hai ya koi due payment bacha hota hai, to reports par **'Locked due to unpaid balance'** lag jata hai aur PDF download nahi hoti.\n\n"
+          + "**Solution**: Turant [Open B2B Wallet](/dashboard/wallet) me jakar online recharge karein. Recharge complete hote hi sabhi reports instantly unlock ho jayengi!"
+        : "Why is report access locked and how to resolve it:\n\n"
+          + "In accordance with B2B credit policies, if your wallet balance falls into the negative or has pending dues, report downloads are locked.\n\n"
+          + "**Solution**: Go to [Open B2B Wallet](/dashboard/wallet) and complete a quick online wallet recharge via PayU or UPI. Once payment is confirmed, all reports unlock automatically.";
+    }
+
+    // B2B Reports & Download
+    if (q.includes("report") || q.includes("download") || q.includes("pdf") || q.includes("print")) {
+      return isHindi
+        ? "B2B Reports download karne ke steps:\n\n"
+          + "1. Sidebar se **'Reports'** me jayein: [Open Reports Management](/dashboard/reports).\n"
+          + "2. Jab report status **'Approved'** ho jaye, to **'PDF'** ya **'Print'** par click karein.\n"
+          + "3. Clean letterhead ya plain paper format me report download ho jayegi."
+        : "To download finalized reports in B2B portal:\n\n"
+          + "1. Go to [Open Reports Management](/dashboard/reports).\n"
+          + "2. Locate the patient. Once the status shows **'Approved'**, click **'PDF'** or **'Print'**.\n"
+          + "3. Download the verified vector PDF report.";
+    }
+
+    // B2B Patient Booking
+    if (q.includes("patient") || q.includes("mariz") || q.includes("booking") || q.includes("register")) {
+      return isHindi
+        ? "B2B Patient booking ke steps:\n\n"
+          + "1. Sidebar se **'+ Add Patient'** dabayein: [Open Patient Registration](/dashboard/patients/register).\n"
+          + "2. Patient details enter karein aur tests select karein. B2B portal me rates automatically contracted discount par calculate hote hain.\n"
+          + "3. Save karke barcode print karein aur sample central lab dispatch karein."
+        : "To book a patient under B2B rate card:\n\n"
+          + "1. Click **'+ Add Patient'** or go to [Open Patient Registration](/dashboard/patients/register).\n"
+          + "2. Enter patient demographics and select prescribed tests. B2B contracted rates apply automatically.\n"
+          + "3. Save to generate barcode and dispatch specimen to central laboratory.";
+    }
+
+    // Contracted Rates for B2B
+    if (q.includes("rate") || q.includes("price") || q.includes("khrcha")) {
+      return isHindi
+        ? "Contracted B2B Rate List dekhne ke liye:\n\n"
+          + "1. Sidebar se **'Finance & Rates > Rate List'** me jayein: [Open Rate List](/dashboard/ratelist).\n"
+          + "2. Yahan aapko aapke B2B agreement ke mutabik sabhi tests aur packages ke contracted rates dikhenge."
+        : "To view your contracted B2B rate list:\n\n"
+          + "1. Go to **Dashboard > Finance & Rates > Rate List**: [Open Rate List](/dashboard/ratelist).\n"
+          + "2. Review agreed prices for all tests and health packages.";
+    }
+
+    // Default B2B response
+    return isHindi
+      ? "Main OnePath B2B Partner Assistant hoon! Main aapko in features me guide kar sakta hoon:\n\n"
+        + "- [Open Patient Registration](/dashboard/patients/register) – B2B rate par referral mariz book karna\n"
+        + "- [Open B2B Wallet](/dashboard/wallet) – Prepaid wallet balance dekhna aur online recharge karna\n"
+        + "- [Open Reports Management](/dashboard/reports) – Approved test reports download karna\n"
+        + "- [Open Rate List](/dashboard/ratelist) – Contracted rate list check karna\n\n"
+        + "Aap Hindi ya English me koi bhi sawal pooch sakte hain!"
+      : "Welcome to the OnePath B2B Partner Assistant! I can guide you through all B2B features:\n\n"
+        + "- [Open Patient Registration](/dashboard/patients/register): Book patients at B2B rates\n"
+        + "- [Open B2B Wallet](/dashboard/wallet): Check balance and recharge via PayU/UPI\n"
+        + "- [Open Reports Management](/dashboard/reports): Download approved test reports\n"
+        + "- [Open Rate List](/dashboard/ratelist): Check contracted B2B rate list.";
+  }
+
+  // ==========================================
+  // ROLE 4: ADMIN / PATHOLOGIST / SUPER ADMIN
+  // ==========================================
   // Greetings & Identity
   if (q.includes("kon ho") || q.includes("kaun ho") || q.includes("who are you") || q.includes("kya kar sakte") || q.includes("namaste") || q.includes("hello") || q.includes("hi") || q.includes("suno")) {
     return isHindi
