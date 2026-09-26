@@ -948,17 +948,25 @@ function RegisterPatientPage() {
               if (patReport.results && Array.isArray(patReport.results)) {
                 const testIds: string[] = [];
                 patReport.results.forEach((res: any) => {
-                  const tId = res.test_id || res.testId || (res.test && res.test.id);
-                  const pId = res.test?.parent_id || res.test?.parentId || res.test?.parent?.id;
-                  if (pId && !testIds.includes(pId)) {
-                    testIds.push(pId);
+                  let testObj = res.test;
+                  // Climb up to the top-level parent (main panel like CBC) so child parameters aren't booked as separate tests
+                  while (testObj) {
+                    const parentId = testObj.parentId || testObj.parent_id || testObj.parent?.id;
+                    if (!parentId) break;
+                    const parentObj = testObj.parent;
+                    if (!parentObj) {
+                      testObj = { id: parentId };
+                      break;
+                    }
+                    testObj = parentObj;
                   }
-                  if (tId && !testIds.includes(tId)) {
-                    testIds.push(tId);
+                  const mainId = testObj?.id || res.test?.parent_id || res.test?.parentId || res.test_id || res.testId;
+                  if (mainId && !testIds.includes(mainId)) {
+                    testIds.push(mainId);
                   }
                 });
                 if (testIds.length > 0) {
-                  setSelectedTests(testIds);
+                  setSelectedTests(Array.from(new Set(testIds)));
                 }
               }
 
@@ -1357,12 +1365,12 @@ function RegisterPatientPage() {
       const computedBalance = isB2B ? grandTotal : balanceDue;
       const computedDiscount = isB2B ? 0 : parsedDiscount;
 
-      // Sanitize testIds: Only send valid UUIDs to PostgreSQL backend
+      // Sanitize testIds: Only send valid unique UUIDs to PostgreSQL backend
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      let validTestIds = selectedTests.filter(id => uuidRegex.test(id));
+      let validTestIds = Array.from(new Set(selectedTests.filter(id => uuidRegex.test(id))));
 
       if (validTestIds.length === 0 && selectedPackage) {
-        validTestIds = resolvePackageTestIds(selectedPackage, availableTests).filter(id => uuidRegex.test(id));
+        validTestIds = Array.from(new Set(resolvePackageTestIds(selectedPackage, availableTests).filter(id => uuidRegex.test(id))));
       }
       if (validTestIds.length === 0 && availableTests.length > 0) {
         validTestIds = [availableTests[0].id];

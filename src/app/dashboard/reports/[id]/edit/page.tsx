@@ -79,6 +79,8 @@ interface Test {
   sort_order?: number;
   subTests?: Test[];
   sub_tests?: Test[];
+  parentId?: string | null;
+  parent_id?: string | null;
   parent?: any;
 }
 interface ReportTest {
@@ -1778,11 +1780,32 @@ export default function ResultEntryPage() {
       sectionsMap: Map<string, { parentOrder: number; items: ReportTest[] }>;
     }>();
 
-    report.results.forEach((item) => {
+    const seenParamKeys = new Set<string>();
+
+    // Prioritize results that already have entered values
+    const sortedResults = [...report.results].sort((a, b) => {
+      const hasValA = Boolean((values[a.id] || a.result_value || '').trim());
+      const hasValB = Boolean((values[b.id] || b.result_value || '').trim());
+      if (hasValA && !hasValB) return -1;
+      if (!hasValA && hasValB) return 1;
+      return 0;
+    });
+
+    sortedResults.forEach((item) => {
       const t = item.test;
+      if (!t) return;
       const mt = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
       const mtId = mt.id;
       const mtName = mt.name;
+
+      // Defensive parameter deduplication by mainTestId + section + normalized name
+      const parentKeyId = t.parent_id || t.parentId || t.parent?.id || 'root';
+      const paramKey = `${mtId}:${parentKeyId}:${(t.name || '').trim().toLowerCase()}`;
+      if (seenParamKeys.has(paramKey)) {
+        return; // Guard against duplicate parameter rows
+      }
+      seenParamKeys.add(paramKey);
+
       const rawInterp = mt.interpretation || t.interpretation || (t.parent ? t.parent.interpretation : null);
       const interp = getClinicalInterpretation(mtName, rawInterp, t.category);
       const hasInterp = !!interp && interp.trim() !== '' && interp !== '<p><br></p>';
