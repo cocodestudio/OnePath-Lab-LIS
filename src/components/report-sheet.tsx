@@ -6,6 +6,7 @@ import { BarcodeSVG } from "@/components/barcode-svg";
 import { normalizeReportSettings, type ReportLayoutSettings, defaultReportLayoutSettings, resolveSignatureUrl, type DoctorSignatureConfig } from "@/lib/report-settings";
 import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 import { getReportPackage } from "@/lib/packages";
+import { compareClinicalTests, compareClinicalParameters, getClinicalTestPriority } from "@/lib/clinical-order";
 
 interface Test { 
   id: string; name: string; category: string; price: number; unit: string; 
@@ -231,7 +232,7 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
 
   return (
     <div 
-      className="border border-zinc-300 rounded-xs px-2.5 py-1.5 mb-2 text-[11px] leading-[1.3] text-zinc-900 bg-white"
+      className="border border-zinc-300 rounded-xs px-2 py-1 mb-1.5 text-[11px] leading-[1.25] text-zinc-900 bg-white"
       style={{ fontFamily: 'Arial, "Segoe UI", Roboto, sans-serif' }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -248,19 +249,19 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
 
           {/* Scannable Barcode tightly placed under left info with 0 extra whitespace */}
           {reportSettings.typography.showBarcode && (
-            <div className="mt-1 flex items-center gap-2">
-              <BarcodeSVG value={report.customId || report.id} width={1.0} height={16} fontSize={7.5} />
-              <span className="text-[7.5px] font-mono text-zinc-400 font-semibold tracking-wider">LAB ACCREDITED</span>
+            <div className="mt-0.5 flex items-center gap-2">
+              <BarcodeSVG value={report.customId || report.id} width={1.0} height={15} fontSize={7} />
+              <span className="text-[7px] font-mono text-zinc-400 font-semibold tracking-wider">LAB ACCREDITED</span>
             </div>
           )}
         </div>
 
         {/* Dynamic QR Code Verification Stamp */}
-        <div className="shrink-0 flex flex-col items-center justify-center border-l border-zinc-200 pl-3 min-w-[68px]">
+        <div className="shrink-0 flex flex-col items-center justify-center border-l border-zinc-200 pl-3 min-w-[64px]">
           <div className="bg-white p-0.5 rounded border border-zinc-300 shadow-2xs">
             <QRCodeSVG
               value={qrValue}
-              size={48}
+              size={44}
               level="M"
               includeMargin={false}
             />
@@ -320,51 +321,18 @@ function getDepartmentOrderIndex(category: string, orderList: string[]): number 
 }
 
 function getTestPriority(mainTestName: string, category?: string): number {
-  const name = (mainTestName || "").trim().toLowerCase();
-  const cat = (category || "").trim().toLowerCase();
-
-  // 1. CBC Top Priority
-  if (name.includes("complete blood count") || name.includes("cbc") || name.includes("hemogram") || name.includes("haemogram")) {
-    return 10;
-  }
-
-  // 2. ESR
-  if (name.includes("erythrocyte sedimentation rate") || name.includes("esr")) {
-    return 20;
-  }
-
-  // 3. Other Haematology / Hematology
-  if (cat.includes("haemat") || cat.includes("hemat") || name.includes("blood group") || name.includes("coagulation") || name.includes("pt/inr") || name.includes("prothrombin") || name.includes("smear") || name.includes("platelet") || name.includes("bleeding time") || name.includes("clotting time")) {
-    return 30;
-  }
-
-  // 4. Biochemistry (LFT, KFT, Lipids, Sugar, HbA1c, Electrolytes, Calcium, etc.)
-  if (cat.includes("bio") || cat.includes("chem") || name.includes("liver") || name.includes("lft") || name.includes("kidney") || name.includes("kft") || name.includes("renal") || name.includes("rft") || name.includes("lipid") || name.includes("glucose") || name.includes("sugar") || name.includes("hba1c") || name.includes("electrolyte") || name.includes("calcium") || name.includes("cardiac") || name.includes("amylase") || name.includes("lipase") || name.includes("iron profile") || name.includes("iron studies")) {
-    return 40;
-  }
-
-  // 5. Serology & Immunology & Hormones
-  if (cat.includes("serol") || cat.includes("immun") || cat.includes("hormone") || cat.includes("endocrin") || name.includes("widal") || name.includes("dengue") || name.includes("typhoid") || name.includes("hiv") || name.includes("hbsag") || name.includes("hcv") || name.includes("vdrl") || name.includes("crp") || name.includes("ra factor") || name.includes("thyroid") || name.includes("tft") || name.includes("vitamin")) {
-    return 50;
-  }
-
-  // 6. Microbiology / Clinical Pathology / Urine / Semen / Stool
-  if (cat.includes("micro") || cat.includes("path") || cat.includes("urine") || cat.includes("semen") || cat.includes("stool") || name.includes("urine") || name.includes("semen") || name.includes("stool") || name.includes("culture") || name.includes("sputum") || name.includes("swab")) {
-    return 60;
-  }
-
-  // 7. General / Others
-  return 70;
+  return getClinicalTestPriority(mainTestName, category);
 }
 
 export function renderDoctorSignature(
   sig: DoctorSignatureConfig,
   globalShowSignatureOnly: boolean,
-  defaultAlign: "left" | "right" | "center" = "left"
+  defaultAlign: "left" | "right" | "center" = "left",
+  ignoreMarginTop = false
 ) {
   const align = sig.alignment || defaultAlign;
   const resolvedUrl = resolveSignatureUrl(sig.imageUrl);
-  const vertOffset = (sig.marginTop || 0) - (sig.marginBottom || 0);
+  const vertOffset = ignoreMarginTop ? 0 : ((sig.marginTop || 0) - (sig.marginBottom || 0));
   const horizOffset = (sig.marginLeft || 0) - (sig.marginRight || 0);
   const isImageOnly = Boolean(globalShowSignatureOnly || sig.showSignatureOnly);
 
@@ -426,7 +394,8 @@ export function renderDoctorSignature(
 export function renderSignaturesGrid(
   signatureRows: Array<[DoctorSignatureConfig, DoctorSignatureConfig | undefined]>,
   enabledSignatures: DoctorSignatureConfig[],
-  globalShowSignatureOnly: boolean
+  globalShowSignatureOnly: boolean,
+  ignoreMarginTop = false
 ) {
   if (enabledSignatures.length === 0) return null;
 
@@ -439,7 +408,7 @@ export function renderSignaturesGrid(
           align === "left" ? "justify-start" : align === "center" ? "justify-center" : "justify-end"
         }`}
       >
-        {renderDoctorSignature(singleSig, globalShowSignatureOnly, align)}
+        {renderDoctorSignature(singleSig, globalShowSignatureOnly, align, ignoreMarginTop)}
       </div>
     );
   }
@@ -451,8 +420,8 @@ export function renderSignaturesGrid(
         const rightSig = pair[1];
         return (
           <div key={rowIdx} className="flex items-start justify-between px-2 text-[10px]">
-            {leftSig ? renderDoctorSignature(leftSig, globalShowSignatureOnly, "left") : <div />}
-            {rightSig ? renderDoctorSignature(rightSig, globalShowSignatureOnly, "right") : <div />}
+            {leftSig ? renderDoctorSignature(leftSig, globalShowSignatureOnly, "left", ignoreMarginTop) : <div />}
+            {rightSig ? renderDoctorSignature(rightSig, globalShowSignatureOnly, "right", ignoreMarginTop) : <div />}
           </div>
         );
       })}
@@ -462,7 +431,7 @@ export function renderSignaturesGrid(
 
 export function buildReportBlocks(
   report: ReportSheetData,
-  opts?: { hidePatientBlock?: boolean; hideInterpretation?: boolean }
+  opts?: { hidePatientBlock?: boolean; hideInterpretation?: boolean; autoFitToFooter?: boolean }
 ): ReportBlock[] {
   const blocks: ReportBlock[] = [];
   let isFirstMainTestPushed = false;
@@ -661,7 +630,7 @@ export function buildReportBlocks(
   });
 
   sortedCategories.forEach(([category, mainTests], catIdx) => {
-    if (catIdx > 0 && isFirstMainTestPushed) {
+    if (reportSettings.separatePagePerTest && catIdx > 0 && isFirstMainTestPushed) {
       pendingPageBreakForNextBlock = true;
     }
 
@@ -678,13 +647,13 @@ export function buildReportBlocks(
         key: `department-header-${category}-${suffix}`,
         node: (
           <div 
-            className={`font-extrabold text-zinc-900 uppercase tracking-widest pb-1 mb-1 border-b border-zinc-300 ${deptAlign} ${
-              isSeparateTest ? "mt-2" : ""
+            className={`font-extrabold text-zinc-900 uppercase tracking-widest pb-0.5 mb-0.5 border-b border-zinc-300 ${deptAlign} ${
+              isSeparateTest ? "mt-1.5" : ""
             }`}
             style={{ 
               fontFamily: 'Arial, Helvetica, sans-serif',
-              fontSize: `${typo.departmentFontSize || 13}px`,
-              paddingTop: `${sp.department || 2}px`,
+              fontSize: `${Math.min(12, typo.departmentFontSize || 12)}px`,
+              paddingTop: `${Math.min(2, sp.department || 2)}px`,
             }}
           >
             {category}
@@ -703,9 +672,9 @@ export function buildReportBlocks(
         pushBlock({
           key: `package-header-${category}`,
           node: (
-            <div className="text-left mb-1.5 mt-0.5 flex items-center gap-1.5 select-none">
-              <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Health Package:</span>
-              <span className="font-extrabold text-[11px] text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-300">
+            <div className="text-left mb-1 mt-0.5 flex items-center gap-1.5 select-none">
+              <span className="text-[9.5px] font-bold text-zinc-500 uppercase tracking-wider">Health Package:</span>
+              <span className="font-extrabold text-[10.5px] text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-300">
                 {resolvedPackageName}
               </span>
             </div>
@@ -715,16 +684,13 @@ export function buildReportBlocks(
     }
 
     const sortedMainTests = Object.entries(mainTests).sort(([nameA], [nameB]) => {
-      const pA = getTestPriority(nameA, category);
-      const pB = getTestPriority(nameB, category);
-      if (pA !== pB) return pA - pB;
-      return nameA.localeCompare(nameB);
+      return compareClinicalTests(nameA, nameB, category, category);
     });
 
     sortedMainTests.forEach(([mainTestName, itemsList], testIdx) => {
       if (!itemsList || itemsList.length === 0) return;
 
-      if (testIdx > 0 && isFirstMainTestPushed) {
+      if (reportSettings.separatePagePerTest && testIdx > 0 && isFirstMainTestPushed) {
         pendingPageBreakForNextBlock = true;
       } else if (!isFirstMainTestPushed) {
         isFirstMainTestPushed = true;
@@ -740,9 +706,9 @@ export function buildReportBlocks(
           pushBlock({
             key: `package-header-${category}`,
             node: (
-              <div className="text-left mb-1.5 mt-0.5 flex items-center gap-1.5 select-none">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Health Package:</span>
-                <span className="font-extrabold text-[11px] text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-300">
+              <div className="text-left mb-1 mt-0.5 flex items-center gap-1.5 select-none">
+                <span className="text-[9.5px] font-bold text-zinc-500 uppercase tracking-wider">Health Package:</span>
+                <span className="font-extrabold text-[10.5px] text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-300">
                   {resolvedPackageName}
                 </span>
               </div>
@@ -771,13 +737,13 @@ export function buildReportBlocks(
             }`}
             style={{ 
               fontFamily: 'Arial, Helvetica, sans-serif',
-              marginTop: `${sp.testName || 7}px`,
-              marginBottom: `${typo.spacingBetweenTests || 6}px`,
+              marginTop: `${Math.min(4, sp.testName || 4)}px`,
+              marginBottom: `${Math.min(3, typo.spacingBetweenTests || 3)}px`,
             }}
           >
             <span 
               className={`font-extrabold text-zinc-950 tracking-wide ${typo.properCaseTestNames ? "capitalize" : "uppercase"}`}
-              style={{ fontSize: `${typo.testNameFontSize || 12}px` }}
+              style={{ fontSize: `${Math.min(12, typo.testNameFontSize || 12)}px` }}
             >
               * {formattedMainTestName}
             </span>
@@ -800,20 +766,129 @@ export function buildReportBlocks(
       // 3. Custom Editor or Table Rows
       if (allCustomEditor) {
         itemsList.forEach((item) => {
-          pushBlock({
-            key: `custom-editor-${item.id}`,
-            node: (
-              <div 
-                className="my-1.5 p-2 bg-white rounded leading-relaxed text-zinc-900"
-                style={{ 
-                  fontFamily: 'Arial, Helvetica, sans-serif',
-                  fontSize: `${typo.testParameterFontSize || 11}px`,
-                  textAlign: typo.testBodyImageAlignment === "Left" ? "left" : typo.testBodyImageAlignment === "Right" ? "right" : "center",
-                }}
-                dangerouslySetInnerHTML={{ __html: item.resultValue || "<p class='text-zinc-400 italic text-xs'>No content recorded.</p>" }}
-              />
-            ),
-          });
+          const rawVal = (item.resultValue || (item as any).result_value || "").trim();
+          const isBlank = !rawVal || rawVal === "<p></p>" || rawVal === "<p><br></p>" || rawVal === "<p><br/></p>";
+          const content = !isBlank ? rawVal : (item.test?.interpretation || "<p class='text-zinc-400 italic text-xs'>No content recorded.</p>");
+
+          // Check if content has a multi-row table (e.g. Culture & Sensitivity with 39 rows) that needs multi-page pagination
+          let isMultiPageTable = false;
+          let preTableHtml = "";
+          let theadHtml = "";
+          let colgroupHtml = "";
+          let trNodes: string[] = [];
+          let postTableHtml = "";
+
+          if (content.includes("<table")) {
+            const tableMatch = content.match(/<table[\s\S]*?<\/table>/i);
+            if (tableMatch) {
+              const tableHtml = tableMatch[0];
+              const tableIdx = content.indexOf(tableHtml);
+              preTableHtml = content.substring(0, tableIdx);
+              postTableHtml = content.substring(tableIdx + tableHtml.length);
+
+              const theadMatch = tableHtml.match(/<thead[\s\S]*?<\/thead>/i);
+              theadHtml = theadMatch ? theadMatch[0] : "";
+
+              const colgroupMatch = tableHtml.match(/<colgroup[\s\S]*?<\/colgroup>/i);
+              colgroupHtml = colgroupMatch ? colgroupMatch[0] : `<colgroup><col style="width:10%" /><col style="width:55%" /><col style="width:35%" /></colgroup>`;
+
+              const tbodyMatch = tableHtml.match(/<tbody[\s\S]*?<\/tbody>/i);
+              const tbodyContent = tbodyMatch ? tbodyMatch[0] : tableHtml;
+
+              const trMatches = tbodyContent.match(/<tr[\s\S]*?<\/tr>/gi);
+              if (trMatches && trMatches.length > 6) {
+                isMultiPageTable = true;
+                trNodes = trMatches;
+              }
+            }
+          }
+
+          if (isMultiPageTable) {
+            // 1. Intro block (sterile note, collection date, sample type, organism, colony count)
+            if (preTableHtml) {
+              pushBlock({
+                key: `custom-editor-intro-${item.id}`,
+                node: (
+                  <div 
+                    className="my-1 text-zinc-900 report-custom-editor-content"
+                    style={{ 
+                      fontFamily: 'Arial, Helvetica, sans-serif',
+                      fontSize: `${typo.testParameterFontSize || 10.5}px`,
+                      textAlign: "left",
+                      lineHeight: 1.35,
+                    }}
+                    dangerouslySetInnerHTML={{ __html: preTableHtml }}
+                  />
+                ),
+              });
+            }
+
+            // 2. Chunked table rows in slices of 2 rows each
+            const chunkSize = 2;
+            for (let rIdx = 0; rIdx < trNodes.length; rIdx += chunkSize) {
+              const chunkSlice = trNodes.slice(rIdx, rIdx + chunkSize);
+              const rowsHtml = chunkSlice.join("");
+              const isFirstChunk = (rIdx === 0);
+
+              const contHeader = theadHtml ? (
+                <div className="report-custom-editor-content" style={{ marginTop: "2px", marginBottom: "0px" }}>
+                  <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", margin: 0 }}>
+                    <colgroup dangerouslySetInnerHTML={{ __html: colgroupHtml }} />
+                    <thead dangerouslySetInnerHTML={{ __html: theadHtml }} />
+                  </table>
+                </div>
+              ) : null;
+
+              pushBlock({
+                key: `custom-editor-row-${item.id}-${rIdx}`,
+                continuationHeader: contHeader,
+                node: (
+                  <div className="report-custom-editor-content">
+                    <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", margin: 0 }}>
+                      <colgroup dangerouslySetInnerHTML={{ __html: colgroupHtml }} />
+                      {isFirstChunk && theadHtml && (
+                        <thead dangerouslySetInnerHTML={{ __html: theadHtml }} />
+                      )}
+                      <tbody dangerouslySetInnerHTML={{ __html: rowsHtml }} />
+                    </table>
+                  </div>
+                ),
+              } as any);
+            }
+
+            // 3. Post-table block if any
+            if (postTableHtml) {
+              pushBlock({
+                key: `custom-editor-post-${item.id}`,
+                node: (
+                  <div 
+                    className="my-1.5 p-1 text-zinc-900 report-custom-editor-content"
+                    style={{ 
+                      fontFamily: 'Arial, Helvetica, sans-serif',
+                      fontSize: `${typo.testParameterFontSize || 10.5}px`,
+                      textAlign: "left",
+                    }}
+                    dangerouslySetInnerHTML={{ __html: postTableHtml }}
+                  />
+                ),
+              });
+            }
+          } else {
+            pushBlock({
+              key: `custom-editor-${item.id}`,
+              node: (
+                <div 
+                  className="my-1.5 p-1 bg-white rounded leading-relaxed text-zinc-900 report-custom-editor-content"
+                  style={{ 
+                    fontFamily: 'Arial, Helvetica, sans-serif',
+                    fontSize: `${typo.testParameterFontSize || 11}px`,
+                    textAlign: "left",
+                  }}
+                  dangerouslySetInnerHTML={{ __html: content }}
+                />
+              ),
+            });
+          }
         });
       } else {
         // Table Header
@@ -830,6 +905,8 @@ export function buildReportBlocks(
                 width: "100%",
                 tableLayout: "fixed",
                 borderCollapse: "collapse",
+                borderSpacing: 0,
+                margin: 0,
                 fontFamily: 'Arial, Helvetica, sans-serif',
                 fontSize: `${typo.columnHeadingFontSize || 10}px`,
                 fontWeight: "bold",
@@ -847,11 +924,11 @@ export function buildReportBlocks(
               </colgroup>
               <thead>
                 <tr>
-                  <th style={{ width: `${cw.testDescription}%`, padding: `${sp.columnHeader || 4}px 6px ${sp.columnHeader || 4}px 4px`, textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{cl.testDescription}</th>
-                  <th style={{ width: `${cw.result}%`, padding: `${sp.columnHeader || 4}px 4px`, textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{cl.result}</th>
-                  <th style={{ width: `${cw.flag}%`, padding: `${sp.columnHeader || 4}px 2px`, textAlign: "center", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{cl.flag}</th>
-                  <th style={{ width: col4Width, padding: `${sp.columnHeader || 4}px 4px ${sp.columnHeader || 4}px 16px`, textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{col4Label}</th>
-                  <th style={{ width: col5Width, padding: `${sp.columnHeader || 4}px 4px ${sp.columnHeader || 4}px 12px`, textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{col5Label}</th>
+                  <th style={{ width: `${cw.testDescription}%`, padding: "2.5px 6px 2.5px 4px", textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{cl.testDescription}</th>
+                  <th style={{ width: `${cw.result}%`, padding: "2.5px 4px", textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{cl.result}</th>
+                  <th style={{ width: `${cw.flag}%`, padding: "2.5px 2px", textAlign: "center", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{cl.flag}</th>
+                  <th style={{ width: col4Width, padding: "2.5px 4px 2.5px 16px", textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{col4Label}</th>
+                  <th style={{ width: col5Width, padding: "2.5px 4px 2.5px 12px", textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{col5Label}</th>
                 </tr>
               </thead>
             </table>
@@ -884,19 +961,19 @@ export function buildReportBlocks(
         Object.entries(subGroupMap).forEach(([subName, data]) => {
           // Sort items within subgroup
           data.items.sort((a, b) => {
-            const orderA = a.test.sort_order ?? (a.test as any)?.sortOrder ?? 0;
-            const orderB = b.test.sort_order ?? (b.test as any)?.sortOrder ?? 0;
-            if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;
-            return 0;
+            return compareClinicalParameters(a, b);
           });
           const minOrder = data.items[0]?.test.sort_order ?? data.sortOrder;
           renderUnits.push({ type: "subgroup", title: subName, items: data.items, sortOrder: minOrder || data.sortOrder });
         });
 
-        // Sort all render units by sortOrder
+        // Sort all render units by sortOrder and clinical parameter order
         renderUnits.sort((a, b) => {
           if (a.sortOrder !== b.sortOrder && a.sortOrder !== 0 && b.sortOrder !== 0) {
             return a.sortOrder - b.sortOrder;
+          }
+          if (a.type === "item" && b.type === "item") {
+            return compareClinicalParameters(a.item, b.item);
           }
           if (a.sortOrder !== 0 && b.sortOrder === 0) return -1;
           if (a.sortOrder === 0 && b.sortOrder !== 0) return 1;
@@ -904,6 +981,11 @@ export function buildReportBlocks(
         });
 
         const vAlign = (typo.rowAlignment as string) === "Top" ? "top" : "middle";
+        const isCompactPanel = itemsList.length >= 10;
+        const isAutoFit = opts?.autoFitToFooter ?? true;
+        const paramPad = isAutoFit && isCompactPanel ? "1px" : `${Math.min(3, sp.testParameters ?? 3)}px`;
+        const paramFontSize = typo.testParameterFontSize || 11;
+        const paramLineHeight = isAutoFit && isCompactPanel ? "1.24" : "1.32";
 
         const renderSingleRow = (item: ReportTest, isIndented = false) => {
           const refRange = getRefRange(item);
@@ -915,8 +997,6 @@ export function buildReportBlocks(
             ? item.test.name.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.substring(1).toLowerCase())
             : item.test.name;
 
-          const paramPad = `${sp.testParameters || 2}px`;
-
           const col4Content = sp.interchangeColumns ? (item.test.unit || "") : refRange;
           const col5Content = sp.interchangeColumns ? refRange : (item.test.unit || "");
 
@@ -927,6 +1007,8 @@ export function buildReportBlocks(
                 width: "100%",
                 tableLayout: "fixed",
                 borderCollapse: "collapse",
+                borderSpacing: 0,
+                margin: 0,
                 fontFamily: 'Arial, Helvetica, sans-serif',
                 borderBottom: typo.lineBelowEachParameterRow ? "1px solid #e4e4e7" : "none",
               }}
@@ -944,8 +1026,8 @@ export function buildReportBlocks(
                     style={{ 
                       width: `${cw.testDescription}%`,
                       padding: `${paramPad} 6px ${paramPad} 4px`, 
-                      fontSize: `${typo.testParameterFontSize || 10.5}px`, 
-                      lineHeight: "1.4", 
+                      fontSize: `${paramFontSize}px`, 
+                      lineHeight: paramLineHeight, 
                       fontWeight: flagsConf.boldOnlyResultAndFlag ? (typo.boldMultiTypeParameter ? "700" : "500") : (isAbnormal ? "700" : "500"), 
                       color: "#000",
                       boxSizing: "border-box",
@@ -953,7 +1035,7 @@ export function buildReportBlocks(
                     }}
                   >
                     {isIndented && !typo.leftAlignSubParameters ? (
-                      <span style={{ paddingLeft: "10px", display: "block", fontSize: `${(typo.testParameterFontSize || 10.5) - 0.5}px` }}>
+                      <span style={{ paddingLeft: "10px", display: "block", fontSize: `${paramFontSize - 0.5}px` }}>
                         {paramName}
                       </span>
                     ) : (
@@ -962,7 +1044,7 @@ export function buildReportBlocks(
                     {reportSettings.fieldsToShow.testMethod && item.test.method && item.test.method !== mainTestObj.method && (
                       <div 
                         style={{ 
-                          fontSize: `${typo.testMethodFontSize || 8.5}px`, 
+                          fontSize: `${typo.testMethodFontSize || 8}px`, 
                           color: typo.testMethodColor || "#71717a", 
                           fontStyle: "italic", 
                           fontWeight: "400", 
@@ -978,8 +1060,8 @@ export function buildReportBlocks(
                     style={{ 
                       width: `${cw.result}%`,
                       padding: `${paramPad} 4px`, 
-                      fontSize: `${(typo.testParameterFontSize || 10.5) + 0.5}px`, 
-                      lineHeight: "1.4", 
+                      fontSize: `${paramFontSize + 0.5}px`, 
+                      lineHeight: paramLineHeight, 
                       fontFamily: "monospace", 
                       fontWeight: isAbnormal ? "700" : "400", 
                       color: isHighOrLow ? flagInfo.color : "#000", 
@@ -996,8 +1078,8 @@ export function buildReportBlocks(
                     style={{ 
                       width: `${cw.flag}%`,
                       padding: `${paramPad} 2px`, 
-                      fontSize: `${typo.testParameterFontSize || 10.5}px`, 
-                      lineHeight: "1.4", 
+                      fontSize: `${paramFontSize}px`, 
+                      lineHeight: paramLineHeight, 
                       fontWeight: "800", 
                       color: flagInfo.color, 
                       textAlign: "center", 
@@ -1012,8 +1094,8 @@ export function buildReportBlocks(
                     style={{ 
                       width: col4Width,
                       padding: `${paramPad} 4px ${paramPad} 16px`, 
-                      fontSize: `${typo.testParameterFontSize || 10.5}px`, 
-                      lineHeight: "1.4", 
+                      fontSize: `${paramFontSize}px`, 
+                      lineHeight: paramLineHeight, 
                       fontFamily: sp.interchangeColumns ? "inherit" : "monospace", 
                       color: sp.interchangeColumns ? "#52525b" : "#3f3f46", 
                       textAlign: "left", 
@@ -1029,9 +1111,9 @@ export function buildReportBlocks(
                     style={{ 
                       width: col5Width,
                       padding: `${paramPad} 4px ${paramPad} 12px`, 
-                      fontSize: `${(typo.testParameterFontSize || 10.5) - (sp.interchangeColumns ? 0 : 0.5)}px`, 
-                      lineHeight: "1.4", 
-                      fontFamily: sp.interchangeColumns ? "monospace" : "inherit",
+                      fontSize: `${paramFontSize - (sp.interchangeColumns ? 0 : 0.5)}px`, 
+                      lineHeight: paramLineHeight, 
+                      fontFamily: sp.interchangeColumns ? "monospace" : "inherit", 
                       color: sp.interchangeColumns ? "#3f3f46" : "#52525b", 
                       textAlign: "left", 
                       verticalAlign: vAlign,
@@ -1044,7 +1126,7 @@ export function buildReportBlocks(
                 </tr>
                 {item.remarks && item.remarks.trim() !== "" && (
                   <tr>
-                    <td colSpan={5} style={{ padding: `${sp.parameterComment || 2}px 4px ${sp.parameterComment || 2}px 8px`, fontSize: `${typo.parameterCommentFontSize || 9.5}px`, color: "#52525b", fontStyle: "italic", borderLeft: "2px solid #a78bfa" }}>
+                    <td colSpan={5} style={{ padding: `${sp.parameterComment || 1.5}px 4px ${sp.parameterComment || 1.5}px 8px`, fontSize: `${typo.parameterCommentFontSize || 9}px`, color: "#52525b", fontStyle: "italic", borderLeft: "2px solid #a78bfa" }}>
                       <span style={{ fontWeight: "600", fontStyle: "normal", color: "#3f3f46" }}>Remark: </span>
                       {item.remarks}
                     </td>
@@ -1067,8 +1149,8 @@ export function buildReportBlocks(
               key: `subgroup-title-${mainTestName}-${unit.title}`,
               node: (
                 <div 
-                  className="pt-2 pb-0.5 font-bold text-[10.5px] text-zinc-900 uppercase tracking-wide border-b border-zinc-300 mt-1 mb-0.5"
-                  style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+                  className="pt-0.5 pb-0.5 font-bold text-[10px] text-zinc-900 uppercase tracking-wide border-b border-zinc-200 mt-0.5 mb-0.5"
+                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', pageBreakInside: 'avoid' }}
                 >
                   {unit.title}
                 </div>
@@ -1094,25 +1176,25 @@ export function buildReportBlocks(
           key: `findings-${category}-${mainTestName}`,
           node: (
             <div 
-              className="mt-2 p-2 bg-zinc-50 border border-zinc-200 rounded text-[10px] space-y-1"
+              className="mt-1.5 p-1.5 bg-zinc-50 border border-zinc-200 rounded text-[9.5px] space-y-0.5"
               style={{ fontFamily: 'Arial, Helvetica, sans-serif', pageBreakInside: 'avoid' }}
             >
               {activeTestNotes.notes && (
                 <div>
-                  <span className="font-bold text-zinc-900 uppercase" style={{ fontSize: `${noteConf.headingFontSize || 10}px` }}>Note: </span>
-                  <span className="text-zinc-800 font-semibold" style={{ fontSize: `${noteConf.contentFontSize || 10}px` }}>{activeTestNotes.notes}</span>
+                  <span className="font-bold text-zinc-900 uppercase" style={{ fontSize: `${noteConf.headingFontSize || 9.5}px` }}>Note: </span>
+                  <span className="text-zinc-800 font-semibold" style={{ fontSize: `${noteConf.contentFontSize || 9.5}px` }}>{activeTestNotes.notes}</span>
                 </div>
               )}
               {activeTestNotes.remarks && (
                 <div>
-                  <span className="font-bold text-zinc-900 uppercase" style={{ fontSize: `${noteConf.headingFontSize || 10}px` }}>Remarks: </span>
-                  <span className="text-zinc-800 font-semibold" style={{ fontSize: `${noteConf.contentFontSize || 10}px` }}>{activeTestNotes.remarks}</span>
+                  <span className="font-bold text-zinc-900 uppercase" style={{ fontSize: `${noteConf.headingFontSize || 9.5}px` }}>Remarks: </span>
+                  <span className="text-zinc-800 font-semibold" style={{ fontSize: `${noteConf.contentFontSize || 9.5}px` }}>{activeTestNotes.remarks}</span>
                 </div>
               )}
               {activeTestNotes.advices && (
                 <div>
-                  <span className="font-bold text-zinc-900 uppercase" style={{ fontSize: `${noteConf.headingFontSize || 10}px` }}>Advices: </span>
-                  <span className="text-zinc-800 font-semibold" style={{ fontSize: `${noteConf.contentFontSize || 10}px` }}>{activeTestNotes.advices}</span>
+                  <span className="font-bold text-zinc-900 uppercase" style={{ fontSize: `${noteConf.headingFontSize || 9.5}px` }}>Advices: </span>
+                  <span className="text-zinc-800 font-semibold" style={{ fontSize: `${noteConf.contentFontSize || 9.5}px` }}>{activeTestNotes.advices}</span>
                 </div>
               )}
             </div>
@@ -1125,7 +1207,7 @@ export function buildReportBlocks(
       const interpContent = getClinicalInterpretation(mainTestName, directInterp, category);
       const hasInterpText = Boolean(interpContent && interpContent.trim() !== "" && interpContent !== "<p><br></p>");
 
-      const isInterpEnabled = !opts?.hideInterpretation && hasInterpText && (
+      const isInterpEnabled = !allCustomEditor && !opts?.hideInterpretation && hasInterpText && (
         reportSettings.fieldsToShow.interpretation !== false
       ) && (
         !hasExplicitInterpSetting ||
@@ -1133,9 +1215,7 @@ export function buildReportBlocks(
         printedInterps.includes(mainTestObj.id) ||
         printedInterps.includes(firstTestObj.id) ||
         printedInterps.includes(itemsList[0]?.test?.id) ||
-        printedInterps.includes("ALL") ||
-        mainTestName.toUpperCase().includes("CBC") ||
-        mainTestName.toUpperCase().includes("COMPLETE BLOOD")
+        printedInterps.includes("ALL")
       );
 
       if (isInterpEnabled) {
@@ -1143,14 +1223,14 @@ export function buildReportBlocks(
           key: `interp-${category}-${mainTestName}`,
           node: (
             <div 
-              className="mt-2.5 pt-2 border-t border-dashed border-zinc-400 text-zinc-700 leading-snug"
-              style={{ fontFamily: 'Arial, Helvetica, sans-serif', pageBreakInside: 'avoid', fontSize: `${interpConf.contentFontSize || 10}px` }}
+              className="mt-2 pt-1.5 border-t border-dashed border-zinc-400 text-zinc-700 leading-snug"
+              style={{ fontFamily: 'Arial, Helvetica, sans-serif', pageBreakInside: 'avoid', fontSize: `${interpConf.contentFontSize || 9.5}px` }}
             >
-              <p className={`text-zinc-900 uppercase tracking-wider mb-1.5 ${interpConf.boldHeading ? "font-bold" : "font-semibold"}`} style={{ fontSize: `${interpConf.headingFontSize || 10}px` }}>
+              <p className={`text-zinc-900 uppercase tracking-wider mb-1 ${interpConf.boldHeading ? "font-bold" : "font-semibold"}`} style={{ fontSize: `${interpConf.headingFontSize || 9.5}px` }}>
                 Clinical Notes & Interpretation ({mainTestName}):
               </p>
               <div 
-                className="[&_table]:border-collapse [&_table]:w-full [&_table]:my-1.5 [&_table]:border [&_table]:border-zinc-300 [&_th]:border [&_th]:border-zinc-300 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:bg-zinc-100 [&_th]:font-bold [&_th]:text-[10px] [&_th]:text-left [&_td]:border [&_td]:border-zinc-300 [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-[9.5px] [&_td]:leading-relaxed text-zinc-800" 
+                className="[&_table]:border-collapse [&_table]:w-full [&_table]:my-1 [&_table]:border [&_table]:border-zinc-300 [&_th]:border [&_th]:border-zinc-300 [&_th]:px-2 [&_th]:py-1 [&_th]:bg-zinc-100 [&_th]:font-bold [&_th]:text-[9.5px] [&_th]:text-left [&_td]:border [&_td]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 [&_td]:text-[9px] [&_td]:leading-snug text-zinc-800" 
                 dangerouslySetInnerHTML={{ __html: interpContent || "" }} 
               />
             </div>
@@ -1247,13 +1327,14 @@ export const PaginatedReportPreview = React.forwardRef<
     scale?: number;
     hidePatientBlock?: boolean;
     hideInterpretation?: boolean;
+    autoFitToFooter?: boolean;
     onPageCount?: (n: number) => void;
     showMarginGuides?: boolean;
   }
->(({ report, settings, scale = 1, hidePatientBlock, hideInterpretation, onPageCount, showMarginGuides }, ref) => {
+>(({ report, settings, scale = 1, hidePatientBlock, hideInterpretation, autoFitToFooter = true, onPageCount, showMarginGuides }, ref) => {
   const blocks = React.useMemo(
-    () => buildReportBlocks(report, { hidePatientBlock, hideInterpretation }),
-    [report, hidePatientBlock, hideInterpretation]
+    () => buildReportBlocks(report, { hidePatientBlock, hideInterpretation, autoFitToFooter }),
+    [report, hidePatientBlock, hideInterpretation, autoFitToFooter]
   );
   const measureRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const patientMeasureRef = React.useRef<HTMLDivElement | null>(null);
@@ -1323,26 +1404,38 @@ export const PaginatedReportPreview = React.forwardRef<
   // Estimated fallback height to prevent clipping on initial frame or slow networks
   const getEstimatedBlockHeight = (block: ReportBlock): number => {
     const k = block.key || "";
-    if (k.startsWith("tblhead-")) return 28;
-    if (k.startsWith("header-")) return 34;
-    if (k.startsWith("department-header-")) return 30;
-    if (k.startsWith("subgroup-title-")) return 26;
-    if (k.startsWith("row-")) return 26;
-    if (k.startsWith("interp-")) return 220;
-    if (k.startsWith("findings-")) return 55;
-    if (k.startsWith("report-end-of-report-line")) return 30;
-    if (k.startsWith("report-signatures-footer")) return 90;
-    if (k.startsWith("endline-")) return 10;
-    return 26;
+    if (k.startsWith("tblhead-")) return 20;
+    if (k.startsWith("header-")) return 22;
+    if (k.startsWith("department-header-")) return 20;
+    if (k.startsWith("subgroup-title-")) return 16;
+    if (k.startsWith("row-")) return 18;
+    if (k.startsWith("custom-editor-intro-")) return 80;
+    if (k.startsWith("custom-editor-row-")) return 38;
+    if (k.startsWith("custom-editor-post-")) return 40;
+    if (k.startsWith("custom-editor-")) return 250;
+    if (k.startsWith("interp-")) return 160;
+    if (k.startsWith("findings-")) return 35;
+    if (k.startsWith("report-end-of-report-line")) return 16;
+    if (k.startsWith("report-signatures-footer")) return 65;
+    if (k.startsWith("endline-")) return 6;
+    return 18;
   };
 
-  // Measure block heights at natural (unscaled) content width with loop guard
+  // Measure block heights at natural (unscaled) content width including margins with loop guard
   React.useLayoutEffect(() => {
     const measureHeights = () => {
       const next = blocks.map((_, i) => {
         const el = measureRefs.current[i];
         if (!el) return 0;
-        return el.getBoundingClientRect().height || el.offsetHeight || 0;
+        const rect = el.getBoundingClientRect();
+        let totalH = rect.height;
+        try {
+          const style = window.getComputedStyle(el);
+          const mt = parseFloat(style.marginTop) || 0;
+          const mb = parseFloat(style.marginBottom) || 0;
+          totalH += (mt + mb);
+        } catch {}
+        return Math.ceil(totalH);
       });
       setHeights(prev => {
         if (prev.length === next.length && prev.every((v, idx) => Math.abs(v - next[idx]) < 1)) {
@@ -1351,11 +1444,29 @@ export const PaginatedReportPreview = React.forwardRef<
         return next;
       });
       if (patientMeasureRef.current) {
-        const ph = patientMeasureRef.current.getBoundingClientRect().height || patientMeasureRef.current.offsetHeight;
+        const el = patientMeasureRef.current;
+        const rect = el.getBoundingClientRect();
+        let totalPh = rect.height;
+        try {
+          const style = window.getComputedStyle(el);
+          const mt = parseFloat(style.marginTop) || 0;
+          const mb = parseFloat(style.marginBottom) || 0;
+          totalPh += (mt + mb);
+        } catch {}
+        const ph = Math.ceil(totalPh);
         if (ph > 0) setPatientH(prev => Math.abs(prev - ph) < 1 ? prev : ph);
       }
       if (sigMeasureRef.current) {
-        const mh = sigMeasureRef.current.getBoundingClientRect().height || sigMeasureRef.current.offsetHeight;
+        const el = sigMeasureRef.current;
+        const rect = el.getBoundingClientRect();
+        let totalMh = rect.height;
+        try {
+          const style = window.getComputedStyle(el);
+          const mt = parseFloat(style.marginTop) || 0;
+          const mb = parseFloat(style.marginBottom) || 0;
+          totalMh += (mt + mb);
+        } catch {}
+        const mh = Math.ceil(totalMh);
         if (mh > 0) setSigH(prev => Math.abs(prev - mh) < 1 ? prev : mh);
       }
     };
@@ -1378,33 +1489,57 @@ export const PaginatedReportPreview = React.forwardRef<
     ? reportSettings.signatureSettings.horizontalOffset
     : 35;
 
-  // The content must never bleed into the footer or collide with a fixed signature
-  const bottomReserved = Math.max(
-    effectiveSettings.footerHeight,
-    isFixedSig && enabledSignaturesList.length > 0
-      ? (sigBottomOffset + sigH)
-      : effectiveSettings.footerHeight
-  );
-  const contentAreaHeight = Math.max(120, A4_H - effectiveSettings.headerHeight - bottomReserved);
+  // The content area extends strictly down to the user-configured footer line
+  const contentAreaHeight = Math.max(120, A4_H - effectiveSettings.headerHeight - effectiveSettings.footerHeight);
 
-  // Pack blocks into pages with Patient Block room on every page
-  const effectiveUsableH = Math.max(
-    100,
-    contentAreaHeight - (hidePatientBlock ? 0 : patientH) - (!isFixedSig && printOnEveryPage && enabledSignaturesList.length > 0 ? sigH : 0)
+  // Exact usable height for blocks on each page up to the footer line
+  const getPageUsableHeight = React.useCallback(
+    (isLastPage: boolean): number => {
+      const patientBlockRoom = hidePatientBlock ? 0 : patientH;
+      let sigReservation = 0;
+      const hasSigs = enabledSignaturesList.length > 0;
+      const showSigOnThisPage = hasSigs && (printOnEveryPage || isLastPage);
+
+      if (showSigOnThisPage) {
+        const netSigH = Math.max(45, Math.min(85, sigH - maxUserMarginTop));
+        if (!isFixedSig) {
+          // Flow mode: signature rendered inside the content div at bottom
+          sigReservation = netSigH + 2;
+        } else {
+          // Fixed mode: signature at bottom: sigBottomOffset
+          // Only reserve space if the top of the signature extends above the footer boundary
+          const sigTopFromBottom = sigBottomOffset + netSigH;
+          if (sigTopFromBottom > effectiveSettings.footerHeight) {
+            sigReservation = Math.max(0, sigTopFromBottom - effectiveSettings.footerHeight);
+          }
+        }
+      }
+
+      // 1px minimal safety buffer: content fills strictly right down to the footer line!
+      return Math.max(60, contentAreaHeight - patientBlockRoom - sigReservation - 1);
+    },
+    [contentAreaHeight, hidePatientBlock, patientH, enabledSignaturesList.length, printOnEveryPage, isFixedSig, sigH, maxUserMarginTop, sigBottomOffset, effectiveSettings.footerHeight]
   );
 
   const pages = React.useMemo(() => {
+    if (!blocks.length) return [[]];
+
+    const getH = (b: ReportBlock, idx: number) => {
+      const isSig = b.key === "report-signatures-footer";
+      const measured = heights[idx];
+      const measuredH = (measured && measured > 3)
+        ? Math.ceil(measured)
+        : Math.ceil(getEstimatedBlockHeight(b));
+      return isSig ? Math.max(65, measuredH - maxUserMarginTop) : measuredH;
+    };
+
     const result: number[][] = [];
     let current: number[] = [];
     let used = 0;
 
-    blocks.forEach((b, i) => {
-      const isSig = b.key === "report-signatures-footer";
-      const measured = heights[i];
-      const measuredH = (measured && measured > 5) ? measured : getEstimatedBlockHeight(b);
-      const h = isSig
-        ? Math.max(75, measuredH - maxUserMarginTop)
-        : measuredH;
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
+      const h = getH(b, i);
 
       const shouldForceNewPage = Boolean(
         reportSettings.separatePagePerTest &&
@@ -1412,18 +1547,46 @@ export const PaginatedReportPreview = React.forwardRef<
         current.length > 0
       );
 
-      if ((current.length > 0 && used + h > effectiveUsableH) || shouldForceNewPage) {
+      // Usable height for standard page filling up to the user-configured footer line
+      const currentUsable = getPageUsableHeight(false);
+
+      // Orphan prevention: if this block is a table header, test header, department header, or subgroup title,
+      // make sure its required children will fit on the same page!
+      let lookAheadH = 0;
+      if (
+        (b.key.startsWith("tblhead-") || b.key.startsWith("subgroup-title-")) &&
+        i + 1 < blocks.length
+      ) {
+        lookAheadH = Math.min(45, getH(blocks[i + 1], i + 1));
+      } else if (b.key.startsWith("header-") && i + 1 < blocks.length) {
+        const nextH = getH(blocks[i + 1], i + 1);
+        const secondH = (i + 2 < blocks.length) ? getH(blocks[i + 2], i + 2) : 0;
+        lookAheadH = Math.min(65, nextH + secondH);
+      } else if (b.key.startsWith("department-header-") && i + 1 < blocks.length) {
+        const nextH = getH(blocks[i + 1], i + 1);
+        const secondH = (i + 2 < blocks.length) ? getH(blocks[i + 2], i + 2) : 0;
+        lookAheadH = Math.min(85, nextH + secondH);
+      }
+
+      if (
+        (current.length > 0 && (used + h + lookAheadH > currentUsable)) ||
+        shouldForceNewPage
+      ) {
         result.push(current);
         current = [];
         used = 0;
       }
+
       current.push(i);
       used += h;
-    });
+    }
 
-    if (current.length) result.push(current);
+    if (current.length) {
+      result.push(current);
+    }
+
     return result.length ? result : [[]];
-  }, [blocks, heights, effectiveUsableH, maxUserMarginTop, reportSettings.separatePagePerTest]);
+  }, [blocks, heights, getPageUsableHeight, maxUserMarginTop, reportSettings.separatePagePerTest]);
 
   React.useEffect(() => {
     onPageCount?.(pages.length);
@@ -1445,6 +1608,10 @@ export const PaginatedReportPreview = React.forwardRef<
                 background: #ffffff !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+              }
+              table, tr, td {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
               }
               .report-preview-page-card {
                 width: 794px !important;
@@ -1469,6 +1636,24 @@ export const PaginatedReportPreview = React.forwardRef<
                 overflow: hidden !important;
                 background-color: #ffffff !important;
               }
+            }
+            .report-custom-editor-content table {
+              width: 100% !important;
+              border-collapse: collapse !important;
+              margin-top: 1px !important;
+              margin-bottom: 1px !important;
+              font-size: 10px !important;
+            }
+            .report-custom-editor-content th,
+            .report-custom-editor-content td {
+              border: 1px solid #d4d4d8 !important;
+              padding: 2.5px 6px !important;
+              line-height: 1.25 !important;
+            }
+            .report-custom-editor-content th {
+              background-color: #f4f4f5 !important;
+              font-weight: bold !important;
+              color: #18181b !important;
             }
           `,
         }}
@@ -1505,7 +1690,7 @@ export const PaginatedReportPreview = React.forwardRef<
         ))}
         {printOnEveryPage && enabledSignaturesList.length > 0 && (
           <div ref={sigMeasureRef} className="text-zinc-900 pt-2">
-            {renderSignaturesGrid(signatureRows, enabledSignaturesList, globalShowSignatureOnly)}
+            {renderSignaturesGrid(signatureRows, enabledSignaturesList, globalShowSignatureOnly, true)}
           </div>
         )}
       </div>
@@ -1570,11 +1755,24 @@ export const PaginatedReportPreview = React.forwardRef<
                   fontFamily: 'Arial, "Helvetica Neue", Helvetica, "Segoe UI", Roboto, sans-serif',
                 }}
               >
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 min-h-0">
                   {!hidePatientBlock && <PatientInfoBlock report={report} />}
-                  {pageBlockIdxs.map((bi) => (
-                    <div key={blocks[bi].key}>{blocks[bi].node}</div>
-                  ))}
+                  {pageBlockIdxs.map((bi, bIdx) => {
+                    const block = blocks[bi] as any;
+                    const prevBi = bIdx > 0 ? pageBlockIdxs[bIdx - 1] : null;
+                    const prevKey = prevBi !== null ? blocks[prevBi]?.key : "";
+                    const isRowContinuation =
+                      block.key?.startsWith("custom-editor-row-") &&
+                      !block.key?.endsWith("-0") &&
+                      (!prevKey || !prevKey.startsWith("custom-editor-row-"));
+
+                    return (
+                      <div key={block.key}>
+                        {isRowContinuation && block.continuationHeader}
+                        {block.node}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* If printOnEveryPage is true AND in flow mode, render signatures at bottom of EVERY page in flow */}
@@ -1598,7 +1796,7 @@ export const PaginatedReportPreview = React.forwardRef<
                     pointerEvents: "none",
                   }}
                 >
-                  {renderSignaturesGrid(signatureRows, enabledSignaturesList, globalShowSignatureOnly)}
+                  {renderSignaturesGrid(signatureRows, enabledSignaturesList, globalShowSignatureOnly, true)}
                 </div>
               )}
 

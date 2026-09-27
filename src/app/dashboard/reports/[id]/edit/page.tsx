@@ -24,6 +24,7 @@ import { TipTapEditor } from "@/components/tiptap-editor";
 import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
 import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 import { getReportPackage } from "@/lib/packages";
+import { compareClinicalTests, compareClinicalParameters, getClinicalTestPriority } from "@/lib/clinical-order";
 
 // Clinical Categorized Predefined Units
 const CATEGORIZED_UNITS: Record<string, string[]> = {
@@ -173,41 +174,7 @@ interface CalculationResult {
 }
 
 function getTestPriority(mainTestName: string, category?: string): number {
-  const name = (mainTestName || "").trim().toLowerCase();
-  const cat = (category || "").trim().toLowerCase();
-
-  // 1. CBC Top Priority
-  if (name.includes("complete blood count") || name.includes("cbc") || name.includes("hemogram") || name.includes("haemogram")) {
-    return 10;
-  }
-
-  // 2. ESR
-  if (name.includes("erythrocyte sedimentation rate") || name.includes("esr")) {
-    return 20;
-  }
-
-  // 3. Other Haematology / Hematology
-  if (cat.includes("haemat") || cat.includes("hemat") || name.includes("blood group") || name.includes("coagulation") || name.includes("pt/inr") || name.includes("prothrombin") || name.includes("smear") || name.includes("platelet") || name.includes("bleeding time") || name.includes("clotting time")) {
-    return 30;
-  }
-
-  // 4. Biochemistry (LFT, KFT, Lipids, Sugar, HbA1c, Electrolytes, Calcium, etc.)
-  if (cat.includes("bio") || cat.includes("chem") || name.includes("liver") || name.includes("lft") || name.includes("kidney") || name.includes("kft") || name.includes("renal") || name.includes("rft") || name.includes("lipid") || name.includes("glucose") || name.includes("sugar") || name.includes("hba1c") || name.includes("electrolyte") || name.includes("calcium") || name.includes("cardiac") || name.includes("amylase") || name.includes("lipase") || name.includes("iron profile") || name.includes("iron studies")) {
-    return 40;
-  }
-
-  // 5. Serology & Immunology & Hormones
-  if (cat.includes("serol") || cat.includes("immun") || cat.includes("hormone") || cat.includes("endocrin") || name.includes("widal") || name.includes("dengue") || name.includes("typhoid") || name.includes("hiv") || name.includes("hbsag") || name.includes("hcv") || name.includes("vdrl") || name.includes("crp") || name.includes("ra factor") || name.includes("thyroid") || name.includes("tft") || name.includes("vitamin")) {
-    return 50;
-  }
-
-  // 6. Microbiology / Clinical Pathology / Urine / Semen / Stool
-  if (cat.includes("micro") || cat.includes("path") || cat.includes("urine") || cat.includes("semen") || cat.includes("stool") || name.includes("urine") || name.includes("semen") || name.includes("stool") || name.includes("culture") || name.includes("sputum") || name.includes("swab")) {
-    return 60;
-  }
-
-  // 7. General / Others
-  return 70;
+  return getClinicalTestPriority(mainTestName, category);
 }
 
 function hasReportParam(patterns: (string | RegExp)[], report: Report | null, excludeId?: string): boolean {
@@ -1147,8 +1114,11 @@ export default function ResultEntryPage() {
       const resultsList = Array.isArray(data?.results) ? data.results : [];
       resultsList.forEach((r: any) => {
         const fieldType = r.test?.fieldType || r.test?.field_type;
-        if (!r.resultValue && !r.result_value && fieldType === "Custom Editor" && r.test?.interpretation) {
-          initialVals[r.id] = r.test.interpretation;
+        const rawVal = (r.resultValue ?? r.result_value ?? "").trim();
+        const isBlank = !rawVal || rawVal === "<p></p>" || rawVal === "<p><br></p>" || rawVal === "<p><br/></p>";
+        const template = r.test?.interpretation || (r.test as any)?.custom_template || "";
+        if (isBlank && fieldType === "Custom Editor" && template) {
+          initialVals[r.id] = template;
         } else {
           initialVals[r.id] = r.resultValue || r.result_value || "";
         }
@@ -1167,7 +1137,7 @@ export default function ResultEntryPage() {
       setValues((prev) => {
         const merged: Record<string, string> = { ...autoComputedInit };
         Object.entries(prev).forEach(([k, v]) => {
-          if (v !== undefined && v !== "") {
+          if (v !== undefined && v !== "" && v !== "<p></p>" && v !== "<p><br></p>") {
             merged[k] = v;
           }
         });
@@ -1849,7 +1819,7 @@ export default function ResultEntryPage() {
               if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;
               if (orderA !== 0 && orderB === 0) return -1;
               if (orderA === 0 && orderB !== 0) return 1;
-              return 0;
+              return compareClinicalParameters(a.test.name, b.test.name);
             }),
           }))
           .sort((secA, secB) => {
@@ -1864,10 +1834,10 @@ export default function ResultEntryPage() {
       .sort((a, b) => {
         const catA = a.sections[0]?.items[0]?.test?.category;
         const catB = b.sections[0]?.items[0]?.test?.category;
-        const pA = getTestPriority(a.mainTestName, catA);
-        const pB = getTestPriority(b.mainTestName, catB);
-        if (pA !== pB) return pA - pB;
-        return a.mainTestName.localeCompare(b.mainTestName);
+        return compareClinicalTests(
+          { name: a.mainTestName, category: catA },
+          { name: b.mainTestName, category: catB }
+        );
       });
   }, [report]);
 
@@ -2078,20 +2048,6 @@ export default function ResultEntryPage() {
               <p>{success}</p>
             </div>
           )}
-
-          {/* Add Additional Test Bar */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-card p-4 rounded-xl border border-border/70 shadow-sm">
-            <div className="bg-primary/10 p-2 rounded-lg text-primary shrink-0"><Plus className="w-5 h-5" /></div>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-foreground">Add Additional Test</h3>
-              <p className="text-xs text-muted-foreground">Select a test from the catalog to append to this patient report.</p>
-            </div>
-            <div className="w-full sm:w-[240px]">
-              <Button type="button" onClick={handleOpenAddTestModal} disabled={modifyingTest} className="w-full cursor-pointer font-bold text-xs">
-                Browse Test Catalog
-              </Button>
-            </div>
-          </div>
 
           {/* Main Tests Groups with Subgroup Headers, Parameter Remarks and Test Meta (Notes/Remarks/Advices) */}
           <div className="space-y-6">

@@ -717,6 +717,16 @@ function RegisterPatientPage() {
         setAvailableTests(list);
       } catch (err) { console.error("Error fetching tests:", err); }
 
+      try {
+        const docRes = await fetchFromLaravel("/doctors?filter=all", { skipCache: true });
+        if (docRes && docRes.doctors && Array.isArray(docRes.doctors)) {
+          const apiDocs = docRes.doctors.map((d: any) => d.name).filter(Boolean);
+          const combined = Array.from(new Set(["Self", ...apiDocs]));
+          setDoctorsList(combined);
+          localStorage.setItem("lis_referral_doctors", JSON.stringify(combined));
+        }
+      } catch (err) { console.error("Error syncing doctors from API:", err); }
+
       let activeLabName = "";
       try {
         const lab = await fetchFromLaravel("/lab");
@@ -1006,7 +1016,7 @@ function RegisterPatientPage() {
   }, [editId]);
 
   // Doctor Helpers
-  const handleAddDoctor = (e: React.FormEvent) => {
+  const handleAddDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newDoctorInput.trim();
     if (!trimmed) return;
@@ -1017,6 +1027,16 @@ function RegisterPatientPage() {
     }
     setRefDoctorSelect(trimmed);
     setNewDoctorInput("");
+
+    // Sync to database so doctor immediately appears in Manage Doctors
+    try {
+      await fetchFromLaravel("/doctors", {
+        method: "POST",
+        body: JSON.stringify({ name: trimmed }),
+      });
+    } catch (err) {
+      console.error("Failed to sync new doctor to database:", err);
+    }
   };
 
   const handleSaveEditDoctor = () => {

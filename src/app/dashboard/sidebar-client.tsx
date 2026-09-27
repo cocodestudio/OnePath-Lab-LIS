@@ -7,7 +7,8 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Users, FileText, Receipt, Menu, X,
   FlaskConical, Settings, HelpCircle, LifeBuoy, Clock, TrendingUp,
-  Briefcase, ChevronDown, Wallet, Lock, Sparkles, ShieldAlert, Gift, Activity, Boxes
+  Briefcase, ChevronDown, Wallet, Lock, Sparkles, ShieldAlert, Gift, Activity, Boxes,
+  Stethoscope
 } from "lucide-react";
 import { getStoredUser, fetchFromLaravel } from "@/lib/api-client";
 import { isSubscriptionExpired } from "@/lib/subscription";
@@ -30,6 +31,14 @@ const navigation: NavItem[] = [
   { name: "Patients", href: "/dashboard/patients", icon: Users },
   { name: "Reports", href: "/dashboard/reports", icon: FileText },
   { name: "Billing", href: "/dashboard/billing", icon: Receipt },
+  {
+    name: "Doctors",
+    icon: Stethoscope,
+    children: [
+      { name: "View", href: "/dashboard/doctors" },
+      { name: "Manage", href: "/dashboard/doctors/manage" },
+    ],
+  },
   {
     name: "B2B",
     icon: Briefcase,
@@ -286,15 +295,11 @@ export default function Sidebar() {
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md ring-inset-top hover:-translate-y-px active:scale-[0.98] transition-all"
           >
             <span className="text-base leading-none font-bold">+</span>
-            <span>
-              {!isRoleResolved
-                ? "..."
-                : isB2B
+            <span suppressHydrationWarning>
+              {isB2B
                 ? "New Requisition"
                 : isCollectionCenter
                 ? "Sample Entry"
-                : isReceptionist
-                ? "Add Patient"
                 : "Add Patient"}
             </span>
           </Link>

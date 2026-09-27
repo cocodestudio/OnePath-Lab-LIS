@@ -75,7 +75,7 @@ import { Extension } from "@tiptap/core";
 import {
   Bold, Italic, Undo, Redo, AlignLeft, AlignCenter, AlignRight,
   Type, Highlighter, LayoutGrid, Image as ImageIcon,
-  MoreHorizontal, Minus, Plus, ChevronDown, PaintBucket
+  MoreHorizontal, Minus, Plus, ChevronDown, PaintBucket, Trash2
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -138,6 +138,7 @@ export function TipTapEditor({
   hideFooter = false
 }: TipTapEditorProps) {
   const [currentFontSize, setCurrentFontSize] = useState(16); // default 16px
+  const [isTableActive, setIsTableActive] = useState(false);
   
   const [tablePropsOpen, setTablePropsOpen] = useState(false);
   const [tableWidth, setTableWidth] = useState("");
@@ -161,13 +162,21 @@ export function TipTapEditor({
       FontSize,
     ],
     content: value || "<p></p>",
+    onSelectionUpdate: ({ editor }) => {
+      setIsTableActive(editor.isActive("table"));
+    },
+    onTransaction: ({ editor }) => {
+      setIsTableActive(editor.isActive("table"));
+    },
     onUpdate: ({ editor }) => {
+      setIsTableActive(editor.isActive("table"));
       onChange(editor.getHTML());
     },
   });
 
   useEffect(() => {
     if (editor) {
+      setIsTableActive(editor.isActive("table"));
       // Keep track of font size logic
       const sizeStr = editor.getAttributes("textStyle").fontSize;
       if (sizeStr) {
@@ -431,6 +440,21 @@ export function TipTapEditor({
           }} className="p-1.5 rounded hover:bg-muted text-foreground/80"><ImageIcon className="w-4 h-4" /></button>
         </div>
 
+        {/* One-Click Delete Table Button (Visible when clicking in any table) */}
+        {isTableActive && (
+          <div className="flex items-center gap-1 pl-1">
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().deleteTable().run()}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-rose-700 bg-rose-100 hover:bg-rose-200 active:scale-95 border border-rose-300 rounded-md transition-all shadow-xs cursor-pointer animate-in fade-in"
+              title="Click to remove this table (One-Click Delete Table)"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              Delete Table
+            </button>
+          </div>
+        )}
+
         {/* 8. Overflow Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger className="p-1.5 ml-auto rounded hover:bg-muted text-foreground/80 outline-none">
@@ -452,6 +476,24 @@ export function TipTapEditor({
 
       {/* Editor Canvas Area */}
       <div className="flex-1 overflow-auto bg-muted/5 relative">
+        {/* Floating One-Click Delete Table Pill */}
+        {isTableActive && (
+          <div className="sticky top-2 z-20 mx-auto w-fit flex items-center gap-2.5 px-3.5 py-1.5 bg-rose-50/95 border border-rose-300 shadow-md backdrop-blur-xs rounded-full text-rose-800 text-xs font-semibold animate-in fade-in slide-in-from-top-1">
+            <span className="flex items-center gap-1.5">
+              <LayoutGrid className="w-3.5 h-3.5 text-rose-600" />
+              Table Selected
+            </span>
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().deleteTable().run()}
+              className="flex items-center gap-1.5 px-3 py-1 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-full font-bold transition-all shadow-xs cursor-pointer text-xs"
+              title="Click to delete this entire table"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              One-Click Delete Table
+            </button>
+          </div>
+        )}
         <div className="min-h-full p-6 mx-auto w-full max-w-4xl">
           <EditorContent 
             editor={editor} 

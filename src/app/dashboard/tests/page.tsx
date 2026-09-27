@@ -376,8 +376,11 @@ export default function TestMasterPage() {
         return { value: "Negative / Normal", isAbnormal: false };
       }
 
-      if (item.fieldType === "Custom Editor") {
-        return { value: "<p>Clinical and microscopic evaluation within normal reference limits.</p>", isAbnormal: false };
+      if (item.fieldType === "Custom Editor" || (item as any).field_type === "Custom Editor") {
+        return { 
+          value: item.interpretation || "<p>Clinical and microscopic evaluation within normal reference limits.</p>", 
+          isAbnormal: false 
+        };
       }
 
       const minVal = item.refRangeMinMale ?? item.refRangeMin ?? item.ref_range_min_male ?? item.ref_range_min;
@@ -470,7 +473,9 @@ export default function TestMasterPage() {
       const { value, isAbnormal } = generateSampleValue(test);
       results.push({
         id: `res-${test.id || test.testCode || (test as any).test_code || Math.random()}`,
-        resultValue: value,
+        resultValue: (test.fieldType === "Custom Editor" || (test as any).field_type === "Custom Editor")
+          ? (test.interpretation || value)
+          : value,
         isAbnormal,
         test: {
           ...test,

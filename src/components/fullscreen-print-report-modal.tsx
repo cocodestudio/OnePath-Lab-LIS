@@ -43,43 +43,7 @@ interface FullscreenPrintReportModalProps {
   printedInterpretations?: string[];
 }
 
-function getTestPriority(mainTestName: string, category?: string): number {
-  const name = (mainTestName || "").trim().toLowerCase();
-  const cat = (category || "").trim().toLowerCase();
-
-  // 1. CBC Top Priority
-  if (name.includes("complete blood count") || name.includes("cbc") || name.includes("hemogram") || name.includes("haemogram")) {
-    return 10;
-  }
-
-  // 2. ESR
-  if (name.includes("erythrocyte sedimentation rate") || name.includes("esr")) {
-    return 20;
-  }
-
-  // 3. Other Haematology / Hematology
-  if (cat.includes("haemat") || cat.includes("hemat") || name.includes("blood group") || name.includes("coagulation") || name.includes("pt/inr") || name.includes("prothrombin") || name.includes("smear") || name.includes("platelet") || name.includes("bleeding time") || name.includes("clotting time")) {
-    return 30;
-  }
-
-  // 4. Biochemistry (LFT, KFT, Lipids, Sugar, HbA1c, Electrolytes, Calcium, etc.)
-  if (cat.includes("bio") || cat.includes("chem") || name.includes("liver") || name.includes("lft") || name.includes("kidney") || name.includes("kft") || name.includes("renal") || name.includes("rft") || name.includes("lipid") || name.includes("glucose") || name.includes("sugar") || name.includes("hba1c") || name.includes("electrolyte") || name.includes("calcium") || name.includes("cardiac") || name.includes("amylase") || name.includes("lipase") || name.includes("iron profile") || name.includes("iron studies")) {
-    return 40;
-  }
-
-  // 5. Serology & Immunology & Hormones
-  if (cat.includes("serol") || cat.includes("immun") || cat.includes("hormone") || cat.includes("endocrin") || name.includes("widal") || name.includes("dengue") || name.includes("typhoid") || name.includes("hiv") || name.includes("hbsag") || name.includes("hcv") || name.includes("vdrl") || name.includes("crp") || name.includes("ra factor") || name.includes("thyroid") || name.includes("tft") || name.includes("vitamin")) {
-    return 50;
-  }
-
-  // 6. Microbiology / Clinical Pathology / Urine / Semen / Stool
-  if (cat.includes("micro") || cat.includes("path") || cat.includes("urine") || cat.includes("semen") || cat.includes("stool") || name.includes("urine") || name.includes("semen") || name.includes("stool") || name.includes("culture") || name.includes("sputum") || name.includes("swab")) {
-    return 60;
-  }
-
-  // 7. General / Others
-  return 70;
-}
+import { compareClinicalTests } from "@/lib/clinical-order";
 
 export function FullscreenPrintReportModal({
   open,
@@ -100,6 +64,8 @@ export function FullscreenPrintReportModal({
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [printWithHeaderFooter, setPrintWithHeaderFooter] = useState(false);
   const [separatePagePerTest, setSeparatePagePerTest] = useState<boolean>(false);
+  const [autoFitToFooter, setAutoFitToFooter] = useState<boolean>(true);
+  const [showClinicalInterpretation, setShowClinicalInterpretation] = useState<boolean>(true);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [zoomScale, setZoomScale] = useState<number>(0.80);
   const [totalPages, setTotalPages] = useState(1);
@@ -128,16 +94,17 @@ export function FullscreenPrintReportModal({
       if (!map.has(mt.id)) map.set(mt.id, { id: mt.id, name: mt.name, category: t.category });
     });
     return Array.from(map.values()).sort((a, b) => {
-      const pA = getTestPriority(a.name, a.category);
-      const pB = getTestPriority(b.name, b.category);
-      if (pA !== pB) return pA - pB;
-      return a.name.localeCompare(b.name);
+      return compareClinicalTests(
+        { name: a.name, category: a.category },
+        { name: b.name, category: b.category }
+      );
     });
   }, [report]);
 
   // ── Sync on modal open & Fetch Latest Lab Settings ────
   useEffect(() => {
     if (open) {
+      setShowClinicalInterpretation(true);
       const initialSetting = Boolean(
         report?.lab?.report_settings?.separatePagePerTest ??
         (typeof report?.lab?.report_settings === "string" ? JSON.parse(report?.lab?.report_settings || "{}")?.separatePagePerTest : false)
@@ -629,7 +596,8 @@ export function FullscreenPrintReportModal({
                   report={activeReportData}
                   settings={printSettings}
                   scale={zoomScale}
-                  hideInterpretation={false}
+                  hideInterpretation={!showClinicalInterpretation}
+                  autoFitToFooter={autoFitToFooter}
                   onPageCount={setTotalPages}
                 />
               </div>
@@ -758,6 +726,19 @@ export function FullscreenPrintReportModal({
                     type="checkbox"
                     checked={separatePagePerTest}
                     onChange={(e) => setSeparatePagePerTest(e.target.checked)}
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 cursor-pointer accent-primary"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 rounded-xl border border-border/80 bg-muted/20 hover:bg-muted/30 cursor-pointer transition-colors mt-2">
+                  <div className="space-y-0.5 pr-2">
+                    <span className="text-xs font-bold text-foreground block">Clinical Notes & Interpretation</span>
+                    <span className="text-[10px] text-muted-foreground block">Show clinical significance & interpretation tables</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={showClinicalInterpretation}
+                    onChange={(e) => setShowClinicalInterpretation(e.target.checked)}
                     className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 cursor-pointer accent-primary"
                   />
                 </label>
