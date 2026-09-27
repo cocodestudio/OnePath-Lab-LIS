@@ -296,7 +296,7 @@ export default function BillingPage() {
       }
       const [data, labRes] = await Promise.all([
         fetchFromLaravel("/bills", { skipCache: isForce }),
-        fetchFromLaravel("/lab").catch(() => null),
+        !labData ? fetchFromLaravel("/lab").catch(() => null) : Promise.resolve(null),
       ]);
       const rawList = Array.isArray(data) ? data : (data?.data || []);
       const billsList = rawList.map(normalizeBillObj);
@@ -449,14 +449,26 @@ export default function BillingPage() {
     const fullTotal = Number(bill.total) || 0;
     try {
       setUpdatingBillId(bill.id);
-      await fetchFromLaravel(`/bills/${bill.id}`, {
+      const res = await fetchFromLaravel(`/bills/${bill.id}`, {
         method: "PUT",
         body: JSON.stringify({
           paid_amount: fullTotal,
           status: "PAID",
         }),
       });
-      await fetchBills();
+      if (res && (res.id || res.custom_id)) {
+        const normalized = normalizeBillObj(res);
+        setBills(prev => prev.map(b => (b.id === normalized.id ? normalized : b)));
+        try {
+          const cachedBills = localStorage.getItem("lis_cached_bills");
+          if (cachedBills) {
+            const list = JSON.parse(cachedBills);
+            const updatedList = list.map((b: any) => (b.id === normalized.id ? normalized : b));
+            localStorage.setItem("lis_cached_bills", JSON.stringify(updatedList));
+          }
+        } catch {}
+      }
+      fetchBills();
     } catch (err: any) {
       console.error("Failed to mark bill as paid:", err);
     } finally {
@@ -487,14 +499,31 @@ export default function BillingPage() {
         payload.test_ids = billTests.map(t => t.id);
       }
 
-      await fetchFromLaravel(`/bills/${editingBill.id}`, {
+      const updatedBill = await fetchFromLaravel(`/bills/${editingBill.id}`, {
         method: "PUT",
         body: JSON.stringify(payload),
       });
 
-      setSuccess("Invoice & investigations updated successfully.");
-      await fetchBills();
-      setTimeout(() => setIsEditDialogOpen(false), 700);
+      // Instantly update the bill in local state & cache
+      if (updatedBill && (updatedBill.id || updatedBill.custom_id)) {
+        const normalized = normalizeBillObj(updatedBill);
+        setBills(prev => prev.map(b => (b.id === normalized.id ? normalized : b)));
+        try {
+          const cachedBills = localStorage.getItem("lis_cached_bills");
+          if (cachedBills) {
+            const list = JSON.parse(cachedBills);
+            const updatedList = list.map((b: any) => (b.id === normalized.id ? normalized : b));
+            localStorage.setItem("lis_cached_bills", JSON.stringify(updatedList));
+          }
+        } catch {}
+      }
+
+      // Close modal immediately for a snappy, instantaneous experience
+      setIsEditDialogOpen(false);
+      setSuccess(null);
+
+      // Refresh in background without blocking UI
+      fetchBills();
     } catch (err: any) {
       setError(err.message || "Failed to update invoice.");
     } finally {
@@ -617,8 +646,17 @@ export default function BillingPage() {
             </div>
           </div>
           <div className="mt-4">
-            <p className="font-display text-2xl font-bold text-foreground font-mono">₹{totalInvoiced.toFixed(2)}</p>
-            <p className="text-[11px] text-muted-foreground mt-1">{filteredBills.length} invoices on selected date</p>
+            {loading ? (
+              <div className="space-y-2 py-0.5">
+                <div className="h-7 w-28 rounded-md shimmer-gradient" />
+                <div className="h-3 w-36 rounded shimmer-gradient" />
+              </div>
+            ) : (
+              <>
+                <p className="font-display text-2xl font-bold text-foreground font-mono">₹{totalInvoiced.toFixed(2)}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{filteredBills.length} invoices on selected date</p>
+              </>
+            )}
           </div>
         </div>
 
@@ -631,8 +669,17 @@ export default function BillingPage() {
             </div>
           </div>
           <div className="mt-4">
-            <p className="font-display text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{totalCollected.toFixed(2)}</p>
-            <p className="text-[11px] text-muted-foreground mt-1">{paidCount} fully paid accounts</p>
+            {loading ? (
+              <div className="space-y-2 py-0.5">
+                <div className="h-7 w-28 rounded-md shimmer-gradient" />
+                <div className="h-3 w-32 rounded shimmer-gradient" />
+              </div>
+            ) : (
+              <>
+                <p className="font-display text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{totalCollected.toFixed(2)}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{paidCount} fully paid accounts</p>
+              </>
+            )}
           </div>
         </div>
 
@@ -645,8 +692,17 @@ export default function BillingPage() {
             </div>
           </div>
           <div className="mt-4">
-            <p className="font-display text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono">₹{totalDue.toFixed(2)}</p>
-            <p className="text-[11px] text-muted-foreground mt-1">{unpaidCount} invoices with balance</p>
+            {loading ? (
+              <div className="space-y-2 py-0.5">
+                <div className="h-7 w-28 rounded-md shimmer-gradient" />
+                <div className="h-3 w-36 rounded shimmer-gradient" />
+              </div>
+            ) : (
+              <>
+                <p className="font-display text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono">₹{totalDue.toFixed(2)}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">{unpaidCount} invoices with balance</p>
+              </>
+            )}
           </div>
         </div>
 
@@ -659,10 +715,19 @@ export default function BillingPage() {
             </div>
           </div>
           <div className="mt-4">
-            <p className="font-display text-2xl font-bold text-foreground font-mono">
-              {totalInvoiced > 0 ? ((totalCollected / totalInvoiced) * 100).toFixed(1) : "100"}%
-            </p>
-            <p className="text-[11px] text-muted-foreground mt-1">Settlement efficiency</p>
+            {loading ? (
+              <div className="space-y-2 py-0.5">
+                <div className="h-7 w-20 rounded-md shimmer-gradient" />
+                <div className="h-3 w-32 rounded shimmer-gradient" />
+              </div>
+            ) : (
+              <>
+                <p className="font-display text-2xl font-bold text-foreground font-mono">
+                  {totalInvoiced > 0 ? ((totalCollected / totalInvoiced) * 100).toFixed(1) : "100"}%
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-1">Settlement efficiency</p>
+              </>
+            )}
           </div>
         </div>
       </div>
