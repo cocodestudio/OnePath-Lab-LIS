@@ -8,13 +8,15 @@ import {
   AlertCircle, CheckCircle2, Building2, Phone, Mail, Wallet,
   ShieldCheck, ArrowRight, X, Filter, Sparkles, PlusCircle,
   FileText, Percent, IndianRupee, Eye,
-  SlidersHorizontal, Award, ArrowUpRight, BadgePercent, ChevronDown
+  SlidersHorizontal, Award, ArrowUpRight, BadgePercent, ChevronDown,
+  Printer, Loader2
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { downloadDoctorStatementPdf } from "@/lib/download-doctor-statement";
 
 interface DoctorStat {
   id: string;
@@ -63,6 +65,59 @@ export default function DoctorsOverviewPage() {
   // Pagination for Doctor list
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
+
+  // Statement Download & Lab State
+  const [labInfo, setLabInfo] = useState<any>(null);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+
+  // Fetch Lab Details for statement letterhead branding
+  useEffect(() => {
+    fetchFromLaravel("/lab")
+      .then((res) => {
+        if (res) setLabInfo(res);
+      })
+      .catch((err) => console.warn("Could not fetch lab info for statements:", err));
+  }, []);
+
+  // Statement Download Handler (PDF Direct 1-Click)
+  const handleDownloadStatement = async (doc: DoctorStat) => {
+    setDownloadingDocId(doc.id);
+    try {
+      const params = new URLSearchParams();
+      params.append("filter", filter);
+      if (filter === "custom" && customStart && customEnd) {
+        params.append("start_date", customStart);
+        params.append("end_date", customEnd);
+      }
+      params.append("doctor_name", doc.name);
+
+      const docIdentifier = doc.id && !doc.id.startsWith("unreg_") ? doc.id : doc.name;
+      const res = await fetchFromLaravel(`/doctors/${encodeURIComponent(docIdentifier)}/statement?${params.toString()}`, {
+        skipCache: true,
+      });
+
+      if (!res || !res.success) {
+        throw new Error(res?.message || res?.error || "Failed to retrieve doctor statement data");
+      }
+
+      const statementLab = {
+        name: labInfo?.name || "OnePath Diagnostic Laboratory",
+        tagline: labInfo?.tagline || "Advanced Pathology & Diagnostics",
+        address: labInfo?.address || (labInfo?.city ? `${labInfo?.city}, ${labInfo?.state || ""}` : undefined),
+        phone: labInfo?.phone,
+        email: labInfo?.email,
+        website: labInfo?.website,
+      };
+
+      await downloadDoctorStatementPdf(res, statementLab);
+      toast.success("Statement Downloaded", `PDF statement for ${doc.name} generated successfully.`);
+    } catch (err: any) {
+      console.error("Statement download failed:", err);
+      toast.error("Download Failed", err.message || "Failed to generate doctor statement");
+    } finally {
+      setDownloadingDocId(null);
+    }
+  };
 
   // Fetch doctors overview data
   const fetchData = useCallback(async () => {
@@ -452,7 +507,10 @@ export default function DoctorsOverviewPage() {
                       <Skeleton className="h-4 w-16 rounded ml-auto" />
                     </td>
                     <td className="py-3.5 px-4 text-center">
-                      <Skeleton className="h-7 w-20 rounded-lg mx-auto" />
+                      <div className="flex items-center justify-center gap-1.5">
+                        <Skeleton className="h-7 w-16 rounded-lg" />
+                        <Skeleton className="h-7 w-7 rounded-lg" />
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -549,7 +607,7 @@ export default function DoctorsOverviewPage() {
                       </div>
                     </td>
 
-                    {/* Actions: Removed Statement Button as requested; keeping Set Rates / Edit */}
+                    {/* Actions: Set Rates + Print / Download Statement Dropdown */}
                     <td className="py-3.5 px-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         <Link href={`/dashboard/doctors/manage?selected_doctor=${encodeURIComponent(doc.name)}`}>
@@ -563,6 +621,24 @@ export default function DoctorsOverviewPage() {
                             <span>Set Rates</span>
                           </Button>
                         </Link>
+
+                        {/* Direct 1-Click Print PDF Statement */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDownloadStatement(doc)}
+                          disabled={Boolean(downloadingDocId)}
+                          className={`h-8 w-8 p-0 rounded-lg border-border hover:bg-muted/80 text-foreground cursor-pointer transition-colors ${
+                            downloadingDocId === doc.id ? "opacity-75 pointer-events-none" : ""
+                          }`}
+                          title="Download Official PDF Statement"
+                        >
+                          {downloadingDocId === doc.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                          ) : (
+                            <Printer className="h-3.5 w-3.5 text-foreground/80 hover:text-foreground" />
+                          )}
+                        </Button>
                       </div>
                     </td>
                   </tr>

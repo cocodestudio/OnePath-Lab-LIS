@@ -447,6 +447,7 @@ export default function PatientsPage() {
   const [editCollectedBy, setEditCollectedBy] = useState("Self / Lab Staff");
   const [editAddress, setEditAddress] = useState("");
   const [saving, setSaving] = useState(false);
+  const [navigatingEditId, setNavigatingEditId] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
 
@@ -883,14 +884,27 @@ export default function PatientsPage() {
                             }
 
                             return (
-                              <Link href={`/dashboard/patients/register?edit=${patient.id}`}>
+                              <Link
+                                href={`/dashboard/patients/register?edit=${patient.id}`}
+                                onClick={() => {
+                                  setNavigatingEditId(patient.id);
+                                  try {
+                                    sessionStorage.setItem(`edit_patient_cache_${patient.id}`, JSON.stringify(patient));
+                                  } catch (_) {}
+                                }}
+                              >
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-muted-foreground hover:text-primary cursor-pointer"
                                   title="Edit Patient Details & Tests"
+                                  disabled={navigatingEditId === patient.id}
                                 >
-                                  <Edit2 className="h-3.5 w-3.5" />
+                                  {navigatingEditId === patient.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                  ) : (
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                  )}
                                 </Button>
                               </Link>
                             );

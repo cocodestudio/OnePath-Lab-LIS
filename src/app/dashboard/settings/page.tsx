@@ -26,6 +26,7 @@ import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import {
   ALL_DESIGNATIONS,
+  normalizeDesignation,
   ALL_ORDERING_FIELDS,
   DEFAULT_INTAKE_FIELDS,
   DEFAULT_DEPARTMENT_ORDER,
@@ -654,7 +655,7 @@ function SettingsContent() {
 
         const parsedLayout = normalizeReportSettings(lab.report_settings || lab.reportSettings);
         if (lab.default_designation || lab.defaultDesignation) {
-          parsedLayout.defaultDesignation = lab.default_designation || lab.defaultDesignation;
+          parsedLayout.defaultDesignation = normalizeDesignation(lab.default_designation || lab.defaultDesignation);
         }
         setLayoutSettings(parsedLayout);
         try {
@@ -704,7 +705,7 @@ function SettingsContent() {
             print_margin_left: settings.marginLeft,
             print_margin_right: settings.marginRight,
             print_with_letterhead: true,
-            default_designation: layoutSettings.defaultDesignation || "MR.",
+            default_designation: normalizeDesignation(layoutSettings.defaultDesignation || "Mr."),
             report_settings: layoutSettings,
             bill_settings: billSettings,
           }),
@@ -719,7 +720,7 @@ function SettingsContent() {
         formData.append("print_margin_left", String(settings.marginLeft));
         formData.append("print_margin_right", String(settings.marginRight));
         formData.append("print_with_letterhead", "1");
-        formData.append("default_designation", layoutSettings.defaultDesignation || "MR.");
+        formData.append("default_designation", normalizeDesignation(layoutSettings.defaultDesignation || "Mr."));
         formData.append("report_settings", JSON.stringify(layoutSettings));
         formData.append("bill_settings", JSON.stringify(billSettings));
 
@@ -776,7 +777,7 @@ function SettingsContent() {
           print_margin_left: settings.marginLeft,
           print_margin_right: settings.marginRight,
           print_with_letterhead: false,
-          default_designation: layoutSettings.defaultDesignation,
+          default_designation: normalizeDesignation(layoutSettings.defaultDesignation || "Mr."),
           report_settings: layoutSettings,
           bill_settings: billSettings,
         }),
@@ -940,7 +941,7 @@ function SettingsContent() {
           print_margin_left: settings.marginLeft,
           print_margin_right: settings.marginRight,
           print_with_letterhead: settings.printWithLetterhead,
-          default_designation: payloadLayoutSettings.defaultDesignation,
+          default_designation: normalizeDesignation(payloadLayoutSettings.defaultDesignation || "Mr."),
           report_settings: payloadLayoutSettings,
           bill_settings: billSettings,
         }),
@@ -1720,13 +1721,13 @@ function SettingsContent() {
                 </p>
               </div>
               <span className="text-xs font-mono font-bold px-2.5 py-1 bg-primary/10 text-primary rounded-lg border border-primary/20">
-                Selected: {layoutSettings.defaultDesignation}
+                Selected: {normalizeDesignation(layoutSettings.defaultDesignation)}
               </span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 pt-2">
               {ALL_DESIGNATIONS.map((title) => {
-                const isSelected = layoutSettings.defaultDesignation === title;
+                const isSelected = normalizeDesignation(layoutSettings.defaultDesignation) === title;
                 return (
                   <label
                     key={title}

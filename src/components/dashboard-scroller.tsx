@@ -100,6 +100,35 @@ export function DashboardScroller({ children }: { children: React.ReactNode }) {
     }
   }, [pathname]);
 
+  // Global custom event to scroll to top programmatically (e.g., patient intake invoice generation)
+  useEffect(() => {
+    const handleScrollToTop = (e: Event) => {
+      const customEvent = e as CustomEvent<{ immediate?: boolean }>;
+      const immediate = customEvent.detail?.immediate ?? false;
+      if (lenisRef.current) {
+        lenisRef.current.scrollTo(0, { immediate });
+        lenisRef.current.resize();
+      }
+      if (wrapperRef.current) {
+        if (immediate) {
+          wrapperRef.current.scrollTop = 0;
+        } else {
+          wrapperRef.current.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }
+      if (immediate) {
+        window.scrollTo({ top: 0, left: 0 });
+      } else {
+        window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+      }
+    };
+
+    window.addEventListener("dashboard-scroll-top", handleScrollToTop);
+    return () => {
+      window.removeEventListener("dashboard-scroll-top", handleScrollToTop);
+    };
+  }, []);
+
   return (
     <main
       ref={wrapperRef}

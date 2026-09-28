@@ -8,9 +8,15 @@ import {
   Save, RefreshCw, Trash2, Edit2, Check, X, Percent,
   IndianRupee, ArrowLeft, CheckCircle2, AlertCircle, Building2,
   Phone, Mail, MapPin, Sparkles, Filter, Layers, HelpCircle,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Printer
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
+import {
+  type DoctorStatementPrintSettings,
+  defaultDoctorStatementPrintSettings,
+  getSavedStatementPrintSettings,
+  saveStatementPrintSettingsToCache,
+} from "@/lib/download-doctor-statement";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -86,6 +92,13 @@ export default function ManageDoctorsPage() {
   // Directory Search & Filter
   const [doctorSearch, setDoctorSearch] = useState<string>("");
 
+  // Statement Print Settings State
+  const [isPrintSettingsModalOpen, setIsPrintSettingsModalOpen] = useState<boolean>(false);
+  const [statementPrintSettings, setStatementPrintSettings] = useState<DoctorStatementPrintSettings>(() => {
+    return getSavedStatementPrintSettings();
+  });
+  const [isSavingPrintSettings, setIsSavingPrintSettings] = useState<boolean>(false);
+
   // Directory Add/Edit Modal
   const [isDoctorModalOpen, setIsDoctorModalOpen] = useState<boolean>(false);
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
@@ -111,6 +124,12 @@ export default function ManageDoctorsPage() {
         const globRate = Number(s.default_commission_percent || 0);
         setGlobalDefaultRate(globRate);
         setGlobalTestCommissions(s.global_test_commissions || {});
+
+        if (s.statement_settings && typeof s.statement_settings === "object") {
+          const merged = { ...defaultDoctorStatementPrintSettings, ...s.statement_settings };
+          setStatementPrintSettings(merged);
+          saveStatementPrintSettingsToCache(merged);
+        }
       }
 
       // 2. Fetch doctors list
@@ -245,6 +264,32 @@ export default function ManageDoctorsPage() {
         delete copy[testId];
         return copy;
       });
+    }
+  };
+
+  // Save Statement Print Preferences
+  const handleSavePrintSettings = async () => {
+    setIsSavingPrintSettings(true);
+    try {
+      const res = await fetchFromLaravel("/doctors/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          statement_settings: statementPrintSettings,
+        }),
+      });
+
+      if (res && res.success) {
+        saveStatementPrintSettingsToCache(statementPrintSettings);
+        toast.success("Settings Saved!", "Doctor statement print preferences updated successfully.");
+        setIsPrintSettingsModalOpen(false);
+      } else {
+        throw new Error(res?.message || "Failed to update print preferences");
+      }
+    } catch (err: any) {
+      console.error("Save print settings error:", err);
+      toast.error("Error", err.message || "Failed to save statement print preferences.");
+    } finally {
+      setIsSavingPrintSettings(false);
     }
   };
 
@@ -515,6 +560,18 @@ export default function ManageDoctorsPage() {
               Doctor Directory ({doctors.length})
             </button>
           </div>
+
+          {/* Statement Print Settings Button */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setIsPrintSettingsModalOpen(true)}
+            className="gap-1.5 h-9 rounded-xl border-border hover:bg-muted/80 text-foreground font-semibold shadow-2xs cursor-pointer"
+            title="Configure statement PDF columns & print layout"
+          >
+            <Printer className="h-4 w-4 text-primary" />
+            <span>Print Settings</span>
+          </Button>
 
           {/* ONLY ONE Single Add Doctor Button on the page */}
           <Button
@@ -1221,6 +1278,251 @@ export default function ManageDoctorsPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── STATEMENT PRINT SETTINGS MODAL ── */}
+      <Dialog open={isPrintSettingsModalOpen} onOpenChange={setIsPrintSettingsModalOpen}>
+        <DialogContent className="max-w-xl w-full rounded-2xl p-6">
+          <DialogHeader className="space-y-1.5 border-b border-border/70 pb-4">
+            <div className="flex items-center gap-2.5 text-primary">
+              <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Printer className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-foreground">
+                  Doctor Statement Print Settings
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Choose which columns, demographics, and revenue metrics appear on the official PDF statement.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-5 py-4 max-h-[65vh] overflow-y-auto pr-1">
+            {/* Section 1: Patient Details */}
+            <div className="space-y-2.5">
+              <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                <Users className="h-3.5 w-3.5 text-primary" />
+                <span>Patient Demographics & Identification</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {[
+                  {
+                    key: "show_patient_name",
+                    label: "Patient Name",
+                    desc: "Print patient full name on each row",
+                  },
+                  {
+                    key: "show_invoice_id",
+                    label: "Invoice No. / Patient ID",
+                    desc: "Print bill invoice number & patient code",
+                  },
+                  {
+                    key: "show_patient_age_gender",
+                    label: "Age & Gender",
+                    desc: "Display patient age & biological gender",
+                  },
+                  {
+                    key: "show_patient_phone",
+                    label: "Patient Contact Phone",
+                    desc: "Print patient telephone number",
+                  },
+                ].map((item) => (
+                  <label
+                    key={item.key}
+                    className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                      (statementPrintSettings as any)[item.key]
+                        ? "bg-primary/5 border-primary/40 text-foreground"
+                        : "bg-muted/20 border-border/70 text-muted-foreground hover:bg-muted/40"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={(statementPrintSettings as any)[item.key]}
+                      onChange={(e) =>
+                        setStatementPrintSettings((prev) => ({
+                          ...prev,
+                          [item.key]: e.target.checked,
+                        }))
+                      }
+                      className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-foreground">{item.label}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{item.desc}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Section 2: Clinical Details */}
+            <div className="space-y-2.5">
+              <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                <span>Diagnostic & Investigation Details</span>
+              </h4>
+              <label
+                className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                  statementPrintSettings.show_tests
+                    ? "bg-primary/5 border-primary/40 text-foreground"
+                    : "bg-muted/20 border-border/70 text-muted-foreground hover:bg-muted/40"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={statementPrintSettings.show_tests}
+                  onChange={(e) =>
+                    setStatementPrintSettings((prev) => ({
+                      ...prev,
+                      show_tests: e.target.checked,
+                    }))
+                  }
+                  className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-foreground">Diagnostic Tests Performed</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Print the names of diagnostic laboratory tests ordered on each invoice
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            {/* Section 3: Financial & Margin Disclosures */}
+            <div className="space-y-2.5">
+              <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                <IndianRupee className="h-3.5 w-3.5 text-primary" />
+                <span>Financial Columns & Lab Privacy</span>
+              </h4>
+              <div className="space-y-2.5">
+                {/* Lab Revenue Toggle with prominent privacy callout */}
+                <label
+                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
+                    statementPrintSettings.show_lab_revenue
+                      ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/40 text-foreground"
+                      : "bg-amber-500/5 border-amber-500/30 text-amber-700 dark:text-amber-300"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={statementPrintSettings.show_lab_revenue}
+                    onChange={(e) =>
+                      setStatementPrintSettings((prev) => ({
+                        ...prev,
+                        show_lab_revenue: e.target.checked,
+                      }))
+                    }
+                    className="mt-0.5 h-4 w-4 rounded border-border text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-foreground">
+                        Show Lab Net Revenue & Margin Share
+                      </p>
+                      {!statementPrintSettings.show_lab_revenue && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                          Hidden from Doctor (Private)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      When enabled, shows the laboratory&apos;s retained revenue column and summary card. When unchecked, the clinician only sees their own sales and commission cut.
+                    </p>
+                  </div>
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {[
+                    {
+                      key: "show_kpi_cards",
+                      label: "Top KPI Summary Cards",
+                      desc: "Show the executive metric summary boxes at the top of statement",
+                    },
+                    {
+                      key: "show_commission_rate",
+                      label: "Commission Rate %",
+                      desc: "Display the percentage cut badge on each row",
+                    },
+                    {
+                      key: "show_gross_total",
+                      label: "Gross Billed Total",
+                      desc: "Show pre-discount invoice amount column",
+                    },
+                    {
+                      key: "show_doctor_phone",
+                      label: "Doctor Phone in Header",
+                      desc: "Print doctor telephone number in statement profile",
+                    },
+                  ].map((item) => (
+                    <label
+                      key={item.key}
+                      className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${
+                        (statementPrintSettings as any)[item.key]
+                          ? "bg-primary/5 border-primary/40 text-foreground"
+                          : "bg-muted/20 border-border/70 text-muted-foreground hover:bg-muted/40"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={(statementPrintSettings as any)[item.key]}
+                        onChange={(e) =>
+                          setStatementPrintSettings((prev) => ({
+                            ...prev,
+                            [item.key]: e.target.checked,
+                          }))
+                        }
+                        className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-foreground">{item.label}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{item.desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row items-center justify-between gap-2.5 border-t border-border/70 pt-4">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setStatementPrintSettings({ ...defaultDoctorStatementPrintSettings })}
+              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              Reset to Defaults
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsPrintSettingsModalOpen(false)}
+                className="text-xs cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={isSavingPrintSettings}
+                onClick={handleSavePrintSettings}
+                className="text-xs font-semibold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer shadow-xs"
+              >
+                {isSavingPrintSettings ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
+                <span>Save Print Settings</span>
+              </Button>
+            </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

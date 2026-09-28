@@ -1,31 +1,55 @@
 export const ALL_DESIGNATIONS = [
-  "MR.",
-  "MRS.",
-  "SHRI.",
-  "MS.",
-  "MASTER.",
-  "MISS.",
-  "SMT.",
-  "W/O",
-  "DR.",
-  "KUMAR.",
-  "KUMARI.",
-  "MOHD.",
-  "BABY OR JUST BORN (B/O)",
-  "BABY",
-  "BABY OF",
-  "PET OF",
-  "S/O",
-  "D/O",
-  "C/O",
-  "M/O",
-  "BLANK",
-  "SK",
-  "MD.",
-  "BABA",
-  "JUNIOR",
+  "Mr.",
+  "Mrs.",
+  "Ms.",
+  "Dr.",
+  "Master.",
+  "Miss.",
+  "Shri.",
+  "Smt.",
+  "Baby",
+  "Baby of",
+  "Baby (B/o)",
+  "W/o",
+  "S/o",
+  "D/o",
+  "C/o",
+  "M/o",
+  "Mohd.",
+  "Kumar.",
+  "Kumari.",
+  "Md.",
+  "Baba",
+  "Junior",
+  "Pet of",
+  "Sk.",
+  "Blank",
   "Null",
 ] as const;
+
+/**
+ * Normalizes any patient designation / title to Title Case (e.g. 'MR.' -> 'Mr.', 'dr.' -> 'Dr.').
+ * Safely preserves backward-compatibility for legacy database records and settings.
+ */
+export function normalizeDesignation(val?: string | null): string {
+  if (!val) return "Mr.";
+  const trimmed = val.trim();
+  if (!trimmed || trimmed.toLowerCase() === "null") return "Mr.";
+
+  // Direct case-insensitive match against ALL_DESIGNATIONS
+  const found = ALL_DESIGNATIONS.find(
+    (d) =>
+      d.toLowerCase() === trimmed.toLowerCase() ||
+      d.replace(/\./g, "").toLowerCase() === trimmed.replace(/\./g, "").toLowerCase()
+  );
+  if (found) return found;
+
+  // Title case the string (first letter capital, rest lowercase)
+  return trimmed
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+}
 
 export const ALL_ORDERING_FIELDS = [
   "Name",
@@ -321,7 +345,7 @@ export const DEFAULT_DEPARTMENT_ORDER = [
 ] as const;
 
 export const defaultReportLayoutSettings: ReportLayoutSettings = {
-  defaultDesignation: "MR.",
+  defaultDesignation: "Mr.",
   flags: {
     enabled: true,
     lowColor: "#000000",
@@ -499,7 +523,7 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
   };
 
   if (raw.defaultDesignation || raw.default_designation) {
-    res.defaultDesignation = raw.defaultDesignation || raw.default_designation;
+    res.defaultDesignation = normalizeDesignation(raw.defaultDesignation || raw.default_designation);
   }
 
   if (raw.flags) {

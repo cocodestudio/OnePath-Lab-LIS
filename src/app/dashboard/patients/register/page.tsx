@@ -7,12 +7,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Stethoscope, MapPin, Phone, User, Hash, FlaskConical, CheckCircle2,
   Loader2, Printer, FileText, AlertCircle, ArrowRight, Search, BookOpen, Settings,
-  ChevronDown, ChevronRight, PlusCircle, Edit2, Trash2, UserCheck, Building, Sparkles,
+  ChevronDown, ChevronRight, ChevronLeft, PlusCircle, Edit2, Trash2, UserCheck, Building, Sparkles,
   Percent, DollarSign, Receipt, RefreshCw, X, Check,
   Mail, Shield, CreditCard, Building2, Calendar, CheckSquare, RotateCcw,
   ClipboardList, Asterisk, Activity, Scale, Ruler, HeartPulse, ShieldCheck, Tag, Clock,
   Banknote, QrCode, Globe, Wallet, Boxes, Lock, TestTube2, Barcode
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -22,6 +23,7 @@ import {
 import { fetchFromLaravel, getStoredUser, getStoredToken, getAuthBaseUrl, updateStoredUser } from "@/lib/api-client";
 import {
   ALL_DESIGNATIONS,
+  normalizeDesignation,
   DEFAULT_INTAKE_FIELDS,
   type IntakeFieldConfig,
   normalizeReportSettings
@@ -195,11 +197,180 @@ const defaultDoctors = ["Self", "Dr. Rajesh Sharma", "Dr. Amit Verma", "Dr. Anja
 const defaultCollectionPoints = ["Main Lab", "Home Collection", "Hospital OPD", "Branch 1 - City Center"];
 const defaultPhlebotomists = ["Self / Lab Staff", "Rahul Phlebotomist", "Pooja Sharma (Tech)", "Vikram Collector"];
 
+function RegisterPageShimmer({ pid }: { pid?: string | null }) {
+  return (
+    <div className="w-full space-y-7 pb-12 animate-fade-in text-foreground select-none" aria-busy="true">
+      {/* Top Header Shimmer */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-5">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-ping" />
+            <div className="h-3 w-40 rounded shimmer-gradient" />
+            {pid && (
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-mono font-bold text-[11px]">
+                PID: {pid}
+              </span>
+            )}
+          </div>
+          <div className="h-8 w-72 sm:w-96 rounded-xl shimmer-gradient" />
+          <div className="h-4 w-60 sm:w-80 rounded-md shimmer-gradient" />
+        </div>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard/patients"
+            className="px-3.5 py-2 rounded-xl border border-border/90 bg-card hover:bg-accent text-xs font-semibold text-muted-foreground transition-all shadow-xs flex items-center gap-2"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span>Back to Patients</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Shimmer Feedback Banner */}
+      <div className="flex items-center gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 shadow-xs animate-pulse">
+        <Loader2 className="h-5 w-5 animate-spin text-amber-600 dark:text-amber-400 shrink-0" />
+        <div className="text-xs space-y-0.5">
+          <p className="font-bold text-sm">Fetching Patient Profile & Investigations...</p>
+          <p className="text-muted-foreground text-[11px]">Loading demographics, test catalog, reference doctor, and billing details from central database.</p>
+        </div>
+      </div>
+
+      {/* Stepper Shimmer */}
+      <div className="flex items-center justify-between max-w-xl mx-auto px-4 py-1">
+        {[1, 2, 3].map((step, idx) => (
+          <React.Fragment key={step}>
+            <div className="flex flex-col items-center gap-1.5 shrink-0">
+              <div className="w-9 h-9 rounded-full shimmer-gradient" />
+              <div className="h-2.5 w-16 rounded shimmer-gradient" />
+            </div>
+            {idx < 2 && <div className="flex-1 min-w-[32px] h-[2px] mx-3 mb-4 rounded shimmer-gradient" />}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* Main Grid: 8 Cols Form + 4 Cols Tests & Billing */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Left 8 Cols Demographics Shimmer */}
+        <div className="lg:col-span-8 space-y-6">
+          <div className="bg-card/80 p-6 sm:p-7 rounded-2xl border border-border/90 shadow-sm space-y-6">
+            <div className="flex items-center justify-between border-b border-border/80 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-4 rounded shimmer-gradient" />
+                <div className="h-4 w-48 rounded shimmer-gradient" />
+              </div>
+              <div className="h-7 w-24 rounded-lg shimmer-gradient" />
+            </div>
+
+            {/* Input fields grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+              <div className="sm:col-span-3 space-y-1.5">
+                <div className="h-3 w-16 rounded shimmer-gradient" />
+                <div className="h-10 w-full rounded-xl shimmer-gradient" />
+              </div>
+              <div className="sm:col-span-4 space-y-1.5">
+                <div className="h-3 w-20 rounded shimmer-gradient" />
+                <div className="h-10 w-full rounded-xl shimmer-gradient" />
+              </div>
+              <div className="sm:col-span-5 space-y-1.5">
+                <div className="h-3 w-20 rounded shimmer-gradient" />
+                <div className="h-10 w-full rounded-xl shimmer-gradient" />
+              </div>
+
+              <div className="sm:col-span-4 space-y-1.5">
+                <div className="h-3 w-16 rounded shimmer-gradient" />
+                <div className="h-10 w-full rounded-xl shimmer-gradient" />
+              </div>
+              <div className="sm:col-span-8 space-y-1.5">
+                <div className="h-3 w-16 rounded shimmer-gradient" />
+                <div className="h-10 w-full rounded-xl shimmer-gradient" />
+              </div>
+
+              <div className="sm:col-span-6 space-y-1.5">
+                <div className="h-3 w-24 rounded shimmer-gradient" />
+                <div className="h-10 w-full rounded-xl shimmer-gradient" />
+              </div>
+              <div className="sm:col-span-6 space-y-1.5">
+                <div className="h-3 w-20 rounded shimmer-gradient" />
+                <div className="h-10 w-full rounded-xl shimmer-gradient" />
+              </div>
+
+              <div className="sm:col-span-8 space-y-1.5">
+                <div className="h-3 w-16 rounded shimmer-gradient" />
+                <div className="h-10 w-full rounded-xl shimmer-gradient" />
+              </div>
+              <div className="sm:col-span-4 space-y-1.5">
+                <div className="h-3 w-16 rounded shimmer-gradient" />
+                <div className="h-10 w-full rounded-xl shimmer-gradient" />
+              </div>
+            </div>
+
+            {/* Referral & Collection Points */}
+            <div className="border-t border-border/80 pt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <div className="h-3 w-28 rounded shimmer-gradient" />
+                <div className="h-10 w-full rounded-xl shimmer-gradient" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-3 w-32 rounded shimmer-gradient" />
+                <div className="h-10 w-full rounded-xl shimmer-gradient" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right 4 Cols Tests & Billing Shimmer */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* Tests Card */}
+          <div className="bg-card/80 p-5 rounded-2xl border border-border/90 shadow-sm space-y-4">
+            <div className="flex items-center justify-between border-b border-border/80 pb-3">
+              <div className="h-4 w-32 rounded shimmer-gradient" />
+              <div className="h-5 w-12 rounded-full shimmer-gradient" />
+            </div>
+            <div className="space-y-2.5">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="p-3 rounded-xl border border-border/70 flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="h-3.5 w-32 rounded shimmer-gradient" />
+                    <div className="h-2.5 w-20 rounded shimmer-gradient" />
+                  </div>
+                  <div className="h-4 w-12 rounded shimmer-gradient" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Billing Card */}
+          <div className="bg-card/80 p-5 rounded-2xl border border-border/90 shadow-sm space-y-3.5">
+            <div className="h-4 w-28 rounded shimmer-gradient border-b border-border/80 pb-3" />
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <div className="h-3 w-20 rounded shimmer-gradient" />
+                <div className="h-3 w-16 rounded shimmer-gradient" />
+              </div>
+              <div className="flex justify-between">
+                <div className="h-3 w-24 rounded shimmer-gradient" />
+                <div className="h-3 w-14 rounded shimmer-gradient" />
+              </div>
+              <div className="flex justify-between pt-2 border-t border-border/70">
+                <div className="h-4 w-24 rounded shimmer-gradient" />
+                <div className="h-5 w-20 rounded shimmer-gradient" />
+              </div>
+            </div>
+            <div className="h-11 w-full rounded-xl shimmer-gradient mt-4" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RegisterPatientPage() {
   const searchParams = useSearchParams();
   const editId = searchParams?.get("edit");
   const [isEditMode, setIsEditMode] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
+  const [isEditLoading, setIsEditLoading] = useState<boolean>(() => Boolean(editId));
+  const [hasPreloadedPreview, setHasPreloadedPreview] = useState<boolean>(false);
   const [existingReport, setExistingReport] = useState<any>(null);
   const [existingBill, setExistingBill] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
@@ -385,6 +556,45 @@ function RegisterPatientPage() {
 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
+  // Automatically scroll to the top of the page / DashboardScroller container
+  const scrollToTop = (smooth = true) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.dispatchEvent(
+        new CustomEvent("dashboard-scroll-top", { detail: { immediate: !smooth } })
+      );
+      const mainEl = document.getElementById("main-content") || document.querySelector("main");
+      if (mainEl) {
+        if (smooth) {
+          mainEl.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+        } else {
+          mainEl.scrollTop = 0;
+        }
+      }
+      if (smooth) {
+        window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+      } else {
+        window.scrollTo({ top: 0, left: 0 });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (bookingSuccess) {
+      scrollToTop(false);
+      const t1 = setTimeout(() => scrollToTop(false), 50);
+      const t2 = setTimeout(() => scrollToTop(true), 150);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
+  }, [bookingSuccess]);
+
   const handleAbhaVerified = async (verified: AbhaVerifiedPatient) => {
     // 1. Populate all local registration form fields
     const nameParts = (verified.name || "").trim().split(" ");
@@ -400,9 +610,9 @@ function RegisterPatientPage() {
     setFirstName(fName);
     setLastName(lName);
 
-    let des = designation;
+    let des = normalizeDesignation(designation);
     if (verified.designation) {
-      des = verified.designation.replace(/\.$/, "") + ".";
+      des = normalizeDesignation(verified.designation);
       setDesignation(des);
     }
 
@@ -744,7 +954,7 @@ function RegisterPatientPage() {
               } catch {}
             }
             if (normalized.defaultDesignation) {
-              setDesignation(normalized.defaultDesignation);
+              setDesignation(normalizeDesignation(normalized.defaultDesignation));
             }
           }
           const rawBillSettings = lab?.bill_settings || lab?.billSettings;
@@ -799,218 +1009,247 @@ function RegisterPatientPage() {
     })();
   }, []);
 
+  const applyPatientDemographics = (patientData: any) => {
+    if (!patientData) return;
+    // Parse Name
+    const rawName = (patientData.name || "").trim();
+    const parts = rawName.split(/\s+/);
+    let des = normalizeDesignation(patientData.designation || "Mr.");
+    let fn = "";
+    let ln = "";
+
+    const isDesignationInName = ALL_DESIGNATIONS.some(
+      (d) =>
+        d.toLowerCase() === parts[0].toLowerCase() ||
+        d.replace(/\./g, "").toLowerCase() === parts[0].replace(/\./g, "").toLowerCase()
+    );
+
+    if (isDesignationInName) {
+      des = normalizeDesignation(parts[0]);
+      fn = parts[1] || "";
+      ln = parts.slice(2).join(" ");
+    } else {
+      fn = parts[0] || "";
+      ln = parts.slice(1).join(" ");
+    }
+
+    setDesignation(des);
+    setFirstName(fn);
+    setLastName(ln);
+
+    setAgeYears((patientData.age || 0).toString());
+    setAgeMonths("0");
+    setAgeDays("0");
+    setGender(patientData.gender || "Male");
+    setPhone(patientData.phone && patientData.phone !== "N/A" ? patientData.phone : "");
+    setEmail(patientData.email || "");
+    setAddress(patientData.address && patientData.address !== "N/A" ? patientData.address : "");
+    setPincode(patientData.pincode || "");
+    setCity(patientData.city || "");
+    setDistrict(patientData.district || "");
+    setState(patientData.state || "");
+
+    const doc = patientData.ref_doctor || patientData.refDoctor || "Self";
+    setRefDoctorSelect(doc);
+    setSecondReferral(patientData.second_referral || patientData.secondReferral || "");
+
+    const coll = patientData.collected_at || patientData.collectedAt || "Main Lab (Self / Lab Staff)";
+    const match = coll.match(/^(.*?)(?:\s*\((.*?)\))?$/);
+    const point = match && match[1] ? match[1].trim() : "Main Lab";
+    const phlebo = match && match[2] ? match[2].trim() : "Self / Lab Staff";
+    setCollectedAtSelect(point);
+    setCollectedBySelect(phlebo);
+
+    // Identification & Corporate
+    setAadhaarNo(patientData.aadhaar_no || patientData.aadhaarNo || "");
+    setInsuranceNo(patientData.insurance_no || patientData.insuranceNo || "");
+    setTpa(patientData.tpa || "");
+    setHfrId(patientData.hfr_id || patientData.hfrId || "");
+    setUhid(patientData.uhid || "");
+    setPassportNumber(patientData.passport_number || patientData.passportNumber || "");
+    setAbhaNumber(patientData.abha_number || patientData.abhaNumber || "");
+    setAbhaAddress(patientData.abha_address || patientData.abhaAddress || "");
+    setIsAbhaVerified(Boolean(patientData.is_abha_verified || patientData.isAbhaVerified));
+    setAbhaProfilePhoto(patientData.abha_profile_photo || patientData.abhaProfilePhoto || null);
+    setCorporateName(patientData.corporate_name || patientData.corporateName || "");
+    setCorporatePlan(patientData.corporate_plan || patientData.corporatePlan || "");
+    setGovPanel(patientData.gov_panel || patientData.govPanel || "");
+
+    // Physical metrics
+    setHeight(patientData.height || "");
+    setWeight(patientData.weight || "");
+    setOwnerName(patientData.owner_name || patientData.ownerName || "");
+    setBreed(patientData.breed || "");
+    setSpecies(patientData.species || "");
+
+    let patMeta = patientData.meta;
+    if (typeof patMeta === "string") {
+      try { patMeta = JSON.parse(patMeta); } catch { patMeta = {}; }
+    }
+    if (!patMeta || typeof patMeta !== "object") {
+      patMeta = {};
+    }
+
+    let loadedBarcodes: Record<string, string> = {};
+    if (patMeta?.vial_barcodes) {
+      if (typeof patMeta.vial_barcodes === "string") {
+        try { loadedBarcodes = JSON.parse(patMeta.vial_barcodes); } catch { }
+      } else if (typeof patMeta.vial_barcodes === "object") {
+        loadedBarcodes = { ...patMeta.vial_barcodes };
+      }
+    }
+
+    const rawBarcode = patientData.vial_barcode || patientData.vialBarcode || patMeta?.vial_barcode || "";
+    setSampleBarcode(rawBarcode);
+
+    if (Object.keys(loadedBarcodes).length > 0) {
+      setVialBarcodes(loadedBarcodes);
+    } else if (rawBarcode) {
+      const parts = rawBarcode.split(",").map((s: string) => s.trim()).filter(Boolean);
+      if (parts.length > 0) {
+        parts.forEach((code: string, idx: number) => {
+          const upper = code.toUpperCase();
+          if (upper.includes("EDTA")) loadedBarcodes["EDTA"] = code;
+          else if (upper.includes("SST") || upper.includes("SERUM") || upper.includes("PLAIN")) loadedBarcodes["SST"] = code;
+          else if (upper.includes("FLUORIDE") || upper.includes("GLUCOSE")) loadedBarcodes["FLUORIDE"] = code;
+          else if (upper.includes("CITRATE") || upper.includes("COAG")) loadedBarcodes["CITRATE"] = code;
+          else if (upper.includes("URINE")) loadedBarcodes["URINE"] = code;
+          else if (upper.includes("STOOL")) loadedBarcodes["STOOL"] = code;
+          else {
+            loadedBarcodes[`VIAL_${idx + 1}`] = code;
+          }
+        });
+        setVialBarcodes(loadedBarcodes);
+      }
+    }
+
+    const patObj: Patient = {
+      id: patientData.id,
+      customId: patientData.custom_id || patientData.customId || "",
+      name: patientData.name,
+      age: patientData.age || 0,
+      gender: patientData.gender || "Male",
+      phone: patientData.phone || "",
+      refDoctor: doc,
+      address: patientData.address || "",
+      collectedAt: coll,
+      vial_barcode: rawBarcode,
+      vialBarcode: rawBarcode,
+      meta: {
+        ...patMeta,
+        vial_barcode: rawBarcode,
+        vial_barcodes: loadedBarcodes,
+      },
+    };
+    setNewPatient(patObj);
+  };
+
   useEffect(() => {
-    if (!editId) return;
+    if (!editId) {
+      setIsEditLoading(false);
+      return;
+    }
     setIsEditMode(true);
     setEditPatientId(editId);
+    setIsEditLoading(true);
 
+    // 1. Instant cache retrieval from sessionStorage for 0ms initial render
+    try {
+      const cachedStr = sessionStorage.getItem(`edit_patient_cache_${editId}`);
+      if (cachedStr) {
+        const cached = JSON.parse(cachedStr);
+        if (cached && (cached.id === editId || cached.custom_id === editId || cached.customId === editId)) {
+          applyPatientDemographics(cached);
+          setHasPreloadedPreview(true);
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fetch authoritative data from API
     (async () => {
       try {
         const patientData = await fetchFromLaravel(`/patients/${editId}`);
         if (patientData) {
-          // Parse Name
-          const rawName = (patientData.name || "").trim();
-          const parts = rawName.split(/\s+/);
-          let des = patientData.designation || "Mr.";
-          let fn = "";
-          let ln = "";
+          applyPatientDemographics(patientData);
 
-          if (ALL_DESIGNATIONS.includes(parts[0])) {
-            des = parts[0];
-            fn = parts[1] || "";
-            ln = parts.slice(2).join(" ");
-          } else {
-            fn = parts[0] || "";
-            ln = parts.slice(1).join(" ");
-          }
+          // Fast parallel loading of associated reports and bills
+          let patReport = (patientData.reports && Array.isArray(patientData.reports) && patientData.reports.length > 0)
+            ? patientData.reports[0]
+            : null;
 
-          setDesignation(des);
-          setFirstName(fn);
-          setLastName(ln);
+          let patBill = patReport?.bill || (patientData.bills && Array.isArray(patientData.bills) && patientData.bills.length > 0 ? patientData.bills[0] : null);
 
-          setAgeYears((patientData.age || 0).toString());
-          setAgeMonths("0");
-          setAgeDays("0");
-          setGender(patientData.gender || "Male");
-          setPhone(patientData.phone && patientData.phone !== "N/A" ? patientData.phone : "");
-          setEmail(patientData.email || "");
-          setAddress(patientData.address && patientData.address !== "N/A" ? patientData.address : "");
-          setPincode(patientData.pincode || "");
-          setCity(patientData.city || "");
-          setDistrict(patientData.district || "");
-          setState(patientData.state || "");
+          // Only perform parallel network fallback if report or bill is missing
+          if (!patReport || !patReport.results || patReport.results.length === 0 || !patBill) {
+            try {
+              const [reportsRes, billsRes] = await Promise.all([
+                (!patReport || !patReport.results || patReport.results.length === 0)
+                  ? fetchFromLaravel(`/reports?patient_id=${editId}`).catch(() => null)
+                  : Promise.resolve(null),
+                !patBill
+                  ? fetchFromLaravel(`/bills?search=${patientData.custom_id || patientData.customId || editId}`).catch(() => null)
+                  : Promise.resolve(null),
+              ]);
 
-          const doc = patientData.ref_doctor || patientData.refDoctor || "Self";
-          setRefDoctorSelect(doc);
-          setSecondReferral(patientData.second_referral || patientData.secondReferral || "");
-
-          const coll = patientData.collected_at || patientData.collectedAt || "Main Lab (Self / Lab Staff)";
-          const match = coll.match(/^(.*?)(?:\s*\((.*?)\))?$/);
-          const point = match && match[1] ? match[1].trim() : "Main Lab";
-          const phlebo = match && match[2] ? match[2].trim() : "Self / Lab Staff";
-          setCollectedAtSelect(point);
-          setCollectedBySelect(phlebo);
-
-          // Identification & Corporate
-          setAadhaarNo(patientData.aadhaar_no || patientData.aadhaarNo || "");
-          setInsuranceNo(patientData.insurance_no || patientData.insuranceNo || "");
-          setTpa(patientData.tpa || "");
-          setHfrId(patientData.hfr_id || patientData.hfrId || "");
-          setUhid(patientData.uhid || "");
-          setPassportNumber(patientData.passport_number || patientData.passportNumber || "");
-          setAbhaNumber(patientData.abha_number || patientData.abhaNumber || "");
-          setAbhaAddress(patientData.abha_address || patientData.abhaAddress || "");
-          setIsAbhaVerified(Boolean(patientData.is_abha_verified || patientData.isAbhaVerified));
-          setAbhaProfilePhoto(patientData.abha_profile_photo || patientData.abhaProfilePhoto || null);
-          setCorporateName(patientData.corporate_name || patientData.corporateName || "");
-          setCorporatePlan(patientData.corporate_plan || patientData.corporatePlan || "");
-          setGovPanel(patientData.gov_panel || patientData.govPanel || "");
-
-          // Physical metrics
-          setHeight(patientData.height || "");
-          setWeight(patientData.weight || "");
-          setOwnerName(patientData.owner_name || patientData.ownerName || "");
-          setBreed(patientData.breed || "");
-          setSpecies(patientData.species || "");
-          let patMeta = patientData.meta;
-          if (typeof patMeta === "string") {
-            try { patMeta = JSON.parse(patMeta); } catch { patMeta = {}; }
-          }
-          if (!patMeta || typeof patMeta !== "object") {
-            patMeta = {};
-          }
-
-          let loadedBarcodes: Record<string, string> = {};
-          if (patMeta?.vial_barcodes) {
-            if (typeof patMeta.vial_barcodes === "string") {
-              try { loadedBarcodes = JSON.parse(patMeta.vial_barcodes); } catch { }
-            } else if (typeof patMeta.vial_barcodes === "object") {
-              loadedBarcodes = { ...patMeta.vial_barcodes };
-            }
-          }
-
-          const rawBarcode = patientData.vial_barcode || patientData.vialBarcode || patMeta?.vial_barcode || "";
-          setSampleBarcode(rawBarcode);
-
-          if (Object.keys(loadedBarcodes).length > 0) {
-            setVialBarcodes(loadedBarcodes);
-          } else if (rawBarcode) {
-            const parts = rawBarcode.split(",").map((s: string) => s.trim()).filter(Boolean);
-            if (parts.length > 0) {
-              parts.forEach((code: string, idx: number) => {
-                const upper = code.toUpperCase();
-                if (upper.includes("EDTA")) loadedBarcodes["EDTA"] = code;
-                else if (upper.includes("SST") || upper.includes("SERUM") || upper.includes("PLAIN")) loadedBarcodes["SST"] = code;
-                else if (upper.includes("FLUORIDE") || upper.includes("GLUCOSE")) loadedBarcodes["FLUORIDE"] = code;
-                else if (upper.includes("CITRATE") || upper.includes("COAG")) loadedBarcodes["CITRATE"] = code;
-                else if (upper.includes("URINE")) loadedBarcodes["URINE"] = code;
-                else if (upper.includes("STOOL")) loadedBarcodes["STOOL"] = code;
-                else {
-                  loadedBarcodes[`VIAL_${idx + 1}`] = code;
-                }
-              });
-              setVialBarcodes(loadedBarcodes);
-            }
-          }
-
-          if (patientData.reports && Array.isArray(patientData.reports) && patientData.reports.length > 0) {
-            setExistingReport(patientData.reports[0]);
-          }
-
-          const patObj: Patient = {
-            id: patientData.id,
-            customId: patientData.custom_id || patientData.customId || "",
-            name: patientData.name,
-            age: patientData.age || 0,
-            gender: patientData.gender || "Male",
-            phone: patientData.phone || "",
-            refDoctor: doc,
-            address: patientData.address || "",
-            collectedAt: coll,
-            vial_barcode: rawBarcode,
-            vialBarcode: rawBarcode,
-            meta: {
-              ...patMeta,
-              vial_barcode: rawBarcode,
-              vial_barcodes: loadedBarcodes,
-            },
-          };
-          setNewPatient(patObj);
-
-          // Fetch associated reports & bills for this patient
-          try {
-            let patReport = (patientData.reports && Array.isArray(patientData.reports) && patientData.reports.length > 0)
-              ? patientData.reports[0]
-              : null;
-
-            if (!patReport || !patReport.results || patReport.results.length === 0) {
-              try {
-                const reportsRes = await fetchFromLaravel(`/reports?patient_id=${editId}`);
+              if (!patReport && reportsRes) {
                 const allReports = Array.isArray(reportsRes) ? reportsRes : (reportsRes?.data || []);
-                if (allReports.length > 0) {
-                  patReport = allReports.find((r: any) => (r.patient_id === editId || r.patientId === editId)) || allReports[0];
-                }
-              } catch (e) { }
-            }
-
-            if (patReport) {
-              setExistingReport(patReport);
-              if (patReport.results && Array.isArray(patReport.results)) {
-                const testIds: string[] = [];
-                patReport.results.forEach((res: any) => {
-                  let testObj = res.test;
-                  // Climb up to the top-level parent (main panel like CBC) so child parameters aren't booked as separate tests
-                  while (testObj) {
-                    const parentId = testObj.parentId || testObj.parent_id || testObj.parent?.id;
-                    if (!parentId) break;
-                    const parentObj = testObj.parent;
-                    if (!parentObj) {
-                      testObj = { id: parentId };
-                      break;
-                    }
-                    testObj = parentObj;
-                  }
-                  const mainId = testObj?.id || res.test?.parent_id || res.test?.parentId || res.test_id || res.testId;
-                  if (mainId && !testIds.includes(mainId)) {
-                    testIds.push(mainId);
-                  }
-                });
-                if (testIds.length > 0) {
-                  setSelectedTests(Array.from(new Set(testIds)));
-                }
+                patReport = allReports.find((r: any) => (r.patient_id === editId || r.patientId === editId)) || allReports[0] || null;
               }
-
-              const pkgName = patReport.package_name || patReport.packageName || patReport.meta?.packageName;
-              if (pkgName) {
-                const pkgs = getStoredPackages();
-                const foundPkg = pkgs.find(p => p.name.toLowerCase() === pkgName.toLowerCase() || p.id === pkgName);
-                if (foundPkg) {
-                  setSelectedPackage(foundPkg);
-                }
-              }
-            }
-
-            let patBill = patReport?.bill || (patientData.bills && Array.isArray(patientData.bills) && patientData.bills.length > 0 ? patientData.bills[0] : null);
-            if (!patBill) {
-              try {
-                const billsRes = await fetchFromLaravel(`/bills?search=${patientData.custom_id || patientData.customId || editId}`);
+              if (!patBill && billsRes) {
                 const allBills = Array.isArray(billsRes) ? billsRes : (billsRes?.data || []);
                 patBill = allBills.find((b: any) => (b.patient_id === editId || b.patientId === editId)) || allBills[0] || null;
-              } catch (e) { }
+              }
+            } catch (_) {}
+          }
+
+          if (patReport) {
+            setExistingReport(patReport);
+            if (patReport.results && Array.isArray(patReport.results)) {
+              const testIds: string[] = [];
+              patReport.results.forEach((res: any) => {
+                let testObj = res.test;
+                // Climb up to the top-level parent (main panel like CBC) so child parameters aren't booked as separate tests
+                while (testObj) {
+                  const parentId = testObj.parentId || testObj.parent_id || testObj.parent?.id;
+                  if (!parentId) break;
+                  const parentObj = testObj.parent;
+                  if (!parentObj) {
+                    testObj = { id: parentId };
+                    break;
+                  }
+                  testObj = parentObj;
+                }
+                const mainId = testObj?.id || res.test?.parent_id || res.test?.parentId || res.test_id || res.testId;
+                if (mainId && !testIds.includes(mainId)) {
+                  testIds.push(mainId);
+                }
+              });
+              if (testIds.length > 0) {
+                setSelectedTests(Array.from(new Set(testIds)));
+              }
             }
 
-            if (patBill) {
-              setExistingBill(patBill);
-              setDiscount((patBill.discount || 0).toString());
-              setPaidAmount((patBill.paid_amount || patBill.paidAmount || 0).toString());
-              setPaymentStatus(patBill.status || "UNPAID");
+            const pkgName = patReport.package_name || patReport.packageName || patReport.meta?.packageName;
+            if (pkgName) {
+              const pkgs = getStoredPackages();
+              const foundPkg = pkgs.find(p => p.name.toLowerCase() === pkgName.toLowerCase() || p.id === pkgName);
+              if (foundPkg) {
+                setSelectedPackage(foundPkg);
+              }
             }
-          } catch (e) {
-            console.error("Error fetching associated report & bill:", e);
+          }
+
+          if (patBill) {
+            setExistingBill(patBill);
+            setDiscount((patBill.discount || 0).toString());
+            setPaidAmount((patBill.paid_amount || patBill.paidAmount || 0).toString());
+            setPaymentStatus(patBill.status || "UNPAID");
           }
         }
       } catch (err) {
         console.error("Error loading patient for edit:", err);
+      } finally {
+        setIsEditLoading(false);
       }
     })();
   }, [editId]);
@@ -1521,6 +1760,7 @@ function RegisterPatientPage() {
           }));
 
       setBookingSuccess(true);
+      scrollToTop(false);
       const initialMode = computedStatus === "PAID" ? (selectedPaymentMode !== "UNPAID" ? selectedPaymentMode : "CASH") : "UNPAID";
       setSelectedPaymentMode(initialMode as any);
       setPaymentUpdateMessage(null);
@@ -1595,6 +1835,7 @@ function RegisterPatientPage() {
     setPaidAmount("0");
     setPaymentStatus("UNPAID");
     setBookingSuccess(false);
+    scrollToTop(true);
     setSuccessDetails(null);
     setIsPrintModalOpen(false);
     setSampleBarcode("");
@@ -1765,6 +2006,10 @@ function RegisterPatientPage() {
     { n: 3, label: "Invoice & Barcode", done: bookingSuccess },
   ];
 
+  if (isEditMode && isEditLoading && !hasPreloadedPreview) {
+    return <RegisterPageShimmer pid={editId} />;
+  }
+
   return (
     <div className="w-full space-y-7 pb-12 animate-fade-in text-foreground">
       {/* Top Header */}
@@ -1808,6 +2053,16 @@ function RegisterPatientPage() {
 
       {!bookingSuccess ? (
         <div className="space-y-6">
+          {/* Background Data Sync Notice when preloaded preview is displayed */}
+          {isEditMode && isEditLoading && hasPreloadedPreview && (
+            <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-primary/10 border border-primary/20 text-xs text-primary font-medium shadow-xs animate-pulse">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+                <span>Patient demographics loaded instantly. Syncing clinical investigations, billing breakdown & doctor history from server...</span>
+              </div>
+              <span className="text-[10px] font-mono font-bold bg-primary/20 px-2 py-0.5 rounded uppercase tracking-wider shrink-0">Fast Sync</span>
+            </div>
+          )}
           {/* Stepper */}
           <div className="flex items-center justify-between max-w-xl mx-auto px-2 sm:px-4 overflow-x-auto py-1">
             {steps.map((s, i) => (
@@ -1962,7 +2217,7 @@ function RegisterPatientPage() {
                       <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
                         Title <span className="text-primary">*</span>
                       </label>
-                      <Select value={designation} onValueChange={setDesignation} disabled={registering || (!!newPatient && !isEditMode)}>
+                      <Select value={normalizeDesignation(designation)} onValueChange={setDesignation} disabled={registering || (!!newPatient && !isEditMode)}>
                         <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
                           <SelectValue />
                         </SelectTrigger>
@@ -2977,7 +3232,31 @@ function RegisterPatientPage() {
 
                 {/* Selected Tests Breakdown */}
                 <div className="p-4 min-h-[160px] max-h-[260px] overflow-y-auto space-y-2">
-                  {selectedTestObjects.length === 0 ? (
+                  {isEditLoading ? (
+                    <div className="space-y-3 py-2">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1.5 flex-1 pr-4">
+                          <Skeleton className="h-3.5 w-3/4 rounded" />
+                          <Skeleton className="h-2.5 w-1/3 rounded" />
+                        </div>
+                        <Skeleton className="h-4 w-12 rounded" />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1.5 flex-1 pr-4">
+                          <Skeleton className="h-3.5 w-2/3 rounded" />
+                          <Skeleton className="h-2.5 w-1/4 rounded" />
+                        </div>
+                        <Skeleton className="h-4 w-12 rounded" />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1.5 flex-1 pr-4">
+                          <Skeleton className="h-3.5 w-4/5 rounded" />
+                          <Skeleton className="h-2.5 w-1/3 rounded" />
+                        </div>
+                        <Skeleton className="h-4 w-12 rounded" />
+                      </div>
+                    </div>
+                  ) : selectedTestObjects.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center py-8 text-muted-foreground">
                       <FlaskConical className="h-9 w-9 opacity-30 mb-2" />
                       <p className="text-xs font-semibold">No tests added yet.</p>
@@ -3003,7 +3282,11 @@ function RegisterPatientPage() {
                   <div className="space-y-2 text-xs">
                     <div className="flex justify-between text-muted-foreground font-medium">
                       <span>Gross Subtotal</span>
-                      <span className="font-mono font-bold text-foreground">₹{subtotal.toFixed(2)}</span>
+                      {isEditLoading ? (
+                        <Skeleton className="h-4 w-16 rounded" />
+                      ) : (
+                        <span className="font-mono font-bold text-foreground">₹{subtotal.toFixed(2)}</span>
+                      )}
                     </div>
 
                     {/* Concession / Discount Input */}
@@ -3018,7 +3301,8 @@ function RegisterPatientPage() {
                           placeholder="0"
                           value={discount === "0" ? "" : discount}
                           onChange={(e) => setDiscount(e.target.value)}
-                          className="w-20 px-2 py-1 bg-background border border-border/80 rounded-md font-mono text-xs font-bold text-right outline-none focus:border-primary text-foreground"
+                          disabled={isEditLoading}
+                          className="w-20 px-2 py-1 bg-background border border-border/80 rounded-md font-mono text-xs font-bold text-right outline-none focus:border-primary text-foreground disabled:opacity-50"
                         />
                       </div>
                     </div>
@@ -3033,7 +3317,11 @@ function RegisterPatientPage() {
 
                   <div className="flex justify-between items-center pt-2.5 border-t border-border/80">
                     <span className="font-bold text-sm text-foreground">Net Payable</span>
-                    <span className="font-display text-2xl font-bold text-primary font-mono">₹{grandTotal.toFixed(2)}</span>
+                    {isEditLoading ? (
+                      <Skeleton className="h-7 w-24 rounded" />
+                    ) : (
+                      <span className="font-display text-2xl font-bold text-primary font-mono">₹{grandTotal.toFixed(2)}</span>
+                    )}
                   </div>
 
                   {/* Payment Mode & Status Selection at Registration */}

@@ -501,6 +501,9 @@ export default function Navbar() {
                               onClick={() => {
                                 setIsSearchOpen(false);
                                 setSearchQuery("");
+                                try {
+                                  sessionStorage.setItem(`edit_patient_cache_${p.id}`, JSON.stringify(p));
+                                } catch (_) {}
                               }}
                               className="block p-2.5 sm:p-3 hover:bg-muted/70 transition-colors cursor-pointer text-left group"
                             >
