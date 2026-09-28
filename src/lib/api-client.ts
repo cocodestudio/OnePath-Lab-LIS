@@ -118,6 +118,7 @@ const inFlightRequests = new Map<string, Promise<any>>();
 export interface FetchFromLaravelOptions extends RequestInit {
   skipCache?: boolean;
   cacheTtlMs?: number;
+  timeoutMs?: number;
 }
 
 /**
@@ -221,21 +222,39 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
   const apiBase = getApiBaseUrl();
 
   const fetchPromise = (async () => {
+    const controller = new AbortController();
+    const timeoutMs = options.timeoutMs ?? 15000; // 15s timeout
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    if (options.signal) {
+      options.signal.addEventListener("abort", () => controller.abort());
+    }
+
     try {
-      const response = await fetch(`${apiBase}${cleanEndpoint}`, { ...options, headers });
+      const response = await fetch(`${apiBase}${cleanEndpoint}`, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
 
       if (response.status === 401) {
         if (cleanEndpoint.includes("/abha/")) {
           // For ABHA endpoints, retry without Authorization header
           const retryHeaders = { ...headers };
           delete retryHeaders["Authorization"];
-          const retryRes = await fetch(`${apiBase}${cleanEndpoint}`, { ...options, headers: retryHeaders });
+          const retryRes = await fetch(`${apiBase}${cleanEndpoint}`, {
+            ...options,
+            headers: retryHeaders,
+            signal: controller.signal,
+          });
           if (retryRes.ok) {
             const retryText = await retryRes.text();
             return retryText ? JSON.parse(retryText) : {};
           }
         }
-        // Do NOT abruptly wipe token and force redirect on transient 401s so active user work is never lost
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("lis_auth_unauthorized", { detail: { endpoint: cleanEndpoint } }));
+        }
         throw new Error("Authentication failed or session expired. Please verify your login.");
       }
 
@@ -294,7 +313,13 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
       }
 
       return data;
+    } catch (err: any) {
+      if (err?.name === "AbortError" || controller.signal.aborted) {
+        throw new Error(`Network timeout (${timeoutMs / 1000}s) while calling ${cleanEndpoint}. Please check your connection.`);
+      }
+      throw err;
     } finally {
+      clearTimeout(timeoutId);
       if (isGet) {
         inFlightRequests.delete(cleanEndpoint);
       }

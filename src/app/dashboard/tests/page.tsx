@@ -181,36 +181,10 @@ export interface SubTestState {
 
 export default function TestMasterPage() {
   const toast = useToast();
-  const [tests, setTests] = useState<Test[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem("lis_cached_tests");
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        }
-      } catch {}
-    }
-    return [];
-  });
+  const [tests, setTests] = useState<Test[]>([]);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
-  const [loading, setLoading] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem("lis_cached_tests");
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return false;
-          }
-        }
-      } catch {}
-    }
-    return true;
-  });
+  const [loading, setLoading] = useState<boolean>(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingTest, setEditingTest] = useState<Test | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Test | null>(null);
@@ -294,7 +268,21 @@ export default function TestMasterPage() {
   }, [dynamicCategories]);
 
   useEffect(() => { 
-    fetchTests(); 
+    // 1. Instant cache load on client mount (0ms)
+    try {
+      const cached = localStorage.getItem("lis_cached_tests");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setTests(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {}
+
+    // 2. Silent revalidation from server in background (no Ctrl+F5 needed)
+    fetchTests(true); 
+
     fetchFromLaravel("/lab")
       .then(data => setLabProfile(data))
       .catch(() => {});
@@ -303,16 +291,16 @@ export default function TestMasterPage() {
   const fetchTests = async (forceRefresh?: boolean | any) => {
     const isForce = forceRefresh === true;
     try {
-      if (isForce || tests.length === 0) {
+      if (isForce && tests.length === 0) {
         setLoading(true);
       }
-      const data = await fetchFromLaravel("/tests", { skipCache: isForce });
+      const data = await fetchFromLaravel("/tests", { skipCache: true });
       if (Array.isArray(data)) {
         setTests(data);
         try {
           localStorage.setItem("lis_cached_tests", JSON.stringify(data));
         } catch {}
-      } else if (isForce) {
+      } else if (isForce && tests.length === 0) {
         setTests([]);
       }
     } catch (err) {

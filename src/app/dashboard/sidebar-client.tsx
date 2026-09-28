@@ -74,36 +74,22 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [user, setUser] = useState<any>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const raw = localStorage.getItem("lis_user");
-        if (raw) return JSON.parse(raw);
-        const roleMatch = document.cookie.match(/(?:^|;\s*)lis_role=([^;]+)/);
-        if (roleMatch && roleMatch[1]) {
-          return { role: decodeURIComponent(roleMatch[1]) };
-        }
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
+  const [user, setUser] = useState<any>(null);
   const [isMounted, setIsMounted] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [isAiGuideOpen, setIsAiGuideOpen] = useState(false);
-  const [isLocked, setIsLocked] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("lis_subscription_locked") === "true";
-    }
-    return false;
-  });
+  const [isLocked, setIsLocked] = useState<boolean>(false);
 
   useEffect(() => {
     setIsMounted(true);
     const u = getStoredUser();
     if (u) setUser(u);
+    try {
+      if (typeof window !== "undefined") {
+        setIsLocked(sessionStorage.getItem("lis_subscription_locked") === "true");
+      }
+    } catch {}
   }, []);
 
   useEffect(() => {

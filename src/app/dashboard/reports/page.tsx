@@ -42,6 +42,19 @@ interface Report {
   abdmCareContextId?: string;
 }
 
+function getTodayStr() {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  } catch {
+    return new Date().toISOString().split("T")[0];
+  }
+}
+
 const DEFAULT_LAB = { name: "OnePath Lab Main", email: "info@onepathlab.com", address: "123 Healthcare Blvd, Medical District, Delhi", logoUrl: "/onepath-logo.png" };
 
 export default function ReportsListPage() {
@@ -68,7 +81,7 @@ export default function ReportsListPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [filterDate, setFilterDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [filterDate, setFilterDate] = useState(() => getTodayStr());
 
   const isB2B = currentUser?.role === "B2B";
   const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER";
@@ -408,9 +421,9 @@ export default function ReportsListPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setFilterDate(new Date().toISOString().split("T")[0])}
+                onClick={() => setFilterDate(getTodayStr())}
                 className={`h-10 px-3 text-xs font-bold ${
-                  filterDate === new Date().toISOString().split("T")[0]
+                  filterDate === getTodayStr()
                     ? "bg-primary/10 text-primary border-primary/30"
                     : "text-muted-foreground"
                 }`}
@@ -490,10 +503,36 @@ export default function ReportsListPage() {
               </tbody>
             </table>
           ) : filteredReports.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-2">
-              <Filter className="h-10 w-10 opacity-25" />
-              <p className="text-sm font-medium">No reports match your criteria.</p>
-              <p className="text-xs text-muted-foreground/70">Try clearing filters or starting a new registration.</p>
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2 px-4 text-center">
+              <Filter className="h-10 w-10 opacity-25 mb-1" />
+              {filterDate && safeReports.length > 0 ? (
+                <>
+                  <p className="text-sm font-semibold text-foreground">
+                    No reports found for {filterDate === getTodayStr() ? "Today" : filterDate}.
+                  </p>
+                  <p className="text-xs text-muted-foreground max-w-sm">
+                    You have {safeReports.length} total diagnostic reports in your archive. Click below to view all past reports.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setFilterDate("")}
+                    className="mt-2 text-xs font-semibold"
+                  >
+                    Show All {safeReports.length} Reports
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium">No reports match your criteria.</p>
+                  <p className="text-xs text-muted-foreground/70">Try clearing filters or starting a new registration.</p>
+                  {hasFilters && (
+                    <Button variant="outline" size="sm" onClick={clearFilters} className="mt-2 text-xs">
+                      Clear All Filters
+                    </Button>
+                  )}
+                </>
+              )}
             </div>
           ) : (
             <table className="w-full min-w-[640px] text-left">

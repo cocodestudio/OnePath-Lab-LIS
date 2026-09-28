@@ -374,15 +374,7 @@ function RegisterPatientPage() {
   const [existingReport, setExistingReport] = useState<any>(null);
   const [existingBill, setExistingBill] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
-  const [currentUserPermissions, setCurrentUserPermissions] = useState<any[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const u = getStoredUser();
-        return Array.isArray(u?.permissions) ? u.permissions : [];
-      } catch {}
-    }
-    return [];
-  });
+  const [currentUserPermissions, setCurrentUserPermissions] = useState<any[]>([]);
   const isB2B = currentUserRole === "B2B";
   const isCollectionCenter = currentUserRole === "COLLECTION_CENTER";
   const isReceptionist = currentUserRole === "RECEPTIONIST";
@@ -486,24 +478,12 @@ function RegisterPatientPage() {
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [labInfo, setLabInfo] = useState<any>(null);
-  const [billSettings, setBillSettings] = useState<BillLayoutSettings>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem("lis_cached_bill_settings");
-        if (cached) return normalizeBillSettings(JSON.parse(cached));
-      } catch {}
-    }
-    return normalizeBillSettings({});
-  });
+  const [billSettings, setBillSettings] = useState<BillLayoutSettings>(() => normalizeBillSettings({}));
   const registerPrintRef = useRef<HTMLDivElement>(null);
 
   // Collection Center Specific Fields & PayU Gate
   const [sampleBarcode, setSampleBarcode] = useState("");
-  const [collectionDateTime, setCollectionDateTime] = useState(() => {
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    return now.toISOString().slice(0, 16);
-  });
+  const [collectionDateTime, setCollectionDateTime] = useState("");
   const [isApprovingPayment, setIsApprovingPayment] = useState(false);
   const [isPayUModalOpen, setIsPayUModalOpen] = useState(false);
   const [payULoading, setPayULoading] = useState(false);
@@ -829,6 +809,16 @@ function RegisterPatientPage() {
   };
 
   useEffect(() => {
+    // Populate collection date time once mounted on client in user's local timezone
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    setCollectionDateTime(now.toISOString().slice(0, 16));
+
+    try {
+      const cachedBill = localStorage.getItem("lis_cached_bill_settings");
+      if (cachedBill) setBillSettings(normalizeBillSettings(JSON.parse(cachedBill)));
+    } catch {}
+
     const storedUser = getStoredUser();
     if (storedUser) {
       setCurrentUserRole(storedUser.role || "STAFF");
@@ -920,11 +910,25 @@ function RegisterPatientPage() {
       try { setPhlebotomists(JSON.parse(savedPhlebo)); } catch (e) { }
     }
 
+    // Instant test list from cache for 0ms registration latency
+    try {
+      const cached = localStorage.getItem("lis_cached_tests");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAvailableTests(parsed);
+        }
+      }
+    } catch {}
+
     (async () => {
       try {
-        const data = await fetchFromLaravel("/tests");
+        const data = await fetchFromLaravel("/tests", { skipCache: true });
         const list = Array.isArray(data) ? data : (data?.data || []);
-        setAvailableTests(list);
+        if (list.length > 0) {
+          setAvailableTests(list);
+          try { localStorage.setItem("lis_cached_tests", JSON.stringify(list)); } catch {}
+        }
       } catch (err) { console.error("Error fetching tests:", err); }
 
       try {
@@ -2707,6 +2711,7 @@ function RegisterPatientPage() {
                         <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                         <input
                           type="datetime-local"
+                          suppressHydrationWarning
                           className="w-full pl-9 pr-1 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-xs font-semibold focus:border-zinc-900 dark:focus:border-white focus:ring-1 outline-none text-foreground transition-all shadow-2xs"
                           value={collectionDateTime}
                           onChange={(e) => setCollectionDateTime(e.target.value)}

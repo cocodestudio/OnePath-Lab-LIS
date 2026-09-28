@@ -190,6 +190,19 @@ function normalizeBillObj(b: any): Bill {
   };
 }
 
+function getTodayStr() {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  } catch {
+    return new Date().toISOString().split("T")[0];
+  }
+}
+
 export default function BillingPage() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [labData, setLabData] = useState<any>(null);
@@ -206,7 +219,7 @@ export default function BillingPage() {
   const [availableMainTests, setAvailableMainTests] = useState<Test[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [filterDate, setFilterDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [filterDate, setFilterDate] = useState(() => getTodayStr());
   const [loading, setLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -328,12 +341,17 @@ export default function BillingPage() {
 
   const fetchAvailableTests = async () => {
     try {
-      const data = await fetchFromLaravel("/tests");
+      const data = await fetchFromLaravel("/tests", { skipCache: true });
       const list = Array.isArray(data) ? data : (data?.data || []);
-      setAllRawTests(list);
-      // Filter ONLY Main / Top-Level tests (no sub-parameters)
-      const mainTestsOnly = list.filter((t: any) => !t.parentId && !t.parent_id);
-      setAvailableMainTests(mainTestsOnly);
+      if (list.length > 0) {
+        setAllRawTests(list);
+        // Filter ONLY Main / Top-Level tests (no sub-parameters)
+        const mainTestsOnly = list.filter((t: any) => !t.parentId && !t.parent_id);
+        setAvailableMainTests(mainTestsOnly);
+        try {
+          localStorage.setItem("lis_cached_tests", JSON.stringify(list));
+        } catch {}
+      }
     } catch (err) {
       console.error("Error fetching tests:", err);
     }
@@ -777,9 +795,9 @@ export default function BillingPage() {
 
             <button
               type="button"
-              onClick={() => setFilterDate(new Date().toISOString().split("T")[0])}
+              onClick={() => setFilterDate(getTodayStr())}
               className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                filterDate === new Date().toISOString().split("T")[0]
+                filterDate === getTodayStr()
                   ? "bg-primary/10 text-primary border-primary/30"
                   : "bg-background text-muted-foreground hover:text-foreground border-border/90"
               }`}
@@ -865,12 +883,27 @@ export default function BillingPage() {
                 ))
               ) : currentRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-16 text-center text-muted-foreground">
+                  <td colSpan={8} className="py-16 text-center text-muted-foreground px-4">
                     <Receipt className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
                     <p className="font-bold text-foreground">
-                      {filterDate ? `No invoices found for ${filterDate}` : "No invoices found"}
+                      {filterDate ? `No invoices found for ${filterDate === getTodayStr() ? "Today" : filterDate}` : "No invoices found"}
                     </p>
-                    <p className="text-[11px] mt-0.5">Use the &lt; and &gt; date arrows or click &quot;All Dates&quot; above.</p>
+                    {filterDate && safeBills.length > 0 ? (
+                      <div className="mt-2 space-y-2">
+                        <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
+                          You have {safeBills.length} total invoices in your archive. Click below to view all past invoices.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setFilterDate("")}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-all cursor-pointer inline-flex items-center gap-1.5"
+                        >
+                          Show All {safeBills.length} Invoices
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] mt-0.5">Use the &lt; and &gt; date arrows or click &quot;All Dates&quot; above.</p>
+                    )}
                   </td>
                 </tr>
               ) : (

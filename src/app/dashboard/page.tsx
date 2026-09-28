@@ -65,9 +65,25 @@ function StatCard({
   return href ? <Link href={href}>{inner}</Link> : inner;
 }
 
+const getTodayDateStr = () => {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+  } catch {
+    return new Date().toISOString().split("T")[0];
+  }
+};
+
 export default function DashboardOverviewPage() {
   const [isMounted, setIsMounted] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const u = getStoredUser();
+        if (u) return u;
+      } catch {}
+    }
+    return null;
+  });
   const [stats, setStats] = useState<Stats>({
     patientsToday: 0,
     totalPatients: 0,
@@ -90,17 +106,33 @@ export default function DashboardOverviewPage() {
     const u = getStoredUser();
     setUser(u);
 
-    // Read client-side cached data on mount
+    // Read client-side cached data on mount safely with date matching
     try {
+      const todayStr = getTodayDateStr();
       const cachedStats = localStorage.getItem("lis_cached_dashboard_stats");
-      if (cachedStats) setStats(JSON.parse(cachedStats));
+      if (cachedStats) {
+        const parsed = JSON.parse(cachedStats);
+        if (parsed.cachedDate === todayStr) {
+          setStats(parsed);
+          setLoading(false);
+        } else {
+          // If from previous day, preserve lifetime totals but zero-out today's metrics
+          setStats({
+            ...parsed,
+            patientsToday: 0,
+            todayReports: 0,
+            todayPendingReports: 0,
+            todayCompletedReports: 0,
+            revenue: 0,
+          });
+        }
+      }
       const cachedCharts = localStorage.getItem("lis_cached_dashboard_charts");
       if (cachedCharts) setChartData(JSON.parse(cachedCharts));
       const cachedReports = localStorage.getItem("lis_cached_dashboard_recent_reports");
       if (cachedReports) setRecentReports(JSON.parse(cachedReports));
       const cachedLab = localStorage.getItem("lis_cached_lab");
       if (cachedLab) setLabInfo(JSON.parse(cachedLab));
-      if (cachedStats) setLoading(false);
     } catch {}
 
     const refreshLabInfo = () => {
@@ -186,7 +218,10 @@ export default function DashboardOverviewPage() {
 
       setStats(newStats);
       try {
-        localStorage.setItem("lis_cached_dashboard_stats", JSON.stringify(newStats));
+        localStorage.setItem(
+          "lis_cached_dashboard_stats",
+          JSON.stringify({ ...newStats, cachedDate: getTodayDateStr() })
+        );
       } catch {}
 
       if (Array.isArray(analytics?.reportsOverTime)) {

@@ -19,11 +19,13 @@ interface Props {
 }
 
 export function CollectionCenterOverview({ user }: Props) {
+  const [isMounted, setIsMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
 
   useEffect(() => {
+    setIsMounted(true);
     loadData();
   }, []);
 
@@ -236,44 +238,46 @@ export function CollectionCenterOverview({ user }: Props) {
           </div>
 
           <div className="h-[250px] w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
-              <BarChart data={weeklyIntakeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis
-                  dataKey="day"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  allowDecimals={false}
-                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                />
-                <Tooltip
-                  cursor={{ fill: "hsl(var(--muted)/0.4)" }}
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="bg-popover border border-border p-2.5 rounded-xl shadow-xl text-xs">
-                          <p className="font-bold text-foreground">{payload[0].payload.day}</p>
-                          <p className="text-primary font-extrabold mt-0.5">{payload[0].value} Samples Logged</p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                  {weeklyIntakeData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.isToday ? "hsl(var(--primary))" : "hsl(var(--primary)/0.4)"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {isMounted && (
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+                <BarChart data={weeklyIntakeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <XAxis
+                    dataKey="day"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    allowDecimals={false}
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "hsl(var(--muted)/0.4)" }}
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-popover border border-border p-2.5 rounded-xl shadow-xl text-xs">
+                            <p className="font-bold text-foreground">{payload[0].payload.day}</p>
+                            <p className="text-primary font-extrabold mt-0.5">{payload[0].value} Samples Logged</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                    {weeklyIntakeData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={entry.isToday ? "hsl(var(--primary))" : "hsl(var(--primary)/0.4)"}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -291,22 +295,24 @@ export function CollectionCenterOverview({ user }: Props) {
             {/* Donut 1: Processing Stages */}
             <div className="flex flex-col items-center text-center">
               <div className="h-[130px] w-[130px] relative">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
-                  <PieChart>
-                    <Pie
-                      data={stagePieData}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={36}
-                      outerRadius={58}
-                      paddingAngle={3}
-                    >
-                      {stagePieData.map((entry, idx) => (
-                        <Cell key={`donut1-${idx}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
+                {isMounted && (
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+                    <PieChart>
+                      <Pie
+                        data={stagePieData}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={36}
+                        outerRadius={58}
+                        paddingAngle={3}
+                      >
+                        {stagePieData.map((entry, idx) => (
+                          <Cell key={`donut1-${idx}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-sm font-extrabold text-foreground">{totalSamples}</span>
                   <span className="text-[9px] uppercase font-bold text-muted-foreground">Vials</span>
@@ -319,22 +325,24 @@ export function CollectionCenterOverview({ user }: Props) {
             {/* Donut 2: Payment Clearance Ratio */}
             <div className="flex flex-col items-center text-center">
               <div className="h-[130px] w-[130px] relative">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
-                  <PieChart>
-                    <Pie
-                      data={paymentPieData}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={36}
-                      outerRadius={58}
-                      paddingAngle={3}
-                    >
-                      {paymentPieData.map((entry, idx) => (
-                        <Cell key={`donut2-${idx}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
+                {isMounted && (
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+                    <PieChart>
+                      <Pie
+                        data={paymentPieData}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={36}
+                        outerRadius={58}
+                        paddingAngle={3}
+                      >
+                        {paymentPieData.map((entry, idx) => (
+                          <Cell key={`donut2-${idx}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
                     {totalCollectedRevenue + totalDueRevenue > 0

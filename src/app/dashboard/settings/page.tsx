@@ -335,61 +335,10 @@ function SettingsContent() {
       ? "report-layout"
       : "letterhead"
   );
-  const [settings, setSettings] = useState<ExtendedPrintSettings>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cachedPrint = localStorage.getItem("lis_cached_print_settings");
-        const cachedLetterhead = localStorage.getItem("lis_cached_letterhead");
-        if (cachedPrint) {
-          const parsed = JSON.parse(cachedPrint);
-          if (cachedLetterhead && !parsed.bgImage) parsed.bgImage = cachedLetterhead;
-          return parsed;
-        } else if (cachedLetterhead) {
-          return { ...defaultPrintSettings, bgImage: cachedLetterhead, printWithLetterhead: true };
-        }
-      } catch {}
-    }
-    return defaultPrintSettings;
-  });
-
-  const [layoutSettings, setLayoutSettings] = useState<ReportLayoutSettings>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem("lis_cached_report_settings");
-        if (cached) {
-          return normalizeReportSettings(JSON.parse(cached));
-        }
-      } catch {}
-    }
-    return defaultReportLayoutSettings;
-  });
-
-  const [billSettings, setBillSettings] = useState<BillLayoutSettings>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const cached = localStorage.getItem("lis_cached_bill_settings");
-        if (cached) {
-          return normalizeBillSettings(JSON.parse(cached));
-        }
-      } catch {}
-    }
-    return defaultBillLayoutSettings;
-  });
-
-  const [isLoading, setIsLoading] = useState(() => {
-    if (typeof window !== "undefined") {
-      try {
-        if (
-          localStorage.getItem("lis_cached_report_settings") ||
-          localStorage.getItem("lis_cached_print_settings") ||
-          localStorage.getItem("lis_cached_bill_settings")
-        ) {
-          return false;
-        }
-      } catch {}
-    }
-    return true;
-  });
+  const [settings, setSettings] = useState<ExtendedPrintSettings>(defaultPrintSettings);
+  const [layoutSettings, setLayoutSettings] = useState<ReportLayoutSettings>(defaultReportLayoutSettings);
+  const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const { success: toastSuccess, error: toastError, toast: showGlobalToast } = useToast();
   const setToast = React.useCallback((input: { text: string; type: "success" | "error" } | null) => {
@@ -615,6 +564,33 @@ function SettingsContent() {
   };
 
   useEffect(() => {
+    // 1. Instantly read local cache on client mount
+    try {
+      const cachedPrint = localStorage.getItem("lis_cached_print_settings");
+      const cachedLetterhead = localStorage.getItem("lis_cached_letterhead");
+      if (cachedPrint) {
+        const parsed = JSON.parse(cachedPrint);
+        if (cachedLetterhead && !parsed.bgImage) parsed.bgImage = cachedLetterhead;
+        setSettings(parsed);
+      } else if (cachedLetterhead) {
+        setSettings({ ...defaultPrintSettings, bgImage: cachedLetterhead, printWithLetterhead: true });
+      }
+
+      const cachedReport = localStorage.getItem("lis_cached_report_settings");
+      if (cachedReport) {
+        setLayoutSettings(normalizeReportSettings(JSON.parse(cachedReport)));
+      }
+
+      const cachedBill = localStorage.getItem("lis_cached_bill_settings");
+      if (cachedBill) {
+        setBillSettings(normalizeBillSettings(JSON.parse(cachedBill)));
+      }
+
+      if (cachedPrint || cachedReport || cachedBill) {
+        setIsLoading(false);
+      }
+    } catch {}
+
     fetchSettings();
 
     const handleSync = () => {

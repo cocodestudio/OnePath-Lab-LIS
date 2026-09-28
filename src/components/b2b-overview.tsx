@@ -162,11 +162,16 @@ export function B2BOverviewShimmer() {
 }
 
 export function B2BOverview({ user }: Props) {
+  const [isMounted, setIsMounted] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [reports, setReports] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
   const [walletSummary, setWalletSummary] = useState<any>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const loadData = async (isInitial = false) => {
     try {
@@ -435,34 +440,36 @@ export function B2BOverview({ user }: Props) {
           </div>
 
           <div className="h-44 w-full my-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyIntakeData}>
-                <XAxis dataKey="day" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
-                <Tooltip
-                  cursor={{ fill: "rgba(139, 92, 246, 0.06)" }}
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="bg-slate-900 text-white px-2.5 py-1.5 rounded-lg text-xs shadow-md">
-                          <p className="font-bold">{payload[0].payload.day}</p>
-                          <p className="text-purple-300">{payload[0].value} requisitions</p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <Bar dataKey="count" radius={[5, 5, 0, 0]}>
-                  {weeklyIntakeData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.isToday ? "#8b5cf6" : "#c4b5fd"}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {isMounted && (
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+                <BarChart data={weeklyIntakeData}>
+                  <XAxis dataKey="day" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip
+                    cursor={{ fill: "rgba(139, 92, 246, 0.06)" }}
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-slate-900 text-white px-2.5 py-1.5 rounded-lg text-xs shadow-md">
+                            <p className="font-bold">{payload[0].payload.day}</p>
+                            <p className="text-purple-300">{payload[0].value} requisitions</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar dataKey="count" radius={[5, 5, 0, 0]}>
+                    {weeklyIntakeData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={entry.isToday ? "#8b5cf6" : "#c4b5fd"}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           <div className="pt-2 border-t border-border/50 text-xs text-muted-foreground flex items-center justify-between">
@@ -488,23 +495,25 @@ export function B2BOverview({ user }: Props) {
           </div>
 
           <div className="h-44 relative my-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={creditDonutData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={48}
-                  outerRadius={68}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {creditDonutData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
+            {isMounted && (
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+                <PieChart>
+                  <Pie
+                    data={creditDonutData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={48}
+                    outerRadius={68}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {creditDonutData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            )}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-lg font-black text-foreground">
                 ₹{walletBalance.toLocaleString("en-IN")}
@@ -548,23 +557,25 @@ export function B2BOverview({ user }: Props) {
           </div>
 
           <div className="h-44 relative my-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={stagePieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={48}
-                  outerRadius={68}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {stagePieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
+            {isMounted && (
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+                <PieChart>
+                  <Pie
+                    data={stagePieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={48}
+                    outerRadius={68}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {stagePieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            )}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-2xl font-extrabold text-foreground">{totalRequisitions}</span>
               <span className="text-[9px] uppercase font-bold text-muted-foreground">Total</span>

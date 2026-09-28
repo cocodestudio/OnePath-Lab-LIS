@@ -67,21 +67,7 @@ export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
-  const [user, setUser] = useState<any>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const raw = localStorage.getItem("lis_user");
-        if (raw) return JSON.parse(raw);
-        const roleMatch = document.cookie.match(/(?:^|;\s*)lis_role=([^;]+)/);
-        if (roleMatch && roleMatch[1]) {
-          return { role: decodeURIComponent(roleMatch[1]) };
-        }
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
+  const [user, setUser] = useState<any>(null);
   const normalizedRole = (user?.role || "").toUpperCase().trim();
   const isB2B = normalizedRole === "B2B";
   const isCollectionCenter = normalizedRole === "COLLECTION_CENTER" || normalizedRole === "COLLECTION_CENTRE";
@@ -109,12 +95,7 @@ export default function Navbar() {
   const [labData, setLabData] = useState<any>(null);
   const [todaySales, setTodaySales] = useState<string>("₹0");
   const [copiedLabId, setCopiedLabId] = useState(false);
-  const [isLocked, setIsLocked] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("lis_subscription_locked") === "true";
-    }
-    return false;
-  });
+  const [isLocked, setIsLocked] = useState<boolean>(false);
 
   useEffect(() => {
     setUser(getStoredUser());
@@ -226,9 +207,13 @@ export default function Navbar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Live search query debounce
+  // Live search query debounce with race-condition protection
+  const activeSearchQueryRef = useRef("");
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    const q = searchQuery.trim();
+    activeSearchQueryRef.current = q;
+
+    if (!q) {
       setSearchResults({ patients: [], reports: [], bills: [] });
       setIsSearching(false);
       return;
@@ -238,10 +223,13 @@ export default function Navbar() {
       setIsSearching(true);
       try {
         const [pRes, rRes, bRes] = await Promise.allSettled([
-          fetchFromLaravel(`/patients?search=${encodeURIComponent(searchQuery)}`),
-          fetchFromLaravel(`/reports?search=${encodeURIComponent(searchQuery)}`),
-          fetchFromLaravel(`/bills?search=${encodeURIComponent(searchQuery)}`),
+          fetchFromLaravel(`/patients?search=${encodeURIComponent(q)}`, { skipCache: true }),
+          fetchFromLaravel(`/reports?search=${encodeURIComponent(q)}`, { skipCache: true }),
+          fetchFromLaravel(`/bills?search=${encodeURIComponent(q)}`, { skipCache: true }),
         ]);
+
+        // Discard stale responses if user continued typing
+        if (activeSearchQueryRef.current !== q) return;
 
         const patients = pRes.status === "fulfilled" ? (Array.isArray(pRes.value) ? pRes.value : pRes.value?.data || []) : [];
         const reports = rRes.status === "fulfilled" ? (Array.isArray(rRes.value) ? rRes.value : rRes.value?.data || []) : [];
@@ -249,15 +237,17 @@ export default function Navbar() {
 
         setSearchResults({
           patients: patients.slice(0, 8),
-          reports: reports.slice(0, 4),
-          bills: bills.slice(0, 3),
+          reports: reports.slice(0, 6),
+          bills: bills.slice(0, 5),
         });
       } catch (err) {
         console.error("Global search error:", err);
       } finally {
-        setIsSearching(false);
+        if (activeSearchQueryRef.current === q) {
+          setIsSearching(false);
+        }
       }
-    }, 250);
+    }, 200);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);

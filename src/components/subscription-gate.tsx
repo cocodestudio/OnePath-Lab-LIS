@@ -9,12 +9,7 @@ import { isSubscriptionExpired } from "@/lib/subscription";
 export default function SubscriptionGate() {
   const pathname = usePathname();
   const router = useRouter();
-  const [isLocked, setIsLocked] = useState(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("lis_subscription_locked") === "true";
-    }
-    return false;
-  });
+  const [isLocked, setIsLocked] = useState(false);
   const [labData, setLabData] = useState<any>(null);
   const [checking, setChecking] = useState(true);
 

@@ -305,8 +305,16 @@ export default function PatientsPage() {
     }
     return [];
   });
+const getTodayStr = () => {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+  } catch {
+    return new Date().toISOString().split("T")[0];
+  }
+};
+
   const [search, setSearch] = useState("");
-  const [filterDate, setFilterDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [filterDate, setFilterDate] = useState(() => getTodayStr());
   const [loading, setLoading] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -747,10 +755,27 @@ export default function PatientsPage() {
           ) : currentRows.length === 0 ? (
             <div className="text-center py-16 px-4 space-y-3">
               <Users className="h-10 w-10 mx-auto text-muted-foreground/40" />
-              <p className="text-sm font-semibold text-foreground">No registered patients found.</p>
-              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                No patient records matched your active search query or date filter.
+              <p className="text-sm font-semibold text-foreground">
+                {filterDate ? `No patients registered for ${filterDate === getTodayStr() ? "Today" : filterDate}.` : "No registered patients found."}
               </p>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                {safePatients.length > 0
+                  ? `You have ${safePatients.length} patient records in your laboratory archive.`
+                  : "No patient records exist yet. Click 'Register Patient' to create one."}
+              </p>
+              {safePatients.length > 0 && (filterDate || search) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterDate("");
+                    setSearch("");
+                  }}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 text-xs font-semibold transition-all cursor-pointer"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  <span>Show All {safePatients.length} Patients</span>
+                </button>
+              )}
             </div>
           ) : (
             <table className="w-full min-w-[760px] text-xs text-left border-collapse">
