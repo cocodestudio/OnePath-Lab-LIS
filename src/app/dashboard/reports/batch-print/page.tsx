@@ -139,7 +139,7 @@ function BatchPrintContent() {
         if (isMounted && labData) setLiveLab(labData);
 
         // 2. Read any cached reports from localStorage
-        let cachedMap: Record<string, any> = {};
+        const cachedMap: Record<string, any> = {};
         if (typeof window !== "undefined") {
           try {
             const rawCached = localStorage.getItem("lis_cached_reports");
