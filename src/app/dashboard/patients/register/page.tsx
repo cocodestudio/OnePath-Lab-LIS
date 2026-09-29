@@ -425,6 +425,45 @@ function RegisterPatientPage() {
   const [district, setDistrict] = useState("");
   const [state, setState] = useState("");
 
+  const handleTitleChange = (newTitle: string) => {
+    setDesignation(newTitle);
+    const lower = (newTitle || "").toLowerCase().trim();
+    // If Baby or B/o, keep gender as none / unselected because baby can be male or female
+    if (lower.startsWith("baby") || lower.includes("b/o")) {
+      setGender("");
+      return;
+    }
+    // Female Titles
+    if (
+      lower.startsWith("mrs") ||
+      lower.startsWith("ms") ||
+      lower.startsWith("miss") ||
+      lower.startsWith("smt") ||
+      lower === "w/o" ||
+      lower === "d/o" ||
+      lower === "m/o" ||
+      lower.startsWith("kumari")
+    ) {
+      setGender("Female");
+      return;
+    }
+    // Male Titles
+    if (
+      lower.startsWith("mr") ||
+      lower.startsWith("master") ||
+      lower.startsWith("shri") ||
+      lower === "s/o" ||
+      lower.startsWith("mohd") ||
+      lower.startsWith("kumar") ||
+      lower.startsWith("md") ||
+      lower.startsWith("baba") ||
+      lower.startsWith("sk")
+    ) {
+      setGender("Male");
+      return;
+    }
+  };
+
   // Referrals & Logistics
   const [doctorsList, setDoctorsList] = useState<string[]>(defaultDoctors);
   const [refDoctorSelect, setRefDoctorSelect] = useState("Self");
@@ -493,6 +532,8 @@ function RegisterPatientPage() {
 
   // Packages & Catalog Mode
   const [catalogMode, setCatalogMode] = useState<"TESTS" | "PACKAGES">("TESTS");
+  const [testCatalogTab, setTestCatalogTab] = useState<"IN_HOUSE" | "OUTSOURCE" | "PACKAGES">("IN_HOUSE");
+  const [outsourcedTestIds, setOutsourcedTestIds] = useState<string[]>([]);
   const [availablePackages, setAvailablePackages] = useState<LabPackage[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<LabPackage | null>(null);
 
@@ -1386,6 +1427,7 @@ function RegisterPatientPage() {
     const missing: string[] = [];
     if (isFieldRequired("name") && !firstName.trim()) missing.push("First Name");
     if (isFieldRequired("ageGender") && (!ageYears && !ageMonths && !ageDays)) missing.push("Age");
+    if (isFieldRequired("ageGender") && !gender) missing.push("Gender");
     if (isFieldRequired("phone") && !phone.trim()) missing.push("Phone Number");
     if (isFieldRequired("email") && !email.trim()) missing.push("Email Address");
     if (isFieldRequired("address") && !address.trim()) missing.push("Residential Address");
@@ -1567,8 +1609,25 @@ function RegisterPatientPage() {
     }
   };
 
-  const handleToggleTest = (testId: string) =>
-    setSelectedTests((prev) => prev.includes(testId) ? prev.filter((id) => id !== testId) : [...prev, testId]);
+  const handleToggleTest = (testId: string) => {
+    if (testCatalogTab === "OUTSOURCE") {
+      if (outsourcedTestIds.includes(testId)) {
+        setOutsourcedTestIds((prev) => prev.filter((id) => id !== testId));
+        setSelectedTests((prev) => prev.filter((id) => id !== testId));
+      } else {
+        setOutsourcedTestIds((prev) => [...prev, testId]);
+        setSelectedTests((prev) => (prev.includes(testId) ? prev : [...prev, testId]));
+      }
+    } else {
+      if (selectedTests.includes(testId)) {
+        setSelectedTests((prev) => prev.filter((id) => id !== testId));
+        setOutsourcedTestIds((prev) => prev.filter((id) => id !== testId));
+      } else {
+        setSelectedTests((prev) => [...prev, testId]);
+        setOutsourcedTestIds((prev) => prev.filter((id) => id !== testId));
+      }
+    }
+  };
 
   const selectedTestObjects = availableTests.flatMap((t) => {
     let shouldChargeParent = selectedTests.includes(t.id);
@@ -1647,6 +1706,11 @@ function RegisterPatientPage() {
       let assignedBillCustomId = "INV-CONFIRMED";
       const currentBillId = existingBill?.id || existingReport?.bill?.id || existingReport?.bill_id;
 
+      // Separate in-house tests from outsourced tests
+      // Critical requirement: outsourced tests MUST NOT show up in in-house Enter Result!
+      const inHouseTestIds = validTestIds.filter(id => !outsourcedTestIds.includes(id));
+      const outsourceTestObjects = selectedTestObjects.filter(t => outsourcedTestIds.includes(t.id));
+
       if (isEditMode && (currentBillId || existingReport?.id)) {
         if (currentBillId) {
           try {
@@ -1688,7 +1752,7 @@ function RegisterPatientPage() {
           method: "POST",
           body: JSON.stringify({
             patientId: newPatient.id,
-            testIds: validTestIds,
+            testIds: inHouseTestIds, // Excludes outsourced tests so they do NOT appear in enter result!
             total: grandTotal,
             discount: computedDiscount,
             paidAmount: computedPaid,
@@ -1720,9 +1784,33 @@ function RegisterPatientPage() {
                 ...(newPatient.meta || {}),
                 vial_barcode: joinedBarcodes,
                 vial_barcodes: activeVialBarcodes,
+                has_outsource: outsourcedTestIds.length > 0,
+                outsource_tests: outsourceTestObjects.map(t => ({
+                  id: t.id,
+                  name: t.name,
+                  category: t.category,
+                  price: Number(t.price) || 0,
+                })),
               },
             }),
           });
+
+          // Also record into dedicated outsource cases endpoint if any test is outsourced
+          if (outsourcedTestIds.length > 0) {
+            fetchFromLaravel("/outsource-cases", {
+              method: "POST",
+              body: JSON.stringify({
+                patient_id: newPatient.id,
+                tests: outsourceTestObjects.map(t => ({
+                  id: t.id,
+                  name: t.name,
+                  category: t.category,
+                  price: Number(t.price) || 0,
+                })),
+              }),
+            }).catch(() => null);
+          }
+
           setNewPatient((prev: any) => prev ? {
             ...prev,
             vial_barcode: joinedBarcodes,
@@ -1731,10 +1819,17 @@ function RegisterPatientPage() {
               ...(prev.meta || {}),
               vial_barcode: joinedBarcodes,
               vial_barcodes: activeVialBarcodes,
+              has_outsource: outsourcedTestIds.length > 0,
+              outsource_tests: outsourceTestObjects.map(t => ({
+                id: t.id,
+                name: t.name,
+                category: t.category,
+                price: Number(t.price) || 0,
+              })),
             },
           } : prev);
         } catch (e) {
-          console.error("Error updating patient vial barcodes:", e);
+          console.error("Error updating patient vial barcodes and outsource meta:", e);
         }
       }
 
@@ -1802,6 +1897,8 @@ function RegisterPatientPage() {
   const handleResetFlow = () => {
     setSelectedPackage(null);
     setCatalogMode("TESTS");
+    setTestCatalogTab("IN_HOUSE");
+    setOutsourcedTestIds([]);
     setDesignation("Mr.");
     setFirstName("");
     setLastName("");
@@ -2221,7 +2318,7 @@ function RegisterPatientPage() {
                       <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
                         Title <span className="text-primary">*</span>
                       </label>
-                      <Select value={normalizeDesignation(designation)} onValueChange={setDesignation} disabled={registering || (!!newPatient && !isEditMode)}>
+                      <Select value={normalizeDesignation(designation)} onValueChange={handleTitleChange} disabled={registering || (!!newPatient && !isEditMode)}>
                         <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
                           <SelectValue />
                         </SelectTrigger>
@@ -2326,7 +2423,7 @@ function RegisterPatientPage() {
                       </label>
                       <Select value={gender} onValueChange={setGender} disabled={registering || (!!newPatient && !isEditMode)}>
                         <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
-                          <SelectValue />
+                          <SelectValue placeholder="Select Gender" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Male">Male</SelectItem>
@@ -3962,19 +4059,82 @@ function RegisterPatientPage() {
 
       {/* 1. Test Selection Catalog Modal (Horizontal Landscape) */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl">
+        <DialogContent className="max-w-6xl w-[96vw] max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-3xl bg-card border border-border shadow-2xl animate-scale-in">
           <DialogTitle className="sr-only">Diagnostic Test Directory</DialogTitle>
 
           {/* Header */}
-          <div className="flex items-center gap-3 px-6 py-4 border-b border-border/80 shrink-0 bg-card">
-            <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground shadow-sm">
-              <FlaskConical className="h-5 w-5" />
+          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-border/80 shrink-0 bg-card">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground shadow-sm">
+                <FlaskConical className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="font-display text-base font-bold text-foreground">Diagnostic Investigation Catalog</h2>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Patient: <strong className="text-foreground">{newPatient?.name}</strong> · <span className="font-mono">{newPatient?.customId}</span>
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="font-display text-base font-bold text-foreground">Pathology Investigation Catalog</h2>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                Patient: <strong className="text-foreground">{newPatient?.name}</strong> · <span className="font-mono">{newPatient?.customId}</span>
-              </p>
+
+            {/* Top Navigation Tabs: In-House Tests vs Outsource Lab vs Packages */}
+            <div className="flex items-center gap-1.5 p-1 bg-muted/70 rounded-xl border border-border/80">
+              <button
+                type="button"
+                onClick={() => {
+                  setTestCatalogTab("IN_HOUSE");
+                  setCatalogMode("TESTS");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                  testCatalogTab === "IN_HOUSE"
+                    ? "bg-background text-foreground shadow-xs ring-1 ring-border"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <FlaskConical className="h-3.5 w-3.5 text-primary" />
+                <span>In-House Tests</span>
+                {selectedTestObjects.filter(t => !outsourcedTestIds.includes(t.id)).length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-primary text-primary-foreground font-mono">
+                    {selectedTestObjects.filter(t => !outsourcedTestIds.includes(t.id)).length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTestCatalogTab("OUTSOURCE");
+                  setCatalogMode("TESTS");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                  testCatalogTab === "OUTSOURCE"
+                    ? "bg-purple-600 text-white shadow-xs"
+                    : "text-muted-foreground hover:text-purple-600 dark:hover:text-purple-400"
+                }`}
+              >
+                <Building2 className="h-3.5 w-3.5" />
+                <span>Outsource Lab</span>
+                {outsourcedTestIds.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-white text-purple-700 font-mono font-black">
+                    {outsourcedTestIds.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTestCatalogTab("PACKAGES");
+                  setCatalogMode("PACKAGES");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                  testCatalogTab === "PACKAGES"
+                    ? "bg-background text-foreground shadow-xs ring-1 ring-border"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Boxes className="h-3.5 w-3.5 text-primary" />
+                <span>Packages</span>
+              </button>
             </div>
           </div>
 
@@ -3985,37 +4145,31 @@ function RegisterPatientPage() {
             </div>
           )}
 
-          {/* Search, Mode Dropdown & Category Chips */}
-          <div className="p-4 border-b border-border/80 shrink-0 space-y-3 bg-card/60">
-            <div className="flex items-center gap-2.5">
-              <div className="relative flex-1">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
-                  className="w-full pl-10 pr-4 py-2.5 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/60 focus:border-primary outline-none text-foreground font-medium shadow-2xs"
-                  placeholder={
-                    catalogMode === "TESTS"
-                      ? "Search test name or test code (e.g. CBC, LFT, KFT, Glucose)…"
-                      : "Search diagnostic package name or code (e.g. Full Body, Cardiac, PKG-101)…"
-                  }
-                  value={testSearch}
-                  onChange={(e) => setTestSearch(e.target.value)}
-                />
+          {/* Search Bar & Outsource Mode Indicator Banner */}
+          <div className="p-4 border-b border-border/80 shrink-0 space-y-2.5 bg-card/60">
+            {testCatalogTab === "OUTSOURCE" && (
+              <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-purple-500/10 border border-purple-500/25 text-purple-700 dark:text-purple-300 text-xs font-medium animate-fade-in">
+                <Building2 className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" />
+                <p className="flex-1">
+                  <strong>Outsource Mode Active:</strong> Selected tests below will be sent to external partner lab and billed to the patient. These tests bypass in-house Result Entry and appear under <strong>Cases &gt; Outsource Cases</strong>.
+                </p>
               </div>
+            )}
 
-              {/* Mode Selector Dropdown on Right */}
-              <div className="flex items-center gap-1.5 shrink-0">
-                <select
-                  value={catalogMode}
-                  onChange={(e) => {
-                    setCatalogMode(e.target.value as "TESTS" | "PACKAGES");
-                    setTestSearch("");
-                  }}
-                  className="h-10 px-3.5 rounded-lg bg-background border border-border/90 text-xs font-bold text-foreground focus:border-primary focus:ring-1 focus:ring-primary outline-none cursor-pointer shadow-2xs"
-                >
-                  <option value="TESTS">Tests</option>
-                  <option value="PACKAGES">Packages</option>
-                </select>
-              </div>
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                className="w-full pl-10 pr-4 py-2 bg-background border border-border/90 rounded-xl text-xs placeholder:text-muted-foreground/60 focus:border-primary outline-none text-foreground font-medium shadow-2xs"
+                placeholder={
+                  catalogMode === "TESTS"
+                    ? testCatalogTab === "OUTSOURCE"
+                      ? "Search tests to outsource (e.g. Vitamin D, Thyroid, Culture & Sensitivity, Lipid)…"
+                      : "Search test name or code (e.g. CBC, LFT, KFT, Glucose)…"
+                    : "Search diagnostic package name or code (e.g. Full Body, Cardiac)…"
+                }
+                value={testSearch}
+                onChange={(e) => setTestSearch(e.target.value)}
+              />
             </div>
 
             {/* If Tests mode: show Category Chips */}
@@ -4153,26 +4307,45 @@ function RegisterPatientPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {tests.map((test) => {
                       const selected = selectedTests.includes(test.id);
+                      const isOutsourced = outsourcedTestIds.includes(test.id);
                       const paramCount = test.subTests?.reduce((acc: number, st: any) => acc + (st.subTests && st.subTests.length > 0 ? st.subTests.length : 1), 0) ?? (test.subTests?.length || 0);
                       return (
                         <div key={test.id} className="flex flex-col gap-1">
                           <div
                             onClick={() => handleToggleTest(test.id)}
-                            className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer select-none transition-all ${selected
+                            className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer select-none transition-all ${
+                              isOutsourced
+                                ? "bg-purple-500/10 border-purple-500/40 shadow-xs ring-1 ring-purple-500/30"
+                                : selected
                                 ? "bg-accent/80 border-primary shadow-sm ring-1 ring-primary/30"
                                 : "bg-card border-border/90 hover:border-primary/50"
-                              }`}
+                            }`}
                           >
                             <div className="flex items-center gap-3 min-w-0">
-                              <Checkbox checked={selected} onCheckedChange={() => handleToggleTest(test.id)} onClick={(e) => e.stopPropagation()} />
+                              <Checkbox
+                                checked={selected}
+                                onCheckedChange={() => handleToggleTest(test.id)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
                               <div className="min-w-0">
-                                <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
+                                  {isOutsourced ? (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-purple-600 text-white uppercase shrink-0">
+                                      Outsource
+                                    </span>
+                                  ) : selected ? (
+                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
+                                      In-House
+                                    </span>
+                                  ) : null}
+                                </div>
                                 <p className="text-[10px] text-muted-foreground mt-0.5">
                                   {paramCount > 0 ? `${paramCount} Parameters Included` : `Ref ${test.refRangeMin ?? "N/A"}–${test.refRangeMax ?? "N/A"}`}
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                               <span className="font-mono text-xs font-bold text-foreground shrink-0">₹{Number(test.price).toFixed(0)}</span>
                               {test.subTests && test.subTests.length > 0 && (
                                 <button
@@ -4214,58 +4387,41 @@ function RegisterPatientPage() {
             )}
           </div>
 
-          {/* Pricing & Concession Bottom Bar */}
-          <div className="border-t border-border/80 px-6 py-4 shrink-0 bg-muted/50 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
-              {!isB2B && (
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Discount Concession (₹)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={subtotal}
-                    placeholder="0"
-                    className="h-9 w-28 text-xs font-mono font-bold border border-border/90 rounded-lg px-2.5 bg-background text-foreground focus:border-primary outline-none"
-                    value={discount}
-                    onChange={(e) => setDiscount(e.target.value)}
-                    disabled={booking}
-                  />
-                </div>
-              )}
+          {/* Refined Bottom Summary Bar (No discount/advance inputs here, pristine layout) */}
+          <div className="border-t border-border/80 px-6 py-4 shrink-0 bg-muted/40 backdrop-blur-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto text-xs">
+              <div className="px-3.5 py-1.5 rounded-xl bg-card border border-border flex items-center gap-2 shadow-2xs">
+                <FlaskConical className="h-3.5 w-3.5 text-primary" />
+                <span className="text-muted-foreground font-semibold">In-House:</span>
+                <span className="font-bold text-foreground">
+                  {selectedTestObjects.filter(t => !outsourcedTestIds.includes(t.id)).length} Tests
+                </span>
+                <span className="text-muted-foreground font-mono text-[11px]">
+                  (₹{selectedTestObjects.filter(t => !outsourcedTestIds.includes(t.id)).reduce((s, t) => s + (Number(t.price) || 0), 0).toFixed(0)})
+                </span>
+              </div>
 
-              {isB2B ? (
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Settlement Status</label>
-                  <div className="h-9 px-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>UNPAID (Pending Central Lab Clearance)</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Advance Paid (₹)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max={grandTotal}
-                    placeholder="0"
-                    className="h-9 w-28 text-xs font-mono font-bold border border-border/90 rounded-lg px-2.5 bg-background text-foreground focus:border-primary outline-none"
-                    value={paidAmount}
-                    onChange={(e) => setPaidAmount(e.target.value)}
-                    disabled={booking}
-                  />
+              {outsourcedTestIds.length > 0 && (
+                <div className="px-3.5 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/25 flex items-center gap-2 text-purple-700 dark:text-purple-300 shadow-2xs font-semibold">
+                  <Building2 className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                  <span>Outsource Lab:</span>
+                  <span className="font-bold text-purple-600 dark:text-purple-400">{outsourcedTestIds.length} Tests</span>
+                  <span className="font-mono text-[11px]">
+                    (₹{selectedTestObjects.filter(t => outsourcedTestIds.includes(t.id)).reduce((s, t) => s + (Number(t.price) || 0), 0).toFixed(0)})
+                  </span>
                 </div>
               )}
             </div>
 
             <div className="flex items-center gap-5 justify-between w-full sm:w-auto sm:justify-end">
               <div className="text-right">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Grand Total</p>
-                <p className="font-display text-2xl font-bold text-primary font-mono">₹{grandTotal.toFixed(2)}</p>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Gross Total</p>
+                <p className="font-display text-2xl font-bold text-primary font-mono">₹{subtotal.toFixed(2)}</p>
               </div>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="gradient-primary text-primary-foreground font-bold text-xs px-6 py-2.5 rounded-xl ring-inset-top hover:-translate-y-px transition-all shadow-md"
+                className="gradient-primary text-primary-foreground font-bold text-xs px-6 py-2.5 rounded-xl ring-inset-top hover:-translate-y-px transition-all shadow-md cursor-pointer"
               >
                 Done ({selectedTestObjects.length})
               </button>

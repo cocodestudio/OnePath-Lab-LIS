@@ -12,7 +12,7 @@ import { fetchFromLaravel, getCleanLetterheadUrl, getStoredUser } from "@/lib/ap
 import {
   FlaskConical, ArrowLeft, Loader2, CheckCircle2, AlertTriangle,
   User, AlertCircle, TrendingUp, History, ExternalLink, ClipboardList, Plus, Trash2,
-  Search, ChevronDown, ChevronRight, FileText, Eye, Edit, Pencil, Building2, Phone, Calendar, Receipt, Printer,
+  Search, ChevronDown, ChevronRight, ChevronLeft, FileText, Eye, Edit, Pencil, Building2, Phone, Calendar, Receipt, Printer,
   MessageSquare, FileEdit, Sparkles, CheckCheck, Calculator, Zap, X, Check, Save,
   Shield, Mail, MapPin, Stethoscope, BadgeCheck, CreditCard, Clock, Hash, Activity, Boxes,
   Cpu, Radio, RefreshCw, HardDrive
@@ -166,6 +166,10 @@ interface Report {
   abdm_synced_at?: string;
   abdmError?: string;
   abdm_error?: string;
+  prev_id?: string | null;
+  prevId?: string | null;
+  next_id?: string | null;
+  nextId?: string | null;
 }
 
 interface CalculationResult {
@@ -1454,10 +1458,51 @@ let globalAvailableTestsCache: Test[] | null = null;
 export default function ResultEntryPage() {
   const router = useRouter();
   const params = useParams();
-  const reportId = params.id as string;
+  const rawId = Array.isArray(params?.id) ? params.id[0] : (params?.id as string) || "";
+  const reportId = typeof rawId === "string" ? decodeURIComponent(rawId).trim() : "";
   const toast = useToast();
 
   const [report, setReport] = useState<Report | null>(null);
+
+  // Sibling report sequence for fast "Previous" and "Save & Next" navigation
+  const cachedReports = useMemo(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("lis_cached_reports");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  }, [reportId]);
+
+  const { prevReportId, nextReportId } = useMemo(() => {
+    let prevId: string | null = null;
+    let nextId: string | null = null;
+
+    if (cachedReports.length > 0) {
+      const idx = cachedReports.findIndex(
+        (r: any) => r.id === reportId || r.custom_id === reportId || r.customId === reportId
+      );
+      if (idx > 0) {
+        prevId = cachedReports[idx - 1]?.id || null;
+      }
+      if (idx >= 0 && idx < cachedReports.length - 1) {
+        nextId = cachedReports[idx + 1]?.id || null;
+      }
+    }
+
+    // Fallback to backend sibling pointers
+    if (!prevId) {
+      prevId = report?.prev_id || (report as any)?.prevId || null;
+    }
+    if (!nextId) {
+      nextId = report?.next_id || (report as any)?.nextId || null;
+    }
+
+    return { prevReportId: prevId, nextReportId: nextId };
+  }, [cachedReports, reportId, report]);
   // Ref to always have latest report in async/closure contexts without stale state
   const reportRef = React.useRef<Report | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1777,6 +1822,17 @@ export default function ResultEntryPage() {
       return;
     }
     if (reportId) {
+      setReport(null);
+      reportRef.current = null;
+      setValues({});
+      valuesRef.current = {};
+      setManualOverrides(new Set());
+      setAbnormalOverrides({});
+      setParamRemarks({});
+      setShowParamRemark({});
+      setTestNotes({});
+      setError(null);
+      setSuccess(null);
       fetchReport();
     }
     // Prefetch investigations catalog immediately in the background
@@ -1936,7 +1992,7 @@ export default function ResultEntryPage() {
   const fetchHistory = async (patientId: string) => {
     try {
       setLoadingHistory(true);
-      const data = await fetchFromLaravel("/reports");
+      const data = await fetchFromLaravel(`/reports?patient_id=${encodeURIComponent(patientId)}`);
       const list = Array.isArray(data) ? data : (data?.data || []);
       setHistory(list.filter((r: any) => (r.patientId === patientId || r.patient_id === patientId) && r.id !== reportId));
     } catch (err) {
@@ -2370,7 +2426,7 @@ export default function ResultEntryPage() {
     }
   };
 
-  const handleSaveResults = async (targetStatus?: "PENDING" | "FINAL" | "APPROVED") => {
+  const handleSaveResults = async (targetStatus?: "PENDING" | "FINAL" | "APPROVED", andNext: boolean = false) => {
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -2423,7 +2479,17 @@ export default function ResultEntryPage() {
 
       setSuccess(successMsg);
       toast.success("Success", successMsg);
-      setTimeout(() => { router.push(`/dashboard/reports`); router.refresh(); }, 800);
+
+      if (andNext) {
+        if (nextReportId) {
+          router.push(`/dashboard/reports/${nextReportId}/edit`);
+        } else {
+          toast.success("Queue Finished", "All reports in sequence have been completed.");
+          setTimeout(() => { router.push(`/dashboard/reports`); router.refresh(); }, 500);
+        }
+      } else {
+        setTimeout(() => { router.push(`/dashboard/reports`); router.refresh(); }, 800);
+      }
     } catch (err: any) {
       setError(err.message || "Failed to update results.");
       setSaving(false);
@@ -2757,20 +2823,15 @@ export default function ResultEntryPage() {
         {/* Top Header Bar with Save Results on the Right */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-border/80 pb-4 mb-6">
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 gap-1.5 cursor-pointer shrink-0"
-              onClick={() => {
-                if (typeof window !== "undefined" && window.history.length > 1) {
-                  router.back();
-                } else {
-                  router.push("/dashboard/reports");
-                }
-              }}
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Back
-            </Button>
+            <Link href="/dashboard/reports">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 cursor-pointer shrink-0"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> Back
+              </Button>
+            </Link>
             <div className="min-w-0">
               <h1 className="font-display text-xl sm:text-2xl font-semibold tracking-tight text-foreground truncate">Enter Results</h1>
               <p className="text-[11px] sm:text-xs text-muted-foreground truncate">Enter laboratory parameters, remarks, and clinical findings below.</p>
@@ -2800,7 +2861,7 @@ export default function ResultEntryPage() {
               className="h-10 px-5 gap-2 font-bold shadow-sm cursor-pointer gradient-primary text-primary-foreground hover:-translate-y-px transition-all rounded-xl w-full sm:w-auto"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              <span>{saving ? "Saving…" : "Save Results"}</span>
+              <span>{saving ? "Saving…" : "Save"}</span>
             </Button>
           </div>
         </div>
@@ -3459,13 +3520,33 @@ export default function ResultEntryPage() {
             </div>
           </div>
 
-          {/* Sticky Bottom Action Footer with Cancel, Print, Final, Approve, and Save Buttons */}
+          {/* Sticky Bottom Action Footer with Cancel, Previous, Print, Final, Approve, and Save & Next Buttons */}
           <div className="sticky bottom-0 z-30 mt-auto bg-card/95 backdrop-blur-md border-t border-x border-border/90 rounded-t-2xl rounded-b-none p-3 sm:p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_-8px_20px_rgba(0,0,0,0.3)] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 safe-pb">
-            <Link href="/dashboard/reports" className="w-full sm:w-auto">
-              <Button type="button" variant="outline" disabled={saving} className="cursor-pointer w-full sm:w-auto h-9 sm:h-10 text-xs font-semibold">
-                Cancel
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Link href="/dashboard/reports" className="w-full sm:w-auto">
+                <Button type="button" variant="outline" disabled={saving} className="cursor-pointer w-full sm:w-auto h-9 sm:h-10 text-xs font-semibold">
+                  Cancel
+                </Button>
+              </Link>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (prevReportId) {
+                    router.push(`/dashboard/reports/${prevReportId}/edit`);
+                  } else {
+                    toast.info("Queue", "No previous report found in sequence.");
+                  }
+                }}
+                disabled={saving || !prevReportId}
+                className="cursor-pointer w-full sm:w-auto h-9 sm:h-10 text-xs font-semibold gap-1.5 border-border/90 hover:bg-muted text-foreground transition-all disabled:opacity-40"
+                title={prevReportId ? "Go to previous report" : "No previous report available"}
+              >
+                <ChevronLeft className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
+                <span>Previous</span>
               </Button>
-            </Link>
+            </div>
 
             <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 w-full sm:w-auto justify-end">
               <Button
@@ -3506,12 +3587,13 @@ export default function ResultEntryPage() {
 
               <Button
                 type="button"
-                onClick={() => handleSaveResults()}
+                onClick={() => handleSaveResults(undefined, true)}
                 disabled={saving}
-                className="gradient-primary text-primary-foreground font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs"
+                className="gradient-primary text-primary-foreground font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs hover:opacity-95 transition-opacity"
               >
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
-                <span>{saving ? "Saving…" : "Save"}</span>
+                <span>{saving ? "Saving…" : "Save & Next"}</span>
+                {!saving && <ChevronRight className="h-3.5 sm:h-4 w-3.5 sm:w-4 ml-0.5 opacity-80" />}
               </Button>
             </div>
           </div>

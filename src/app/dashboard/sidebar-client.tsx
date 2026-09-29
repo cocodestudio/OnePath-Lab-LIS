@@ -32,11 +32,12 @@ const navigation: NavItem[] = [
   { name: "Reports", href: "/dashboard/reports", icon: FileText },
   { name: "Billing", href: "/dashboard/billing", icon: Receipt },
   {
-    name: "Doctors",
+    name: "Cases",
     icon: Stethoscope,
     children: [
-      { name: "View", href: "/dashboard/doctors" },
-      { name: "Manage", href: "/dashboard/doctors/manage" },
+      { name: "View Referral", href: "/dashboard/doctors" },
+      { name: "Referral Manage", href: "/dashboard/doctors/manage" },
+      { name: "Outsource Cases", href: "/dashboard/cases/outsource" },
     ],
   },
   {
@@ -208,6 +209,15 @@ export default function Sidebar() {
     { name: "Track Samples", href: "/dashboard/track-samples", icon: Activity },
     { name: "Reports", href: "/dashboard/reports", icon: FileText },
     { name: "Billing", href: "/dashboard/billing", icon: Receipt },
+    {
+      name: "Cases",
+      icon: Stethoscope,
+      children: [
+        { name: "View Referral", href: "/dashboard/doctors" },
+        { name: "Referral Manage", href: "/dashboard/doctors/manage" },
+        { name: "Outsource Cases", href: "/dashboard/cases/outsource" },
+      ],
+    },
     { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
   ];
 

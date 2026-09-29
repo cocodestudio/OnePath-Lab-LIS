@@ -223,7 +223,7 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
 
   const fetchPromise = (async () => {
     const controller = new AbortController();
-    const timeoutMs = options.timeoutMs ?? 15000; // 15s timeout
+    const timeoutMs = options.timeoutMs ?? 30000; // 30s timeout cushion
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     if (options.signal) {

@@ -298,6 +298,38 @@ export default function ReportsListPage() {
   const indexOfFirstRow = indexOfLastRow - rowsPerPage;
   const currentRows = filteredReports.slice(indexOfFirstRow, indexOfLastRow);
 
+  const isAllCurrentPageSelected =
+    currentRows.length > 0 &&
+    currentRows.every((r: any) => selectedIds.includes(r.id));
+
+  const toggleSelectAllCurrentPage = () => {
+    if (isAllCurrentPageSelected) {
+      const pageIdSet = new Set(currentRows.map((r: any) => r.id));
+      setSelectedIds((prev) => prev.filter((id) => !pageIdSet.has(id)));
+    } else {
+      const newSet = new Set(selectedIds);
+      currentRows.forEach((r: any) => newSet.add(r.id));
+      setSelectedIds(Array.from(newSet));
+    }
+  };
+
+  const toggleSelectReport = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleOpenBatchPrint = () => {
+    if (selectedIds.length === 0) return;
+    try {
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("lis_batch_print_ids", JSON.stringify(selectedIds));
+      }
+    } catch {}
+    const url = `/dashboard/reports/batch-print?ids=${selectedIds.join(",")}`;
+    window.open(url, "_blank");
+  };
+
   useEffect(() => { setCurrentPage(1); }, [search, statusFilter, categoryFilter, filterDate]);
 
   const clearFilters = () => { setSearch(""); setStatusFilter("ALL"); setCategoryFilter("ALL"); setFilterDate(""); };
@@ -474,6 +506,57 @@ export default function ReportsListPage() {
         </div>
       </div>
 
+      {/* Bulk Selection Action Bar */}
+      {selectedIds.length > 0 && (
+        <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 sm:px-4 sm:py-3 flex flex-wrap items-center justify-between gap-3 animate-fade-in shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs shadow-xs">
+              {selectedIds.length}
+            </div>
+            <div>
+              <p className="text-xs font-bold text-foreground">
+                {selectedIds.length} {selectedIds.length === 1 ? "Report" : "Reports"} Selected
+              </p>
+              <p className="text-[11px] text-muted-foreground hidden sm:block">
+                Print all selected patient reports together in one continuous printer queue
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {filteredReports.length > currentRows.length && selectedIds.length < filteredReports.length && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedIds(filteredReports.map((r: any) => r.id))}
+                className="h-9 text-xs text-primary hover:text-primary font-semibold cursor-pointer"
+              >
+                Select all {filteredReports.length} reports
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds([])}
+              className="h-9 text-xs text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" /> Clear
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleOpenBatchPrint}
+              className="h-9 px-4 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md gap-2 cursor-pointer hover:opacity-95"
+            >
+              <Printer className="h-4 w-4" />
+              <span>Print Selected Reports ({selectedIds.length})</span>
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-card border border-border/70 rounded-xl shadow-card overflow-hidden">
         <div className="table-responsive-container">
@@ -481,6 +564,9 @@ export default function ReportsListPage() {
             <table className="w-full min-w-[640px] text-left">
               <thead>
                 <tr className="bg-muted/30 border-b border-border/60">
+                  <th className="w-12 px-4 py-3.5 text-center">
+                    <div className="h-4 w-4 rounded bg-muted/60 mx-auto" />
+                  </th>
                   {["Report ID", "Patient", "Received", "Tests", "Status", ""].map((h, i) => (
                     <th key={h + i} className={`px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${i === 2 || i === 3 ? "hidden lg:table-cell" : ""} ${i === 5 ? "text-right" : ""}`}>{h}</th>
                   ))}
@@ -489,6 +575,7 @@ export default function ReportsListPage() {
               <tbody className="divide-y divide-border/30">
                 {Array.from({ length: 7 }).map((_, idx) => (
                   <tr key={idx} className="animate-fade-in">
+                    <td className="w-12 px-4 py-4 text-center"><div className="h-4 w-4 rounded shimmer-gradient mx-auto" /></td>
                     <td className="px-6 py-4"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
                     <td className="px-6 py-4 space-y-1">
                       <div className="h-4 w-32 rounded shimmer-gradient" />
@@ -538,6 +625,13 @@ export default function ReportsListPage() {
             <table className="w-full min-w-[640px] text-left">
               <thead>
                 <tr className="bg-muted/30 border-b border-border/60">
+                  <th className="w-12 px-4 py-3.5 text-center">
+                    <Checkbox
+                      checked={isAllCurrentPageSelected}
+                      onCheckedChange={toggleSelectAllCurrentPage}
+                      aria-label="Select all reports on this page"
+                    />
+                  </th>
                   {["Report ID", "Patient", "Received", "Tests", "Status", ""].map((h, i) => (
                     <th key={h + i} className={`px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${i === 2 || i === 3 ? "hidden lg:table-cell" : ""} ${i === 5 ? "text-right" : ""}`}>{h}</th>
                   ))}
@@ -545,6 +639,7 @@ export default function ReportsListPage() {
               </thead>
               <tbody>
                 {currentRows.map((rep: any) => {
+                  const isSelected = selectedIds.includes(rep.id);
                   const resultsList = Array.isArray(rep.results) ? rep.results : [];
                   const abnormalCount = resultsList.filter((r: any) => r.isAbnormal || r.is_abnormal).length;
                   const patName = rep.patient?.name || "Patient";
@@ -555,7 +650,19 @@ export default function ReportsListPage() {
                   const repDate = rep.created_at || rep.createdAt;
 
                   return (
-                    <tr key={rep.id} className="border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors">
+                    <tr
+                      key={rep.id}
+                      className={`border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors ${
+                        isSelected ? "bg-primary/5 dark:bg-primary/10" : ""
+                      }`}
+                    >
+                      <td className="w-12 px-4 py-4 text-center">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelectReport(rep.id)}
+                          aria-label={`Select report ${repId}`}
+                        />
+                      </td>
                       <td className="px-6 py-4 font-mono text-xs font-semibold text-primary">{repId}</td>
                       <td className="px-6 py-4">
                         <p className="font-semibold text-foreground text-sm">{patName}</p>

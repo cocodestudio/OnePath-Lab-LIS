@@ -377,9 +377,9 @@ export default function DashboardOverviewPage() {
             </div>
             <span className="text-[11px] font-medium px-3 py-1.5 rounded-lg bg-muted/60 text-muted-foreground border border-border/60">Weekly</span>
           </div>
-          <div className="h-56 min-w-0">
+          <div className="h-56 min-w-0 w-full" style={{ minHeight: 224 }}>
             {isMounted && formattedChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+              <ResponsiveContainer width="100%" height={224} minWidth={0} minHeight={0} debounce={50}>
                 <BarChart data={formattedChartData} margin={{ top: 4, right: 0, left: -24, bottom: 0 }}>
                   <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" />
                   <YAxis fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" allowDecimals={false} />

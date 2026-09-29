@@ -237,9 +237,9 @@ export function CollectionCenterOverview({ user }: Props) {
             </span>
           </div>
 
-          <div className="h-[250px] w-full pt-2">
+          <div className="h-[250px] w-full pt-2" style={{ minHeight: 240 }}>
             {isMounted && (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+              <ResponsiveContainer width="100%" height={240} minWidth={0} minHeight={0} debounce={50}>
                 <BarChart data={weeklyIntakeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <XAxis
                     dataKey="day"
@@ -296,7 +296,7 @@ export function CollectionCenterOverview({ user }: Props) {
             <div className="flex flex-col items-center text-center">
               <div className="h-[130px] w-[130px] relative">
                 {isMounted && (
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+                  <ResponsiveContainer width={130} height={130} minWidth={0} minHeight={0} debounce={50}>
                     <PieChart>
                       <Pie
                         data={stagePieData}
@@ -326,7 +326,7 @@ export function CollectionCenterOverview({ user }: Props) {
             <div className="flex flex-col items-center text-center">
               <div className="h-[130px] w-[130px] relative">
                 {isMounted && (
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+                  <ResponsiveContainer width={130} height={130} minWidth={0} minHeight={0} debounce={50}>
                     <PieChart>
                       <Pie
                         data={paymentPieData}

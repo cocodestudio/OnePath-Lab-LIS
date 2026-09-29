@@ -439,9 +439,9 @@ export function B2BOverview({ user }: Props) {
             </span>
           </div>
 
-          <div className="h-44 w-full my-2">
+          <div className="h-44 w-full my-2" style={{ minHeight: 176 }}>
             {isMounted && (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+              <ResponsiveContainer width="100%" height={176} minWidth={0} minHeight={0} debounce={50}>
                 <BarChart data={weeklyIntakeData}>
                   <XAxis dataKey="day" stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
@@ -494,9 +494,9 @@ export function B2BOverview({ user }: Props) {
             </Link>
           </div>
 
-          <div className="h-44 relative my-2">
+          <div className="h-44 relative my-2" style={{ minHeight: 176 }}>
             {isMounted && (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+              <ResponsiveContainer width="100%" height={176} minWidth={0} minHeight={0} debounce={50}>
                 <PieChart>
                   <Pie
                     data={creditDonutData}
@@ -556,9 +556,9 @@ export function B2BOverview({ user }: Props) {
             <p className="text-xs text-muted-foreground">Status of referred test requisitions</p>
           </div>
 
-          <div className="h-44 relative my-2">
+          <div className="h-44 relative my-2" style={{ minHeight: 176 }}>
             {isMounted && (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+              <ResponsiveContainer width="100%" height={176} minWidth={0} minHeight={0} debounce={50}>
                 <PieChart>
                   <Pie
                     data={stagePieData}
