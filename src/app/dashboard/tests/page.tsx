@@ -491,6 +491,8 @@ export default function TestMasterPage() {
 
       return {
         id: `sample-${test.id}`,
+        testId: test.id,
+        mainTestId: test.id,
         customId: `SAMPLE-${test.testCode || "TEST"}`,
         status: "COMPLETED",
         createdAt: new Date().toISOString(),

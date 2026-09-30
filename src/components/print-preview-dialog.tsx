@@ -278,7 +278,8 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
 
     try {
       const firstRes = report.results[0];
-      const mainTestId = firstRes?.test?.parent?.parent?.id || firstRes?.test?.parent?.id || firstRes?.test?.id;
+      const rawTestId = report?.testId || report?.mainTestId || firstRes?.test?.parent?.parent?.id || firstRes?.test?.parent?.id || firstRes?.test?.id || report?.id;
+      const cleanTestId = String(rawTestId || "").replace(/^sample-/, '');
 
       // Flatten blocks into parameter payload
       const parametersPayload: any[] = [];
@@ -317,8 +318,8 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
         }
       });
 
-      if (mainTestId && !String(mainTestId).startsWith("sample-")) {
-        await fetchFromLaravel(`/tests/${mainTestId}/report-layout`, {
+      if (cleanTestId && cleanTestId !== "preview-temp-id" && cleanTestId !== "undefined") {
+        await fetchFromLaravel(`/tests/${cleanTestId}/report-layout`, {
           method: "POST",
           body: JSON.stringify({
             parameters: parametersPayload,
@@ -343,17 +344,34 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
   const activeReport = useMemo(() => {
     if (!report) return null;
 
-    // Flatten blocksList into results array in exact sequential order
+    // Flatten blocksList into results array in exact sequential order with updated sort_order
     const orderedResults: ReportTest[] = [];
+    let currentSeq = 1;
     blocksList.forEach(block => {
       if (hiddenBlockIds.includes(block.id)) return;
-      block.items.forEach(item => {
+      const groupSeq = currentSeq++;
+      block.items.forEach((item, itemIdx) => {
         let n = item.test.name;
         if (item.test.parent?.parent) n = item.test.parent.parent.name;
         else if (item.test.parent) n = item.test.parent.name;
 
         if (!excludedMainTests.includes(n)) {
-          orderedResults.push(item);
+          const itemSeq = block.isGroup ? (groupSeq * 100 + itemIdx + 1) : currentSeq++;
+          orderedResults.push({
+            ...item,
+            test: {
+              ...item.test,
+              sort_order: itemSeq,
+              sortOrder: itemSeq,
+              ...(item.test.parent ? {
+                parent: {
+                  ...item.test.parent,
+                  sort_order: groupSeq,
+                  sortOrder: groupSeq,
+                }
+              } : {})
+            }
+          });
         }
       });
     });

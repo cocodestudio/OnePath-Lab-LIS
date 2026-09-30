@@ -2761,7 +2761,7 @@ export default function ResultEntryPage() {
               if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;
               if (orderA !== 0 && orderB === 0) return -1;
               if (orderA === 0 && orderB !== 0) return 1;
-              return compareClinicalParameters(a.test.name, b.test.name);
+              return 0;
             }),
           }))
           .sort((secA, secB) => {

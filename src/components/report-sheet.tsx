@@ -99,6 +99,8 @@ export interface ReportSheetData {
   package_name?: string | null;
   healthPackage?: { id?: string | number; name?: string } | null;
   health_package?: { id?: string | number; name?: string } | null;
+  testId?: string | number;
+  mainTestId?: string | number;
 }
 
 export const A4_W = 794;
@@ -959,47 +961,47 @@ export function buildReportBlocks(
 
         // Group and order items/subgroups sequentially
         type RenderUnit = 
-          | { type: "item"; item: ReportTest; sortOrder: number }
-          | { type: "subgroup"; title: string; items: ReportTest[]; sortOrder: number };
+          | { type: "item"; item: ReportTest; sortOrder: number; arrayIndex: number }
+          | { type: "subgroup"; title: string; items: ReportTest[]; sortOrder: number; arrayIndex: number };
 
         const renderUnits: RenderUnit[] = [];
-        const subGroupMap: Record<string, { items: ReportTest[]; sortOrder: number }> = {};
+        const subGroupMap: Record<string, { items: ReportTest[]; sortOrder: number; arrayIndex: number }> = {};
 
-        itemsList.forEach((item) => {
+        itemsList.forEach((item, arrIdx) => {
           if (item.test.parent && item.test.parent.parent && item.test.parent.name !== mainTestName) {
             const subName = item.test.parent.name;
-            const parentOrder = item.test.parent.sort_order ?? (item.test.parent as any)?.sortOrder ?? item.test.sort_order ?? 0;
+            const parentOrder = item.test.parent.sort_order ?? (item.test.parent as any)?.sortOrder ?? (arrIdx + 1);
             if (!subGroupMap[subName]) {
-              subGroupMap[subName] = { items: [], sortOrder: parentOrder };
+              subGroupMap[subName] = { items: [], sortOrder: parentOrder, arrayIndex: arrIdx };
             }
             subGroupMap[subName].items.push(item);
           } else {
-            const itemOrder = item.test.sort_order ?? (item.test as any)?.sortOrder ?? 0;
-            renderUnits.push({ type: "item", item, sortOrder: itemOrder });
+            const itemOrder = item.test.sort_order ?? (item.test as any)?.sortOrder ?? (arrIdx + 1);
+            renderUnits.push({ type: "item", item, sortOrder: itemOrder, arrayIndex: arrIdx });
           }
         });
 
         // Add subgroups to renderUnits
         Object.entries(subGroupMap).forEach(([subName, data]) => {
-          // Sort items within subgroup
+          // Sort items within subgroup by sort_order
           data.items.sort((a, b) => {
-            return compareClinicalParameters(a, b);
+            const ordA = a.test.sort_order ?? (a.test as any)?.sortOrder ?? 0;
+            const ordB = b.test.sort_order ?? (b.test as any)?.sortOrder ?? 0;
+            if (ordA !== ordB && ordA !== 0 && ordB !== 0) return ordA - ordB;
+            return 0;
           });
           const minOrder = data.items[0]?.test.sort_order ?? data.sortOrder;
-          renderUnits.push({ type: "subgroup", title: subName, items: data.items, sortOrder: minOrder || data.sortOrder });
+          renderUnits.push({ type: "subgroup", title: subName, items: data.items, sortOrder: minOrder || data.sortOrder, arrayIndex: data.arrayIndex });
         });
 
-        // Sort all render units by sortOrder and clinical parameter order
+        // Sort all render units by sortOrder; if equal/0, maintain their exact arrayIndex order!
         renderUnits.sort((a, b) => {
           if (a.sortOrder !== b.sortOrder && a.sortOrder !== 0 && b.sortOrder !== 0) {
             return a.sortOrder - b.sortOrder;
           }
-          if (a.type === "item" && b.type === "item") {
-            return compareClinicalParameters(a.item, b.item);
-          }
           if (a.sortOrder !== 0 && b.sortOrder === 0) return -1;
           if (a.sortOrder === 0 && b.sortOrder !== 0) return 1;
-          return 0;
+          return a.arrayIndex - b.arrayIndex;
         });
 
         const vAlign = (typo.rowAlignment as string) === "Top" ? "top" : "middle";
