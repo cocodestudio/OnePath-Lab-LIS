@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useReactToPrint } from "react-to-print";
 import { Button } from "@/components/ui/button";
@@ -82,6 +82,7 @@ export default function ReportsListPage() {
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filterDate, setFilterDate] = useState(() => getTodayStr());
+  const [sortOrder, setSortOrder] = useState<"oldest" | "recent">("oldest");
 
   const isB2B = currentUser?.role === "B2B";
   const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER";
@@ -145,7 +146,7 @@ export default function ReportsListPage() {
       if (isForce && reports.length === 0) {
         setLoading(true);
       }
-      const data = await fetchFromLaravel("/reports", { skipCache: isForce });
+      const data = await fetchFromLaravel(`/reports?limit=250&sort=${sortOrder}`, { skipCache: isForce });
       if (data?.is_outstanding_locked) {
         setOutstandingLock({
           isLocked: true,
@@ -311,11 +312,32 @@ export default function ReportsListPage() {
     return matchesSearch && matchesStatus && matchesCategory && matchesDate;
   });
 
-  const totalRows = filteredReports.length;
+  const sortedReports = useMemo(() => {
+    return [...filteredReports].sort((a: any, b: any) => {
+      const dateA = a.created_at || a.createdAt || "";
+      const dateB = b.created_at || b.createdAt || "";
+      const timeA = dateA ? new Date(dateA).getTime() : 0;
+      const timeB = dateB ? new Date(dateB).getTime() : 0;
+
+      if (timeA !== timeB && !isNaN(timeA) && !isNaN(timeB)) {
+        return sortOrder === "oldest" ? timeA - timeB : timeB - timeA;
+      }
+
+      const idA = Number(a.id) || 0;
+      const idB = Number(b.id) || 0;
+      if (idA !== idB) {
+        return sortOrder === "oldest" ? idA - idB : idB - idA;
+      }
+
+      return 0;
+    });
+  }, [filteredReports, sortOrder]);
+
+  const totalRows = sortedReports.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
   const indexOfLastRow = currentPage * rowsPerPage;
   const indexOfFirstRow = indexOfLastRow - rowsPerPage;
-  const currentRows = filteredReports.slice(indexOfFirstRow, indexOfLastRow);
+  const currentRows = sortedReports.slice(indexOfFirstRow, indexOfLastRow);
 
   const isAllCurrentPageSelected =
     currentRows.length > 0 &&
@@ -349,10 +371,10 @@ export default function ReportsListPage() {
     window.open(url, "_blank");
   };
 
-  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, categoryFilter, filterDate]);
+  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, categoryFilter, filterDate, sortOrder]);
 
-  const clearFilters = () => { setSearch(""); setStatusFilter("ALL"); setCategoryFilter("ALL"); setFilterDate(""); };
-  const hasFilters = search || statusFilter !== "ALL" || categoryFilter !== "ALL" || filterDate;
+  const clearFilters = () => { setSearch(""); setStatusFilter("ALL"); setCategoryFilter("ALL"); setFilterDate(""); setSortOrder("oldest"); };
+  const hasFilters = search || statusFilter !== "ALL" || categoryFilter !== "ALL" || filterDate || sortOrder !== "oldest";
 
   const selectClass = "w-full h-10 bg-background border border-border rounded-lg px-3 text-sm focus:border-primary/60 focus:ring-2 focus:ring-primary/20 outline-none transition-all";
 
@@ -515,6 +537,18 @@ export default function ReportsListPage() {
             </select>
           </div>
 
+          <div className="space-y-1.5 w-full sm:w-[160px]">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sort By</label>
+            <select 
+              className={selectClass} 
+              value={sortOrder} 
+              onChange={(e) => setSortOrder(e.target.value as "oldest" | "recent")}
+            >
+              <option value="oldest">Oldest First</option>
+              <option value="recent">Recent First</option>
+            </select>
+          </div>
+
           {hasFilters && (
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Button onClick={clearFilters} variant="outline" className="h-10 text-xs gap-1.5">
@@ -543,15 +577,15 @@ export default function ReportsListPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {filteredReports.length > currentRows.length && selectedIds.length < filteredReports.length && (
+            {sortedReports.length > currentRows.length && selectedIds.length < sortedReports.length && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setSelectedIds(filteredReports.map((r: any) => r.id))}
+                onClick={() => setSelectedIds(sortedReports.map((r: any) => r.id))}
                 className="h-9 text-xs text-primary hover:text-primary font-semibold cursor-pointer"
               >
-                Select all {filteredReports.length} reports
+                Select all {sortedReports.length} reports
               </Button>
             )}
             <Button
@@ -608,7 +642,7 @@ export default function ReportsListPage() {
                 ))}
               </tbody>
             </table>
-          ) : filteredReports.length === 0 ? (
+          ) : sortedReports.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2 px-4 text-center">
               <Filter className="h-10 w-10 opacity-25 mb-1" />
               {filterDate && safeReports.length > 0 ? (
