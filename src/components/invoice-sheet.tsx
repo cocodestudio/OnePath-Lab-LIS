@@ -221,12 +221,10 @@ export const InvoiceSheet = React.forwardRef<
     const map = new Map<string, { mainTest: any; subTests: any[] }>();
     (invoice.tests || []).forEach(test => {
       let mainTest = test;
-      if (test.parent) {
-        if (test.parent.parent) {
-          mainTest = test.parent.parent;
-        } else {
-          mainTest = test.parent;
-        }
+      let depth = 0;
+      while (mainTest && mainTest.parent && depth < 10) {
+        depth++;
+        mainTest = mainTest.parent;
       }
       
       const key = mainTest.id || mainTest.name;
@@ -234,12 +232,14 @@ export const InvoiceSheet = React.forwardRef<
         map.set(key, { mainTest, subTests: [] });
       }
       
-      if (test.id !== mainTest.id && test.name !== "Report Template") {
+      // Only include sub-tests if this is an explicit health package booking, never for regular diagnostic tests/parameters like CBC
+      const isExplicitPackage = Boolean(invoice.packageName || (mainTest as any).isPackage || (mainTest as any).is_package);
+      if (isExplicitPackage && test.id !== mainTest.id && test.name !== "Report Template") {
         map.get(key)!.subTests.push(test);
       }
     });
     return Array.from(map.values());
-  }, [invoice.tests]);
+  }, [invoice.tests, invoice.packageName]);
 
   const billDateStr = (() => {
     try {
@@ -528,7 +528,7 @@ export const InvoiceSheet = React.forwardRef<
                 <tbody className="divide-y divide-zinc-200 text-[11px]">
                   {groupedTests.map((group, idx) => {
                     const testObj = group.mainTest;
-                    const hasSub = billSettings.showPackageTests && group.subTests.length > 0;
+                    const hasSub = Boolean(billSettings.showPackageTests && invoice.packageName && group.subTests.length > 0);
                     const sampleTypeLabel = resolveSampleType(testObj);
                     const rowBarcode = String((testObj as any).barcode || (testObj as any).vialBarcode || rawVial || "").trim();
 

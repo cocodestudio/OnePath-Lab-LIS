@@ -466,8 +466,31 @@ export function buildReportBlocks(
   const endConf = reportSettings.endingLine;
 
   const isDeptGroupingEnabled = !!reportSettings.groupByDepartment;
+  const isSampleOrTemplate = Boolean(
+    report.id?.startsWith?.("sample-") ||
+    report.id === "sample-report" ||
+    report.id?.startsWith?.("dummy-")
+  );
+
+  const isBlankValue = (val: any) => {
+    if (val === 0 || val === "0") return false;
+    if (val === null || val === undefined) return true;
+    const s = String(val).trim();
+    if (s === "" || s === "—" || s === "-") return true;
+    if (s === "<p></p>" || s === "<p><br></p>" || s === "<p><br/></p>") return true;
+    return false;
+  };
+
+  // Only include parameters with entered results (blank ones are hidden from the final report)
+  const activeResults = (report.results || []).filter((item) => {
+    if (!item || !item.test) return false;
+    if (isSampleOrTemplate) return true;
+    const val = item.resultValue ?? (item as any).result_value;
+    return !isBlankValue(val);
+  });
+
   const groupedTests: Record<string, Record<string, ReportTest[]>> = {};
-  (report.results || []).forEach((item) => {
+  activeResults.forEach((item) => {
     let cat = item.test.category || "General Pathology";
     if (isDeptGroupingEnabled) {
       let rootTest: any = item.test;
@@ -593,7 +616,7 @@ export function buildReportBlocks(
     return { flag: null, label: "", color: "#000000" };
   };
 
-  if (!report.results || report.results.length === 0) {
+  if (!activeResults || activeResults.length === 0) {
     blocks.push({
       key: "pending-status-block",
       node: (

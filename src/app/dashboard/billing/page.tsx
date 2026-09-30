@@ -92,10 +92,12 @@ function getMainBillItems(
             let testObj = (res.test.id && allTestsMap?.get(res.test.id)) || res.test;
 
             // Climb up parent hierarchy until top-level main panel is reached
-            while (testObj) {
+            let depth = 0;
+            while (testObj && depth < 10) {
+              depth++;
               const parentId = testObj.parentId || testObj.parent_id || testObj.parent?.id;
-              if (!parentId) break;
-              const parentObj = allTestsMap?.get(parentId) || testObj.parent;
+              if (!parentId && !testObj.parent) break;
+              const parentObj = (parentId && allTestsMap?.get(parentId)) || testObj.parent;
               if (!parentObj) break;
               testObj = parentObj;
             }
@@ -334,12 +336,7 @@ export default function BillingPage() {
     } catch {}
 
     fetchBills();
-
-    // High performance optimization: Only fetch tests catalog if missing from cache!
-    const hasCachedTests = typeof window !== "undefined" && !!localStorage.getItem("lis_cached_tests");
-    if (!hasCachedTests) {
-      fetchAvailableTests();
-    }
+    fetchAvailableTests();
 
     try {
       setAvailablePackages(getStoredPackages());

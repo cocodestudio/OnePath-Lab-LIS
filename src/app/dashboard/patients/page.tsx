@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -481,7 +481,7 @@ const getTodayStr = () => {
       if (isForce && patients.length === 0) {
         setLoading(true);
       }
-      const data = await fetchFromLaravel("/patients", { skipCache: isForce });
+      const data = await fetchFromLaravel("/patients?per_page=150&order=asc", { skipCache: isForce });
       const list = Array.isArray(data) ? data : (data?.data || []);
       setPatients(list);
       try {
@@ -629,11 +629,20 @@ const getTodayStr = () => {
     }
   };
 
-  const totalRows = filteredPatients.length;
+  const sortedFilteredPatients = useMemo(() => {
+    return [...filteredPatients].sort((a: any, b: any) => {
+      const timeA = new Date(a.created_at || a.createdAt || 0).getTime();
+      const timeB = new Date(b.created_at || b.createdAt || 0).getTime();
+      if (timeA !== timeB) return timeA - timeB; // Ascending: first registered patient shows first
+      return String(a.id || "").localeCompare(String(b.id || ""));
+    });
+  }, [filteredPatients]);
+
+  const totalRows = sortedFilteredPatients.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
   const indexOfLastRow = currentPage * rowsPerPage;
   const indexOfFirstRow = indexOfLastRow - rowsPerPage;
-  const currentRows = filteredPatients.slice(indexOfFirstRow, indexOfLastRow);
+  const currentRows = sortedFilteredPatients.slice(indexOfFirstRow, indexOfLastRow);
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -807,7 +816,7 @@ const getTodayStr = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {currentRows.map((patient) => {
+                {currentRows.map((patient: any) => {
                   const patId = patient.custom_id || patient.customId || "N/A";
                   const patName = patient.name;
                   const patGender = patient.gender || "Male";

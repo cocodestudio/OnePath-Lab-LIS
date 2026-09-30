@@ -1456,7 +1456,7 @@ function computeAutomatedFormulas(
 // Global memory cache so investigations load instantly on browse
 let globalAvailableTestsCache: Test[] | null = null;
 
-export default function ResultEntryPage() {
+function ResultEntryContent() {
   const router = useRouter();
   const params = useParams();
   const rawId = Array.isArray(params?.id) ? params.id[0] : (params?.id as string) || "";
@@ -2683,7 +2683,7 @@ export default function ResultEntryPage() {
 
   // Hierarchy grouping & ordering
   const mainGroups = useMemo(() => {
-    if (!report || !report.results) return [];
+    if (!report || !report.results || !Array.isArray(report.results)) return [];
 
     const map = new Map<string, {
       mainTestName: string;
@@ -2695,20 +2695,22 @@ export default function ResultEntryPage() {
     const seenParamKeys = new Set<string>();
 
     // Prioritize results that already have entered values
-    const sortedResults = [...report.results].sort((a, b) => {
-      const hasValA = Boolean((values[a.id] || a.result_value || '').trim());
-      const hasValB = Boolean((values[b.id] || b.result_value || '').trim());
+    const sortedResults = [...report.results].filter(Boolean).sort((a, b) => {
+      const hasValA = Boolean((values[a?.id] || a?.result_value || '').trim());
+      const hasValB = Boolean((values[b?.id] || b?.result_value || '').trim());
       if (hasValA && !hasValB) return -1;
       if (!hasValA && hasValB) return 1;
       return 0;
     });
 
     sortedResults.forEach((item) => {
+      if (!item) return;
       const t = item.test;
       if (!t) return;
       const mt = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
-      const mtId = mt.id;
-      const mtName = mt.name;
+      if (!mt) return;
+      const mtId = mt.id || t.id || `test-${item.id}`;
+      const mtName = mt.name || t.name || "Diagnostic Panel";
 
       // Defensive parameter deduplication by mainTestId + section + normalized name
       const parentKeyId = t.parent_id || t.parentId || t.parent?.id || 'root';
@@ -2736,8 +2738,8 @@ export default function ResultEntryPage() {
       let sectionName = "_default";
       let parentOrder = 0;
       if (t.parent && t.parent.id !== mt.id) {
-        sectionName = t.parent.name;
-        parentOrder = t.parent.sort_order ?? (t.parent as any).sortOrder ?? 0;
+        sectionName = t.parent.name || "Parameters";
+        parentOrder = t.parent.sort_order ?? (t.parent as any)?.sortOrder ?? 0;
       }
 
       if (!group.sectionsMap.has(sectionName)) {
@@ -2756,12 +2758,12 @@ export default function ResultEntryPage() {
             sectionName: secName,
             parentOrder: secData.parentOrder,
             items: secData.items.slice().sort((a, b) => {
-              const orderA = a.test.sort_order ?? (a.test as any).sortOrder ?? 0;
-              const orderB = b.test.sort_order ?? (b.test as any).sortOrder ?? 0;
+              const orderA = a?.test?.sort_order ?? (a?.test as any)?.sortOrder ?? 0;
+              const orderB = b?.test?.sort_order ?? (b?.test as any)?.sortOrder ?? 0;
               if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;
               if (orderA !== 0 && orderB === 0) return -1;
               if (orderA === 0 && orderB !== 0) return 1;
-              return 0;
+              return (a?.test?.name || "").localeCompare(b?.test?.name || "");
             }),
           }))
           .sort((secA, secB) => {
@@ -2774,15 +2776,15 @@ export default function ResultEntryPage() {
             if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;
             if (secA.sectionName === "_default") return -1;
             if (secB.sectionName === "_default") return 1;
-            return 0;
+            return (secA.sectionName || "").localeCompare(secB.sectionName || "");
           }),
       }))
       .sort((a, b) => {
-        const catA = a.sections[0]?.items[0]?.test?.category;
-        const catB = b.sections[0]?.items[0]?.test?.category;
+        const catA = a.sections?.[0]?.items?.[0]?.test?.category;
+        const catB = b.sections?.[0]?.items?.[0]?.test?.category;
         return compareClinicalTests(
-          { name: a.mainTestName, category: catA },
-          { name: b.mainTestName, category: catB }
+          { name: a.mainTestName || "", category: catA },
+          { name: b.mainTestName || "", category: catB }
         );
       });
   }, [report]);
@@ -2994,10 +2996,10 @@ export default function ResultEntryPage() {
             <div className="space-y-6">
               {mainGroups.map((group) => {
                 const allCustomEditor = group.sections.every(sec =>
-                  sec.items.every(item => (item.test.fieldType || item.test.field_type) === "Custom Editor")
+                  sec.items.every(item => (item.test?.fieldType || item.test?.field_type) === "Custom Editor")
                 );
                 const hasAnyNumeric = group.sections.some(sec =>
-                  sec.items.some(item => (item.test.fieldType || item.test.field_type) !== "Custom Editor" && (item.test.valueType || item.test.value_type) !== "Custom")
+                  sec.items.some(item => (item.test?.fieldType || item.test?.field_type) !== "Custom Editor" && (item.test?.valueType || item.test?.value_type) !== "Custom")
                 );
                 const currentTestMeta = testNotes[group.mainTestId] || {};
 
@@ -3054,10 +3056,10 @@ export default function ResultEntryPage() {
                         <tbody>
                           {group.sections.map((section) => {
                             const isDlcSection =
-                              (/differential.*leukocyte/i.test(section.sectionName) && !/absolute/i.test(section.sectionName)) ||
+                              (/differential.*leukocyte/i.test(section.sectionName || "") && !/absolute/i.test(section.sectionName || "")) ||
                               (section.items.length >= 3 &&
-                                section.items.some(it => /neutrophil|polymorph/i.test(it.test.name) && !/absolute/i.test(it.test.name)) &&
-                                section.items.some(it => /lymphocyte/i.test(it.test.name) && !/absolute/i.test(it.test.name)));
+                                section.items.some(it => /neutrophil|polymorph/i.test(it.test?.name || "") && !/absolute/i.test(it.test?.name || "")) &&
+                                section.items.some(it => /lymphocyte/i.test(it.test?.name || "") && !/absolute/i.test(it.test?.name || "")));
 
                             let dlcSum = 0;
                             let dlcFilledCount = 0;
@@ -3065,11 +3067,11 @@ export default function ResultEntryPage() {
 
                             if (isDlcSection) {
                               section.items.forEach(item => {
-                                const tName = (item.test.name || "").toLowerCase();
+                                const tName = (item.test?.name || "").toLowerCase();
                                 if (
                                   (tName.includes("neutrophil") || tName.includes("polymorph") || tName.includes("lymphocyte") ||
                                     tName.includes("eosinophil") || tName.includes("monocyte") || tName.includes("basophil")) &&
-                                  !tName.includes("absolute") && (item.test.unit === "%" || !item.test.unit || item.test.unit === "")
+                                  !tName.includes("absolute") && (item.test?.unit === "%" || !item.test?.unit || item.test?.unit === "")
                                 ) {
                                   hasDlcParams = true;
                                   const v = parseFloat((values[item.id] ?? "").toString().trim());
@@ -3095,6 +3097,7 @@ export default function ResultEntryPage() {
                                 )}
 
                                 {section.items.map((item) => {
+                                  if (!item || !item.test) return null;
                                   const val = values[item.id] || "";
                                   const { abnormal, flag } = isValueAbnormal(item.test, val);
                                   const isForcedAbnormal = !!abnormalOverrides[item.id];
@@ -3103,7 +3106,9 @@ export default function ResultEntryPage() {
                                   const isCalculated = calculatedParamIds.has(item.id) || (canAutoCalc && isParamFormulaCalculated(item.test));
                                   const isTextType = (item.test.valueType || item.test.value_type) === "Text";
                                   const isTextRange = (item.test.rangeType || item.test.range_type) === "TEXT" || !!(item.test.textRefRange || item.test.text_ref_range);
-                                  const range = getRefRange(item.test, report.patient.gender, report.patient.age);
+                                  const patGender = report?.patient?.gender || "both";
+                                  const patAge = report?.patient?.age ?? 25;
+                                  const range = getRefRange(item.test, patGender, patAge);
                                   const refRangeText = isTextRange ? (item.test.textRefRange || item.test.text_ref_range || "—") : formatRefRangeText(range);
                                   const hasActiveRemark = showParamRemark[item.id] || !!paramRemarks[item.id];
 
@@ -4543,3 +4548,61 @@ export default function ResultEntryPage() {
     </div>
   );
 }
+
+class ReportErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("Report Edit caught client-side exception:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center space-y-4">
+          <div className="h-14 w-14 rounded-full bg-amber-500/10 text-amber-600 flex items-center justify-center">
+            <AlertCircle className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">Error Loading Report Results</h2>
+          <p className="text-sm text-muted-foreground max-w-md">
+            A temporary issue occurred while rendering the test parameters. Your previous inputs have been saved safely.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-lg text-sm shadow hover:bg-primary/90 transition-all cursor-pointer"
+            >
+              Reload Page
+            </button>
+            <a
+              href="/dashboard/reports"
+              className="px-4 py-2 border border-border bg-card text-foreground font-semibold rounded-lg text-sm hover:bg-muted transition-all"
+            >
+              Back to Reports
+            </a>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function ResultEntryPage() {
+  return (
+    <ReportErrorBoundary>
+      <ResultEntryContent />
+    </ReportErrorBoundary>
+  );
+}
+
