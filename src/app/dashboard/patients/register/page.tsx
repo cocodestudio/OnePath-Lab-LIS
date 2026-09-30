@@ -532,8 +532,6 @@ function RegisterPatientPage() {
 
   // Packages & Catalog Mode
   const [catalogMode, setCatalogMode] = useState<"TESTS" | "PACKAGES">("TESTS");
-  const [testCatalogTab, setTestCatalogTab] = useState<"IN_HOUSE" | "OUTSOURCE" | "PACKAGES">("IN_HOUSE");
-  const [outsourcedTestIds, setOutsourcedTestIds] = useState<string[]>([]);
   const [availablePackages, setAvailablePackages] = useState<LabPackage[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<LabPackage | null>(null);
 
@@ -1610,22 +1608,10 @@ function RegisterPatientPage() {
   };
 
   const handleToggleTest = (testId: string) => {
-    if (testCatalogTab === "OUTSOURCE") {
-      if (outsourcedTestIds.includes(testId)) {
-        setOutsourcedTestIds((prev) => prev.filter((id) => id !== testId));
-        setSelectedTests((prev) => prev.filter((id) => id !== testId));
-      } else {
-        setOutsourcedTestIds((prev) => [...prev, testId]);
-        setSelectedTests((prev) => (prev.includes(testId) ? prev : [...prev, testId]));
-      }
+    if (selectedTests.includes(testId)) {
+      setSelectedTests((prev) => prev.filter((id) => id !== testId));
     } else {
-      if (selectedTests.includes(testId)) {
-        setSelectedTests((prev) => prev.filter((id) => id !== testId));
-        setOutsourcedTestIds((prev) => prev.filter((id) => id !== testId));
-      } else {
-        setSelectedTests((prev) => [...prev, testId]);
-        setOutsourcedTestIds((prev) => prev.filter((id) => id !== testId));
-      }
+      setSelectedTests((prev) => [...prev, testId]);
     }
   };
 
@@ -1706,11 +1692,6 @@ function RegisterPatientPage() {
       let assignedBillCustomId = "INV-CONFIRMED";
       const currentBillId = existingBill?.id || existingReport?.bill?.id || existingReport?.bill_id;
 
-      // Separate in-house tests from outsourced tests
-      // Critical requirement: outsourced tests MUST NOT show up in in-house Enter Result!
-      const inHouseTestIds = validTestIds.filter(id => !outsourcedTestIds.includes(id));
-      const outsourceTestObjects = selectedTestObjects.filter(t => outsourcedTestIds.includes(t.id));
-
       if (isEditMode && (currentBillId || existingReport?.id)) {
         if (currentBillId) {
           try {
@@ -1752,7 +1733,7 @@ function RegisterPatientPage() {
           method: "POST",
           body: JSON.stringify({
             patientId: newPatient.id,
-            testIds: inHouseTestIds, // Excludes outsourced tests so they do NOT appear in enter result!
+            testIds: validTestIds,
             total: grandTotal,
             discount: computedDiscount,
             paidAmount: computedPaid,
@@ -1784,32 +1765,9 @@ function RegisterPatientPage() {
                 ...(newPatient.meta || {}),
                 vial_barcode: joinedBarcodes,
                 vial_barcodes: activeVialBarcodes,
-                has_outsource: outsourcedTestIds.length > 0,
-                outsource_tests: outsourceTestObjects.map(t => ({
-                  id: t.id,
-                  name: t.name,
-                  category: t.category,
-                  price: Number(t.price) || 0,
-                })),
               },
             }),
           });
-
-          // Also record into dedicated outsource cases endpoint if any test is outsourced
-          if (outsourcedTestIds.length > 0) {
-            fetchFromLaravel("/outsource-cases", {
-              method: "POST",
-              body: JSON.stringify({
-                patient_id: newPatient.id,
-                tests: outsourceTestObjects.map(t => ({
-                  id: t.id,
-                  name: t.name,
-                  category: t.category,
-                  price: Number(t.price) || 0,
-                })),
-              }),
-            }).catch(() => null);
-          }
 
           setNewPatient((prev: any) => prev ? {
             ...prev,
@@ -1819,17 +1777,10 @@ function RegisterPatientPage() {
               ...(prev.meta || {}),
               vial_barcode: joinedBarcodes,
               vial_barcodes: activeVialBarcodes,
-              has_outsource: outsourcedTestIds.length > 0,
-              outsource_tests: outsourceTestObjects.map(t => ({
-                id: t.id,
-                name: t.name,
-                category: t.category,
-                price: Number(t.price) || 0,
-              })),
             },
           } : prev);
         } catch (e) {
-          console.error("Error updating patient vial barcodes and outsource meta:", e);
+          console.error("Error updating patient vial barcodes:", e);
         }
       }
 
@@ -1897,8 +1848,6 @@ function RegisterPatientPage() {
   const handleResetFlow = () => {
     setSelectedPackage(null);
     setCatalogMode("TESTS");
-    setTestCatalogTab("IN_HOUSE");
-    setOutsourcedTestIds([]);
     setDesignation("Mr.");
     setFirstName("");
     setLastName("");
@@ -4076,58 +4025,31 @@ function RegisterPatientPage() {
               </div>
             </div>
 
-            {/* Top Navigation Tabs: In-House Tests vs Outsource Lab vs Packages */}
+            {/* Top Navigation Tabs: Diagnostic Tests vs Packages */}
             <div className="flex items-center gap-1.5 p-1 bg-muted/70 rounded-xl border border-border/80">
               <button
                 type="button"
-                onClick={() => {
-                  setTestCatalogTab("IN_HOUSE");
-                  setCatalogMode("TESTS");
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
-                  testCatalogTab === "IN_HOUSE"
+                onClick={() => setCatalogMode("TESTS")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                  catalogMode === "TESTS"
                     ? "bg-background text-foreground shadow-xs ring-1 ring-border"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <FlaskConical className="h-3.5 w-3.5 text-primary" />
-                <span>In-House Tests</span>
-                {selectedTestObjects.filter(t => !outsourcedTestIds.includes(t.id)).length > 0 && (
+                <span>Diagnostic Tests</span>
+                {selectedTestObjects.length > 0 && (
                   <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-primary text-primary-foreground font-mono">
-                    {selectedTestObjects.filter(t => !outsourcedTestIds.includes(t.id)).length}
+                    {selectedTestObjects.length}
                   </span>
                 )}
               </button>
 
               <button
                 type="button"
-                onClick={() => {
-                  setTestCatalogTab("OUTSOURCE");
-                  setCatalogMode("TESTS");
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
-                  testCatalogTab === "OUTSOURCE"
-                    ? "bg-purple-600 text-white shadow-xs"
-                    : "text-muted-foreground hover:text-purple-600 dark:hover:text-purple-400"
-                }`}
-              >
-                <Building2 className="h-3.5 w-3.5" />
-                <span>Outsource Lab</span>
-                {outsourcedTestIds.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-white text-purple-700 font-mono font-black">
-                    {outsourcedTestIds.length}
-                  </span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setTestCatalogTab("PACKAGES");
-                  setCatalogMode("PACKAGES");
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
-                  testCatalogTab === "PACKAGES"
+                onClick={() => setCatalogMode("PACKAGES")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                  catalogMode === "PACKAGES"
                     ? "bg-background text-foreground shadow-xs ring-1 ring-border"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -4145,26 +4067,15 @@ function RegisterPatientPage() {
             </div>
           )}
 
-          {/* Search Bar & Outsource Mode Indicator Banner */}
+          {/* Search Bar */}
           <div className="p-4 border-b border-border/80 shrink-0 space-y-2.5 bg-card/60">
-            {testCatalogTab === "OUTSOURCE" && (
-              <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-purple-500/10 border border-purple-500/25 text-purple-700 dark:text-purple-300 text-xs font-medium animate-fade-in">
-                <Building2 className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400" />
-                <p className="flex-1">
-                  <strong>Outsource Mode Active:</strong> Selected tests below will be sent to external partner lab and billed to the patient. These tests bypass in-house Result Entry and appear under <strong>Cases &gt; Outsource Cases</strong>.
-                </p>
-              </div>
-            )}
-
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 className="w-full pl-10 pr-4 py-2 bg-background border border-border/90 rounded-xl text-xs placeholder:text-muted-foreground/60 focus:border-primary outline-none text-foreground font-medium shadow-2xs"
                 placeholder={
                   catalogMode === "TESTS"
-                    ? testCatalogTab === "OUTSOURCE"
-                      ? "Search tests to outsource (e.g. Vitamin D, Thyroid, Culture & Sensitivity, Lipid)…"
-                      : "Search test name or code (e.g. CBC, LFT, KFT, Glucose)…"
+                    ? "Search test name or code (e.g. CBC, LFT, KFT, Glucose)…"
                     : "Search diagnostic package name or code (e.g. Full Body, Cardiac)…"
                 }
                 value={testSearch}
@@ -4307,16 +4218,13 @@ function RegisterPatientPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {tests.map((test) => {
                       const selected = selectedTests.includes(test.id);
-                      const isOutsourced = outsourcedTestIds.includes(test.id);
                       const paramCount = test.subTests?.reduce((acc: number, st: any) => acc + (st.subTests && st.subTests.length > 0 ? st.subTests.length : 1), 0) ?? (test.subTests?.length || 0);
                       return (
                         <div key={test.id} className="flex flex-col gap-1">
                           <div
                             onClick={() => handleToggleTest(test.id)}
                             className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer select-none transition-all ${
-                              isOutsourced
-                                ? "bg-purple-500/10 border-purple-500/40 shadow-xs ring-1 ring-purple-500/30"
-                                : selected
+                              selected
                                 ? "bg-accent/80 border-primary shadow-sm ring-1 ring-primary/30"
                                 : "bg-card border-border/90 hover:border-primary/50"
                             }`}
@@ -4330,15 +4238,11 @@ function RegisterPatientPage() {
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
                                   <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
-                                  {isOutsourced ? (
-                                    <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-purple-600 text-white uppercase shrink-0">
-                                      Outsource
-                                    </span>
-                                  ) : selected ? (
+                                  {selected && (
                                     <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
-                                      In-House
+                                      Selected
                                     </span>
-                                  ) : null}
+                                  )}
                                 </div>
                                 <p className="text-[10px] text-muted-foreground mt-0.5">
                                   {paramCount > 0 ? `${paramCount} Parameters Included` : `Ref ${test.refRangeMin ?? "N/A"}–${test.refRangeMax ?? "N/A"}`}
@@ -4388,29 +4292,19 @@ function RegisterPatientPage() {
           </div>
 
           {/* Refined Bottom Summary Bar (No discount/advance inputs here, pristine layout) */}
+          {/* Refined Bottom Summary Bar */}
           <div className="border-t border-border/80 px-6 py-4 shrink-0 bg-muted/40 backdrop-blur-xs flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto text-xs">
               <div className="px-3.5 py-1.5 rounded-xl bg-card border border-border flex items-center gap-2 shadow-2xs">
                 <FlaskConical className="h-3.5 w-3.5 text-primary" />
-                <span className="text-muted-foreground font-semibold">In-House:</span>
+                <span className="text-muted-foreground font-semibold">Selected Tests:</span>
                 <span className="font-bold text-foreground">
-                  {selectedTestObjects.filter(t => !outsourcedTestIds.includes(t.id)).length} Tests
+                  {selectedTestObjects.length} {selectedTestObjects.length === 1 ? "Test" : "Tests"}
                 </span>
                 <span className="text-muted-foreground font-mono text-[11px]">
-                  (₹{selectedTestObjects.filter(t => !outsourcedTestIds.includes(t.id)).reduce((s, t) => s + (Number(t.price) || 0), 0).toFixed(0)})
+                  (₹{subtotal.toFixed(0)})
                 </span>
               </div>
-
-              {outsourcedTestIds.length > 0 && (
-                <div className="px-3.5 py-1.5 rounded-xl bg-purple-500/10 border border-purple-500/25 flex items-center gap-2 text-purple-700 dark:text-purple-300 shadow-2xs font-semibold">
-                  <Building2 className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-                  <span>Outsource Lab:</span>
-                  <span className="font-bold text-purple-600 dark:text-purple-400">{outsourcedTestIds.length} Tests</span>
-                  <span className="font-mono text-[11px]">
-                    (₹{selectedTestObjects.filter(t => outsourcedTestIds.includes(t.id)).reduce((s, t) => s + (Number(t.price) || 0), 0).toFixed(0)})
-                  </span>
-                </div>
-              )}
             </div>
 
             <div className="flex items-center gap-5 justify-between w-full sm:w-auto sm:justify-end">

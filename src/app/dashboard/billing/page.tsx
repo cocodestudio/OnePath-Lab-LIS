@@ -205,7 +205,15 @@ function getTodayStr() {
 
 export default function BillingPage() {
   const [bills, setBills] = useState<Bill[]>([]);
-  const [labData, setLabData] = useState<any>(null);
+  const [labData, setLabData] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_lab");
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return null;
+  });
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -215,12 +223,37 @@ export default function BillingPage() {
     }
     return normalizeBillSettings({});
   });
-  const [allRawTests, setAllRawTests] = useState<Test[]>([]);
-  const [availableMainTests, setAvailableMainTests] = useState<Test[]>([]);
+  const [allRawTests, setAllRawTests] = useState<Test[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_tests");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [availableMainTests, setAvailableMainTests] = useState<Test[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_tests");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.filter((t: any) => !t.parentId && !t.parent_id);
+          }
+        }
+      } catch {}
+    }
+    return [];
+  });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [filterDate, setFilterDate] = useState(() => getTodayStr());
   const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
@@ -261,7 +294,7 @@ export default function BillingPage() {
     // Safely hydrate from localStorage after mount to completely prevent SSR hydration mismatches
     try {
       const cachedLab = localStorage.getItem("lis_cached_lab");
-      if (cachedLab) setLabData(JSON.parse(cachedLab));
+      if (cachedLab && !labData) setLabData(JSON.parse(cachedLab));
 
       const cachedBillSettings = localStorage.getItem("lis_cached_bill_settings");
       if (cachedBillSettings) {
@@ -269,7 +302,7 @@ export default function BillingPage() {
       }
 
       const cachedTests = localStorage.getItem("lis_cached_tests");
-      if (cachedTests) {
+      if (cachedTests && allRawTests.length === 0) {
         const parsed = JSON.parse(cachedTests);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setAllRawTests(parsed);
@@ -281,21 +314,35 @@ export default function BillingPage() {
       if (cachedBills) {
         const parsed = JSON.parse(cachedBills);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setBills(parsed.map(normalizeBillObj));
-          setLoading(false);
+          const mapped = parsed.map(normalizeBillObj);
+          setBills(mapped);
+          // Only cancel skeleton if cached bills actually contain items matching today's active filter!
+          const todayStr = getTodayStr();
+          const hasTodayBills = mapped.some((b: any) => {
+            const billDate = (b.createdAt || b.created_at || "").toString();
+            return billDate.startsWith(todayStr);
+          });
+          if (hasTodayBills) {
+            setLoading(false);
+          }
         }
       }
     } catch {}
 
     fetchBills();
-    fetchAvailableTests();
+
+    // High performance optimization: Only fetch tests catalog if missing from cache!
+    const hasCachedTests = typeof window !== "undefined" && !!localStorage.getItem("lis_cached_tests");
+    if (!hasCachedTests) {
+      fetchAvailableTests();
+    }
+
     try {
       setAvailablePackages(getStoredPackages());
     } catch (e) {}
 
     const handleSync = () => {
       fetchBills(true);
-      fetchAvailableTests();
     };
     window.addEventListener("lis_online_sync", handleSync);
     return () => window.removeEventListener("lis_online_sync", handleSync);
@@ -303,45 +350,51 @@ export default function BillingPage() {
 
   const fetchBills = async (forceRefresh?: boolean | any) => {
     const isForce = forceRefresh === true;
+    setIsFetching(true);
     try {
       if (isForce && bills.length === 0) {
         setLoading(true);
       }
-      const [data, labRes] = await Promise.all([
-        fetchFromLaravel("/bills", { skipCache: isForce }),
-        !labData ? fetchFromLaravel("/lab").catch(() => null) : Promise.resolve(null),
-      ]);
+      const data = await fetchFromLaravel("/bills", { skipCache: isForce });
       const rawList = Array.isArray(data) ? data : (data?.data || []);
       const billsList = rawList.map(normalizeBillObj);
       setBills(billsList);
-      if (labRes) {
-        setLabData(labRes);
-        const rawBill = labRes.bill_settings || labRes.billSettings;
-        if (rawBill) {
-          const parsedBill = normalizeBillSettings(rawBill);
-          setBillSettings(parsedBill);
-          try {
-            localStorage.setItem("lis_cached_bill_settings", JSON.stringify(parsedBill));
-          } catch {}
-        }
-        try {
-          localStorage.setItem("lis_cached_lab", JSON.stringify(labRes));
-        } catch {}
-      }
+
       try {
         localStorage.setItem("lis_cached_bills", JSON.stringify(billsList));
       } catch {}
+
+      // Background fetch lab info if not cached yet
+      if (!labData) {
+        fetchFromLaravel("/lab").then(labRes => {
+          if (labRes) {
+            setLabData(labRes);
+            const rawBill = labRes.bill_settings || labRes.billSettings;
+            if (rawBill) {
+              const parsedBill = normalizeBillSettings(rawBill);
+              setBillSettings(parsedBill);
+              try {
+                localStorage.setItem("lis_cached_bill_settings", JSON.stringify(parsedBill));
+              } catch {}
+            }
+            try {
+              localStorage.setItem("lis_cached_lab", JSON.stringify(labRes));
+            } catch {}
+          }
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error("Error fetching bills:", err);
       if (bills.length === 0) setBills([]);
     } finally {
       setLoading(false);
+      setIsFetching(false);
     }
   };
 
-  const fetchAvailableTests = async () => {
+  const fetchAvailableTests = async (force = false) => {
     try {
-      const data = await fetchFromLaravel("/tests", { skipCache: true });
+      const data = await fetchFromLaravel("/tests", { skipCache: force });
       const list = Array.isArray(data) ? data : (data?.data || []);
       if (list.length > 0) {
         setAllRawTests(list);
@@ -367,6 +420,9 @@ export default function BillingPage() {
   }, [allRawTests]);
 
   const handleOpenEditDialog = (bill: Bill) => {
+    if (availableMainTests.length === 0) {
+      fetchAvailableTests();
+    }
     setEditingBill(bill);
     
     // Extract currently attached MAIN tests only (no single sub-parameters)
@@ -624,13 +680,23 @@ export default function BillingPage() {
     return getMainBillItems(selectedBillForInvoice, allTestsMap);
   }, [selectedBillForInvoice, allTestsMap]);
 
+  // True whenever initial load is underway or live data is being fetched and no bills are visible yet
+  const isTableLoading = loading || (isFetching && filteredBills.length === 0);
+
   return (
     <div className="w-full space-y-7 pb-12 animate-fade-in text-foreground">
+      {/* Subtle Background Sync Progress Bar */}
+      {isFetching && filteredBills.length > 0 && (
+        <div className="w-full bg-primary/10 h-1 overflow-hidden rounded-full -mb-5 shadow-sm">
+          <div className="w-full h-full bg-primary animate-pulse" />
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+            <span className={`h-2 w-2 rounded-full ${isFetching ? "bg-amber-500 animate-ping" : "bg-primary animate-pulse"}`} />
             <p className="text-[11px] font-bold text-primary uppercase tracking-[0.2em]">Financial Operations</p>
           </div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-1">
@@ -644,11 +710,11 @@ export default function BillingPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => fetchBills(true)}
-            disabled={loading}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border/90 bg-card hover:bg-accent text-xs font-semibold text-foreground transition-all shadow-sm cursor-pointer"
+            disabled={isFetching}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border/90 bg-card hover:bg-accent text-xs font-semibold text-foreground transition-all shadow-sm cursor-pointer disabled:opacity-75"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-primary" : "text-muted-foreground"}`} />
-            <span>Refresh</span>
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin text-primary" : "text-muted-foreground"}`} />
+            <span>{isFetching ? "Syncing..." : "Refresh"}</span>
           </button>
         </div>
       </div>
@@ -664,7 +730,7 @@ export default function BillingPage() {
             </div>
           </div>
           <div className="mt-4">
-            {loading ? (
+            {isTableLoading ? (
               <div className="space-y-2 py-0.5">
                 <div className="h-7 w-28 rounded-md shimmer-gradient" />
                 <div className="h-3 w-36 rounded shimmer-gradient" />
@@ -687,7 +753,7 @@ export default function BillingPage() {
             </div>
           </div>
           <div className="mt-4">
-            {loading ? (
+            {isTableLoading ? (
               <div className="space-y-2 py-0.5">
                 <div className="h-7 w-28 rounded-md shimmer-gradient" />
                 <div className="h-3 w-32 rounded shimmer-gradient" />
@@ -710,7 +776,7 @@ export default function BillingPage() {
             </div>
           </div>
           <div className="mt-4">
-            {loading ? (
+            {isTableLoading ? (
               <div className="space-y-2 py-0.5">
                 <div className="h-7 w-28 rounded-md shimmer-gradient" />
                 <div className="h-3 w-36 rounded shimmer-gradient" />
@@ -733,7 +799,7 @@ export default function BillingPage() {
             </div>
           </div>
           <div className="mt-4">
-            {loading ? (
+            {isTableLoading ? (
               <div className="space-y-2 py-0.5">
                 <div className="h-7 w-20 rounded-md shimmer-gradient" />
                 <div className="h-3 w-32 rounded shimmer-gradient" />
@@ -850,7 +916,7 @@ export default function BillingPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {loading ? (
+              {isTableLoading ? (
                 Array.from({ length: 7 }).map((_, idx) => (
                   <tr key={idx} className="animate-fade-in">
                     <td className="py-3.5 px-4">

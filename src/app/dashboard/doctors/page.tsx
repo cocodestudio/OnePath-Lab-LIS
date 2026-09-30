@@ -9,7 +9,7 @@ import {
   ShieldCheck, ArrowRight, X, Filter, Sparkles, PlusCircle,
   FileText, Percent, IndianRupee, Eye,
   SlidersHorizontal, Award, ArrowUpRight, BadgePercent, ChevronDown,
-  Printer, Loader2
+  Printer, Loader2, ExternalLink
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -184,6 +184,19 @@ export default function DoctorsOverviewPage() {
     ? Math.round((summary.total_lab_revenue / summary.total_sales) * 100)
     : 100;
 
+  // Generate URL to doctor's patients page passing active period filter
+  const getDoctorPatientsUrl = (doc: DoctorStat) => {
+    const params = new URLSearchParams();
+    params.set("doctor_id", doc.id);
+    params.set("doctor_name", doc.name);
+    params.set("filter", filter);
+    if (filter === "custom" && customStart && customEnd) {
+      params.set("start_date", customStart);
+      params.set("end_date", customEnd);
+    }
+    return `/dashboard/doctors/patients?${params.toString()}`;
+  };
+
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-fade-in pb-16">
       {/* ── Page Header ── */}
@@ -232,10 +245,10 @@ export default function DoctorsOverviewPage() {
         </div>
       </div>
 
-      {/* ── Filter & Search Toolbar ── */}
-      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-card border border-border/80 rounded-2xl p-3 shadow-xs">
+      {/* ── Filter & Search Toolbar (Responsive & Clean) ── */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3.5 bg-card border border-border/80 rounded-2xl p-3 sm:p-3.5 shadow-xs">
         {/* Date Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 custom-scrollbar">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none shrink-0">
           {[
             { label: "Today", value: "today" },
             { label: "Yesterday", value: "yesterday" },
@@ -263,10 +276,10 @@ export default function DoctorsOverviewPage() {
           ))}
         </div>
 
-        {/* Custom Date Pickers & Search */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Custom Date Pickers & Responsive Search Input */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
           {filter === "custom" && (
-            <div className="flex items-center gap-1.5 bg-muted/30 p-1 rounded-xl border border-border/80">
+            <div className="flex items-center gap-1.5 bg-muted/40 p-1.5 rounded-xl border border-border/80 justify-between sm:justify-start">
               <input
                 type="date"
                 value={customStart}
@@ -274,7 +287,7 @@ export default function DoctorsOverviewPage() {
                   setCustomStart(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="bg-background border border-border/80 rounded-lg px-2 py-1 text-xs font-mono font-medium outline-none focus:border-primary"
+                className="bg-background border border-border/80 rounded-lg px-2 py-1 text-xs font-mono font-medium outline-none focus:border-primary text-foreground"
               />
               <span className="text-xs text-muted-foreground">to</span>
               <input
@@ -284,13 +297,14 @@ export default function DoctorsOverviewPage() {
                   setCustomEnd(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="bg-background border border-border/80 rounded-lg px-2 py-1 text-xs font-mono font-medium outline-none focus:border-primary"
+                className="bg-background border border-border/80 rounded-lg px-2 py-1 text-xs font-mono font-medium outline-none focus:border-primary text-foreground"
               />
             </div>
           )}
 
-          <div className="relative flex-1 sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          {/* Search Input with non-overlapping padding */}
+          <div className="relative w-full sm:w-72 md:w-80 lg:w-96">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               type="text"
               placeholder="Search doctor, specialty, clinic, phone..."
@@ -299,7 +313,8 @@ export default function DoctorsOverviewPage() {
                 setSearch(e.target.value);
                 setCurrentPage(1);
               }}
-              className="pl-8.5 pr-8 h-9 text-xs rounded-xl bg-background border-border/80 focus:border-primary"
+              style={{ paddingLeft: "2.5rem", paddingRight: "2.5rem" }}
+              className="h-9.5 text-xs rounded-xl bg-background border-border/80 focus:border-primary shadow-2xs w-full transition-all"
             />
             {search && (
               <button
@@ -308,7 +323,8 @@ export default function DoctorsOverviewPage() {
                   setSearch("");
                   setCurrentPage(1);
                 }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer p-0.5 rounded-full hover:bg-muted transition-colors"
+                title="Clear search"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -562,11 +578,19 @@ export default function DoctorsOverviewPage() {
                       </div>
                     </td>
 
-                    {/* Patients Count */}
+                    {/* Patients Count (Link to separate patient registry) */}
                     <td className="py-3.5 px-3 text-center">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-muted/60 text-foreground font-mono">
-                        {doc.patient_count}
-                      </span>
+                      <Link
+                        href={getDoctorPatientsUrl(doc)}
+                      >
+                        <span
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition-all cursor-pointer shadow-2xs hover:scale-105 active:scale-95"
+                          title={`View all ${doc.patient_count} patients referred by ${doc.name}`}
+                        >
+                          <Users className="h-3 w-3" />
+                          <span>{doc.patient_count}</span>
+                        </span>
+                      </Link>
                     </td>
 
                     {/* Total Sales */}
@@ -607,9 +631,25 @@ export default function DoctorsOverviewPage() {
                       </div>
                     </td>
 
-                    {/* Actions: Set Rates + Print / Download Statement Dropdown */}
+                    {/* Actions: View Patients (Separate Page) + Set Rates + Print Statement */}
                     <td className="py-3.5 px-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
+                        {/* View Patients Separate Page Link */}
+                        <Link
+                          href={getDoctorPatientsUrl(doc)}
+                        >
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-2.5 text-xs font-semibold rounded-lg gap-1.5 border-border hover:bg-primary/10 hover:text-primary hover:border-primary/30 text-foreground cursor-pointer transition-colors"
+                            title={`Open separate patient registry for ${doc.name}`}
+                          >
+                            <Users className="h-3.5 w-3.5 text-primary" />
+                            <span className="hidden xl:inline">View Patients</span>
+                            <span className="xl:hidden">Patients</span>
+                          </Button>
+                        </Link>
+
                         <Link href={`/dashboard/doctors/manage?selected_doctor=${encodeURIComponent(doc.name)}`}>
                           <Button
                             size="sm"
