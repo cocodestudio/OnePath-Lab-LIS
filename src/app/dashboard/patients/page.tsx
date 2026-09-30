@@ -823,7 +823,11 @@ const getTodayStr = () => {
                   const patAge = patient.age;
                   const patBarcode = patient.vial_barcode || patient.vialBarcode || patient.meta?.vial_barcode || patient.custom_id || patient.customId || "—";
                   const patRef = patient.ref_doctor || patient.refDoctor || "Self";
-                  const patColl = patient.collected_at || patient.collectedAt || "Main Lab";
+                  const b2bCreatorName =
+                    patient.creator?.role === "B2B" ? patient.creator?.name :
+                    patient.meta?.created_by_role === "B2B" ? (patient.meta?.created_by_name || patient.meta?.b2b_name) :
+                    patient.meta?.b2b_name || null;
+                  const patColl = b2bCreatorName || patient.collected_at || patient.collectedAt || "Main Lab";
                   const regDate = patient.created_at || patient.createdAt;
 
                   return (
@@ -1233,7 +1237,15 @@ const getTodayStr = () => {
                   </div>
                   <div>
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">Collection Point / Center</p>
-                    <p className="font-semibold text-foreground mt-0.5">{viewPatient.collected_at || viewPatient.collectedAt || "Main Lab"}</p>
+                    <p className="font-semibold text-foreground mt-0.5">
+                      {(() => {
+                        const b2bCreatorName =
+                          viewPatient.creator?.role === "B2B" ? viewPatient.creator?.name :
+                          viewPatient.meta?.created_by_role === "B2B" ? (viewPatient.meta?.created_by_name || viewPatient.meta?.b2b_name) :
+                          viewPatient.meta?.b2b_name || null;
+                        return b2bCreatorName || viewPatient.collected_at || viewPatient.collectedAt || "Main Lab";
+                      })()}
+                    </p>
                   </div>
                   <div>
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">Phlebotomist / Collector</p>

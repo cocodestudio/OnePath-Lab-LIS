@@ -1490,6 +1490,12 @@ function RegisterPatientPage() {
       const primaryBarcode = barcodeValues[0] || sampleBarcode.trim() || newPatient?.vial_barcode || null;
       const joinedBarcodes = barcodeValues.length > 0 ? barcodeValues.join(",") : primaryBarcode;
 
+      const storedUser = getStoredUser();
+      const isB2BUser = currentUserRole === "B2B" || storedUser?.role === "B2B";
+      const effectiveCollectedAt = isB2BUser
+        ? (storedUser?.name || collectedAtSelect)
+        : `${collectedAtSelect} (${collectedBySelect})`;
+
       let data;
       if (editPatientId) {
         data = await fetchFromLaravel(`/patients/${editPatientId}`, {
@@ -1508,8 +1514,8 @@ function RegisterPatientPage() {
             district: district.trim() || null,
             state: state.trim() || null,
             pincode: pincode.trim() || null,
-            collected_at: `${collectedAtSelect} (${collectedBySelect})`,
-            collected_by: collectedBySelect || null,
+            collected_at: effectiveCollectedAt,
+            collectedBy: collectedBySelect || null,
             vial_barcode: joinedBarcodes,
             vialBarcode: joinedBarcodes,
             vial_barcodes: effectiveVialBarcodes,
@@ -1558,7 +1564,8 @@ function RegisterPatientPage() {
             district: district.trim() || null,
             state: state.trim() || null,
             pincode: pincode.trim() || null,
-            collectedAt: `${collectedAtSelect} (${collectedBySelect})`,
+            collectedAt: effectiveCollectedAt,
+            collected_at: effectiveCollectedAt,
             collectedBy: collectedBySelect || null,
             vialBarcode: joinedBarcodes,
             vial_barcode: joinedBarcodes,
@@ -2017,8 +2024,12 @@ function RegisterPatientPage() {
     setAddress("");
     setRefDoctorSelect("Self");
     const storedUser = getStoredUser();
-    if (currentUserRole === "COLLECTION_CENTER" || currentUserRole === "B2B" || storedUser?.role === "COLLECTION_CENTER" || storedUser?.role === "B2B") {
-      const centerName = storedUser?.lab_name || storedUser?.labName || storedUser?.name || (storedUser?.role === "B2B" ? "B2B Partner" : "Collection Center");
+    if (currentUserRole === "B2B" || storedUser?.role === "B2B") {
+      const b2bName = storedUser?.name || storedUser?.lab_name || "B2B Partner";
+      setCollectedAtSelect(b2bName);
+      setCollectedBySelect(storedUser?.name || b2bName);
+    } else if (currentUserRole === "COLLECTION_CENTER" || storedUser?.role === "COLLECTION_CENTER") {
+      const centerName = storedUser?.lab_name || storedUser?.labName || storedUser?.name || "Collection Center";
       setCollectedAtSelect(centerName);
       setCollectedBySelect(storedUser?.name || centerName);
     } else {

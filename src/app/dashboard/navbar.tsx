@@ -168,6 +168,10 @@ export default function Navbar() {
     user?.name ||
     "Diagnostic Laboratory";
 
+  const userProfileName = isB2B
+    ? (user?.name || user?.lab_name || "B2B Partner")
+    : labDisplayName;
+
   const userAvatar = user?.avatarUrl || user?.avatar_url || (user as any)?.avatar || labData?.logoUrl || labData?.logo_url;
 
   const handleCopyLabId = (e: React.MouseEvent) => {
@@ -837,13 +841,13 @@ export default function Navbar() {
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2 rounded-xl pl-1 pr-2 py-1 outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 cursor-pointer">
             <Avatar className="h-8 w-8">
-              {userAvatar && <AvatarImage src={userAvatar} alt={labDisplayName} className="object-cover" />}
+              {userAvatar && <AvatarImage src={userAvatar} alt={userProfileName} className="object-cover" />}
               <AvatarFallback className="gradient-primary text-primary-foreground text-[11px] font-bold">
-                {labDisplayName ? labDisplayName.slice(0, 2).toUpperCase() : initials}
+                {userProfileName ? userProfileName.slice(0, 2).toUpperCase() : initials}
               </AvatarFallback>
             </Avatar>
             <span className="hidden lg:block text-left leading-none max-w-[170px]">
-              <span className="block text-[13px] font-semibold text-foreground truncate">{labDisplayName}</span>
+              <span className="block text-[13px] font-semibold text-foreground truncate">{userProfileName}</span>
               <span className="block text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">{role}</span>
             </span>
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60 hidden lg:block" />
@@ -854,10 +858,13 @@ export default function Navbar() {
             <div className="p-4 pb-3 space-y-1 bg-background">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <h4 className="font-display font-bold text-sm text-foreground truncate" title={labDisplayName}>
-                    {labDisplayName}
+                  <h4 className="font-display font-bold text-sm text-foreground truncate" title={userProfileName}>
+                    {userProfileName}
                   </h4>
-                  {user?.name && user.name !== labDisplayName && (
+                  {isB2B && (user?.lab_name || labData?.centreName) && (
+                    <p className="text-[11px] text-muted-foreground truncate">{user?.lab_name || labData?.centreName}</p>
+                  )}
+                  {!isB2B && user?.name && user.name !== labDisplayName && (
                     <p className="text-[11px] text-muted-foreground truncate">{user.name}</p>
                   )}
                 </div>
