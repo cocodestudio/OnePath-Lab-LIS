@@ -965,33 +965,49 @@ export function buildReportBlocks(
           | { type: "subgroup"; title: string; items: ReportTest[]; sortOrder: number; arrayIndex: number };
 
         const renderUnits: RenderUnit[] = [];
-        const subGroupMap: Record<string, { items: ReportTest[]; sortOrder: number; arrayIndex: number }> = {};
+        const subGroupMap: Record<string, { type: "subgroup"; title: string; items: ReportTest[]; sortOrder: number; arrayIndex: number }> = {};
 
         itemsList.forEach((item, arrIdx) => {
-          if (item.test.parent && item.test.parent.parent && item.test.parent.name !== mainTestName) {
-            const subName = item.test.parent.name;
-            const parentOrder = item.test.parent.sort_order ?? (item.test.parent as any)?.sortOrder ?? (arrIdx + 1);
+          const isSubgroup = Boolean(
+            item.test.parent && 
+            item.test.parent.name && 
+            item.test.parent.name.trim().toLowerCase() !== mainTestName.trim().toLowerCase()
+          );
+
+          if (isSubgroup) {
+            const subName = item.test.parent!.name;
+            const parentOrder = item.test.parent?.sort_order ?? (item.test.parent as any)?.sortOrder ?? item.test.sort_order ?? ((arrIdx + 1) * 100);
             if (!subGroupMap[subName]) {
-              subGroupMap[subName] = { items: [], sortOrder: parentOrder, arrayIndex: arrIdx };
+              const subUnit: RenderUnit = {
+                type: "subgroup",
+                title: subName,
+                items: [item],
+                sortOrder: parentOrder,
+                arrayIndex: arrIdx,
+              };
+              subGroupMap[subName] = subUnit;
+              renderUnits.push(subUnit);
+            } else {
+              subGroupMap[subName].items.push(item);
             }
-            subGroupMap[subName].items.push(item);
           } else {
-            const itemOrder = item.test.sort_order ?? (item.test as any)?.sortOrder ?? (arrIdx + 1);
+            const itemOrder = item.test.sort_order ?? (item.test as any)?.sortOrder ?? ((arrIdx + 1) * 100);
             renderUnits.push({ type: "item", item, sortOrder: itemOrder, arrayIndex: arrIdx });
           }
         });
 
-        // Add subgroups to renderUnits
-        Object.entries(subGroupMap).forEach(([subName, data]) => {
-          // Sort items within subgroup by sort_order
-          data.items.sort((a, b) => {
+        // Sort items within each subgroup by sort_order
+        Object.values(subGroupMap).forEach((unit) => {
+          unit.items.sort((a, b) => {
             const ordA = a.test.sort_order ?? (a.test as any)?.sortOrder ?? 0;
             const ordB = b.test.sort_order ?? (b.test as any)?.sortOrder ?? 0;
             if (ordA !== ordB && ordA !== 0 && ordB !== 0) return ordA - ordB;
             return 0;
           });
-          const minOrder = data.items[0]?.test.sort_order ?? data.sortOrder;
-          renderUnits.push({ type: "subgroup", title: subName, items: data.items, sortOrder: minOrder || data.sortOrder, arrayIndex: data.arrayIndex });
+          // If parent sortOrder wasn't explicitly set, use the minimum of its items
+          if (!unit.sortOrder && unit.items[0]) {
+            unit.sortOrder = unit.items[0].test.sort_order ?? (unit.items[0].test as any)?.sortOrder ?? unit.sortOrder;
+          }
         });
 
         // Sort all render units by sortOrder; if equal/0, maintain their exact arrayIndex order!

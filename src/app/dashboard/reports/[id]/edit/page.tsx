@@ -2765,8 +2765,12 @@ export default function ResultEntryPage() {
             }),
           }))
           .sort((secA, secB) => {
-            const orderA = secA.items[0]?.test?.sort_order ?? (secA.items[0]?.test as any)?.sortOrder ?? secA.parentOrder;
-            const orderB = secB.items[0]?.test?.sort_order ?? (secB.items[0]?.test as any)?.sortOrder ?? secB.parentOrder;
+            const orderA = (secA.parentOrder && secA.parentOrder !== 0)
+              ? secA.parentOrder
+              : (secA.items[0]?.test?.sort_order ?? (secA.items[0]?.test as any)?.sortOrder ?? 0);
+            const orderB = (secB.parentOrder && secB.parentOrder !== 0)
+              ? secB.parentOrder
+              : (secB.items[0]?.test?.sort_order ?? (secB.items[0]?.test as any)?.sortOrder ?? 0);
             if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;
             if (secA.sectionName === "_default") return -1;
             if (secB.sectionName === "_default") return 1;

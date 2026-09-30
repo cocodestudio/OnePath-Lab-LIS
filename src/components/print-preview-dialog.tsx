@@ -283,10 +283,10 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
 
       // Flatten blocks into parameter payload
       const parametersPayload: any[] = [];
-      let currentOrder = 1;
 
-      blocksList.forEach(block => {
+      blocksList.forEach((block, blockIdx) => {
         const isBlockHidden = hiddenBlockIds.includes(block.id);
+        const blockOrder = (blockIdx + 1) * 100;
 
         if (block.isGroup) {
           // If group is hidden, mark all its items hidden
@@ -294,15 +294,15 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
           if (parentSubTestId) {
             parametersPayload.push({
               id: parentSubTestId,
-              sort_order: currentOrder++,
+              sort_order: blockOrder,
               is_hidden: isBlockHidden,
             });
           }
 
-          block.items.forEach(item => {
+          block.items.forEach((item, itemIdx) => {
             parametersPayload.push({
               id: item.test.id,
-              sort_order: currentOrder++,
+              sort_order: blockOrder + itemIdx + 1,
               is_hidden: isBlockHidden,
             });
           });
@@ -311,7 +311,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
           if (item?.test?.id) {
             parametersPayload.push({
               id: item.test.id,
-              sort_order: currentOrder++,
+              sort_order: blockOrder + 1,
               is_hidden: isBlockHidden,
             });
           }
@@ -346,17 +346,16 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
 
     // Flatten blocksList into results array in exact sequential order with updated sort_order
     const orderedResults: ReportTest[] = [];
-    let currentSeq = 1;
-    blocksList.forEach(block => {
+    blocksList.forEach((block, blockIdx) => {
       if (hiddenBlockIds.includes(block.id)) return;
-      const groupSeq = currentSeq++;
+      const blockOrder = (blockIdx + 1) * 100;
       block.items.forEach((item, itemIdx) => {
         let n = item.test.name;
         if (item.test.parent?.parent) n = item.test.parent.parent.name;
         else if (item.test.parent) n = item.test.parent.name;
 
         if (!excludedMainTests.includes(n)) {
-          const itemSeq = block.isGroup ? (groupSeq * 100 + itemIdx + 1) : currentSeq++;
+          const itemSeq = blockOrder + itemIdx + 1;
           orderedResults.push({
             ...item,
             test: {
@@ -366,8 +365,8 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
               ...(item.test.parent ? {
                 parent: {
                   ...item.test.parent,
-                  sort_order: groupSeq,
-                  sortOrder: groupSeq,
+                  sort_order: blockOrder,
+                  sortOrder: blockOrder,
                 }
               } : {})
             }
