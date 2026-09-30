@@ -3121,10 +3121,25 @@ function ResultEntryContent() {
                                               {item.test.name !== "Report Template" ? item.test.name : ""}
                                             </span>
                                             <div className="flex items-center gap-2">
+                                              {item.test.interpretation && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    if (window.confirm("Reload master template from Test Master? This will update the table layout to the latest test definition.")) {
+                                                      handleValueChange(item.id, item.test.interpretation || "");
+                                                    }
+                                                  }}
+                                                  className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded border border-primary/20 transition-colors"
+                                                  title="Click to reload the template saved in Test Master"
+                                                >
+                                                  <RefreshCw className="h-3 w-3" />
+                                                  <span>Reload Test Master Layout</span>
+                                                </button>
+                                              )}
                                               <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded uppercase tracking-wider">Custom Layout</span>
                                             </div>
                                           </div>
-                                          <div className="mt-3 border border-border/60 rounded-xl overflow-hidden shadow-sm">
+                                          <div className="mt-3 border border-border/60 rounded-xl overflow-visible shadow-sm">
                                             <TipTapEditor
                                               value={val}
                                               onChange={(html) => handleValueChange(item.id, html)}

@@ -40,6 +40,9 @@ interface Test {
   id: string; name: string; category: string; price: number;
   unit: string | null; refRangeMin: number | null; refRangeMax: number | null;
   subTests?: Test[];
+  b2b_price?: number;
+  b2bPrice?: number;
+  mrp?: number;
 }
 interface Patient {
   id: string; customId: string; name: string; age: number;
@@ -388,7 +391,7 @@ function RegisterPatientPage() {
   const [existingBill, setExistingBill] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
   const [currentUserPermissions, setCurrentUserPermissions] = useState<any[]>([]);
-  const isB2B = currentUserRole === "B2B";
+  const isB2B = currentUserRole === "B2B" || (typeof window !== "undefined" && getStoredUser()?.role === "B2B");
   const isCollectionCenter = currentUserRole === "COLLECTION_CENTER";
   const isReceptionist = currentUserRole === "RECEPTIONIST";
   const isRestrictedRole = isB2B || isCollectionCenter || isReceptionist;
@@ -486,10 +489,28 @@ function RegisterPatientPage() {
   const [editingDoctor, setEditingDoctor] = useState<{ oldName: string; newName: string } | null>(null);
 
   const [collectionPoints, setCollectionPoints] = useState<string[]>(defaultCollectionPoints);
+  const [collectionCentersList, setCollectionCentersList] = useState<any[]>([]);
   const [collectedAtSelect, setCollectedAtSelect] = useState("Main Lab");
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [newCollectionInput, setNewCollectionInput] = useState("");
   const [editingCollectionPoint, setEditingCollectionPoint] = useState<{ oldName: string; newName: string } | null>(null);
+
+  const selectedB2bCenter = useMemo(() => {
+    if (!collectedAtSelect || collectedAtSelect === "Main Lab") return null;
+    const selNorm = collectedAtSelect.trim().toLowerCase();
+    return (
+      collectionCentersList.find((c: any) => {
+        const isB2B = (c.role && String(c.role).toUpperCase() === "B2B") || c.is_b2b;
+        if (!isB2B) return false;
+        const cName = (c.name || "").trim().toLowerCase();
+        const cLab = (c.lab_name || "").trim().toLowerCase();
+        return (
+          (cName && (cName === selNorm || selNorm.includes(cName) || cName.includes(selNorm))) ||
+          (cLab && (cLab === selNorm || selNorm.includes(cLab) || cLab.includes(selNorm)))
+        );
+      }) || null
+    );
+  }, [collectedAtSelect, collectionCentersList]);
 
   const [phlebotomists, setPhlebotomists] = useState<string[]>(defaultPhlebotomists);
   const [collectedBySelect, setCollectedBySelect] = useState("Self / Lab Staff");
@@ -737,10 +758,21 @@ function RegisterPatientPage() {
         abha_txn_id: verified.txn_id || null,
         ref_doctor: refDoctorSelect || "Self",
         refDoctor: refDoctorSelect || "Self",
-        collected_at: `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`,
-        collectedAt: `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`,
+        collected_at: selectedB2bCenter ? (selectedB2bCenter.name || collectedAtSelect) : `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`,
+        collectedAt: selectedB2bCenter ? (selectedB2bCenter.name || collectedAtSelect) : `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`,
         collected_by: collectedBySelect || null,
         collectedBy: collectedBySelect || null,
+        b2b_user_id: selectedB2bCenter ? selectedB2bCenter.id : undefined,
+        b2bUserId: selectedB2bCenter ? selectedB2bCenter.id : undefined,
+        meta: {
+          ...(selectedB2bCenter ? {
+            b2b_user_id: selectedB2bCenter.id,
+            b2b_name: selectedB2bCenter.name,
+            created_by_id: selectedB2bCenter.id,
+            created_by_name: selectedB2bCenter.name,
+            created_by_role: "B2B",
+          } : {}),
+        },
       };
 
       let savedPatient: any = null;
@@ -1039,6 +1071,7 @@ function RegisterPatientPage() {
       try {
         const ccRes = await fetchFromLaravel("/collection-centers");
         const ccList = Array.isArray(ccRes) ? ccRes : (ccRes?.data || []);
+        setCollectionCentersList(ccList);
         const fetchedCenters: string[] = ccList
           .map((c: any) => (c?.name || "").trim())
           .filter((n: string) => Boolean(n) && n.toLowerCase() !== "main lab");
@@ -1492,9 +1525,11 @@ function RegisterPatientPage() {
 
       const storedUser = getStoredUser();
       const isB2BUser = currentUserRole === "B2B" || storedUser?.role === "B2B";
-      const effectiveCollectedAt = isB2BUser
-        ? (storedUser?.name || collectedAtSelect)
-        : `${collectedAtSelect} (${collectedBySelect})`;
+      const effectiveCollectedAt = selectedB2bCenter
+        ? (selectedB2bCenter.name || collectedAtSelect)
+        : (isB2BUser
+            ? (storedUser?.name || collectedAtSelect)
+            : `${collectedAtSelect} (${collectedBySelect})`);
 
       let data;
       if (editPatientId) {
@@ -1516,6 +1551,8 @@ function RegisterPatientPage() {
             pincode: pincode.trim() || null,
             collected_at: effectiveCollectedAt,
             collectedBy: collectedBySelect || null,
+            b2b_user_id: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
+            b2bUserId: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             vial_barcode: joinedBarcodes,
             vialBarcode: joinedBarcodes,
             vial_barcodes: effectiveVialBarcodes,
@@ -1523,6 +1560,13 @@ function RegisterPatientPage() {
               ...(newPatient?.meta || {}),
               vial_barcode: joinedBarcodes,
               vial_barcodes: effectiveVialBarcodes,
+              ...(selectedB2bCenter ? {
+                b2b_user_id: selectedB2bCenter.id,
+                b2b_name: selectedB2bCenter.name,
+                created_by_id: selectedB2bCenter.id,
+                created_by_name: selectedB2bCenter.name,
+                created_by_role: "B2B",
+              } : {}),
             },
             aadhaar_no: aadhaarNo.trim() || null,
             insurance_no: insuranceNo.trim() || null,
@@ -1567,12 +1611,21 @@ function RegisterPatientPage() {
             collectedAt: effectiveCollectedAt,
             collected_at: effectiveCollectedAt,
             collectedBy: collectedBySelect || null,
+            b2b_user_id: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
+            b2bUserId: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             vialBarcode: joinedBarcodes,
             vial_barcode: joinedBarcodes,
             vial_barcodes: effectiveVialBarcodes,
             meta: {
               vial_barcode: joinedBarcodes,
               vial_barcodes: effectiveVialBarcodes,
+              ...(selectedB2bCenter ? {
+                b2b_user_id: selectedB2bCenter.id,
+                b2b_name: selectedB2bCenter.name,
+                created_by_id: selectedB2bCenter.id,
+                created_by_name: selectedB2bCenter.name,
+                created_by_role: "B2B",
+              } : {}),
             },
             aadhaarNo: aadhaarNo.trim() || null,
             insuranceNo: insuranceNo.trim() || null,
@@ -1613,7 +1666,7 @@ function RegisterPatientPage() {
         city: city.trim() || undefined,
         district: district.trim() || undefined,
         pincode: pincode.trim() || undefined,
-        collectedAt: `${collectedAtSelect} (${collectedBySelect})`,
+        collectedAt: effectiveCollectedAt,
         collectedBy: collectedBySelect || undefined,
         aadhaarNo: aadhaarNo.trim() || undefined,
         insuranceNo: insuranceNo.trim() || undefined,
@@ -1625,6 +1678,13 @@ function RegisterPatientPage() {
           ...(data?.meta || newPatient?.meta || {}),
           vial_barcode: joinedBarcodes,
           vial_barcodes: effectiveVialBarcodes,
+          ...(selectedB2bCenter ? {
+            b2b_user_id: selectedB2bCenter.id,
+            b2b_name: selectedB2bCenter.name,
+            created_by_id: selectedB2bCenter.id,
+            created_by_name: selectedB2bCenter.name,
+            created_by_role: "B2B",
+          } : {}),
         },
       };
 
@@ -1742,7 +1802,12 @@ function RegisterPatientPage() {
     }
   }, [specimenTubes]);
 
-  const rawSubtotal = selectedTestObjects.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
+  const isEffectiveB2B = isB2B || !!selectedB2bCenter;
+
+  const rawSubtotal = selectedTestObjects.reduce((sum, t) => {
+    const rate = isEffectiveB2B ? (t.b2bPrice ?? (t as any).b2b_price ?? t.price) : t.price;
+    return sum + (Number(rate) || 0);
+  }, 0);
   const outsourceSubtotal = selectedOutsourceTests.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
   const inHouseSubtotal = selectedPackage ? selectedPackage.price : rawSubtotal;
   const subtotal = inHouseSubtotal + outsourceSubtotal;
@@ -1756,10 +1821,10 @@ function RegisterPatientPage() {
     setBookingError(null);
     setBooking(true);
     try {
-      const computedPaid = isB2B ? 0 : parsedPaid;
-      const computedStatus = isB2B ? "UNPAID" : (computedPaid >= grandTotal ? "PAID" : (computedPaid > 0 ? "PARTIAL" : "UNPAID"));
-      const computedBalance = isB2B ? grandTotal : balanceDue;
-      const computedDiscount = isB2B ? 0 : parsedDiscount;
+      const computedPaid = isEffectiveB2B ? 0 : parsedPaid;
+      const computedStatus = isEffectiveB2B ? "UNPAID" : (computedPaid >= grandTotal ? "PAID" : (computedPaid > 0 ? "PARTIAL" : "UNPAID"));
+      const computedBalance = isEffectiveB2B ? grandTotal : balanceDue;
+      const computedDiscount = isEffectiveB2B ? 0 : parsedDiscount;
 
       // Sanitize testIds: Only send valid unique UUIDs to PostgreSQL backend
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1858,6 +1923,8 @@ function RegisterPatientPage() {
               paymentStatus: computedStatus,
               packageName: selectedPackage?.name || null,
               package_name: selectedPackage?.name || null,
+              b2b_user_id: selectedB2bCenter?.id || (newPatient as any)?.meta?.b2b_user_id || (isB2B ? (getStoredUser()?.id || null) : null),
+              b2bUserId: selectedB2bCenter?.id || (newPatient as any)?.meta?.b2b_user_id || (isB2B ? (getStoredUser()?.id || null) : null),
             }),
           });
           assignedBillCustomId = report.bill?.customId || report.bill?.custom_id || report.customId || report.custom_id || "INV-CONFIRMED";
@@ -2883,6 +2950,13 @@ function RegisterPatientPage() {
                             ))}
                           </SelectContent>
                         </Select>
+                        {selectedB2bCenter && (
+                          <div className="flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-medium">
+                            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                            <span className="font-bold">B2B Partner Intake:</span>
+                            <span className="truncate">Sample linked to {selectedB2bCenter.name}&apos;s account &amp; wallet balance will be debited.</span>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -3483,15 +3557,30 @@ function RegisterPatientPage() {
                     </div>
                   ) : (
                     <ul className="divide-y divide-border/60">
-                      {selectedTestObjects.map((test) => (
-                        <li key={`inhouse-${test.id}`} className="py-2.5 flex justify-between items-center gap-2">
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{test.category || "Pathology"}</p>
-                          </div>
-                          <span className="font-mono text-xs font-bold text-foreground">₹{Number(test.price).toFixed(0)}</span>
-                        </li>
-                      ))}
+                      {selectedTestObjects.map((test) => {
+                        const b2bRate = test.b2bPrice ?? (test as any).b2b_price;
+                        const showB2B = isB2B || (b2bRate !== undefined && b2bRate !== null);
+                        return (
+                          <li key={`inhouse-${test.id}`} className="py-2.5 flex justify-between items-center gap-2">
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
+                              <p className="text-[10px] text-muted-foreground">{test.category || "Pathology"}</p>
+                            </div>
+                            {showB2B ? (
+                              <div className="text-right leading-tight shrink-0">
+                                <div className="font-mono text-xs font-bold text-purple-600 dark:text-purple-400">
+                                  B2B ₹{Number(b2bRate ?? test.price).toFixed(0)}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground font-medium">
+                                  MRP ₹{Number(test.price).toFixed(0)}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="font-mono text-xs font-bold text-foreground">₹{Number(test.price).toFixed(0)}</span>
+                            )}
+                          </li>
+                        );
+                      })}
                       {selectedOutsourceTests.map((test, idx) => (
                         <li key={`outsource-${test.id || idx}`} className="py-2.5 flex justify-between items-center gap-2 bg-purple-500/5 px-2 -mx-2 rounded-lg">
                           <div className="min-w-0">
@@ -4400,9 +4489,20 @@ function RegisterPatientPage() {
                             <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
                               {pkg.code}
                             </span>
-                            <span className="font-mono text-sm font-extrabold text-primary">
-                              ₹{pkg.price.toFixed(2)}
-                            </span>
+                            {isB2B && ((pkg as any).b2bPrice ?? (pkg as any).b2b_price) ? (
+                              <div className="flex flex-col items-end leading-tight">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                                  B2B ₹{Number((pkg as any).b2bPrice ?? (pkg as any).b2b_price).toFixed(0)}
+                                </span>
+                                <span className="text-[10px] font-medium text-muted-foreground mt-0.5">
+                                  MRP ₹{pkg.price.toFixed(0)}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="font-mono text-sm font-extrabold text-primary">
+                                ₹{pkg.price.toFixed(2)}
+                              </span>
+                            )}
                           </div>
                           <h4 className="font-bold text-foreground text-sm">{pkg.name}</h4>
                           {pkg.description && (
@@ -4631,7 +4731,25 @@ function RegisterPatientPage() {
                                   </p>
                                 </div>
                               </div>
-                              <span className="font-mono text-xs font-bold text-foreground shrink-0">₹{Number(test.price).toFixed(0)}</span>
+                              {(() => {
+                                const b2bRate = (test as any).b2bPrice ?? (test as any).b2b_price;
+                                const showB2B = isB2B || (b2bRate !== undefined && b2bRate !== null);
+                                if (showB2B) {
+                                  return (
+                                    <div className="flex flex-col items-end shrink-0 leading-tight">
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                                        B2B ₹{Number(b2bRate ?? test.price).toFixed(0)}
+                                      </span>
+                                      <span className="text-[10px] font-medium text-muted-foreground mt-0.5">
+                                        MRP ₹{Number(test.price).toFixed(0)}
+                                      </span>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <span className="font-mono text-xs font-bold text-foreground shrink-0">₹{Number(test.price).toFixed(0)}</span>
+                                );
+                              })()}
                             </div>
                           );
                         })}
@@ -4687,18 +4805,36 @@ function RegisterPatientPage() {
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="font-mono text-xs font-bold text-foreground shrink-0">₹{Number(test.price).toFixed(0)}</span>
-                              {test.subTests && test.subTests.length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); setExpandedTests(prev => ({ ...prev, [test.id]: !prev[test.id] })) }}
-                                  className="p-1 rounded hover:bg-muted text-muted-foreground"
-                                >
-                                  {expandedTests[test.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                </button>
-                              )}
-                            </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {(() => {
+                                  const b2bRate = (test as any).b2bPrice ?? (test as any).b2b_price;
+                                  const showB2B = isB2B || (b2bRate !== undefined && b2bRate !== null);
+                                  if (showB2B) {
+                                    return (
+                                      <div className="flex flex-col items-end shrink-0 leading-tight">
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                                          B2B ₹{Number(b2bRate ?? test.price).toFixed(0)}
+                                        </span>
+                                        <span className="text-[10px] font-medium text-muted-foreground mt-0.5">
+                                          MRP ₹{Number(test.price).toFixed(0)}
+                                        </span>
+                                      </div>
+                                    );
+                                  }
+                                  return (
+                                    <span className="font-mono text-xs font-bold text-foreground shrink-0">₹{Number(test.price).toFixed(0)}</span>
+                                  );
+                                })()}
+                                {test.subTests && test.subTests.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setExpandedTests(prev => ({ ...prev, [test.id]: !prev[test.id] })) }}
+                                    className="p-1 rounded hover:bg-muted text-muted-foreground"
+                                  >
+                                    {expandedTests[test.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                  </button>
+                                )}
+                              </div>
                           </div>
                           {expandedTests[test.id] && test.subTests && test.subTests.length > 0 && (
                             <div className="pl-6 pr-2 py-1 space-y-1">

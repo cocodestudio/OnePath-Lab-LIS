@@ -118,13 +118,24 @@ interface CollectionCenter {
   permissions?: PermissionKey[] | string[];
   rate_tier?: "HIGH" | "MEDIUM" | "LOW" | string;
   rateTier?: "HIGH" | "MEDIUM" | "LOW" | string;
+  rate_list_id?: number | null;
+  rate_list_name?: string | null;
   created_at?: string;
   createdAt?: string;
   updated_at?: string;
 }
 
+interface CustomRateList {
+  id: number;
+  name: string;
+  description?: string;
+  is_default?: boolean;
+  items_count?: number;
+}
+
 export function CollectionCentersTab() {
   const [centers, setCenters] = useState<CollectionCenter[]>([]);
+  const [customRateLists, setCustomRateLists] = useState<CustomRateList[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { success: toastSuccess, error: toastError } = useToast();
@@ -153,7 +164,7 @@ export function CollectionCentersTab() {
   const [status, setStatus] = useState<"active" | "suspended">("active");
   const [role, setRole] = useState<"RECEPTIONIST" | "COLLECTION_CENTER" | "B2B">("RECEPTIONIST");
   const [permissions, setPermissions] = useState<PermissionKey[]>(ROLE_DEFAULT_PERMISSIONS.RECEPTIONIST);
-  const [rateTier, setRateTier] = useState<"HIGH" | "MEDIUM" | "LOW">("HIGH");
+  const [rateTier, setRateTier] = useState<string>("HIGH");
   const [showPassword, setShowPassword] = useState(false);
 
   // Edit Form State
@@ -163,7 +174,7 @@ export function CollectionCentersTab() {
   const [editStatus, setEditStatus] = useState<"active" | "suspended">("active");
   const [editRole, setEditRole] = useState<"RECEPTIONIST" | "COLLECTION_CENTER" | "B2B">("RECEPTIONIST");
   const [editPermissions, setEditPermissions] = useState<PermissionKey[]>([]);
-  const [editRateTier, setEditRateTier] = useState<"HIGH" | "MEDIUM" | "LOW">("HIGH");
+  const [editRateTier, setEditRateTier] = useState<string>("HIGH");
   const [editPassword, setEditPassword] = useState("");
   const [showEditPassword, setShowEditPassword] = useState(false);
 
@@ -177,9 +188,19 @@ export function CollectionCentersTab() {
   const loadCenters = async () => {
     try {
       setLoading(true);
-      const data = await fetchFromLaravel("/collection-centers");
-      const list = Array.isArray(data) ? data : (data?.data || []);
-      setCenters(list);
+      const [centersRes, rateListsRes] = await Promise.allSettled([
+        fetchFromLaravel("/collection-centers"),
+        fetchFromLaravel("/rate-lists"),
+      ]);
+
+      if (centersRes.status === "fulfilled") {
+        const list = Array.isArray(centersRes.value) ? centersRes.value : (centersRes.value?.data || []);
+        setCenters(list);
+      }
+      if (rateListsRes.status === "fulfilled") {
+        const rlData = rateListsRes.value?.data || rateListsRes.value || [];
+        setCustomRateLists(Array.isArray(rlData) ? rlData : []);
+      }
     } catch (err: any) {
       console.error("Failed to load accounts:", err);
       setToast({ text: "Failed to load RBAC accounts", type: "error" });
@@ -225,6 +246,16 @@ export function CollectionCentersTab() {
 
     try {
       setIsSubmitting(true);
+      let selectedRateTier = "HIGH";
+      let selectedRateListId: number | null = null;
+      if (rateTier.startsWith("RATELIST_")) {
+        selectedRateListId = parseInt(rateTier.replace("RATELIST_", ""), 10);
+        selectedRateTier = "HIGH";
+      } else {
+        selectedRateTier = rateTier;
+        selectedRateListId = null;
+      }
+
       const res = await fetchFromLaravel("/collection-centers", {
         method: "POST",
         body: JSON.stringify({
@@ -235,7 +266,8 @@ export function CollectionCentersTab() {
           status,
           role,
           permissions,
-          rate_tier: rateTier,
+          rate_tier: selectedRateTier,
+          rate_list_id: selectedRateListId,
         }),
       });
 
@@ -275,8 +307,12 @@ export function CollectionCentersTab() {
       : ROLE_DEFAULT_PERMISSIONS[activeRole] || [];
     setEditPermissions(rawPerms);
 
-    const rawTier = c.rate_tier || c.rateTier || "HIGH";
-    setEditRateTier(rawTier.toUpperCase() === "LOW" ? "LOW" : rawTier.toUpperCase() === "MEDIUM" ? "MEDIUM" : "HIGH");
+    if (c.rate_list_id) {
+      setEditRateTier(`RATELIST_${c.rate_list_id}`);
+    } else {
+      const rawTier = c.rate_tier || c.rateTier || "HIGH";
+      setEditRateTier(rawTier.toUpperCase() === "LOW" ? "LOW" : rawTier.toUpperCase() === "MEDIUM" ? "MEDIUM" : "HIGH");
+    }
     setEditPassword("");
     setShowEditPassword(false);
     setViewMode("EDIT");
@@ -297,7 +333,13 @@ export function CollectionCentersTab() {
       };
 
       if (editRole === "B2B") {
-        payload.rate_tier = editRateTier;
+        if (editRateTier.startsWith("RATELIST_")) {
+          payload.rate_list_id = parseInt(editRateTier.replace("RATELIST_", ""), 10);
+          payload.rate_tier = "HIGH";
+        } else {
+          payload.rate_tier = editRateTier;
+          payload.rate_list_id = null;
+        }
       }
       if (editPassword) {
         payload.password = editPassword;
@@ -488,12 +530,23 @@ export function CollectionCentersTab() {
                     </label>
                     <select
                       value={rateTier}
-                      onChange={(e) => setRateTier(e.target.value as "HIGH" | "MEDIUM" | "LOW")}
+                      onChange={(e) => setRateTier(e.target.value)}
                       className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none transition-colors cursor-pointer"
                     >
-                      <option value="HIGH">High Tier Rate List (Default wholesale rate)</option>
-                      <option value="MEDIUM">Medium Tier Rate List (Moderate concession rate)</option>
-                      <option value="LOW">Low Tier Rate List (Lowest wholesale concession)</option>
+                      <optgroup label="Standard Base Wholesale Tiers">
+                        <option value="HIGH">High Tier Rate List (Default wholesale rate)</option>
+                        <option value="MEDIUM">Medium Tier Rate List (Moderate concession rate)</option>
+                        <option value="LOW">Low Tier Rate List (Lowest wholesale concession)</option>
+                      </optgroup>
+                      {customRateLists && customRateLists.length > 0 && (
+                        <optgroup label="Custom Rate Lists (Rate List Master)">
+                          {customRateLists.map((rl) => (
+                            <option key={rl.id} value={`RATELIST_${rl.id}`}>
+                              {rl.name} {rl.items_count ? `(${rl.items_count} custom test rates)` : ""}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   </div>
                 )}
@@ -753,12 +806,23 @@ export function CollectionCentersTab() {
                     </label>
                     <select
                       value={editRateTier}
-                      onChange={(e) => setEditRateTier(e.target.value as "HIGH" | "MEDIUM" | "LOW")}
+                      onChange={(e) => setEditRateTier(e.target.value)}
                       className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none transition-colors cursor-pointer"
                     >
-                      <option value="HIGH">High Tier Rate List (Default wholesale rate)</option>
-                      <option value="MEDIUM">Medium Tier Rate List (Moderate concession rate)</option>
-                      <option value="LOW">Low Tier Rate List (Lowest wholesale concession)</option>
+                      <optgroup label="Standard Base Wholesale Tiers">
+                        <option value="HIGH">High Tier Rate List (Default wholesale rate)</option>
+                        <option value="MEDIUM">Medium Tier Rate List (Moderate concession rate)</option>
+                        <option value="LOW">Low Tier Rate List (Lowest wholesale concession)</option>
+                      </optgroup>
+                      {customRateLists && customRateLists.length > 0 && (
+                        <optgroup label="Custom Rate Lists (Rate List Master)">
+                          {customRateLists.map((rl) => (
+                            <option key={rl.id} value={`RATELIST_${rl.id}`}>
+                              {rl.name} {rl.items_count ? `(${rl.items_count} custom test rates)` : ""}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                     </select>
                   </div>
                 )}
@@ -1109,10 +1173,18 @@ export function CollectionCentersTab() {
                                 <span>Collection Center</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                                <Briefcase className="h-3 w-3" />
-                                <span>B2B Partner</span>
-                              </span>
+                              <div>
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                                  <Briefcase className="h-3 w-3" />
+                                  <span>B2B Partner</span>
+                                </span>
+                                <div className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-purple-600 dark:text-purple-400">
+                                  <Sliders className="h-3 w-3 shrink-0" />
+                                  <span className="truncate max-w-[130px]" title={c.rate_list_name ? `Rate List: ${c.rate_list_name}` : `Tier ${c.rate_tier || c.rateTier || "HIGH"}`}>
+                                    {c.rate_list_name ? c.rate_list_name : `Tier ${c.rate_tier || c.rateTier || "HIGH"}`}
+                                  </span>
+                                </div>
+                              </div>
                             )}
                           </td>
 

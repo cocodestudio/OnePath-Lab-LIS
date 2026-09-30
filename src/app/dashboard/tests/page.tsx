@@ -600,7 +600,11 @@ export default function TestMasterPage() {
     setComment(test.comment || "");
     setNotes(test.notes || "");
 
-    if (test.subTests && test.subTests.length > 0) {
+    const isCustom = test.fieldType === "Custom Editor" || (test as any).field_type === "Custom Editor" || (test.name || "").toLowerCase().includes("culture and sensitivity");
+
+    if (isCustom) {
+      setSubTests([]);
+    } else if (test.subTests && test.subTests.length > 0) {
       setSubTests(test.subTests.map(sub => ({
         id: sub.id,
         name: sub.name,
@@ -1027,7 +1031,9 @@ export default function TestMasterPage() {
       setError("Please provide a valid Test Name.");
       return;
     }
-    if (subTests.some(s => !s.name.trim())) {
+    const isCustomEditor = editingTest?.fieldType === "Custom Editor" || (editingTest as any)?.field_type === "Custom Editor" || (name || "").toLowerCase().includes("culture and sensitivity");
+
+    if (!isCustomEditor && subTests.some(s => !s.name.trim())) {
       setError("Every parameter must have a name.");
       return;
     }
@@ -1038,7 +1044,7 @@ export default function TestMasterPage() {
     const finalCategory = category === "Other" && customCategory.trim() ? customCategory.trim() : category;
 
     // Main Test payload
-    const isSingleField = subTests.length === 1 && (!subTests[0].subTests || subTests[0].subTests.length === 0);
+    const isSingleField = !isCustomEditor && subTests.length === 1 && (!subTests[0].subTests || subTests[0].subTests.length === 0);
     const primarySub = subTests[0];
 
     const payload: any = {
@@ -1047,14 +1053,17 @@ export default function TestMasterPage() {
       category: finalCategory,
       type,
       price: parseFloat(price) || 0,
-      interpretation: interpretation.trim() || undefined,
+      interpretation: interpretation || undefined,
       comment: comment.trim() || undefined,
       notes: notes.trim() || undefined,
-      field_type: isSingleField ? "Single Field" : "Multiple Field",
+      field_type: isCustomEditor ? "Custom Editor" : (isSingleField ? "Single Field" : "Multiple Field"),
     };
 
-    // If single field, apply parameter ranges & method to main test record too
-    if (isSingleField) {
+    if (isCustomEditor) {
+      payload.sub_tests = [];
+    } else {
+      // If single field, apply parameter ranges & method to main test record too
+      if (isSingleField && primarySub) {
       payload.method = primarySub.method?.trim() || undefined;
       payload.unit = primarySub.unit.trim() || null;
       payload.gender_ref_type = primarySub.genderRefType;
@@ -1136,6 +1145,7 @@ export default function TestMasterPage() {
 
       return mappedSub;
     });
+    }
 
     try {
       if (editingTest) {
@@ -2726,10 +2736,28 @@ export default function TestMasterPage() {
               </button>
               <Button
                 type="button"
-                onClick={() => setNotesModalOpen(false)}
+                onClick={async () => {
+                  setNotesModalOpen(false);
+                  if (editingTest) {
+                    try {
+                      const testIdentifier = editingTest.id || editingTest.testCode;
+                      await fetchFromLaravel(`/tests/${testIdentifier}`, {
+                        method: "PUT",
+                        body: JSON.stringify({
+                          interpretation: interpretation,
+                          field_type: (editingTest.fieldType === "Custom Editor" || (editingTest as any).field_type === "Custom Editor" || (editingTest.name || "").toLowerCase().includes("culture")) ? "Custom Editor" : undefined,
+                        }),
+                      });
+                      toast.success("Interpretation & Layout saved to test master!");
+                      await fetchTests(true);
+                    } catch (e: any) {
+                      console.error("Auto save interpretation error:", e);
+                    }
+                  }
+                }}
                 className="rounded-xl px-7 h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-sm"
               >
-                Done / Save
+                Done / Save Layout
               </Button>
             </div>
           </div>
