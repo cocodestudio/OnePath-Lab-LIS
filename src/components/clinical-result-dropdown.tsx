@@ -17,7 +17,7 @@ interface ClinicalResultDropdownProps {
   paramName: string;
   testName?: string;
   category?: string;
-  customDbOptions?: string | null;
+  customDbOptions?: string | string[] | any;
   value: string;
   onChange: (newValue: string) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
@@ -87,37 +87,48 @@ export function ClinicalResultDropdown({
 
   // Retrieve complete options for this parameter
   const { options, key: paramKey, isColorParam, hasDropdown } = useMemo(() => {
-    return getCompleteParameterOptions(paramName, testName, category, customDbOptions);
+    try {
+      return getCompleteParameterOptions(paramName, testName, category, customDbOptions);
+    } catch (err) {
+      console.error("ClinicalResultDropdown error in getCompleteParameterOptions:", err);
+      return { options: [], key: "", isColorParam: false, hasDropdown: false };
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paramName, testName, category, customDbOptions, customVersion]);
 
   // Saved user custom options for this parameter (for deletion support)
   const savedCustomList = useMemo(() => {
-    return paramKey ? getSavedCustomOptions(paramKey) : [];
+    try {
+      return paramKey ? getSavedCustomOptions(paramKey) : [];
+    } catch {
+      return [];
+    }
   }, [paramKey, customVersion]);
 
   // Determine if this test is simple/binary (Reactive/Non-Reactive, Positive/Negative, etc.)
   const isBinaryOrShortList = useMemo(() => {
-    if (options.length <= 4) return true;
-    if (options.some((o) => /reactive/i.test(o))) return true;
+    if (!Array.isArray(options) || options.length <= 4) return true;
+    if (options.some((o) => typeof o === "string" && /reactive/i.test(o))) return true;
     return false;
   }, [options]);
 
   // Only show search bar if there are 6 or more options and it's not a simple binary test
-  const showSearchBar = options.length > 5 && !isBinaryOrShortList;
+  const showSearchBar = Boolean(Array.isArray(options) && options.length > 5 && !isBinaryOrShortList);
 
   // Filter options by search term
   const filteredOptions = useMemo(() => {
+    if (!Array.isArray(options)) return [];
     if (!showSearchBar || !searchTerm.trim()) return options;
     const term = searchTerm.toLowerCase().trim();
-    return options.filter((opt) => opt.toLowerCase().includes(term));
+    return options.filter((opt) => typeof opt === "string" && opt.toLowerCase().includes(term));
   }, [options, searchTerm, showSearchBar]);
 
   // Check if current search term is already an existing option
   const isSearchTermUnique = useMemo(() => {
+    if (!Array.isArray(options)) return false;
     const term = (isAddingNew ? newOptionInput : searchTerm).trim().toLowerCase();
     if (!term) return false;
-    return !options.some((opt) => opt.toLowerCase() === term);
+    return !options.some((opt) => typeof opt === "string" && opt.toLowerCase() === term);
   }, [options, searchTerm, newOptionInput, isAddingNew]);
 
   // Update floating popover position relative to viewport

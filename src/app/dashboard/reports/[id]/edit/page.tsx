@@ -75,8 +75,8 @@ interface Test {
   range_type?: string | null;
   textRefRange?: string | null;
   text_ref_range?: string | null;
-  customOptions?: string | null;
-  custom_options?: string | null;
+  customOptions?: string | string[] | any;
+  custom_options?: string | string[] | any;
   sortOrder?: number;
   sort_order?: number;
   subTests?: Test[];
@@ -3181,7 +3181,7 @@ function ResultEntryContent() {
                                                 paramName={item.test.name}
                                                 testName={group.mainTestName}
                                                 category={item.test.category || (section.sectionName !== "_default" ? section.sectionName : undefined)}
-                                                customDbOptions={item.test.customOptions}
+                                                customDbOptions={item.test?.customOptions ?? item.test?.custom_options}
                                                 value={val}
                                                 onChange={(newVal) => handleValueChange(item.id, newVal)}
                                                 onKeyDown={(e) => handleInputKeyDown(e, item.id)}
@@ -3230,7 +3230,7 @@ function ResultEntryContent() {
                                                   paramName={item.test.name}
                                                   testName={group.mainTestName}
                                                   category={item.test.category || (section.sectionName !== "_default" ? section.sectionName : undefined)}
-                                                  customDbOptions={item.test.customOptions}
+                                                  customDbOptions={item.test?.customOptions ?? item.test?.custom_options}
                                                   value={val}
                                                   onChange={(newVal) => handleValueChange(item.id, newVal)}
                                                   onKeyDown={(e) => handleInputKeyDown(e, item.id)}

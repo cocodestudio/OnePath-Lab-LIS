@@ -784,8 +784,8 @@ export const GENERIC_QUALITATIVE_OPTIONS = [
 /**
  * Normalizes text to facilitate loose matching
  */
-function normalizeParamName(str: string): string {
-  return (str || "")
+function normalizeParamName(str: any): string {
+  return String(str || "")
     .toLowerCase()
     .replace(/[_\-\(\)\/]/g, " ")
     .replace(/\s+/g, " ")
@@ -940,19 +940,24 @@ export function getClinicalOptionsForParameter(
  * Local storage key helper for user-customized options
  */
 function getStorageKey(paramKey: string): string {
-  return `lis_custom_options_${paramKey.toLowerCase().replace(/[^a-z0-9_]/g, "_")}`;
+  const safeKey = typeof paramKey === "string" ? paramKey : String(paramKey || "");
+  return `lis_custom_options_${safeKey.toLowerCase().replace(/[^a-z0-9_]/g, "_")}`;
 }
 
 /**
  * Retrieves custom lab options persisted by users in localStorage.
  */
 export function getSavedCustomOptions(paramKey: string): string[] {
-  if (typeof window === "undefined") return [];
+  if (typeof window === "undefined" || !paramKey) return [];
   try {
     const raw = localStorage.getItem(getStorageKey(paramKey));
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.filter(Boolean);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => (typeof item === "string" ? item.trim() : String(item ?? "").trim()))
+          .filter(Boolean);
+      }
     }
   } catch {}
   return [];
@@ -962,8 +967,9 @@ export function getSavedCustomOptions(paramKey: string): string[] {
  * Persists a new custom option added by user for a specific parameter.
  */
 export function saveCustomOption(paramKey: string, newOption: string): string[] {
-  if (typeof window === "undefined" || !newOption || !newOption.trim()) return [];
-  const trimmed = newOption.trim();
+  if (typeof window === "undefined" || !newOption) return [];
+  const trimmed = typeof newOption === "string" ? newOption.trim() : String(newOption || "").trim();
+  if (!trimmed) return [];
   const current = getSavedCustomOptions(paramKey);
   if (!current.includes(trimmed)) {
     const updated = [trimmed, ...current];
@@ -995,62 +1001,120 @@ export function getCompleteParameterOptions(
   paramName: string,
   testName?: string,
   category?: string,
-  customDbOptions?: string | null
+  customDbOptions?: string | string[] | any
 ): { options: string[]; key: string; isColorParam?: boolean; hasDropdown: boolean } {
-  const clinicalDef = getClinicalOptionsForParameter(paramName, testName, category);
-
-  // Parse any database-provided options (from test model customOptions)
-  let dbOptionsList: string[] = [];
-  if (customDbOptions) {
-    try {
-      const parsed = JSON.parse(customDbOptions);
-      if (Array.isArray(parsed)) dbOptionsList = parsed.filter(Boolean);
-    } catch {
-      dbOptionsList = customDbOptions.split(",").map(s => s.trim()).filter(Boolean);
+  try {
+    if (!paramName) {
+      return { options: [], key: "", isColorParam: false, hasDropdown: false };
     }
+
+    const safeParamName = typeof paramName === "string" ? paramName : String(paramName || "");
+    const safeTestName = testName ? (typeof testName === "string" ? testName : String(testName)) : undefined;
+    const safeCategory = category ? (typeof category === "string" ? category : String(category)) : undefined;
+
+    const clinicalDef = getClinicalOptionsForParameter(safeParamName, safeTestName, safeCategory);
+
+    // Parse any database-provided options (from test model customOptions or custom_options)
+    let dbOptionsList: string[] = [];
+    if (customDbOptions) {
+      if (Array.isArray(customDbOptions)) {
+        dbOptionsList = customDbOptions
+          .map((opt: any) => (typeof opt === "string" ? opt.trim() : String(opt ?? "").trim()))
+          .filter(Boolean);
+      } else if (typeof customDbOptions === "string") {
+        const trimmed = customDbOptions.trim();
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            if (Array.isArray(parsed)) {
+              dbOptionsList = parsed
+                .map((opt: any) => (typeof opt === "string" ? opt.trim() : String(opt ?? "").trim()))
+                .filter(Boolean);
+            } else {
+              dbOptionsList = [trimmed];
+            }
+          } catch {
+            dbOptionsList = trimmed
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+          }
+        } else {
+          dbOptionsList = trimmed
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        }
+      } else if (typeof customDbOptions === "object" && customDbOptions !== null) {
+        try {
+          dbOptionsList = Object.values(customDbOptions)
+            .map((opt: any) => (typeof opt === "string" ? opt.trim() : String(opt ?? "").trim()))
+            .filter(Boolean);
+        } catch {
+          dbOptionsList = [];
+        }
+      }
+    }
+
+    // Override limited 7-item times with full day times
+    const normalizedP = normalizeParamName(safeParamName);
+    if (
+      normalizedP.includes("time of collection") ||
+      normalizedP.includes("time of examination") ||
+      normalizedP.includes("collection time") ||
+      normalizedP.includes("examination time")
+    ) {
+      dbOptionsList = [];
+    }
+
+    if (!clinicalDef && dbOptionsList.length === 0) {
+      return { options: [], key: "", isColorParam: false, hasDropdown: false };
+    }
+
+    const effectiveKey = clinicalDef?.key || normalizedP.replace(/\s+/g, "_");
+    const userCustomOptions = getSavedCustomOptions(effectiveKey);
+
+    const set = new Set<string>();
+    // User custom options first
+    if (Array.isArray(userCustomOptions)) {
+      userCustomOptions.forEach(opt => {
+        if (typeof opt === "string" && opt.trim()) set.add(opt.trim());
+      });
+    }
+
+    // If specific clinical definition exists, add clinical options
+    if (clinicalDef && clinicalDef.key !== "generic_qualitative") {
+      if (Array.isArray(clinicalDef.options)) {
+        clinicalDef.options.forEach(opt => {
+          if (typeof opt === "string" && opt.trim()) set.add(opt.trim());
+        });
+      }
+      // Also include DB options if any
+      dbOptionsList.forEach(opt => {
+        if (typeof opt === "string" && opt.trim()) set.add(opt.trim());
+      });
+    } else if (dbOptionsList.length > 0) {
+      // If DB provided options, use them directly without adding generic qualitative options
+      dbOptionsList.forEach(opt => {
+        if (typeof opt === "string" && opt.trim()) set.add(opt.trim());
+      });
+    } else if (clinicalDef && Array.isArray(clinicalDef.options)) {
+      // Generic qualitative fallback
+      clinicalDef.options.forEach(opt => {
+        if (typeof opt === "string" && opt.trim()) set.add(opt.trim());
+      });
+    }
+
+    const finalOptions = Array.from(set);
+
+    return {
+      options: finalOptions,
+      key: effectiveKey,
+      isColorParam: Boolean(clinicalDef?.isColorParam),
+      hasDropdown: finalOptions.length > 0,
+    };
+  } catch (err) {
+    console.error("Clinical Options: error in getCompleteParameterOptions:", err);
+    return { options: [], key: "", isColorParam: false, hasDropdown: false };
   }
-
-  // Override limited 7-item times with full day times
-  const normalizedP = normalizeParamName(paramName);
-  if (
-    normalizedP.includes("time of collection") ||
-    normalizedP.includes("time of examination") ||
-    normalizedP.includes("collection time") ||
-    normalizedP.includes("examination time")
-  ) {
-    dbOptionsList = [];
-  }
-
-  if (!clinicalDef && dbOptionsList.length === 0) {
-    return { options: [], key: "", hasDropdown: false };
-  }
-
-  const effectiveKey = clinicalDef?.key || normalizeParamName(paramName).replace(/\s+/g, "_");
-  const userCustomOptions = getSavedCustomOptions(effectiveKey);
-
-  const set = new Set<string>();
-  // User custom options first
-  userCustomOptions.forEach(opt => set.add(opt));
-
-  // If specific clinical definition exists, add clinical options
-  if (clinicalDef && clinicalDef.key !== "generic_qualitative") {
-    clinicalDef.options.forEach(opt => set.add(opt));
-    // Also include DB options if any
-    dbOptionsList.forEach(opt => set.add(opt));
-  } else if (dbOptionsList.length > 0) {
-    // If DB provided options, use them directly without adding generic qualitative options
-    dbOptionsList.forEach(opt => set.add(opt));
-  } else if (clinicalDef) {
-    // Generic qualitative fallback
-    clinicalDef.options.forEach(opt => set.add(opt));
-  }
-
-  const finalOptions = Array.from(set);
-
-  return {
-    options: finalOptions,
-    key: effectiveKey,
-    isColorParam: Boolean(clinicalDef?.isColorParam),
-    hasDropdown: finalOptions.length > 0,
-  };
 }
