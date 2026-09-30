@@ -6,12 +6,16 @@ import {
   Clock, FlaskConical, Search, PlusCircle, RefreshCw, CheckCircle2,
   Copy, Check, FileText, ArrowRight, ShieldCheck, IndianRupee,
   Filter, AlertCircle, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight, User,
-  Barcode, Edit2, Lock, Printer, Receipt, X, Loader2, SlidersHorizontal, Sparkles, CheckCheck, Plus
+  Barcode, Edit2, Lock, Printer, Receipt, X, Loader2, SlidersHorizontal, Sparkles, CheckCheck, Plus,
+  TestTube2, Send, Tag, Building2, Trash2, Activity
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { BarcodeSVG } from "@/components/barcode-svg";
 
@@ -213,18 +217,43 @@ export default function TodaySamplesPage() {
     return rawDates.some((dateVal) => isDateToday(String(dateVal)));
   };
 
+  const isReportPermittedForRole = (r: any, role: string, user: any) => {
+    if (!r) return false;
+    if (role !== "COLLECTION_CENTER" || !user) return true;
+    const p = r.patient || {};
+    const meta = typeof p.meta === "object" ? p.meta : {};
+    const userIdStr = String(user.id || user.user_id || "");
+    const userName = (user.name || "").toLowerCase().trim();
+    const centerCode = (user.center_code || user.centerCode || "").toLowerCase().trim();
+    const collectedAt = String(p.collected_at || meta.collected_at || "").toLowerCase();
+
+    // 1. Created by this Collection Center user
+    const createdById = String(p.created_by_id || meta.created_by_id || "");
+    if (userIdStr && createdById === userIdStr) return true;
+
+    // 2. Explicitly assigned to this Collection Center
+    if (userName && collectedAt.includes(userName)) return true;
+    if (centerCode && (collectedAt.includes(centerCode) || String(meta.center_code || "").toLowerCase() === centerCode)) return true;
+    if (meta.collection_center_id && String(meta.collection_center_id) === userIdStr) return true;
+
+    return false;
+  };
+
   useEffect(() => {
+    let parsedUser: any = null;
     try {
       const uStr = localStorage.getItem("lis_user");
       if (uStr) {
-        const u = JSON.parse(uStr);
-        setCurrentUserRole(u.role || "");
+        parsedUser = JSON.parse(uStr);
+        setCurrentUserRole(parsedUser.role || "");
       }
       const cached = localStorage.getItem("lis_cached_today_samples");
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const todayOnly = parsed.filter(isReportFromToday);
+          const todayOnly = parsed
+            .filter(isReportFromToday)
+            .filter((r) => isReportPermittedForRole(r, parsedUser?.role || "", parsedUser));
           if (todayOnly.length > 0) {
             setReports(todayOnly);
             setLoading(false);
@@ -232,20 +261,30 @@ export default function TodaySamplesPage() {
         }
       }
     } catch (e) {}
-    loadData();
+    loadData(false, parsedUser);
   }, []);
 
-  const loadData = async (forceRefresh?: boolean | any) => {
+  const loadData = async (forceRefresh?: boolean | any, userOverride?: any) => {
     const isForce = forceRefresh === true;
     try {
       if (isForce || reports.length === 0) {
         setLoading(true);
       }
+      let activeUser = userOverride;
+      if (!activeUser && typeof window !== "undefined") {
+        try {
+          const uStr = localStorage.getItem("lis_user");
+          if (uStr) activeUser = JSON.parse(uStr);
+        } catch {}
+      }
+
       const res = await fetchFromLaravel("/reports?today=true&limit=100", { skipCache: isForce }).catch(() => []);
       const repList = Array.isArray(res) ? res : (res?.data || []);
       
-      // Strictly show only today's samples on the Today Samples page
-      const finalReports = repList.filter(isReportFromToday);
+      // Strictly show only today's samples on the Today Samples page and filter out admin portal entries for Collection Center
+      const finalReports = repList
+        .filter(isReportFromToday)
+        .filter((r: any) => isReportPermittedForRole(r, activeUser?.role || currentUserRole, activeUser));
       setReports(finalReports);
       try {
         localStorage.setItem("lis_cached_today_samples", JSON.stringify(finalReports));
@@ -398,6 +437,29 @@ export default function TodaySamplesPage() {
     setTubeBarcodeInputs((prev) => ({ ...prev, [tubeType]: generated }));
   };
 
+  const handleAutoFillAllBarcodes = () => {
+    const p = statusModalReport?.patient || {};
+    const pid = String(p.custom_id || p.customId || statusModalReport?.custom_id || "OPL").replace(/[^a-zA-Z0-9]/g, "");
+    const updated = { ...tubeBarcodeInputs };
+    activeTubeTypes.forEach((tubeKey) => {
+      if (!updated[tubeKey] || !updated[tubeKey].trim()) {
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        updated[tubeKey] = `${pid}-${tubeKey}-${randomNum}`;
+      }
+    });
+    setTubeBarcodeInputs(updated);
+    toast.success("Barcodes Generated", "Auto-generated barcodes for all active vacutainer tubes.");
+  };
+
+  const handleRemoveTubeType = (tubeKey: string) => {
+    setActiveTubeTypes((prev) => prev.filter((t) => t !== tubeKey));
+    setTubeBarcodeInputs((prev) => {
+      const next = { ...prev };
+      delete next[tubeKey];
+      return next;
+    });
+  };
+
   const handleSaveStatusAndBarcodes = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!statusModalReport?.patient?.id) return;
@@ -494,15 +556,13 @@ export default function TodaySamplesPage() {
             <span>Refresh</span>
           </button>
 
-          {currentUserRole !== "COLLECTION_CENTER" && (
-            <Link
-              href="/dashboard/patients/register"
-              className="px-5 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center gap-2 ring-inset-top cursor-pointer"
-            >
-              <PlusCircle className="h-4 w-4" />
-              <span>New Sample Entry</span>
-            </Link>
-          )}
+          <Link
+            href="/dashboard/patients/register"
+            className="px-5 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center gap-2 ring-inset-top cursor-pointer"
+          >
+            <PlusCircle className="h-4 w-4" />
+            <span>New Sample Entry</span>
+          </Link>
         </div>
       </div>
 
@@ -891,365 +951,530 @@ export default function TodaySamplesPage() {
         )}
       </div>
 
-      {/* ── State of the Art Status & Specimen Barcoding Window (Best UI/UX) ── */}
+      {/* ── State of the Art Status & Specimen Barcoding Window (Horizontal Full-Width Premium UI/UX) ── */}
       <Dialog open={!!statusModalReport} onOpenChange={() => setStatusModalReport(null)}>
-        <DialogContent className="max-w-3xl w-full rounded-2xl bg-card border border-border/80 shadow-2xl p-0 overflow-hidden">
-          <DialogTitle className="sr-only">Specimen Status &amp; Tube Barcoding</DialogTitle>
-          
+        <DialogContent className="max-w-6xl w-[96vw] max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-3xl bg-card border border-border/90 shadow-2xl animate-scale-in">
+          <DialogTitle className="sr-only">Specimen Status &amp; Tube Barcoding Station</DialogTitle>
+
           {statusModalReport && (() => {
             const isModalApproved = Boolean(isReportApproved(statusModalReport));
 
             return (
-            <form onSubmit={handleSaveStatusAndBarcodes} className="flex flex-col max-h-[85vh]">
-              {/* Modal Header (Clean single close button) */}
-              <div className="px-6 py-4 border-b border-border/80 bg-muted/20 flex items-center justify-between pr-14">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl gradient-primary text-primary-foreground flex items-center justify-center shadow-xs shrink-0">
-                    <SlidersHorizontal className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-display text-base font-bold text-foreground">
-                      Specimen Status &amp; Tube Barcoding
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Tag physical color vacutainer barcodes and advance specimen processing stage.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Modal Scrollable Body */}
-              <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
-                {/* 1. Patient Summary Card */}
-                <div className="p-4 rounded-xl bg-muted/30 border border-border/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-sm text-foreground">
-                        {statusModalReport.patient?.name || "Patient"}
-                      </span>
-                      <span className="font-mono text-xs font-bold bg-muted px-2 py-0.5 rounded border border-border text-foreground">
-                        {statusModalReport.patient?.custom_id || statusModalReport.patient?.customId || "PID-—"}
-                      </span>
-                      {statusModalReport.patient?.gender && (
-                        <span className="text-xs text-muted-foreground font-medium">
-                          {statusModalReport.patient?.age ? `${statusModalReport.patient.age}y` : ""} · {statusModalReport.patient.gender}
-                        </span>
-                      )}
+              <form onSubmit={handleSaveStatusAndBarcodes} className="flex flex-col h-full max-h-[92vh] overflow-hidden">
+                {/* Modal Header */}
+                <div className="px-6 py-4 border-b border-border/80 bg-card flex items-center justify-between pr-14 shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl gradient-primary text-primary-foreground flex items-center justify-center shadow-xs shrink-0">
+                      <SlidersHorizontal className="h-5 w-5" />
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Ref Doctor: <strong className="text-foreground">{statusModalReport.patient?.ref_doctor || "Self"}</strong> · Sample ID: <span className="font-mono">{statusModalReport.custom_id || statusModalReport.customId}</span>
-                    </p>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-display text-base font-bold text-foreground">
+                          Specimen Status &amp; Vacutainer Barcoding Station
+                        </h3>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
+                          LIS Triage
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Tag physical color vacutainers, scan vial barcodes, and advance specimen processing stage.
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="text-right sm:self-center">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground block">
-                      Investigation Panel
+                  {/* Header quick patient pill */}
+                  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/60 border border-border/70 text-xs">
+                    <User className="h-3.5 w-3.5 text-primary" />
+                    <span className="font-bold text-foreground">{statusModalReport.patient?.name || "Patient"}</span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="font-mono text-muted-foreground text-[11px] font-bold">
+                      {statusModalReport.patient?.custom_id || statusModalReport.patient?.customId || "PID"}
                     </span>
-                    <span className="text-xs font-semibold text-foreground max-w-xs truncate block">
-                      {statusModalReport.results?.map((r: any) => r.test?.name).filter(Boolean).join(", ") || statusModalReport.package_name || "Diagnostic Panel"}
+                    <span className="text-muted-foreground">•</span>
+                    <span className="font-mono text-primary text-[11px] font-bold">
+                      {statusModalReport.custom_id || statusModalReport.customId}
                     </span>
                   </div>
                 </div>
 
-                {/* Report Approved Lockdown Banner */}
-                {isModalApproved && (
-                  <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 flex items-start gap-3 shadow-xs animate-fade-in">
-                    <ShieldCheck className="h-5 w-5 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
-                    <div className="space-y-1 text-xs">
-                      <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
-                        <span>Report Approved & Finalized — Status Update Locked</span>
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[10px] font-mono font-extrabold uppercase">
-                          {statusModalReport.status || "APPROVED"}
-                        </span>
-                      </h4>
-                      <p className="leading-relaxed text-muted-foreground">
-                        This patient&apos;s diagnostic investigation report has already been reviewed, approved, and authorized by the central laboratory. Further specimen stage modifications are locked.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. Processing Stage Selector */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-                        <span>Specimen Collection Stage</span>
-                        {isModalApproved && (
-                          <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/30 text-[10px] font-bold">
-                            Locked
-                          </span>
-                        )}
-                      </label>
-                      <p className="text-[11px] text-muted-foreground">
-                        {isModalApproved 
-                          ? "Status is finalized and locked by Central Lab administration." 
-                          : "By default registered by front-desk receptionist. Advance to Collected once phlebotomy is finished."}
-                      </p>
-                    </div>
-
-                    {/* Quick Button to Mark Collected (only if not approved) */}
-                    {!isModalApproved && modalStage !== "COLLECTED" && (
-                      <button
-                        type="button"
-                        onClick={() => setModalStage("COLLECTED")}
-                        className="px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <CheckCheck className="h-3.5 w-3.5" />
-                        <span>Quick Mark as Collected</span>
-                      </button>
-                    )}
-                  </div>
-
-                  <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 ${isModalApproved ? "opacity-60 pointer-events-none cursor-not-allowed" : ""}`}>
-                    {/* Stage 1: REGISTERED */}
-                    <div
-                      onClick={() => setModalStage("REGISTERED")}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                        modalStage === "REGISTERED"
-                          ? "bg-amber-500/10 border-amber-500 shadow-xs"
-                          : "bg-card border-border/80 hover:bg-muted/40 hover:border-amber-500/30"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-amber-700 dark:text-amber-400">1. Registered</span>
-                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
-                          modalStage === "REGISTERED" ? "border-amber-500 bg-amber-500" : "border-muted-foreground"
-                        }`}>
-                          {modalStage === "REGISTERED" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        Default reception registration; awaiting tube draw.
-                      </p>
-                    </div>
-
-                    {/* Stage 2: COLLECTED */}
-                    <div
-                      onClick={() => setModalStage("COLLECTED")}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                        modalStage === "COLLECTED"
-                          ? "bg-sky-500/10 border-sky-500 shadow-xs"
-                          : "bg-card border-border/80 hover:bg-muted/40 hover:border-sky-500/30"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-sky-700 dark:text-sky-400">2. Collected</span>
-                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
-                          modalStage === "COLLECTED" ? "border-sky-500 bg-sky-500" : "border-muted-foreground"
-                        }`}>
-                          {modalStage === "COLLECTED" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        Phlebotomy drawn &amp; labeled with barcode.
-                      </p>
-                    </div>
-
-                    {/* Stage 3: IN_TRANSIT */}
-                    <div
-                      onClick={() => setModalStage("IN_TRANSIT")}
-                      className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
-                        modalStage === "IN_TRANSIT"
-                          ? "bg-blue-500/10 border-blue-500 shadow-xs"
-                          : "bg-card border-border/80 hover:bg-muted/40 hover:border-blue-500/30"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-blue-700 dark:text-blue-400">3. Central Testing</span>
-                        <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
-                          modalStage === "IN_TRANSIT" ? "border-blue-500 bg-blue-500" : "border-muted-foreground"
-                        }`}>
-                          {modalStage === "IN_TRANSIT" && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        Dispatched to central testing laboratory.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Color-Coded Vacutainers & Barcode Inputs */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="text-xs font-bold text-foreground uppercase tracking-wider">
-                        Color-Coded Specimen Vacutainers &amp; Barcodes
-                      </label>
-                      <p className="text-[11px] text-muted-foreground">
-                        Scan physical tube stickers or type barcodes for each diagnostic container.
-                      </p>
-                    </div>
-
-                    {/* Add extra tube button */}
-                    <div className="flex items-center gap-2">
-                      <select
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val && !activeTubeTypes.includes(val)) {
-                            setActiveTubeTypes((prev) => [...prev, val]);
-                          }
-                          e.target.value = "";
-                        }}
-                        className="text-xs font-bold bg-muted/60 border border-border rounded-xl px-2.5 py-1 text-foreground outline-none cursor-pointer"
-                        defaultValue=""
-                      >
-                        <option value="" disabled>+ Add Tube Type</option>
-                        {Object.keys(TUBE_CONFIG).map((k) => (
-                          <option key={k} value={k} disabled={activeTubeTypes.includes(k)}>
-                            {TUBE_CONFIG[k].title} ({TUBE_CONFIG[k].capName})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    {activeTubeTypes.map((tubeKey) => {
-                      const tube = TUBE_CONFIG[tubeKey] || {
-                        tubeType: tubeKey,
-                        capColor: "#6366f1",
-                        capName: `${tubeKey} Tube`,
-                        badgeBg: "bg-indigo-500/10",
-                        badgeBorder: "border-indigo-500/30",
-                        badgeText: "text-indigo-600 dark:text-indigo-400",
-                        title: `${tubeKey} Vacutainer`,
-                        specimenType: "Lab Specimen",
-                        additive: "Standard Container",
-                        department: "Diagnostic Testing",
-                      };
-
-                      const currentBarcodeVal = tubeBarcodeInputs[tubeKey] || "";
-
-                      return (
-                        <div
-                          key={tubeKey}
-                          className="bg-card border border-border/80 rounded-2xl p-4 space-y-3 shadow-xs hover:border-primary/30 transition-all"
-                        >
-                          {/* Tube Card Header */}
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2.5">
-                              <span
-                                className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 shadow-xs ring-2 ring-white dark:ring-zinc-900"
-                                style={{ backgroundColor: tube.capColor }}
-                              />
-                              <div>
-                                <h4 className="font-bold text-xs text-foreground leading-tight">
-                                  {tube.title}
-                                </h4>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {tube.capName} · {tube.specimenType}
-                                </span>
-                              </div>
+                {/* Modal Scrollable Body - Horizontal 2-Column Split */}
+                <div className="flex-1 overflow-y-auto p-6 bg-background custom-scrollbar">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    {/* ── Left Column (5 Cols): Patient Profile & Specimen Stage Controls ── */}
+                    <div className="lg:col-span-5 space-y-4">
+                      {/* Patient & Clinical Profile Card */}
+                      <div className="p-4 rounded-2xl bg-card border border-border/80 shadow-xs space-y-3">
+                        <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
+                              <User className="h-4 w-4" />
                             </div>
+                            <div>
+                              <p className="text-xs font-bold text-foreground">{statusModalReport.patient?.name || "Patient"}</p>
+                              <p className="text-[10px] text-muted-foreground font-mono">
+                                PID: {statusModalReport.patient?.custom_id || statusModalReport.patient?.customId || "PID-—"}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                            #{statusModalReport.custom_id || statusModalReport.customId}
+                          </span>
+                        </div>
 
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${tube.badgeBg} ${tube.badgeBorder} ${tube.badgeText}`}>
-                              {tube.tubeType}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Age &amp; Gender</span>
+                            <span className="font-bold text-foreground mt-0.5 block">
+                              {statusModalReport.patient?.age ? `${statusModalReport.patient.age} Y` : "N/A"} · {statusModalReport.patient?.gender || "N/A"}
                             </span>
                           </div>
-
-                          {/* Tube Specs info */}
-                          <div className="p-2 rounded-lg bg-muted/40 border border-border/50 text-[10px] text-muted-foreground flex items-center justify-between gap-2">
-                            <span className="truncate">Additive: <strong className="text-foreground/80">{tube.additive}</strong></span>
-                            <span className="truncate max-w-[140px] text-right font-medium">{tube.department}</span>
+                          <div>
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Phone</span>
+                            <span className="font-mono font-bold text-foreground mt-0.5 block">
+                              {statusModalReport.patient?.phone || "N/A"}
+                            </span>
                           </div>
+                        </div>
 
-                          {/* Barcode Input & Auto Generate */}
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <label className="text-[11px] font-bold text-foreground">
-                                Tube Barcode Number
-                              </label>
-                              <button
-                                type="button"
-                                onClick={() => handleAutoGenerateTubeBarcode(tubeKey)}
-                                className="text-[10px] font-bold text-primary hover:underline cursor-pointer flex items-center gap-1"
+                        <div className="pt-2 border-t border-border/60 text-xs">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Ref Doctor</span>
+                          <span className="font-bold text-foreground mt-0.5 block">
+                            {statusModalReport.patient?.ref_doctor || statusModalReport.patient?.refDoctor || "Self"}
+                          </span>
+                        </div>
+
+                        <div className="pt-2 border-t border-border/60 space-y-1.5">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                            Assigned Investigations
+                          </span>
+                          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar">
+                            {(statusModalReport.results || []).map((r: any, idx: number) => (
+                              <span
+                                key={idx}
+                                className="px-2 py-0.5 rounded-md bg-muted/80 border border-border/70 text-[10px] font-medium text-foreground truncate max-w-[200px]"
                               >
-                                <Sparkles className="h-2.5 w-2.5" /> Auto Fill
-                              </button>
-                            </div>
-
-                            <div className="relative">
-                              <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                              <Input
-                                type="text"
-                                value={currentBarcodeVal}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setTubeBarcodeInputs((prev) => ({ ...prev, [tubeKey]: val }));
-                                }}
-                                placeholder="Scan with barcode gun or type..."
-                                className="pl-9 pr-8 h-9 text-xs font-mono font-bold"
-                              />
-                              {currentBarcodeVal && (
-                                <button
-                                  type="button"
-                                  onClick={() => setTubeBarcodeInputs((prev) => ({ ...prev, [tubeKey]: "" }))}
-                                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                            </div>
+                                {r.test?.name || "Test"}
+                              </span>
+                            ))}
+                            {statusModalReport.package_name && (
+                              <span className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/25 text-[10px] font-bold text-primary">
+                                Package: {statusModalReport.package_name}
+                              </span>
+                            )}
                           </div>
+                        </div>
+                      </div>
 
-                          {/* Live SVG Barcode Preview */}
-                          {currentBarcodeVal ? (
-                            <div className="p-2 bg-white rounded-xl border border-zinc-200 flex flex-col items-center justify-center">
-                              <BarcodeSVG value={currentBarcodeVal} width={1.05} height={24} fontSize={8} />
-                            </div>
-                          ) : (
-                            <div className="p-2 rounded-xl border border-dashed border-border/80 text-center text-[10px] text-muted-foreground">
-                              Awaiting barcode scan for {tube.tubeType}
-                            </div>
+                      {/* Report Approved Lockdown Banner */}
+                      {isModalApproved && (
+                        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 space-y-1.5 shadow-xs animate-fade-in">
+                          <div className="flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <h4 className="font-bold text-xs text-foreground">
+                              Report Finalized &amp; Authorized
+                            </h4>
+                            <span className="ml-auto px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-mono font-extrabold uppercase">
+                              {statusModalReport.status || "APPROVED"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">
+                            This report has already been verified and signed off by the central pathologist. Further specimen stage changes are locked.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Specimen Lifecycle Stage Controller */}
+                      <div className="p-4 rounded-2xl bg-card border border-border/80 shadow-xs space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                              <Activity className="h-3.5 w-3.5 text-primary" />
+                              <span>Specimen Collection Stage</span>
+                            </h4>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">
+                              Advance collection stage as samples move through triage.
+                            </p>
+                          </div>
+                          {isModalApproved && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/30 text-[10px] font-bold">
+                              Locked
+                            </span>
                           )}
                         </div>
-                      );
-                    })}
+
+                        {/* Premium Stage Dropdown (Radix Select) */}
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-bold text-foreground/80 flex items-center justify-between">
+                            <span>Stage Selector</span>
+                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                              modalStage === "COLLECTED"
+                                ? "bg-sky-500/10 text-sky-600 border-sky-500/30"
+                                : modalStage === "IN_TRANSIT"
+                                  ? "bg-blue-500/10 text-blue-600 border-blue-500/30"
+                                  : "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                            }`}>
+                              {modalStage}
+                            </span>
+                          </label>
+
+                          <Select
+                            value={modalStage}
+                            onValueChange={(val: any) => !isModalApproved && setModalStage(val)}
+                            disabled={isModalApproved}
+                          >
+                            <SelectTrigger className="h-11 rounded-xl bg-background border-border text-xs font-semibold shadow-2xs hover:border-primary/50 transition-colors cursor-pointer">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-w-md">
+                              <SelectItem value="REGISTERED" className="text-xs py-2.5 cursor-pointer">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+                                  <div>
+                                    <p className="font-bold text-foreground">1. Registered (Reception Intake)</p>
+                                    <p className="text-[10px] text-muted-foreground">Default intake logged; phlebotomy tube draw pending</p>
+                                  </div>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="COLLECTED" className="text-xs py-2.5 cursor-pointer">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-sky-500 shrink-0" />
+                                  <div>
+                                    <p className="font-bold text-foreground">2. Collected (Phlebotomy Complete)</p>
+                                    <p className="text-[10px] text-muted-foreground">Sample drawn &amp; tagged with container barcodes</p>
+                                  </div>
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="IN_TRANSIT" className="text-xs py-2.5 cursor-pointer">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
+                                  <div>
+                                    <p className="font-bold text-foreground">3. Central Hub / In Transit</p>
+                                    <p className="text-[10px] text-muted-foreground">Dispatched in cooler box to Central Pathology Lab</p>
+                                  </div>
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Visual Step Progress Cards */}
+                        <div className={`grid grid-cols-3 gap-2 ${isModalApproved ? "opacity-60 pointer-events-none cursor-not-allowed" : ""}`}>
+                          {/* Step 1: Registered */}
+                          <div
+                            onClick={() => setModalStage("REGISTERED")}
+                            className={`p-2.5 rounded-xl border cursor-pointer select-none transition-all flex flex-col justify-between gap-1 text-center ${
+                              modalStage === "REGISTERED"
+                                ? "bg-amber-500/15 border-amber-500 shadow-2xs ring-1 ring-amber-500/40"
+                                : "bg-muted/30 border-border/70 hover:bg-muted/60"
+                            }`}
+                          >
+                            <div className="flex items-center justify-center">
+                              <span className={`w-2 h-2 rounded-full ${modalStage === "REGISTERED" ? "bg-amber-500" : "bg-muted-foreground"}`} />
+                            </div>
+                            <p className="text-[11px] font-bold text-foreground">1. Registered</p>
+                            <span className="text-[9px] text-muted-foreground">Intake</span>
+                          </div>
+
+                          {/* Step 2: Collected */}
+                          <div
+                            onClick={() => setModalStage("COLLECTED")}
+                            className={`p-2.5 rounded-xl border cursor-pointer select-none transition-all flex flex-col justify-between gap-1 text-center ${
+                              modalStage === "COLLECTED"
+                                ? "bg-sky-500/15 border-sky-500 shadow-2xs ring-1 ring-sky-500/40"
+                                : "bg-muted/30 border-border/70 hover:bg-muted/60"
+                            }`}
+                          >
+                            <div className="flex items-center justify-center">
+                              <span className={`w-2 h-2 rounded-full ${modalStage === "COLLECTED" ? "bg-sky-500" : "bg-muted-foreground"}`} />
+                            </div>
+                            <p className="text-[11px] font-bold text-foreground">2. Collected</p>
+                            <span className="text-[9px] text-muted-foreground">Phlebotomy</span>
+                          </div>
+
+                          {/* Step 3: In Transit */}
+                          <div
+                            onClick={() => setModalStage("IN_TRANSIT")}
+                            className={`p-2.5 rounded-xl border cursor-pointer select-none transition-all flex flex-col justify-between gap-1 text-center ${
+                              modalStage === "IN_TRANSIT"
+                                ? "bg-blue-500/15 border-blue-500 shadow-2xs ring-1 ring-blue-500/40"
+                                : "bg-muted/30 border-border/70 hover:bg-muted/60"
+                            }`}
+                          >
+                            <div className="flex items-center justify-center">
+                              <span className={`w-2 h-2 rounded-full ${modalStage === "IN_TRANSIT" ? "bg-blue-500" : "bg-muted-foreground"}`} />
+                            </div>
+                            <p className="text-[11px] font-bold text-foreground">3. Central Hub</p>
+                            <span className="text-[9px] text-muted-foreground">Testing</span>
+                          </div>
+                        </div>
+
+                        {/* Quick 1-Click Action Buttons */}
+                        {!isModalApproved && (
+                          <div className="flex items-center gap-2 pt-1">
+                            {modalStage !== "COLLECTED" && (
+                              <button
+                                type="button"
+                                onClick={() => setModalStage("COLLECTED")}
+                                className="flex-1 py-2 px-3 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                              >
+                                <CheckCheck className="h-3.5 w-3.5" />
+                                <span>Mark Collected</span>
+                              </button>
+                            )}
+                            {modalStage !== "IN_TRANSIT" && (
+                              <button
+                                type="button"
+                                onClick={() => setModalStage("IN_TRANSIT")}
+                                className="flex-1 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                              >
+                                <Send className="h-3.5 w-3.5" />
+                                <span>Dispatch to Hub</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ── Right Column (7 Cols): Vacutainers & Multi-Vial Barcode Management ── */}
+                    <div className="lg:col-span-7 space-y-4">
+                      {/* Vacutainers Header & Controls */}
+                      <div className="p-4 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h4 className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-2">
+                            <TestTube2 className="h-4 w-4 text-primary" />
+                            <span>Specimen Vacutainers &amp; Barcodes ({activeTubeTypes.length})</span>
+                          </h4>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            Color vacutainers triage. Scan vial barcodes or auto-generate.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* Add Vacutainer Select Dropdown */}
+                          <Select
+                            value=""
+                            onValueChange={(val) => {
+                              if (val && !activeTubeTypes.includes(val)) {
+                                setActiveTubeTypes((prev) => [...prev, val]);
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="h-9 px-3 rounded-xl bg-background border border-border text-xs font-bold text-foreground shadow-2xs hover:border-primary/50 cursor-pointer">
+                              <div className="flex items-center gap-1.5">
+                                <Plus className="h-3.5 w-3.5 text-primary" />
+                                <span>Add Tube</span>
+                              </div>
+                            </SelectTrigger>
+                            <SelectContent className="max-h-72">
+                              {Object.keys(TUBE_CONFIG).map((k) => {
+                                const t = TUBE_CONFIG[k];
+                                const isAdded = activeTubeTypes.includes(k);
+                                return (
+                                  <SelectItem key={k} value={k} disabled={isAdded} className="text-xs py-2 cursor-pointer">
+                                    <div className="flex items-center gap-2">
+                                      <span
+                                        className="w-3.5 h-3.5 rounded-full shrink-0 shadow-2xs border border-white/50"
+                                        style={{ backgroundColor: t.capColor }}
+                                      />
+                                      <span className="font-bold">{t.title}</span>
+                                      <span className="text-[10px] text-muted-foreground">({t.capName})</span>
+                                      {isAdded && (
+                                        <span className="text-[10px] font-semibold text-muted-foreground ml-auto">Added</span>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+
+                          {/* Auto Fill All Barcodes Button */}
+                          <button
+                            type="button"
+                            onClick={handleAutoFillAllBarcodes}
+                            className="px-3 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                            title="Auto-fill barcodes for all empty vacutainer tubes"
+                          >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            <span>Auto Fill All</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 2-Column Grid of Vacutainer Cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        {activeTubeTypes.map((tubeKey) => {
+                          const tube = TUBE_CONFIG[tubeKey] || {
+                            tubeType: tubeKey,
+                            capColor: "#6366f1",
+                            capName: `${tubeKey} Tube`,
+                            badgeBg: "bg-indigo-500/10",
+                            badgeBorder: "border-indigo-500/30",
+                            badgeText: "text-indigo-600 dark:text-indigo-400",
+                            title: `${tubeKey} Vacutainer`,
+                            specimenType: "Lab Specimen",
+                            additive: "Standard Container",
+                            department: "Diagnostic Testing",
+                          };
+
+                          const currentBarcodeVal = tubeBarcodeInputs[tubeKey] || "";
+
+                          return (
+                            <div
+                              key={tubeKey}
+                              className="bg-card border border-border/80 rounded-2xl p-4 space-y-3 shadow-xs hover:border-primary/40 hover:shadow-sm transition-all"
+                            >
+                              {/* Tube Card Header */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2.5">
+                                  <span
+                                    className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 shadow-sm ring-2 ring-white/80 dark:ring-zinc-800"
+                                    style={{
+                                      backgroundColor: tube.capColor,
+                                      boxShadow: `0 2px 4px ${tube.capColor}40`,
+                                    }}
+                                  />
+                                  <div>
+                                    <h5 className="font-bold text-xs text-foreground leading-tight">
+                                      {tube.title}
+                                    </h5>
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {tube.capName} · {tube.specimenType}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${tube.badgeBg} ${tube.badgeBorder} ${tube.badgeText}`}>
+                                    {tube.tubeType}
+                                  </span>
+                                  {activeTubeTypes.length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveTubeType(tubeKey)}
+                                      className="text-muted-foreground hover:text-destructive p-1 rounded-md transition-colors cursor-pointer"
+                                      title="Remove tube"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Specs Pill */}
+                              <div className="p-2 rounded-xl bg-muted/40 border border-border/60 text-[10px] text-muted-foreground flex items-center justify-between gap-2">
+                                <span className="truncate">Additive: <strong className="text-foreground/80">{tube.additive}</strong></span>
+                                <span className="truncate max-w-[120px] text-right font-medium">{tube.department}</span>
+                              </div>
+
+                              {/* Barcode Input & Auto Generate */}
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-[11px] font-bold text-foreground">
+                                    Barcode Number
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAutoGenerateTubeBarcode(tubeKey)}
+                                    className="text-[10px] font-bold text-primary hover:underline cursor-pointer flex items-center gap-1"
+                                  >
+                                    <Sparkles className="h-2.5 w-2.5" /> Auto Fill
+                                  </button>
+                                </div>
+
+                                <div className="relative">
+                                  <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                  <Input
+                                    type="text"
+                                    value={currentBarcodeVal}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setTubeBarcodeInputs((prev) => ({ ...prev, [tubeKey]: val }));
+                                    }}
+                                    placeholder="Scan with barcode gun or type..."
+                                    className="pl-9 pr-8 h-9 text-xs font-mono font-bold bg-background"
+                                  />
+                                  {currentBarcodeVal && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setTubeBarcodeInputs((prev) => ({ ...prev, [tubeKey]: "" }))}
+                                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Live SVG Barcode Preview */}
+                              {currentBarcodeVal ? (
+                                <div className="p-2.5 bg-white rounded-xl border border-zinc-200 shadow-2xs flex flex-col items-center justify-center">
+                                  <BarcodeSVG value={currentBarcodeVal} width={1.05} height={24} fontSize={8} />
+                                </div>
+                              ) : (
+                                <div className="p-2.5 rounded-xl border border-dashed border-border/80 text-center text-[10px] text-muted-foreground">
+                                  Awaiting tube scan for {tube.tubeType}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Modal Footer Controls */}
-              <div className="px-6 py-4 border-t border-border/80 bg-muted/20 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  <span>Real-time LIS analyzer and tracking synchronization</span>
-                </div>
+                {/* Modal Footer Controls */}
+                <div className="px-6 py-4 border-t border-border/80 bg-muted/30 backdrop-blur-xs flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                  <div className="flex items-center gap-3 text-xs">
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card border border-border shadow-2xs">
+                      <span className={`w-2.5 h-2.5 rounded-full ${
+                        modalStage === "COLLECTED" ? "bg-sky-500 animate-pulse" : modalStage === "IN_TRANSIT" ? "bg-blue-500 animate-pulse" : "bg-amber-500 animate-pulse"
+                      }`} />
+                      <span className="text-muted-foreground font-semibold">Active Stage:</span>
+                      <span className="font-bold text-foreground">
+                        {modalStage === "COLLECTED" ? "Sample Collected" : modalStage === "IN_TRANSIT" ? "Central Hub Transit" : "Registered"}
+                      </span>
+                    </div>
+                    <div className="hidden sm:flex items-center gap-1.5 text-muted-foreground font-medium text-[11px]">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>{Object.values(tubeBarcodeInputs).filter(Boolean).length} / {activeTubeTypes.length} tubes barcoded</span>
+                    </div>
+                  </div>
 
-                <div className="flex items-center gap-2.5">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setStatusModalReport(null)}
-                    className="text-xs cursor-pointer"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    disabled={savingStatusModal || isModalApproved}
-                    className={`font-bold text-xs gap-1.5 shadow-md ring-inset-top ${
-                      isModalApproved
-                        ? "bg-muted text-muted-foreground border border-border cursor-not-allowed"
-                        : "gradient-primary text-primary-foreground cursor-pointer"
-                    }`}
-                  >
-                    {savingStatusModal ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : isModalApproved ? (
-                      <Lock className="h-3.5 w-3.5 text-amber-500" />
-                    ) : (
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                    )}
-                    <span>{isModalApproved ? "Status Locked (Report Approved)" : "Save Barcodes & Update Status"}</span>
-                  </Button>
+                  <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setStatusModalReport(null)}
+                      className="h-10 px-4 rounded-xl text-xs font-semibold cursor-pointer"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={savingStatusModal || isModalApproved}
+                      className={`h-10 px-6 rounded-xl font-bold text-xs gap-2 shadow-md ring-inset-top ${
+                        isModalApproved
+                          ? "bg-muted text-muted-foreground border border-border cursor-not-allowed"
+                          : "gradient-primary text-primary-foreground cursor-pointer hover:-translate-y-px active:scale-95 transition-all"
+                      }`}
+                    >
+                      {savingStatusModal ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : isModalApproved ? (
+                        <Lock className="h-4 w-4 text-amber-500" />
+                      ) : (
+                        <CheckCircle2 className="h-4 w-4" />
+                      )}
+                      <span>{isModalApproved ? "Status Locked (Report Approved)" : "Save Barcodes & Update Stage"}</span>
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </form>
+              </form>
             );
           })()}
         </DialogContent>

@@ -289,6 +289,25 @@ export default function ReportsListPage() {
       resultsList.some((res: any) => res.test?.category === categoryFilter);
     const matchesDate = filterDate && repDate ? repDate.startsWith(filterDate) : true;
 
+    // Strictly ensure Collection Center only sees reports belonging to their center
+    if (isCollectionCenter && currentUser) {
+      const p = r.patient || {};
+      const meta = typeof p.meta === "object" ? p.meta : {};
+      const userIdStr = String(currentUser.id || currentUser.user_id || "");
+      const userName = (currentUser.name || "").toLowerCase().trim();
+      const centerCode = (currentUser.center_code || currentUser.centerCode || "").toLowerCase().trim();
+      const collectedAt = String(p.collected_at || meta.collected_at || "").toLowerCase();
+
+      const createdById = String(p.created_by_id || meta.created_by_id || "");
+      const isMine = userIdStr && createdById === userIdStr;
+      const isAssigned =
+        (userName && collectedAt.includes(userName)) ||
+        (centerCode && (collectedAt.includes(centerCode) || String(meta.center_code || "").toLowerCase() === centerCode)) ||
+        (meta.collection_center_id && String(meta.collection_center_id) === userIdStr);
+
+      if (!isMine && !isAssigned) return false;
+    }
+
     return matchesSearch && matchesStatus && matchesCategory && matchesDate;
   });
 

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ClinicalResultDropdown } from "@/components/clinical-result-dropdown";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getCleanLetterheadUrl, getStoredUser } from "@/lib/api-client";
@@ -2426,6 +2427,54 @@ export default function ResultEntryPage() {
     }
   };
 
+  const [printingAndApproving, setPrintingAndApproving] = useState(false);
+
+  // Auto-save & approve report in background, then open Print Report modal
+  const handlePrintReport = async () => {
+    setPrintingAndApproving(true);
+    try {
+      const payload = Object.entries(values).map(([id, resultValue]) => {
+        const isOverridden = !!abnormalOverrides[id];
+        const rItem = report?.results.find((r) => r.id === id);
+        const calculatedAbnormal = rItem ? isValueAbnormal(rItem.test, resultValue).abnormal : false;
+
+        return {
+          id,
+          result_value: resultValue.trim(),
+          resultValue: resultValue.trim(),
+          is_abnormal: isOverridden || calculatedAbnormal,
+          isAbnormal: isOverridden || calculatedAbnormal,
+          remarks: paramRemarks[id] ? paramRemarks[id].trim() : null,
+        };
+      });
+
+      await fetchFromLaravel(`/reports/${reportId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          status: "APPROVED",
+          results: payload,
+          printedInterpretations,
+          test_notes: testNotes,
+          testNotes: testNotes,
+        }),
+      });
+
+      // Update in-memory state so modal and report print reflect APPROVED
+      setReport((prev) => (prev ? { ...prev, status: "APPROVED" } : prev));
+      if (reportRef.current) {
+        reportRef.current.status = "APPROVED";
+      }
+
+      toast.success("Report Approved", "Results saved and marked as APPROVED.");
+    } catch (err: any) {
+      console.error("Auto-approve on print failed:", err);
+      toast.error("Auto-Approve Notice", "Opening print modal, but saving approval failed: " + (err.message || "Network error"));
+    } finally {
+      setPrintingAndApproving(false);
+      setIsPrintModalOpen(true);
+    }
+  };
+
   const handleSaveResults = async (targetStatus?: "PENDING" | "FINAL" | "APPROVED", andNext: boolean = false) => {
     setSaving(true);
     setError(null);
@@ -3118,30 +3167,22 @@ export default function ResultEntryPage() {
                                                 title="Tick to highlight / bold in report"
                                                 className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 cursor-pointer accent-primary shrink-0"
                                               />
-                                              <Input
-                                                list={`options-${item.id}`}
-                                                placeholder={isCalculated ? "Auto" : "Select or enter result..."}
+                                              <ClinicalResultDropdown
+                                                itemId={item.id}
+                                                paramName={item.test.name}
+                                                testName={group.mainTestName}
+                                                category={item.test.category || (section.sectionName !== "_default" ? section.sectionName : undefined)}
+                                                customDbOptions={item.test.customOptions}
                                                 value={val}
-                                                onChange={(e) => handleValueChange(item.id, e.target.value)}
+                                                onChange={(newVal) => handleValueChange(item.id, newVal)}
                                                 onKeyDown={(e) => handleInputKeyDown(e, item.id)}
-                                                data-result-input="true"
-                                                data-result-id={item.id}
-                                                data-is-calculated={isCalculated ? "true" : "false"}
                                                 disabled={saving}
-                                                className={`w-full h-9 text-sm text-foreground ${isCalculated && !manualOverrides.has(item.id)
-                                                  ? "bg-primary/5 border-primary/30 font-bold text-primary cursor-text"
-                                                  : isForcedAbnormal || abnormal
-                                                    ? "font-extrabold border-border/90"
-                                                    : "font-medium"
-                                                  }`}
+                                                isCalculated={isCalculated && !manualOverrides.has(item.id)}
+                                                isForcedAbnormal={isForcedAbnormal}
+                                                abnormal={abnormal}
+                                                isTextOnlyTable={true}
+                                                className="w-full"
                                               />
-                                              {item.test.customOptions && (
-                                                <datalist id={`options-${item.id}`}>
-                                                  {JSON.parse(item.test.customOptions).map((opt: string, i: number) => (
-                                                    <option key={i} value={opt} />
-                                                  ))}
-                                                </datalist>
-                                              )}
 
                                               {/* + Button to add inline comment/remark */}
                                               <button
@@ -3175,21 +3216,21 @@ export default function ResultEntryPage() {
                                                   className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 cursor-pointer accent-primary shrink-0"
                                                 />
 
-                                                <Input
-                                                  placeholder={isCalculated ? "Auto" : "—"}
+                                                <ClinicalResultDropdown
+                                                  itemId={item.id}
+                                                  paramName={item.test.name}
+                                                  testName={group.mainTestName}
+                                                  category={item.test.category || (section.sectionName !== "_default" ? section.sectionName : undefined)}
+                                                  customDbOptions={item.test.customOptions}
                                                   value={val}
-                                                  onChange={(e) => handleValueChange(item.id, e.target.value)}
+                                                  onChange={(newVal) => handleValueChange(item.id, newVal)}
                                                   onKeyDown={(e) => handleInputKeyDown(e, item.id)}
-                                                  data-result-input="true"
-                                                  data-result-id={item.id}
-                                                  data-is-calculated={isCalculated ? "true" : "false"}
                                                   disabled={saving}
-                                                  className={`${isTextType ? "w-64" : "w-32"} h-9 font-mono text-sm text-foreground transition-all ${isCalculated && !manualOverrides.has(item.id)
-                                                    ? "bg-primary/5 border-primary/30 font-bold text-primary cursor-text"
-                                                    : isForcedAbnormal || abnormal
-                                                      ? "font-extrabold border-border/90 bg-muted/20"
-                                                      : "font-semibold"
-                                                    }`}
+                                                  isCalculated={isCalculated && !manualOverrides.has(item.id)}
+                                                  isForcedAbnormal={isForcedAbnormal}
+                                                  abnormal={abnormal}
+                                                  isTextOnlyTable={isTextType}
+                                                  className={isTextType ? "w-64" : "w-36"}
                                                 />
 
                                                 {/* + Button to add inline comment/remark */}
@@ -3552,11 +3593,16 @@ export default function ResultEntryPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsPrintModalOpen(true)}
+                onClick={handlePrintReport}
+                disabled={saving || printingAndApproving}
                 className="h-9 sm:h-10 px-3 sm:px-4 gap-1.5 font-bold cursor-pointer border-border/90 hover:bg-muted text-foreground text-xs"
               >
-                <Printer className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-primary" />
-                <span>Print Report</span>
+                {printingAndApproving ? (
+                  <Loader2 className="h-3.5 sm:h-4 w-3.5 sm:w-4 animate-spin text-primary" />
+                ) : (
+                  <Printer className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-primary" />
+                )}
+                <span>{printingAndApproving ? "Approving…" : "Print Report"}</span>
               </Button>
 
               <Button

@@ -286,9 +286,9 @@ export default function Sidebar() {
           </Link>
         ) : (
           <Link
-            href={isCollectionCenter ? "/dashboard/today-samples" : "/dashboard/patients/register"}
+            href="/dashboard/patients/register"
             onClick={() => setIsOpen(false)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md ring-inset-top hover:-translate-y-px active:scale-[0.98] transition-all"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md ring-inset-top hover:-translate-y-px active:scale-[0.98] transition-all cursor-pointer"
           >
             <span className="text-base leading-none font-bold">+</span>
             <span suppressHydrationWarning>

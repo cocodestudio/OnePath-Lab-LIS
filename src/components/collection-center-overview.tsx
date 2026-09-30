@@ -141,6 +141,14 @@ export function CollectionCenterOverview({ user }: Props) {
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-primary" : ""}`} />
               <span>Refresh</span>
             </button>
+
+            <Link
+              href="/dashboard/patients/register"
+              className="px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md ring-inset-top hover:-translate-y-px active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span>Sample Entry</span>
+            </Link>
           </div>
         </div>
       </div>

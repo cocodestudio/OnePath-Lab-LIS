@@ -282,6 +282,7 @@ export default function BillingPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
   const isB2B = currentUserRole === "B2B";
   const isCollectionCenter = currentUserRole === "COLLECTION_CENTER";
@@ -289,7 +290,10 @@ export default function BillingPage() {
   useEffect(() => {
     setIsMounted(true);
     const user = getStoredUser();
-    if (user?.role) setCurrentUserRole(user.role);
+    if (user) {
+      setCurrentUser(user);
+      if (user.role) setCurrentUserRole(user.role);
+    }
 
     // Safely hydrate from localStorage after mount to completely prevent SSR hydration mismatches
     try {
@@ -639,6 +643,25 @@ export default function BillingPage() {
 
     const matchesStatus = statusFilter === "ALL" || b.status === statusFilter;
     const matchesDate = filterDate ? billDate.startsWith(filterDate) : true;
+
+    // Strictly ensure Collection Center only sees bills belonging to their center
+    if (isCollectionCenter && currentUser) {
+      const p: any = b.patient || {};
+      const meta = typeof p.meta === "object" ? p.meta : {};
+      const userIdStr = String(currentUser.id || currentUser.user_id || "");
+      const userName = (currentUser.name || "").toLowerCase().trim();
+      const centerCode = (currentUser.center_code || currentUser.centerCode || "").toLowerCase().trim();
+      const collectedAt = String(p.collected_at || meta.collected_at || "").toLowerCase();
+
+      const createdById = String(p.created_by_id || meta.created_by_id || "");
+      const isMine = userIdStr && createdById === userIdStr;
+      const isAssigned =
+        (userName && collectedAt.includes(userName)) ||
+        (centerCode && (collectedAt.includes(centerCode) || String(meta.center_code || "").toLowerCase() === centerCode)) ||
+        (meta.collection_center_id && String(meta.collection_center_id) === userIdStr);
+
+      if (!isMine && !isAssigned) return false;
+    }
 
     return matchesSearch && matchesStatus && matchesDate;
   });

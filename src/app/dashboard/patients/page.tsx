@@ -516,6 +516,24 @@ const getTodayStr = () => {
 
     const matchesDate = filterDate ? patDate === filterDate : true;
 
+    // Strictly ensure Collection Center only sees patients belonging to their center
+    if (isCollectionCenter && currentUser) {
+      const meta = typeof p.meta === "object" ? p.meta : {};
+      const userIdStr = String(currentUser.id || currentUser.user_id || "");
+      const userName = (currentUser.name || "").toLowerCase().trim();
+      const centerCode = (currentUser.center_code || currentUser.centerCode || "").toLowerCase().trim();
+      const collectedAt = String(p.collected_at || meta.collected_at || "").toLowerCase();
+
+      const createdById = String(p.created_by_id || meta.created_by_id || "");
+      const isMine = userIdStr && createdById === userIdStr;
+      const isAssigned =
+        (userName && collectedAt.includes(userName)) ||
+        (centerCode && (collectedAt.includes(centerCode) || String(meta.center_code || "").toLowerCase() === centerCode)) ||
+        (meta.collection_center_id && String(meta.collection_center_id) === userIdStr);
+
+      if (!isMine && !isAssigned) return false;
+    }
+
     return matchesSearch && matchesDate;
   });
 
@@ -625,14 +643,12 @@ const getTodayStr = () => {
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">Patients Registry</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Directory of all registered laboratory patients & demographics.</p>
         </div>
-        {currentUser?.role !== "COLLECTION_CENTER" && (
-          <Link href="/dashboard/patients/register">
-            <Button size="sm" className="gradient-primary text-primary-foreground font-bold text-xs gap-2 shadow-xs cursor-pointer ring-inset-top">
-              <UserPlus className="h-4 w-4" />
-              <span>Register Patient</span>
-            </Button>
-          </Link>
-        )}
+        <Link href="/dashboard/patients/register">
+          <Button size="sm" className="gradient-primary text-primary-foreground font-bold text-xs gap-2 shadow-xs cursor-pointer ring-inset-top">
+            <UserPlus className="h-4 w-4" />
+            <span>{currentUser?.role === "COLLECTION_CENTER" ? "Sample Entry" : "Register Patient"}</span>
+          </Button>
+        </Link>
       </div>
 
       {/* Filter / Search Ribbon */}

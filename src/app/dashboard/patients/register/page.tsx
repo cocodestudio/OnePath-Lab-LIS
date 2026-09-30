@@ -8,7 +8,7 @@ import {
   Stethoscope, MapPin, Phone, User, Hash, FlaskConical, CheckCircle2,
   Loader2, Printer, FileText, AlertCircle, ArrowRight, Search, BookOpen, Settings,
   ChevronDown, ChevronRight, ChevronLeft, PlusCircle, Edit2, Trash2, UserCheck, Building, Sparkles,
-  Percent, DollarSign, Receipt, RefreshCw, X, Check,
+  Percent, DollarSign, Receipt, RefreshCw, X, Check, ExternalLink,
   Mail, Shield, CreditCard, Building2, Calendar, CheckSquare, RotateCcw,
   ClipboardList, Asterisk, Activity, Scale, Ruler, HeartPulse, ShieldCheck, Tag, Clock,
   Banknote, QrCode, Globe, Wallet, Boxes, Lock, TestTube2, Barcode
@@ -32,6 +32,7 @@ import { getStoredPackages, type LabPackage, saveReportPackage, resolvePackageTe
 import { InvoiceSheet } from "@/components/invoice-sheet";
 import { normalizeBillSettings, type BillLayoutSettings } from "@/lib/bill-settings";
 import { printInvoiceElement } from "@/lib/print-invoice";
+import { useToast } from "@/components/ui/toast";
 import { AbhaLinkModal, type AbhaVerifiedPatient } from "@/components/abha-link-modal";
 import { AbhaQrPosterModal } from "@/components/abha-qr-poster-modal";
 
@@ -196,6 +197,17 @@ function classifyTestsIntoTubes(tests: Array<{ id: string; name: string; categor
 const defaultDoctors = ["Self", "Dr. Rajesh Sharma", "Dr. Amit Verma", "Dr. Anjali Gupta", "Dr. S. K. Roy"];
 const defaultCollectionPoints = ["Main Lab", "Home Collection", "Hospital OPD", "Branch 1 - City Center"];
 const defaultPhlebotomists = ["Self / Lab Staff", "Rahul Phlebotomist", "Pooja Sharma (Tech)", "Vikram Collector"];
+const OUTSOURCE_PARTNER_LABS = [
+  "Dr. Lal PathLabs",
+  "SRL Diagnostics",
+  "Metropolis Healthcare",
+  "Thyrocare Technologies",
+  "Suburban Diagnostics",
+  "Oncquest Laboratories",
+  "Apollo Diagnostics",
+  "Redcliffe Labs",
+  "Other Partner Lab",
+];
 
 function RegisterPageShimmer({ pid }: { pid?: string | null }) {
   return (
@@ -366,6 +378,7 @@ function RegisterPageShimmer({ pid }: { pid?: string | null }) {
 
 function RegisterPatientPage() {
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const editId = searchParams?.get("edit");
   const [isEditMode, setIsEditMode] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
@@ -531,9 +544,20 @@ function RegisterPatientPage() {
   const [paymentUpdateMessage, setPaymentUpdateMessage] = useState<string | null>(null);
 
   // Packages & Catalog Mode
-  const [catalogMode, setCatalogMode] = useState<"TESTS" | "PACKAGES">("TESTS");
+  const [catalogMode, setCatalogMode] = useState<"TESTS" | "PACKAGES" | "OUTSOURCE">("TESTS");
   const [availablePackages, setAvailablePackages] = useState<LabPackage[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<LabPackage | null>(null);
+
+  // Outsource Investigations State
+  const [selectedOutsourceTests, setSelectedOutsourceTests] = useState<
+    Array<{ id?: string; name: string; code?: string; price: number; category?: string }>
+  >([]);
+  const [outsourcePartnerLab, setOutsourcePartnerLab] = useState<string>("Dr. Lal PathLabs");
+  const [outsourcePartnerLabCustom, setOutsourcePartnerLabCustom] = useState<string>("");
+  const [outsourceNotes, setOutsourceNotes] = useState<string>("");
+  const [customOutsourceName, setCustomOutsourceName] = useState<string>("");
+  const [customOutsourcePrice, setCustomOutsourcePrice] = useState<string>("");
+  const [isAddingCustomOutsource, setIsAddingCustomOutsource] = useState<boolean>(false);
 
   // Booking & Test Selection State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1615,6 +1639,61 @@ function RegisterPatientPage() {
     }
   };
 
+  // Outsource Test Helpers
+  const handleToggleOutsourceTest = (test: any) => {
+    const exists = selectedOutsourceTests.some(
+      (st) => (st.id && st.id === test.id) || st.name.toLowerCase() === test.name.toLowerCase()
+    );
+
+    if (exists) {
+      setSelectedOutsourceTests((prev) =>
+        prev.filter((st) => (st.id ? st.id !== test.id : st.name.toLowerCase() !== test.name.toLowerCase()))
+      );
+    } else {
+      setSelectedOutsourceTests((prev) => [
+        ...prev,
+        {
+          id: test.id,
+          name: test.name,
+          code: test.testCode || test.test_code || test.code || "",
+          price: Number(test.price) || 0,
+          category: test.category || "Outsource",
+        },
+      ]);
+    }
+  };
+
+  const handleAddCustomOutsourceTest = () => {
+    const trimmed = customOutsourceName.trim();
+    if (!trimmed) {
+      toast({ title: "Name Required", description: "Please enter investigation name.", type: "error" });
+      return;
+    }
+    const price = Math.max(0, parseFloat(customOutsourcePrice) || 0);
+    setSelectedOutsourceTests((prev) => [
+      ...prev,
+      {
+        name: trimmed,
+        code: "OUT-CUST",
+        price,
+        category: "Outsource Custom",
+      },
+    ]);
+    setCustomOutsourceName("");
+    setCustomOutsourcePrice("");
+    setIsAddingCustomOutsource(false);
+  };
+
+  const handleRemoveOutsourceTest = (idOrIndex: string | number) => {
+    if (typeof idOrIndex === "number") {
+      setSelectedOutsourceTests((prev) => prev.filter((_, i) => i !== idOrIndex));
+    } else {
+      setSelectedOutsourceTests((prev) =>
+        prev.filter((st, i) => (st.id ? st.id !== idOrIndex : String(i) !== idOrIndex))
+      );
+    }
+  };
+
   const selectedTestObjects = availableTests.flatMap((t) => {
     let shouldChargeParent = selectedTests.includes(t.id);
     if (!shouldChargeParent && t.subTests) {
@@ -1657,7 +1736,9 @@ function RegisterPatientPage() {
   }, [specimenTubes]);
 
   const rawSubtotal = selectedTestObjects.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
-  const subtotal = selectedPackage ? selectedPackage.price : rawSubtotal;
+  const outsourceSubtotal = selectedOutsourceTests.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
+  const inHouseSubtotal = selectedPackage ? selectedPackage.price : rawSubtotal;
+  const subtotal = inHouseSubtotal + outsourceSubtotal;
   const parsedDiscount = Math.min(subtotal, Math.max(0, parseFloat(discount) || 0));
   const grandTotal = Math.max(0, subtotal - parsedDiscount);
   const parsedPaid = Math.min(grandTotal, Math.max(0, parseFloat(paidAmount) || 0));
@@ -1680,74 +1761,123 @@ function RegisterPatientPage() {
       if (validTestIds.length === 0 && selectedPackage) {
         validTestIds = Array.from(new Set(resolvePackageTestIds(selectedPackage, availableTests).filter(id => uuidRegex.test(id))));
       }
-      if (validTestIds.length === 0 && availableTests.length > 0) {
-        validTestIds = [availableTests[0].id];
+
+      const hasInHouse = validTestIds.length > 0;
+      const hasOutsource = selectedOutsourceTests.length > 0;
+
+      if (!hasInHouse && !hasOutsource) {
+        throw new Error("Please select at least one clinical investigation, package, or outsource test.");
       }
 
-      if (validTestIds.length === 0) {
-        throw new Error("Please select at least one clinical investigation or diagnostic package.");
-      }
+      const finalPartnerLab =
+        outsourcePartnerLab === "Other Partner Lab" && outsourcePartnerLabCustom.trim()
+          ? outsourcePartnerLabCustom.trim()
+          : outsourcePartnerLab;
 
-      let report: any;
+      const isPureOutsource = hasOutsource && !hasInHouse;
+
+      let report: any = null;
       let assignedBillCustomId = "INV-CONFIRMED";
       const currentBillId = existingBill?.id || existingReport?.bill?.id || existingReport?.bill_id;
 
-      if (isEditMode && (currentBillId || existingReport?.id)) {
-        if (currentBillId) {
-          try {
-            const updatedBill = await fetchFromLaravel(`/bills/${currentBillId}`, {
-              method: "PUT",
-              body: JSON.stringify({
-                test_ids: validTestIds,
-                total: grandTotal,
-                discount: computedDiscount,
-                paid_amount: computedPaid,
-                status: computedStatus,
-              }),
-            });
-            setExistingBill(updatedBill);
-            assignedBillCustomId = updatedBill.custom_id || updatedBill.customId || existingBill?.custom_id || existingBill?.customId || "INV-UPDATED";
-          } catch (e) {
-            console.error("Error updating bill in edit mode:", e);
-          }
-        }
-
-        if (existingReport?.id) {
-          try {
-            report = await fetchFromLaravel(`/reports/${existingReport.id}`, {
-              method: "PUT",
-              body: JSON.stringify({
-                package_name: selectedPackage?.name || null,
-                packageName: selectedPackage?.name || null,
-              }),
-            });
-            setExistingReport(report);
-          } catch (e) {
-            report = existingReport;
-          }
-        } else {
-          report = existingReport || { id: "REP-EDIT", bill: existingBill };
-        }
-      } else {
-        report = await fetchFromLaravel("/reports", {
+      if (isPureOutsource) {
+        // PURE OUTSOURCE: No in-house report created so it never appears in Reports or Enter Result!
+        const outsourceRes = await fetchFromLaravel("/outsource-cases", {
           method: "POST",
           body: JSON.stringify({
-            patientId: newPatient.id,
-            testIds: validTestIds,
+            patient_id: newPatient.id,
+            is_pure_outsource: true,
+            partner_lab: finalPartnerLab,
+            notes: outsourceNotes,
+            tests: selectedOutsourceTests,
             total: grandTotal,
             discount: computedDiscount,
-            paidAmount: computedPaid,
-            paymentStatus: computedStatus,
-            packageName: selectedPackage?.name || null,
-            package_name: selectedPackage?.name || null,
+            paid_amount: computedPaid,
+            payment_mode: selectedPaymentMode || "CASH",
+            status: computedStatus,
           }),
         });
-        assignedBillCustomId = report.bill?.customId || report.bill?.custom_id || report.customId || report.custom_id || "INV-CONFIRMED";
+
+        const createdBill = outsourceRes?.bill;
+        assignedBillCustomId = createdBill?.custom_id || createdBill?.customId || `INV-${newPatient.customId}`;
+        report = { id: "", bill: createdBill };
+      } else {
+        // IN-HOUSE or MIXED: Create in-house report with only validTestIds (in-house)
+        if (isEditMode && (currentBillId || existingReport?.id)) {
+          if (currentBillId) {
+            try {
+              const updatedBill = await fetchFromLaravel(`/bills/${currentBillId}`, {
+                method: "PUT",
+                body: JSON.stringify({
+                  test_ids: validTestIds,
+                  total: grandTotal,
+                  discount: computedDiscount,
+                  paid_amount: computedPaid,
+                  status: computedStatus,
+                }),
+              });
+              setExistingBill(updatedBill);
+              assignedBillCustomId = updatedBill.custom_id || updatedBill.customId || existingBill?.custom_id || existingBill?.customId || "INV-UPDATED";
+            } catch (e) {
+              console.error("Error updating bill in edit mode:", e);
+            }
+          }
+
+          if (existingReport?.id) {
+            try {
+              report = await fetchFromLaravel(`/reports/${existingReport.id}`, {
+                method: "PUT",
+                body: JSON.stringify({
+                  package_name: selectedPackage?.name || null,
+                  packageName: selectedPackage?.name || null,
+                }),
+              });
+              setExistingReport(report);
+            } catch (e) {
+              report = existingReport;
+            }
+          } else {
+            report = existingReport || { id: "REP-EDIT", bill: existingBill };
+          }
+        } else {
+          report = await fetchFromLaravel("/reports", {
+            method: "POST",
+            body: JSON.stringify({
+              patientId: newPatient.id,
+              testIds: validTestIds,
+              total: grandTotal,
+              discount: computedDiscount,
+              paidAmount: computedPaid,
+              paymentStatus: computedStatus,
+              packageName: selectedPackage?.name || null,
+              package_name: selectedPackage?.name || null,
+            }),
+          });
+          assignedBillCustomId = report.bill?.customId || report.bill?.custom_id || report.customId || report.custom_id || "INV-CONFIRMED";
+        }
+
+        // If mixed (has outsource tests too), attach to /outsource-cases
+        if (hasOutsource) {
+          try {
+            await fetchFromLaravel("/outsource-cases", {
+              method: "POST",
+              body: JSON.stringify({
+                patient_id: newPatient.id,
+                is_pure_outsource: false,
+                partner_lab: finalPartnerLab,
+                notes: outsourceNotes,
+                tests: selectedOutsourceTests,
+              }),
+            });
+          } catch (e) {
+            console.error("Error linking mixed outsource tests:", e);
+          }
+        }
       }
 
       const assignedPatientCustomId = newPatient.customId || (newPatient as any).custom_id || "";
 
-      // Persist multi-vial barcodes to patient model & meta
+      // Persist multi-vial barcodes & outsource metadata to patient
       const activeVialBarcodes = { ...vialBarcodes };
       const barcodeValues = Object.values(activeVialBarcodes).map(b => String(b).trim()).filter(Boolean);
       const primaryBarcode = barcodeValues[0] || sampleBarcode.trim() || newPatient?.vial_barcode || null;
@@ -1765,6 +1895,11 @@ function RegisterPatientPage() {
                 ...(newPatient.meta || {}),
                 vial_barcode: joinedBarcodes,
                 vial_barcodes: activeVialBarcodes,
+                has_outsource: hasOutsource,
+                is_outsource: isPureOutsource,
+                outsource_tests: selectedOutsourceTests,
+                outsource_partner_lab: finalPartnerLab,
+                outsource_notes: outsourceNotes,
               },
             }),
           });
@@ -1777,21 +1912,26 @@ function RegisterPatientPage() {
               ...(prev.meta || {}),
               vial_barcode: joinedBarcodes,
               vial_barcodes: activeVialBarcodes,
+              has_outsource: hasOutsource,
+              is_outsource: isPureOutsource,
+              outsource_tests: selectedOutsourceTests,
+              outsource_partner_lab: finalPartnerLab,
+              outsource_notes: outsourceNotes,
             },
           } : prev);
         } catch (e) {
-          console.error("Error updating patient vial barcodes:", e);
+          console.error("Error updating patient vial barcodes and outsource meta:", e);
         }
       }
 
-      if (selectedPackage) {
+      if (selectedPackage && report?.id) {
         saveReportPackage(report.id, selectedPackage.name, assignedBillCustomId);
         if (assignedPatientCustomId) {
           saveReportPackage(assignedPatientCustomId, selectedPackage.name);
         }
       }
 
-      const invoiceTests = selectedTestObjects.length > 0
+      const inHouseInvoiceTests = selectedTestObjects.length > 0
         ? selectedTestObjects.map(t => ({
             id: t.id,
             name: t.name,
@@ -1809,6 +1949,16 @@ function RegisterPatientPage() {
             sampleType: t.sampleType || t.sample_type || undefined,
           }));
 
+      const outsourceInvoiceTests = selectedOutsourceTests.map((t, idx) => ({
+        id: t.id || `out-${idx}`,
+        name: `${t.name} (Outsource - ${finalPartnerLab})`,
+        category: t.category || "Outsource",
+        price: Number(t.price) || 0,
+        code: t.code || "OUTSOURCE",
+      }));
+
+      const invoiceTests = [...inHouseInvoiceTests, ...outsourceInvoiceTests];
+
       setBookingSuccess(true);
       scrollToTop(false);
       const initialMode = computedStatus === "PAID" ? (selectedPaymentMode !== "UNPAID" ? selectedPaymentMode : "CASH") : "UNPAID";
@@ -1817,8 +1967,8 @@ function RegisterPatientPage() {
       setSuccessDetails({
         patientCustomId: assignedPatientCustomId,
         billCustomId: assignedBillCustomId,
-        reportId: report.id,
-        billId: report.bill?.id || report.id,
+        reportId: report?.id || "",
+        billId: report?.bill?.id || report?.id || assignedBillCustomId,
         total: grandTotal,
         discount: computedDiscount,
         paidAmount: computedPaid,
@@ -1848,6 +1998,13 @@ function RegisterPatientPage() {
   const handleResetFlow = () => {
     setSelectedPackage(null);
     setCatalogMode("TESTS");
+    setSelectedOutsourceTests([]);
+    setOutsourcePartnerLab("Dr. Lal PathLabs");
+    setOutsourcePartnerLabCustom("");
+    setOutsourceNotes("");
+    setCustomOutsourceName("");
+    setCustomOutsourcePrice("");
+    setIsAddingCustomOutsource(false);
     setDesignation("Mr.");
     setFirstName("");
     setLastName("");
@@ -3090,7 +3247,7 @@ function RegisterPatientPage() {
                     <h4 className="font-bold text-base text-foreground">Diagnostic Investigation Catalog</h4>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {newPatient
-                        ? `${selectedTestObjects.length} investigations linked. Click here to add, search or modify panels.`
+                        ? `${selectedTestObjects.length + selectedOutsourceTests.length} investigations linked (${selectedTestObjects.length} in-house${selectedOutsourceTests.length > 0 ? `, ${selectedOutsourceTests.length} outsource` : ""}). Click here to add, search or modify panels.`
                         : "Save the patient intake form above to unlock full test investigations."}
                     </p>
                   </div>
@@ -3098,7 +3255,7 @@ function RegisterPatientPage() {
 
                 {newPatient && (
                   <span className="gradient-primary text-primary-foreground px-5 py-2.5 rounded-xl font-bold text-xs shrink-0 shadow-sm flex items-center gap-2">
-                    <span>Manage Tests ({selectedTestObjects.length})</span>
+                    <span>Manage Tests ({selectedTestObjects.length + selectedOutsourceTests.length})</span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </span>
                 )}
@@ -3274,9 +3431,9 @@ function RegisterPatientPage() {
                     <Receipt className="h-4 w-4 text-primary" />
                     <span>Real-time Invoice Summary</span>
                   </h3>
-                  {selectedTestObjects.length > 0 && (
+                  {(selectedTestObjects.length + selectedOutsourceTests.length) > 0 && (
                     <span className="text-[11px] font-bold text-primary px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20">
-                      {selectedTestObjects.length} Tests
+                      {selectedTestObjects.length + selectedOutsourceTests.length} Tests
                     </span>
                   )}
                 </div>
@@ -3307,7 +3464,7 @@ function RegisterPatientPage() {
                         <Skeleton className="h-4 w-12 rounded" />
                       </div>
                     </div>
-                  ) : selectedTestObjects.length === 0 ? (
+                  ) : (selectedTestObjects.length === 0 && selectedOutsourceTests.length === 0) ? (
                     <div className="flex flex-col items-center justify-center h-full text-center py-8 text-muted-foreground">
                       <FlaskConical className="h-9 w-9 opacity-30 mb-2" />
                       <p className="text-xs font-semibold">No tests added yet.</p>
@@ -3316,12 +3473,36 @@ function RegisterPatientPage() {
                   ) : (
                     <ul className="divide-y divide-border/60">
                       {selectedTestObjects.map((test) => (
-                        <li key={test.id} className="py-2.5 flex justify-between items-center gap-2">
+                        <li key={`inhouse-${test.id}`} className="py-2.5 flex justify-between items-center gap-2">
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
                             <p className="text-[10px] text-muted-foreground">{test.category || "Pathology"}</p>
                           </div>
                           <span className="font-mono text-xs font-bold text-foreground">₹{Number(test.price).toFixed(0)}</span>
+                        </li>
+                      ))}
+                      {selectedOutsourceTests.map((test, idx) => (
+                        <li key={`outsource-${test.id || idx}`} className="py-2.5 flex justify-between items-center gap-2 bg-purple-500/5 px-2 -mx-2 rounded-lg">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 shrink-0">
+                                Outsource
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground truncate">{outsourcePartnerLab} • {test.category || "External Lab"}</p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="font-mono text-xs font-bold text-foreground">₹{Number(test.price).toFixed(0)}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveOutsourceTest(idx)}
+                              className="text-muted-foreground hover:text-destructive p-0.5 rounded transition-colors"
+                              title="Remove outsource test"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -3704,6 +3885,24 @@ function RegisterPatientPage() {
                       </div>
                       <ArrowRight className="h-4 w-4 text-white group-hover:translate-x-0.5 transition-transform" />
                     </button>
+                  ) : !successDetails?.reportId ? (
+                    <Link href="/dashboard/cases/outsource" className="block">
+                      <button
+                        type="button"
+                        className="w-full p-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-all flex items-center justify-between group shadow-md hover:-translate-y-0.5 cursor-pointer ring-inset-top"
+                      >
+                        <div className="flex items-center gap-3 text-left">
+                          <div className="h-10 w-10 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                            <ExternalLink className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-white">View Outsource Cases</p>
+                            <p className="text-[10px] text-white/80">Track outsourced dispatch & partner reports</p>
+                          </div>
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-white group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+                    </Link>
                   ) : (
                     <Link href={`/dashboard/reports/${successDetails?.reportId}/edit`} className="block">
                       <button
@@ -4025,7 +4224,7 @@ function RegisterPatientPage() {
               </div>
             </div>
 
-            {/* Top Navigation Tabs: Diagnostic Tests vs Packages */}
+            {/* Top Navigation Tabs: Diagnostic Tests vs Packages vs Outsource */}
             <div className="flex items-center gap-1.5 p-1 bg-muted/70 rounded-xl border border-border/80">
               <button
                 type="button"
@@ -4057,6 +4256,24 @@ function RegisterPatientPage() {
                 <Boxes className="h-3.5 w-3.5 text-primary" />
                 <span>Packages</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setCatalogMode("OUTSOURCE")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
+                  catalogMode === "OUTSOURCE"
+                    ? "bg-purple-600 text-white shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <ExternalLink className="h-3.5 w-3.5 text-purple-300" />
+                <span>Outsource</span>
+                {selectedOutsourceTests.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-white text-purple-700 font-bold font-mono">
+                    {selectedOutsourceTests.length}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
 
@@ -4076,22 +4293,27 @@ function RegisterPatientPage() {
                 placeholder={
                   catalogMode === "TESTS"
                     ? "Search test name or code (e.g. CBC, LFT, KFT, Glucose)…"
-                    : "Search diagnostic package name or code (e.g. Full Body, Cardiac)…"
+                    : catalogMode === "PACKAGES"
+                      ? "Search diagnostic package name or code (e.g. Full Body, Cardiac)…"
+                      : "Search investigations to outsource (e.g. Biopsy, Vitamin D, Genetic Panel)…"
                 }
                 value={testSearch}
                 onChange={(e) => setTestSearch(e.target.value)}
               />
             </div>
 
-            {/* If Tests mode: show Category Chips */}
-            {catalogMode === "TESTS" ? (
+            {/* If Tests or Outsource mode: show Category Chips */}
+            {catalogMode === "TESTS" || catalogMode === "OUTSOURCE" ? (
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs custom-scrollbar">
                 <button
                   onClick={() => setActiveCategory("ALL")}
-                  className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${activeCategory === "ALL"
-                      ? "bg-primary text-primary-foreground shadow-sm"
+                  className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${
+                    activeCategory === "ALL"
+                      ? catalogMode === "OUTSOURCE"
+                        ? "bg-purple-600 text-white shadow-sm"
+                        : "bg-primary text-primary-foreground shadow-sm"
                       : "bg-muted text-muted-foreground hover:text-foreground"
-                    }`}
+                  }`}
                 >
                   All Categories
                 </button>
@@ -4099,10 +4321,13 @@ function RegisterPatientPage() {
                   <button
                     key={cat}
                     onClick={() => setActiveCategory(cat)}
-                    className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${activeCategory === cat
-                        ? "bg-primary text-primary-foreground shadow-sm"
+                    className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${
+                      activeCategory === cat
+                        ? catalogMode === "OUTSOURCE"
+                          ? "bg-purple-600 text-white shadow-sm"
+                          : "bg-primary text-primary-foreground shadow-sm"
                         : "bg-muted text-muted-foreground hover:text-foreground"
-                      }`}
+                    }`}
                   >
                     {cat}
                   </button>
@@ -4136,7 +4361,7 @@ function RegisterPatientPage() {
             )}
           </div>
 
-          {/* Catalog Body: Either Tests or Packages Grid */}
+          {/* Catalog Body: Tests, Packages, or Outsource Grid */}
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 bg-background custom-scrollbar">
             {catalogMode === "PACKAGES" ? (
               filteredPackagesForCatalog.length === 0 ? (
@@ -4202,6 +4427,208 @@ function RegisterPatientPage() {
                   })}
                 </div>
               )
+            ) : catalogMode === "OUTSOURCE" ? (
+              <div className="space-y-6">
+                {/* Outsource Routing & Partner Lab Controls */}
+                <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/25 space-y-3.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-8 w-8 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                        <ExternalLink className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-foreground">Outsource Laboratory Routing</h4>
+                        <p className="text-[10px] text-muted-foreground">Select destination diagnostic center for outsourced investigations</p>
+                      </div>
+                    </div>
+
+                    {/* Partner Lab Selector */}
+                    <div className="flex items-center gap-2">
+                      <label className="text-[11px] font-bold text-foreground/80 shrink-0">Partner Lab:</label>
+                      <Select value={outsourcePartnerLab} onValueChange={setOutsourcePartnerLab}>
+                        <SelectTrigger className="h-9 min-w-[200px] bg-background border-border text-xs font-semibold rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {OUTSOURCE_PARTNER_LABS.map((lab) => (
+                            <SelectItem key={lab} value={lab} className="text-xs">
+                              {lab}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {outsourcePartnerLab === "Other Partner Lab" && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="text"
+                        className="flex-1 px-3 py-1.5 bg-background border border-border rounded-xl text-xs placeholder:text-muted-foreground outline-none focus:border-purple-500 text-foreground"
+                        placeholder="Enter custom partner lab name..."
+                        value={outsourcePartnerLabCustom}
+                        onChange={(e) => setOutsourcePartnerLabCustom(e.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  {/* Outsource Clinical Notes & Add Custom Test Trigger */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1 border-t border-purple-500/15">
+                    <input
+                      type="text"
+                      className="flex-1 px-3 py-1.5 bg-background border border-border rounded-xl text-xs placeholder:text-muted-foreground outline-none focus:border-purple-500 text-foreground"
+                      placeholder="Outsource instructions / dispatch notes (e.g. Frozen sample, Urgent TAT, Fasting required)..."
+                      value={outsourceNotes}
+                      onChange={(e) => setOutsourceNotes(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCustomOutsource(!isAddingCustomOutsource)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer ${
+                        isAddingCustomOutsource
+                          ? "bg-purple-600 text-white border-purple-600"
+                          : "bg-background border-border hover:border-purple-500 text-foreground"
+                      }`}
+                    >
+                      <PlusCircle className="h-3.5 w-3.5" />
+                      <span>{isAddingCustomOutsource ? "Cancel Custom" : "Add Custom Test"}</span>
+                    </button>
+                  </div>
+
+                  {/* Inline Form to Add Custom Outsource Investigation */}
+                  {isAddingCustomOutsource && (
+                    <div className="p-3.5 rounded-xl bg-background border border-purple-500/40 space-y-2.5 animate-fade-in">
+                      <p className="text-[11px] font-bold text-purple-700 dark:text-purple-300">
+                        Add Unlisted / Specialized Outsource Investigation
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+                        <div className="sm:col-span-7">
+                          <input
+                            type="text"
+                            className="w-full px-3 py-1.5 bg-card border border-border rounded-lg text-xs placeholder:text-muted-foreground outline-none focus:border-purple-500 text-foreground font-medium"
+                            placeholder="Investigation Name (e.g. Histopathology Large Biopsy, HLA B27 PCR)..."
+                            value={customOutsourceName}
+                            onChange={(e) => setCustomOutsourceName(e.target.value)}
+                          />
+                        </div>
+                        <div className="sm:col-span-3">
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-mono">₹</span>
+                            <input
+                              type="number"
+                              className="w-full pl-6 pr-2 py-1.5 bg-card border border-border rounded-lg text-xs placeholder:text-muted-foreground outline-none focus:border-purple-500 text-foreground font-mono font-medium"
+                              placeholder="Price"
+                              value={customOutsourcePrice}
+                              onChange={(e) => setCustomOutsourcePrice(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <button
+                            type="button"
+                            onClick={handleAddCustomOutsourceTest}
+                            className="w-full py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-colors cursor-pointer shadow-xs"
+                          >
+                            Add Test
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Selected Outsource Tests Quick Pills */}
+                  {selectedOutsourceTests.length > 0 && (
+                    <div className="pt-2 border-t border-purple-500/20 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300">
+                          Selected Outsource Investigations ({selectedOutsourceTests.length}):
+                        </span>
+                        <span className="font-mono text-xs font-bold text-foreground">
+                          Total: ₹{selectedOutsourceTests.reduce((sum, t) => sum + (Number(t.price) || 0), 0).toFixed(0)}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedOutsourceTests.map((t, idx) => (
+                          <span
+                            key={t.id || `custom-${idx}`}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-card border border-purple-500/40 text-foreground font-medium shadow-2xs"
+                          >
+                            <span>{t.name}</span>
+                            <span className="font-mono text-[11px] text-purple-600 dark:text-purple-400 font-bold">₹{t.price}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveOutsourceTest(idx)}
+                              className="hover:text-destructive text-muted-foreground ml-1 p-0.5 cursor-pointer"
+                              title="Remove test"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Outsource Catalog List (from availableTests) */}
+                {Object.keys(filteredGroups).length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground space-y-2">
+                    <FlaskConical className="h-9 w-9 mx-auto opacity-30 text-purple-500" />
+                    <p className="text-xs font-bold text-foreground">No matching investigations found.</p>
+                    <p className="text-[11px]">Use &quot;Add Custom Test&quot; above to create any specialized outsource test.</p>
+                  </div>
+                ) : (
+                  Object.entries(filteredGroups).map(([category, tests]) => (
+                    <div key={category} className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">{category}</span>
+                        <div className="h-px flex-1 bg-border/80" />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {tests.map((test) => {
+                          const isOutsourced = selectedOutsourceTests.some(
+                            (st) => (st.id && st.id === test.id) || st.name.toLowerCase() === test.name.toLowerCase()
+                          );
+                          return (
+                            <div
+                              key={`outsource-card-${test.id}`}
+                              onClick={() => handleToggleOutsourceTest(test)}
+                              className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer select-none transition-all ${
+                                isOutsourced
+                                  ? "bg-purple-500/15 border-purple-500 shadow-sm ring-1 ring-purple-500/40"
+                                  : "bg-card border-border/90 hover:border-purple-500/50"
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <Checkbox
+                                  checked={isOutsourced}
+                                  onCheckedChange={() => handleToggleOutsourceTest(test)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className={isOutsourced ? "border-purple-500 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600" : ""}
+                                />
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
+                                    {isOutsourced && (
+                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30 shrink-0">
+                                        Outsource
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    {test.category || "Pathology"}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className="font-mono text-xs font-bold text-foreground shrink-0">₹{Number(test.price).toFixed(0)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             ) : Object.keys(filteredGroups).length === 0 ? (
               <div className="text-center py-16 text-muted-foreground space-y-2">
                 <FlaskConical className="h-10 w-10 mx-auto opacity-30" />
@@ -4291,7 +4718,6 @@ function RegisterPatientPage() {
             )}
           </div>
 
-          {/* Refined Bottom Summary Bar (No discount/advance inputs here, pristine layout) */}
           {/* Refined Bottom Summary Bar */}
           <div className="border-t border-border/80 px-6 py-4 shrink-0 bg-muted/40 backdrop-blur-xs flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto text-xs">
@@ -4299,10 +4725,10 @@ function RegisterPatientPage() {
                 <FlaskConical className="h-3.5 w-3.5 text-primary" />
                 <span className="text-muted-foreground font-semibold">Selected Tests:</span>
                 <span className="font-bold text-foreground">
-                  {selectedTestObjects.length} {selectedTestObjects.length === 1 ? "Test" : "Tests"}
+                  {selectedTestObjects.length + selectedOutsourceTests.length} Total
                 </span>
                 <span className="text-muted-foreground font-mono text-[11px]">
-                  (₹{subtotal.toFixed(0)})
+                  ({selectedTestObjects.length} In-House{selectedOutsourceTests.length > 0 ? `, ${selectedOutsourceTests.length} Outsource` : ""})
                 </span>
               </div>
             </div>
@@ -4317,7 +4743,7 @@ function RegisterPatientPage() {
                 onClick={() => setIsModalOpen(false)}
                 className="gradient-primary text-primary-foreground font-bold text-xs px-6 py-2.5 rounded-xl ring-inset-top hover:-translate-y-px transition-all shadow-md cursor-pointer"
               >
-                Done ({selectedTestObjects.length})
+                Done ({selectedTestObjects.length + selectedOutsourceTests.length})
               </button>
             </div>
           </div>

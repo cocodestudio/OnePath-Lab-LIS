@@ -11,16 +11,22 @@ import { compareClinicalTests, compareClinicalParameters, getClinicalTestPriorit
 interface Test { 
   id: string; name: string; category: string; price: number; unit: string; 
   interpretation?: string | null; comment?: string | null; notes?: string | null;
-  method?: string | null; fieldType?: string;
+  method?: string | null; fieldType?: string; field_type?: string;
   rangeType?: string | null; range_type?: string | null;
   textRefRange?: string | null; text_ref_range?: string | null;
-  genderRefType?: string; refRangeMin: number; refRangeMax: number; 
+  genderRefType?: string; gender_ref_type?: string;
+  refRangeMin: number; refRangeMax: number; 
+  ref_range_min?: number | null; ref_range_max?: number | null;
   refRangeMinMale?: number | null; refRangeMaxMale?: number | null; 
+  ref_range_min_male?: number | null; ref_range_max_male?: number | null; 
   refRangeMinFemale?: number | null; refRangeMaxFemale?: number | null; 
+  ref_range_min_female?: number | null; ref_range_max_female?: number | null; 
   refRangeMinChild?: number | null; refRangeMaxChild?: number | null; 
+  ref_range_min_child?: number | null; ref_range_max_child?: number | null; 
   refRangeMinNewborn?: number | null; refRangeMaxNewborn?: number | null; 
+  ref_range_min_newborn?: number | null; ref_range_max_newborn?: number | null; 
   ageRanges?: any[] | null; age_ranges?: any[] | null;
-  valueType?: string; customOptions?: string | null;
+  valueType?: string; value_type?: string; customOptions?: string | null;
   sort_order?: number | null; sortOrder?: number | null;
   is_hidden?: boolean | null; isHidden?: boolean | null;
   parent?: { 
@@ -28,6 +34,7 @@ interface Test {
     sort_order?: number | null; sortOrder?: number | null; is_hidden?: boolean | null; isHidden?: boolean | null;
     parent?: { id: string; name: string; method?: string; interpretation?: string; comment?: string; notes?: string; sort_order?: number | null; sortOrder?: number | null; is_hidden?: boolean | null; isHidden?: boolean | null; } 
   };
+  [key: string]: any;
 }
 
 export interface ReportTest { 
@@ -491,8 +498,9 @@ export function buildReportBlocks(
 
   const getRefRange = (item: ReportTest): string => {
     const t = item.test;
-    if (t.rangeType === "TEXT" || t.range_type === "TEXT") {
-      return (t.textRefRange || t.text_ref_range || "—").trim();
+    if (t.rangeType === "TEXT" || t.range_type === "TEXT" || (!t.refRangeMin && !t.ref_range_min && (t.textRefRange || t.text_ref_range))) {
+      const txt = (t.textRefRange || t.text_ref_range || "").trim();
+      if (txt) return txt;
     }
 
     if (t.rangeType === "AGE_BASED" || t.range_type === "AGE_BASED") {
@@ -513,24 +521,37 @@ export function buildReportBlocks(
       }
     }
 
-    if (t.genderRefType === "CHILD_SPECIFIC" && patientAge < 12) {
-      if (t.refRangeMinChild !== undefined && t.refRangeMaxChild !== undefined) {
-        return `${t.refRangeMinChild} - ${t.refRangeMaxChild}`;
+    const genderRefType = t.genderRefType || t.gender_ref_type;
+    if (genderRefType === "CHILD_SPECIFIC" && patientAge < 12) {
+      const minChild = t.refRangeMinChild ?? t.ref_range_min_child;
+      const maxChild = t.refRangeMaxChild ?? t.ref_range_max_child;
+      if (minChild !== undefined && maxChild !== undefined) {
+        return `${minChild} - ${maxChild}`;
       }
     }
 
-    if (t.genderRefType === "GENDER_SPECIFIC" || t.genderRefType === "BY_GENDER") {
+    if (genderRefType === "GENDER_SPECIFIC" || genderRefType === "BY_GENDER") {
       const gender = patientGender.toLowerCase();
-      if (gender === "female" && t.refRangeMinFemale !== undefined && t.refRangeMaxFemale !== undefined) {
-        return `${t.refRangeMinFemale} - ${t.refRangeMaxFemale}`;
+      const minF = t.refRangeMinFemale ?? t.ref_range_min_female;
+      const maxF = t.refRangeMaxFemale ?? t.ref_range_max_female;
+      if (gender === "female" && minF !== undefined && maxF !== undefined) {
+        return `${minF} - ${maxF}`;
       }
-      if (gender === "male" && t.refRangeMinMale !== undefined && t.refRangeMaxMale !== undefined) {
-        return `${t.refRangeMinMale} - ${t.refRangeMaxMale}`;
+      const minM = t.refRangeMinMale ?? t.ref_range_min_male;
+      const maxM = t.refRangeMaxMale ?? t.ref_range_max_male;
+      if (gender === "male" && minM !== undefined && maxM !== undefined) {
+        return `${minM} - ${maxM}`;
       }
     }
 
-    if (t.refRangeMin !== undefined && t.refRangeMax !== undefined && (t.refRangeMin !== 0 || t.refRangeMax !== 0)) {
-      return `${t.refRangeMin} - ${t.refRangeMax}`;
+    const rMin = t.refRangeMin ?? t.ref_range_min;
+    const rMax = t.refRangeMax ?? t.ref_range_max;
+    if (rMin !== undefined && rMax !== undefined && rMin !== null && rMax !== null && (rMin !== 0 || rMax !== 0)) {
+      return `${rMin} - ${rMax}`;
+    }
+
+    if (t.textRefRange || t.text_ref_range) {
+      return (t.textRefRange || t.text_ref_range || "—").trim();
     }
 
     return "—";
@@ -541,20 +562,21 @@ export function buildReportBlocks(
     const val = parseFloat(valStr);
     if (isNaN(val)) return { flag: null, label: "", color: "#000000" };
 
-    let minRange: number | undefined = item.test.refRangeMin;
-    let maxRange: number | undefined = item.test.refRangeMax;
+    let minRange: number | undefined = item.test.refRangeMin ?? item.test.ref_range_min;
+    let maxRange: number | undefined = item.test.refRangeMax ?? item.test.ref_range_max;
 
-    if (item.test.genderRefType === "CHILD_SPECIFIC" && patientAge < 12) {
-      minRange = item.test.refRangeMinChild ?? minRange;
-      maxRange = item.test.refRangeMaxChild ?? maxRange;
-    } else if (item.test.genderRefType === "GENDER_SPECIFIC" || item.test.genderRefType === "BY_GENDER") {
+    const gRef = item.test.genderRefType || item.test.gender_ref_type;
+    if (gRef === "CHILD_SPECIFIC" && patientAge < 12) {
+      minRange = item.test.refRangeMinChild ?? item.test.ref_range_min_child ?? minRange;
+      maxRange = item.test.refRangeMaxChild ?? item.test.ref_range_max_child ?? maxRange;
+    } else if (gRef === "GENDER_SPECIFIC" || gRef === "BY_GENDER") {
       const gender = patientGender.toLowerCase();
       if (gender === "female") {
-        minRange = item.test.refRangeMinFemale ?? minRange;
-        maxRange = item.test.refRangeMaxFemale ?? maxRange;
+        minRange = item.test.refRangeMinFemale ?? item.test.ref_range_min_female ?? minRange;
+        maxRange = item.test.refRangeMaxFemale ?? item.test.ref_range_max_female ?? maxRange;
       } else {
-        minRange = item.test.refRangeMinMale ?? minRange;
-        maxRange = item.test.refRangeMaxMale ?? maxRange;
+        minRange = item.test.refRangeMinMale ?? item.test.ref_range_min_male ?? minRange;
+        maxRange = item.test.refRangeMaxMale ?? item.test.ref_range_max_male ?? maxRange;
       }
     }
 
