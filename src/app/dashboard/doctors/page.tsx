@@ -135,7 +135,8 @@ export default function DoctorsOverviewPage() {
 
       const res = await fetchFromLaravel(`/doctors?${params.toString()}`, { skipCache: true });
       if (res && res.success) {
-        setDoctors(res.doctors || []);
+        const fetched = Array.isArray(res.doctors) ? res.doctors.filter((d: any) => d.is_active !== false) : [];
+        setDoctors(fetched);
         setSummary(res.summary || {
           total_sales: 0,
           total_doctor_commission: 0,

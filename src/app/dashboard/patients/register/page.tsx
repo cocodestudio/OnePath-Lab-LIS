@@ -486,6 +486,7 @@ function RegisterPatientPage() {
   const [secondReferral, setSecondReferral] = useState("");
   const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
   const [newDoctorInput, setNewDoctorInput] = useState("");
+  const [isDoctorActive, setIsDoctorActive] = useState<boolean>(true);
   const [editingDoctor, setEditingDoctor] = useState<{ oldName: string; newName: string } | null>(null);
 
   const [collectionPoints, setCollectionPoints] = useState<string[]>(defaultCollectionPoints);
@@ -1027,7 +1028,7 @@ function RegisterPatientPage() {
       } catch (err) { console.error("Error fetching tests:", err); }
 
       try {
-        const docRes = await fetchFromLaravel("/doctors?filter=all", { skipCache: true });
+        const docRes = await fetchFromLaravel("/doctors?filter=all&include_inactive=1", { skipCache: true });
         if (docRes && docRes.doctors && Array.isArray(docRes.doctors)) {
           const apiDocs = docRes.doctors.map((d: any) => d.name).filter(Boolean);
           const combined = Array.from(new Set(["Self", ...apiDocs]));
@@ -1365,13 +1366,15 @@ function RegisterPatientPage() {
       localStorage.setItem("lis_referral_doctors", JSON.stringify(updated));
     }
     setRefDoctorSelect(trimmed);
+    const activeStatus = isDoctorActive;
     setNewDoctorInput("");
+    setIsDoctorActive(true);
 
-    // Sync to database so doctor immediately appears in Manage Doctors
+    // Sync to database so doctor immediately appears in Manage Doctors with active status
     try {
       await fetchFromLaravel("/doctors", {
         method: "POST",
-        body: JSON.stringify({ name: trimmed }),
+        body: JSON.stringify({ name: trimmed, is_active: activeStatus }),
       });
     } catch (err) {
       console.error("Failed to sync new doctor to database:", err);
@@ -1959,6 +1962,19 @@ function RegisterPatientPage() {
 
       if (newPatient.id) {
         try {
+          const outsourceMeta = hasOutsource
+            ? {
+                has_outsource: true,
+                is_outsource: isPureOutsource,
+                outsource_tests: selectedOutsourceTests,
+                outsource_partner_lab: finalPartnerLab,
+                outsource_notes: outsourceNotes,
+              }
+            : {
+                has_outsource: false,
+                is_outsource: false,
+              };
+
           await fetchFromLaravel(`/patients/${newPatient.id}`, {
             method: "PUT",
             body: JSON.stringify({
@@ -1969,11 +1985,7 @@ function RegisterPatientPage() {
                 ...(newPatient.meta || {}),
                 vial_barcode: joinedBarcodes,
                 vial_barcodes: activeVialBarcodes,
-                has_outsource: hasOutsource,
-                is_outsource: isPureOutsource,
-                outsource_tests: selectedOutsourceTests,
-                outsource_partner_lab: finalPartnerLab,
-                outsource_notes: outsourceNotes,
+                ...outsourceMeta,
               },
             }),
           });
@@ -1986,11 +1998,7 @@ function RegisterPatientPage() {
               ...(prev.meta || {}),
               vial_barcode: joinedBarcodes,
               vial_barcodes: activeVialBarcodes,
-              has_outsource: hasOutsource,
-              is_outsource: isPureOutsource,
-              outsource_tests: selectedOutsourceTests,
-              outsource_partner_lab: finalPartnerLab,
-              outsource_notes: outsourceNotes,
+              ...outsourceMeta,
             },
           } : prev);
         } catch (e) {
@@ -3559,7 +3567,7 @@ function RegisterPatientPage() {
                     <ul className="divide-y divide-border/60">
                       {selectedTestObjects.map((test) => {
                         const b2bRate = test.b2bPrice ?? (test as any).b2b_price;
-                        const showB2B = isB2B || (b2bRate !== undefined && b2bRate !== null);
+                        const showB2B = isB2B && (b2bRate !== undefined && b2bRate !== null);
                         return (
                           <li key={`inhouse-${test.id}`} className="py-2.5 flex justify-between items-center gap-2">
                             <div className="min-w-0">
@@ -3744,7 +3752,7 @@ function RegisterPatientPage() {
                   <button
                     type="button"
                     onClick={handleConfirmBooking}
-                    disabled={selectedTests.length === 0 || booking || !newPatient}
+                    disabled={(selectedTests.length === 0 && selectedOutsourceTests.length === 0) || booking || !newPatient}
                     className="w-full gradient-primary text-primary-foreground py-3.5 rounded-xl font-bold text-xs ring-inset-top hover:-translate-y-px active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0 shadow-md"
                   >
                     {booking ? (
@@ -4733,7 +4741,7 @@ function RegisterPatientPage() {
                               </div>
                               {(() => {
                                 const b2bRate = (test as any).b2bPrice ?? (test as any).b2b_price;
-                                const showB2B = isB2B || (b2bRate !== undefined && b2bRate !== null);
+                                const showB2B = isB2B && (b2bRate !== undefined && b2bRate !== null);
                                 if (showB2B) {
                                   return (
                                     <div className="flex flex-col items-end shrink-0 leading-tight">
@@ -4808,7 +4816,7 @@ function RegisterPatientPage() {
                               <div className="flex items-center gap-2 shrink-0">
                                 {(() => {
                                   const b2bRate = (test as any).b2bPrice ?? (test as any).b2b_price;
-                                  const showB2B = isB2B || (b2bRate !== undefined && b2bRate !== null);
+                                  const showB2B = isB2B && (b2bRate !== undefined && b2bRate !== null);
                                   if (showB2B) {
                                     return (
                                       <div className="flex flex-col items-end shrink-0 leading-tight">
@@ -5012,22 +5020,41 @@ function RegisterPatientPage() {
               </div>
             </div>
 
-            <form onSubmit={handleAddDoctor} className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Enter Doctor Name (e.g. Dr. Name)"
-                value={newDoctorInput}
-                onChange={(e) => setNewDoctorInput(e.target.value)}
-                className="flex-1 px-3 h-10 bg-background border border-border/90 rounded-lg text-sm placeholder:text-muted-foreground/50 focus:border-primary outline-none"
-              />
-              <button
-                type="submit"
-                disabled={!newDoctorInput.trim()}
-                className="gradient-primary text-primary-foreground font-bold text-xs px-4 h-10 rounded-lg disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
-              >
-                <PlusCircle className="h-4 w-4" />
-                <span>Add</span>
-              </button>
+            <form onSubmit={handleAddDoctor} className="space-y-3">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Enter Doctor Name (e.g. Dr. Name)"
+                  value={newDoctorInput}
+                  onChange={(e) => setNewDoctorInput(e.target.value)}
+                  className="flex-1 px-3 h-10 bg-background border border-border/90 rounded-lg text-sm placeholder:text-muted-foreground/50 focus:border-primary outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={!newDoctorInput.trim()}
+                  className="gradient-primary text-primary-foreground font-bold text-xs px-4 h-10 rounded-lg disabled:opacity-50 flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  <span>Add</span>
+                </button>
+              </div>
+
+              {/* Active / Temporary Doctor Checkbox */}
+              <div className="flex items-center gap-2 px-1">
+                <input
+                  type="checkbox"
+                  id="doctor-active-checkbox"
+                  checked={isDoctorActive}
+                  onChange={(e) => setIsDoctorActive(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
+                />
+                <label
+                  htmlFor="doctor-active-checkbox"
+                  className="text-xs font-medium text-foreground cursor-pointer select-none"
+                >
+                  Active Doctor <span className="text-[11px] text-muted-foreground font-normal">(Uncheck for temporary doctor — will not track/count referrals in cases tab)</span>
+                </label>
+              </div>
             </form>
 
             <div className="space-y-2 max-h-[300px] overflow-y-auto pt-2">

@@ -110,6 +110,7 @@ export default function ManageDoctorsPage() {
     clinic_hospital: "",
     address: "",
     default_commission_percent: "0",
+    is_active: true,
   });
 
   // Fetch initial data
@@ -132,8 +133,8 @@ export default function ManageDoctorsPage() {
         }
       }
 
-      // 2. Fetch doctors list
-      const doctorsRes = await fetchFromLaravel("/doctors?filter=all", { skipCache: true });
+      // 2. Fetch doctors list (include inactive for management)
+      const doctorsRes = await fetchFromLaravel("/doctors?filter=all&include_inactive=1", { skipCache: true });
       if (doctorsRes && doctorsRes.success) {
         const docList: Doctor[] = doctorsRes.doctors || [];
         setDoctors(docList);
@@ -405,6 +406,7 @@ export default function ManageDoctorsPage() {
         clinic_hospital: doc.clinic_hospital || "",
         address: doc.address || "",
         default_commission_percent: doc.default_commission_percent.toString(),
+        is_active: doc.is_active !== false,
       });
     } else {
       setEditingDoctor(null);
@@ -416,6 +418,7 @@ export default function ManageDoctorsPage() {
         clinic_hospital: "",
         address: "",
         default_commission_percent: globalDefaultRate > 0 ? globalDefaultRate.toString() : "0",
+        is_active: true,
       });
     }
     setIsDoctorModalOpen(true);
@@ -439,6 +442,7 @@ export default function ManageDoctorsPage() {
         clinic_hospital: doctorForm.clinic_hospital.trim() || null,
         address: doctorForm.address.trim() || null,
         default_commission_percent: parseFloat(doctorForm.default_commission_percent) || 0,
+        is_active: doctorForm.is_active,
       };
 
       if (editingDoctor && editingDoctor.is_registered) {
@@ -1258,6 +1262,19 @@ export default function ManageDoctorsPage() {
                 onChange={(e) => setDoctorForm({ ...doctorForm, address: e.target.value })}
                 className="mt-1 h-9 text-xs rounded-xl"
               />
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="manage-doc-active"
+                checked={doctorForm.is_active}
+                onChange={(e) => setDoctorForm({ ...doctorForm, is_active: e.target.checked })}
+                className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
+              />
+              <label htmlFor="manage-doc-active" className="text-xs font-semibold text-foreground cursor-pointer">
+                Active Doctor <span className="text-[11px] text-muted-foreground font-normal">(Uncheck for temporary doctor — referrals won't count in cases analytics)</span>
+              </label>
             </div>
 
             <DialogFooter className="pt-2">
