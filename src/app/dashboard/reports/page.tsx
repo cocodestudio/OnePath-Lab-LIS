@@ -85,7 +85,7 @@ export default function ReportsListPage() {
   const [sortOrder, setSortOrder] = useState<"oldest" | "recent">("oldest");
 
   const isB2B = currentUser?.role === "B2B";
-  const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER";
+  const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER" || currentUser?.role === "COLLECTION_CENTRE";
   const isReceptionist = currentUser?.role === "RECEPTIONIST";
   const isPartnerOrCC = isCollectionCenter || isB2B || isReceptionist;
 
@@ -118,6 +118,7 @@ export default function ReportsListPage() {
     }
     return true;
   });
+  const [isFetching, setIsFetching] = useState<boolean>(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
@@ -142,8 +143,9 @@ export default function ReportsListPage() {
 
   const fetchReports = async (forceRefresh?: boolean | any) => {
     const isForce = forceRefresh === true;
+    setIsFetching(true);
     try {
-      if (isForce && reports.length === 0) {
+      if (reports.length === 0) {
         setLoading(true);
       }
       const data = await fetchFromLaravel(`/reports?limit=250&sort=${sortOrder}`, { skipCache: isForce });
@@ -166,6 +168,7 @@ export default function ReportsListPage() {
       console.error("Error fetching reports:", err);
       if (reports.length === 0) setReports([]);
     } finally {
+      setIsFetching(false);
       setLoading(false);
     }
   };
@@ -292,19 +295,24 @@ export default function ReportsListPage() {
 
     // Strictly ensure Collection Center only sees reports belonging to their center
     if (isCollectionCenter && currentUser) {
-      const p = r.patient || {};
-      const meta = typeof p.meta === "object" ? p.meta : {};
+      const p = r?.patient || {};
+      const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
+      const repMeta = (r && typeof r.meta === "object" && r.meta !== null) ? r.meta : {};
       const userIdStr = String(currentUser.id || currentUser.user_id || "");
       const userName = (currentUser.name || "").toLowerCase().trim();
+      const centerLabName = (currentUser.lab_name || currentUser.labName || "").toLowerCase().trim();
       const centerCode = (currentUser.center_code || currentUser.centerCode || "").toLowerCase().trim();
-      const collectedAt = String(p.collected_at || meta.collected_at || "").toLowerCase();
+      const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
 
-      const createdById = String(p.created_by_id || meta.created_by_id || "");
-      const isMine = userIdStr && createdById === userIdStr;
+      const createdById = String(r?.createdById || r?.created_by_id || p?.createdById || p?.created_by_id || repMeta?.createdById || repMeta?.created_by_id || meta?.createdById || meta?.created_by_id || "");
+      const collectionCenterId = String(repMeta?.collectionCenterId || repMeta?.collection_center_id || meta?.collectionCenterId || meta?.collection_center_id || "");
+      const metaCenterCode = String(repMeta?.centerCode || repMeta?.center_code || meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
+
+      const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
       const isAssigned =
         (userName && collectedAt.includes(userName)) ||
-        (centerCode && (collectedAt.includes(centerCode) || String(meta.center_code || "").toLowerCase() === centerCode)) ||
-        (meta.collection_center_id && String(meta.collection_center_id) === userIdStr);
+        (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
+        (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
 
       if (!isMine && !isAssigned) return false;
     }
@@ -392,6 +400,19 @@ export default function ReportsListPage() {
               ? "View authorized clinical reports and print diagnostic sheets for your patients."
               : "Enter test results, review findings, and issue diagnostic patient reports."}
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchReports(true)}
+            disabled={isFetching}
+            className="h-9 px-3 gap-2 rounded-xl text-xs font-semibold cursor-pointer shadow-xs"
+            title="Refresh latest reports from server"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin text-primary" : ""}`} />
+            <span>Refresh</span>
+          </Button>
         </div>
       </div>
 
@@ -613,7 +634,7 @@ export default function ReportsListPage() {
       {/* Table */}
       <div className="bg-card border border-border/70 rounded-xl shadow-card overflow-hidden">
         <div className="table-responsive-container">
-          {loading ? (
+          {loading || isFetching ? (
             <table className="w-full min-w-[640px] text-left">
               <thead>
                 <tr className="bg-muted/30 border-b border-border/60">
@@ -626,15 +647,15 @@ export default function ReportsListPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/30">
-                {Array.from({ length: 7 }).map((_, idx) => (
+                {Array.from({ length: 8 }).map((_, idx) => (
                   <tr key={idx} className="animate-fade-in">
                     <td className="w-12 px-4 py-4 text-center"><div className="h-4 w-4 rounded shimmer-gradient mx-auto" /></td>
                     <td className="px-6 py-4"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
-                    <td className="px-6 py-4 space-y-1">
-                      <div className="h-4 w-32 rounded shimmer-gradient" />
+                    <td className="px-6 py-4 space-y-1.5">
+                      <div className="h-4 w-36 rounded shimmer-gradient" />
                       <div className="h-3 w-20 rounded shimmer-gradient" />
                     </td>
-                    <td className="px-6 py-4 hidden lg:table-cell"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
+                    <td className="px-6 py-4 hidden lg:table-cell"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
                     <td className="px-6 py-4 hidden lg:table-cell"><div className="h-4 w-36 rounded shimmer-gradient" /></td>
                     <td className="px-6 py-4"><div className="h-6 w-20 rounded-full shimmer-gradient" /></td>
                     <td className="px-6 py-4 text-right"><div className="h-7 w-24 rounded-lg shimmer-gradient ml-auto" /></td>

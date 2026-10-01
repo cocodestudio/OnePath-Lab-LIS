@@ -287,7 +287,7 @@ export default function BillingPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
   const isB2B = currentUserRole === "B2B";
-  const isCollectionCenter = currentUserRole === "COLLECTION_CENTER";
+  const isCollectionCenter = currentUserRole === "COLLECTION_CENTER" || currentUserRole === "COLLECTION_CENTRE" || currentUser?.role === "COLLECTION_CENTER" || currentUser?.role === "COLLECTION_CENTRE";
 
   useEffect(() => {
     setIsMounted(true);
@@ -643,19 +643,23 @@ export default function BillingPage() {
 
     // Strictly ensure Collection Center only sees bills belonging to their center
     if (isCollectionCenter && currentUser) {
-      const p: any = b.patient || {};
-      const meta = typeof p.meta === "object" ? p.meta : {};
+      const p: any = b?.patient || {};
+      const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
       const userIdStr = String(currentUser.id || currentUser.user_id || "");
       const userName = (currentUser.name || "").toLowerCase().trim();
+      const centerLabName = (currentUser.lab_name || currentUser.labName || "").toLowerCase().trim();
       const centerCode = (currentUser.center_code || currentUser.centerCode || "").toLowerCase().trim();
-      const collectedAt = String(p.collected_at || meta.collected_at || "").toLowerCase();
+      const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
 
-      const createdById = String(p.created_by_id || meta.created_by_id || "");
-      const isMine = userIdStr && createdById === userIdStr;
+      const createdById = String(p?.createdById || p?.created_by_id || meta?.createdById || meta?.created_by_id || "");
+      const collectionCenterId = String(meta?.collectionCenterId || meta?.collection_center_id || "");
+      const metaCenterCode = String(meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
+
+      const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
       const isAssigned =
         (userName && collectedAt.includes(userName)) ||
-        (centerCode && (collectedAt.includes(centerCode) || String(meta.center_code || "").toLowerCase() === centerCode)) ||
-        (meta.collection_center_id && String(meta.collection_center_id) === userIdStr);
+        (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
+        (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
 
       if (!isMine && !isAssigned) return false;
     }

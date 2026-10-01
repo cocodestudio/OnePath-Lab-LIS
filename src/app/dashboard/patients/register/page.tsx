@@ -392,7 +392,7 @@ function RegisterPatientPage() {
   const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
   const [currentUserPermissions, setCurrentUserPermissions] = useState<any[]>([]);
   const isB2B = currentUserRole === "B2B" || (typeof window !== "undefined" && getStoredUser()?.role === "B2B");
-  const isCollectionCenter = currentUserRole === "COLLECTION_CENTER";
+  const isCollectionCenter = currentUserRole === "COLLECTION_CENTER" || currentUserRole === "COLLECTION_CENTRE" || (typeof window !== "undefined" && (getStoredUser()?.role === "COLLECTION_CENTER" || getStoredUser()?.role === "COLLECTION_CENTRE"));
   const isReceptionist = currentUserRole === "RECEPTIONIST";
   const isRestrictedRole = isB2B || isCollectionCenter || isReceptionist;
 
@@ -759,12 +759,26 @@ function RegisterPatientPage() {
         abha_txn_id: verified.txn_id || null,
         ref_doctor: refDoctorSelect || "Self",
         refDoctor: refDoctorSelect || "Self",
-        collected_at: selectedB2bCenter ? (selectedB2bCenter.name || collectedAtSelect) : `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`,
-        collectedAt: selectedB2bCenter ? (selectedB2bCenter.name || collectedAtSelect) : `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`,
+        collected_at: selectedB2bCenter
+          ? (selectedB2bCenter.name || collectedAtSelect)
+          : (isB2B
+              ? (getStoredUser()?.name || collectedAtSelect)
+              : (isCollectionCenter
+                  ? (getStoredUser()?.lab_name || getStoredUser()?.labName || getStoredUser()?.name || collectedAtSelect)
+                  : `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`)),
+        collectedAt: selectedB2bCenter
+          ? (selectedB2bCenter.name || collectedAtSelect)
+          : (isB2B
+              ? (getStoredUser()?.name || collectedAtSelect)
+              : (isCollectionCenter
+                  ? (getStoredUser()?.lab_name || getStoredUser()?.labName || getStoredUser()?.name || collectedAtSelect)
+                  : `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`)),
         collected_by: collectedBySelect || null,
         collectedBy: collectedBySelect || null,
         b2b_user_id: selectedB2bCenter ? selectedB2bCenter.id : undefined,
         b2bUserId: selectedB2bCenter ? selectedB2bCenter.id : undefined,
+        collection_center_id: isCollectionCenter && getStoredUser() ? getStoredUser().id : undefined,
+        collectionCenterId: isCollectionCenter && getStoredUser() ? getStoredUser().id : undefined,
         meta: {
           ...(selectedB2bCenter ? {
             b2b_user_id: selectedB2bCenter.id,
@@ -772,6 +786,17 @@ function RegisterPatientPage() {
             created_by_id: selectedB2bCenter.id,
             created_by_name: selectedB2bCenter.name,
             created_by_role: "B2B",
+          } : {}),
+          ...(isCollectionCenter && getStoredUser() ? {
+            collection_center_id: getStoredUser().id,
+            collectionCenterId: getStoredUser().id,
+            collection_center_name: getStoredUser().lab_name || getStoredUser().labName || getStoredUser().name,
+            center_code: getStoredUser().center_code || getStoredUser().centerCode || "",
+            centerCode: getStoredUser().center_code || getStoredUser().centerCode || "",
+            created_by_id: getStoredUser().id,
+            createdById: getStoredUser().id,
+            created_by_name: getStoredUser().name,
+            created_by_role: "COLLECTION_CENTER",
           } : {}),
         },
       };
@@ -1527,12 +1552,15 @@ function RegisterPatientPage() {
       const joinedBarcodes = barcodeValues.length > 0 ? barcodeValues.join(",") : primaryBarcode;
 
       const storedUser = getStoredUser();
+      const isCollectionCenterUser = currentUserRole === "COLLECTION_CENTER" || currentUserRole === "COLLECTION_CENTRE" || storedUser?.role === "COLLECTION_CENTER" || storedUser?.role === "COLLECTION_CENTRE";
       const isB2BUser = currentUserRole === "B2B" || storedUser?.role === "B2B";
       const effectiveCollectedAt = selectedB2bCenter
         ? (selectedB2bCenter.name || collectedAtSelect)
         : (isB2BUser
             ? (storedUser?.name || collectedAtSelect)
-            : `${collectedAtSelect} (${collectedBySelect})`);
+            : (isCollectionCenterUser
+                ? (storedUser?.lab_name || storedUser?.labName || storedUser?.name || collectedAtSelect)
+                : `${collectedAtSelect} (${collectedBySelect})`));
 
       let data;
       if (editPatientId) {
@@ -1556,6 +1584,8 @@ function RegisterPatientPage() {
             collectedBy: collectedBySelect || null,
             b2b_user_id: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             b2bUserId: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
+            collection_center_id: isCollectionCenterUser && storedUser ? storedUser.id : (newPatient?.meta?.collection_center_id || null),
+            collectionCenterId: isCollectionCenterUser && storedUser ? storedUser.id : (newPatient?.meta?.collectionCenterId || null),
             vial_barcode: joinedBarcodes,
             vialBarcode: joinedBarcodes,
             vial_barcodes: effectiveVialBarcodes,
@@ -1569,6 +1599,17 @@ function RegisterPatientPage() {
                 created_by_id: selectedB2bCenter.id,
                 created_by_name: selectedB2bCenter.name,
                 created_by_role: "B2B",
+              } : {}),
+              ...(isCollectionCenterUser && storedUser ? {
+                collection_center_id: storedUser.id,
+                collectionCenterId: storedUser.id,
+                collection_center_name: storedUser.lab_name || storedUser.labName || storedUser.name,
+                center_code: storedUser.center_code || storedUser.centerCode || "",
+                centerCode: storedUser.center_code || storedUser.centerCode || "",
+                created_by_id: storedUser.id,
+                createdById: storedUser.id,
+                created_by_name: storedUser.name,
+                created_by_role: "COLLECTION_CENTER",
               } : {}),
             },
             aadhaar_no: aadhaarNo.trim() || null,
@@ -1616,6 +1657,8 @@ function RegisterPatientPage() {
             collectedBy: collectedBySelect || null,
             b2b_user_id: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             b2bUserId: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
+            collection_center_id: isCollectionCenterUser && storedUser ? storedUser.id : null,
+            collectionCenterId: isCollectionCenterUser && storedUser ? storedUser.id : null,
             vialBarcode: joinedBarcodes,
             vial_barcode: joinedBarcodes,
             vial_barcodes: effectiveVialBarcodes,
@@ -1628,6 +1671,17 @@ function RegisterPatientPage() {
                 created_by_id: selectedB2bCenter.id,
                 created_by_name: selectedB2bCenter.name,
                 created_by_role: "B2B",
+              } : {}),
+              ...(isCollectionCenterUser && storedUser ? {
+                collection_center_id: storedUser.id,
+                collectionCenterId: storedUser.id,
+                collection_center_name: storedUser.lab_name || storedUser.labName || storedUser.name,
+                center_code: storedUser.center_code || storedUser.centerCode || "",
+                centerCode: storedUser.center_code || storedUser.centerCode || "",
+                created_by_id: storedUser.id,
+                createdById: storedUser.id,
+                created_by_name: storedUser.name,
+                created_by_role: "COLLECTION_CENTER",
               } : {}),
             },
             aadhaarNo: aadhaarNo.trim() || null,
@@ -1687,6 +1741,17 @@ function RegisterPatientPage() {
             created_by_id: selectedB2bCenter.id,
             created_by_name: selectedB2bCenter.name,
             created_by_role: "B2B",
+          } : {}),
+          ...(isCollectionCenterUser && storedUser ? {
+            collection_center_id: storedUser.id,
+            collectionCenterId: storedUser.id,
+            collection_center_name: storedUser.lab_name || storedUser.labName || storedUser.name,
+            center_code: storedUser.center_code || storedUser.centerCode || "",
+            centerCode: storedUser.center_code || storedUser.centerCode || "",
+            created_by_id: storedUser.id,
+            createdById: storedUser.id,
+            created_by_name: storedUser.name,
+            created_by_role: "COLLECTION_CENTER",
           } : {}),
         },
       };
@@ -1928,6 +1993,8 @@ function RegisterPatientPage() {
               package_name: selectedPackage?.name || null,
               b2b_user_id: selectedB2bCenter?.id || (newPatient as any)?.meta?.b2b_user_id || (isB2B ? (getStoredUser()?.id || null) : null),
               b2bUserId: selectedB2bCenter?.id || (newPatient as any)?.meta?.b2b_user_id || (isB2B ? (getStoredUser()?.id || null) : null),
+              collection_center_id: (newPatient as any)?.meta?.collection_center_id || (newPatient as any)?.meta?.collectionCenterId || (isCollectionCenter ? (getStoredUser()?.id || null) : null),
+              collectionCenterId: (newPatient as any)?.meta?.collection_center_id || (newPatient as any)?.meta?.collectionCenterId || (isCollectionCenter ? (getStoredUser()?.id || null) : null),
             }),
           });
           assignedBillCustomId = report.bill?.customId || report.bill?.custom_id || report.customId || report.custom_id || "INV-CONFIRMED";
@@ -2631,9 +2698,8 @@ function RegisterPatientPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {isFieldEnabled("phone") && (
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider flex items-center justify-between">
-                          <span>Phone / WhatsApp Number {isFieldRequired("phone") && <span className="text-rose-500 font-extrabold">*</span>}</span>
-                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold lowercase">reports sent here</span>
+                        <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
+                          Phone / WhatsApp Number {isFieldRequired("phone") && <span className="text-rose-500 font-extrabold">*</span>}
                         </label>
                         <div className="relative flex items-center">
                           <div className="absolute left-3 flex items-center gap-1.5 text-xs font-bold text-foreground/80 select-none pointer-events-none border-r border-zinc-300 dark:border-zinc-700 pr-2.5 z-10">

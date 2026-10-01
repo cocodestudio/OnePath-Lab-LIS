@@ -389,17 +389,17 @@ export default function TrackSamplesPage() {
           </div>
 
           {searchResults.map((rep) => {
-            const p = rep.patient || {};
-            const pMeta = typeof p.meta === "object" ? p.meta : {};
+            const p = rep?.patient || {};
+            const pMeta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
             const tubes = getSampleTubes(rep);
             const stageInfo = getSampleStage(rep);
             const currentStep = stageInfo.step;
             const isApproved = stageInfo.stage === "APPROVED";
             const isRejected = stageInfo.stage === "REJECTED";
 
-            const primaryBarcode = p.vial_barcode || p.vialBarcode || pMeta.vial_barcode || rep.custom_id || rep.customId || "—";
-            const abhaNumber = p.abha_number || p.abhaNumber || pMeta.abha_number;
-            const abhaAddress = p.abha_address || p.abhaAddress || pMeta.abha_address;
+            const primaryBarcode = p.vial_barcode || p.vialBarcode || pMeta?.vial_barcode || rep?.custom_id || rep?.customId || "—";
+            const abhaNumber = p.abha_number || p.abhaNumber || pMeta?.abha_number;
+            const abhaAddress = p.abha_address || p.abhaAddress || pMeta?.abha_address;
 
             const registeredDateStr = (rep.created_at || rep.createdAt || p.created_at || p.createdAt)
               ? new Date((rep.created_at || rep.createdAt || p.created_at || p.createdAt) as string).toLocaleString("en-IN", {

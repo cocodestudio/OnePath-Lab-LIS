@@ -86,6 +86,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollListRef = useRef<HTMLDivElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const whatsappPrintRef = useRef<HTMLDivElement>(null);
 
   /* ── Build Top-Level Blocks from results ─────────────────── */
   const buildBlocksFromResults = (results: ReportTest[]): TopLevelBlock[] => {
@@ -448,6 +449,23 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
     };
   }, [report, useCustomLetterpad]);
 
+  // ── Dedicated WhatsApp Settings (ALWAYS with full letterhead, header & footer) ──
+  const whatsappPrintSettings: PrintSettings | undefined = useMemo(() => {
+    if (!report) return undefined;
+    const lab = (report.lab || {}) as any;
+    const rawBg = lab.printBgImage || lab.print_bg_image || null;
+    const hasBg = Boolean(rawBg && rawBg !== "null" && rawBg !== "undefined" && rawBg !== "none");
+    const bgImage = hasBg ? getCleanLetterheadUrl(rawBg) : null;
+
+    return {
+      bgImage,
+      headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? 185,
+      footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? 95,
+      marginLeft: lab.printMarginLeft ?? lab.print_margin_left ?? 32,
+      marginRight: lab.printMarginRight ?? lab.print_margin_right ?? 32,
+    };
+  }, [report]);
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: report ? `Report_${report.customId}` : "Report",
@@ -482,27 +500,23 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
     }
   };
 
-  const handleWhatsApp = async (overridePhone?: string | unknown) => {
-    const rawPhone = (typeof overridePhone === "string" ? overridePhone : (report?.patient?.phone || "")).trim();
+  const handleWhatsApp = async () => {
+    const rawPhone = (report?.patient?.phone || "").trim();
     const digitsOnly = rawPhone.replace(/\D/g, "");
     const isInvalidPhone = !rawPhone || rawPhone === "N/A" || rawPhone === "NA" || rawPhone === "-" || digitsOnly.length < 10;
 
     if (isInvalidPhone) {
-      setCustomPhone("");
-      setIsPhonePromptOpen(true);
+      toast.error("Phone Number Missing", "Patient has no phone number registered. Please add a mobile number during patient registration.");
       return;
     }
 
-    const phone = digitsOnly.length >= 10 ? digitsOnly : rawPhone;
-
-    if (!printRef.current || !activeReport) {
+    const targetRef = whatsappPrintRef.current || printRef.current;
+    if (!targetRef || !activeReport) {
       toast.error("Not Ready", "Report preview is still rendering. Please wait a moment.");
       return;
     }
 
     setIsSendingWhatsApp(true);
-    const displayPhone = phone.replace(/\D/g, "").slice(-10);
-    toast.info("Preparing WhatsApp", "Rendering crisp native PDF report...");
 
     try {
       const pName = (report?.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -510,26 +524,21 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
       const filename = `LabReport_${rCode}_${pName}.pdf`;
 
       const pdfBase64 = await getNativePdfBase64({
-        printContainer: printRef.current,
+        printContainer: targetRef,
         filename,
       });
-
-      toast.info("Sending via WhatsApp...", `Delivering official PDF report to +${displayPhone}...`);
 
       const res = await fetchFromLaravel(`/reports/${report.id}/send-whatsapp`, {
         method: "POST",
         body: JSON.stringify({
           pdf_base64: pdfBase64,
-          phone: phone,
-          save_phone: savePhoneToProfile,
+          phone: digitsOnly,
+          save_phone: false,
         }),
       });
 
       if (res?.status === "success" || res?.success) {
-        toast.success("Sent on WhatsApp!", `Official report PDF sent to +${displayPhone} successfully!`);
-        if (report?.patient) {
-          report.patient.phone = phone;
-        }
+        toast.success("Sent on WhatsApp!", "Report PDF sent to patient's WhatsApp successfully.");
       } else {
         toast.error("Dispatch Failed", res?.message || "Could not deliver WhatsApp message via Meta Cloud API.");
       }
@@ -555,6 +564,13 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
         <div className="sr-only" aria-hidden>
           <div ref={printRef}>
             <ReportSheet report={activeReport} settings={printSettings} hideInterpretation={!showInterpretation} />
+          </div>
+        </div>
+
+        {/* ── Dedicated WhatsApp Print Target (Always with full Letterhead) ── */}
+        <div style={{ position: "absolute", left: "-9999px", top: "-9999px", opacity: 0, pointerEvents: "none" }} aria-hidden>
+          <div ref={whatsappPrintRef}>
+            <ReportSheet report={activeReport} settings={whatsappPrintSettings} hideInterpretation={!showInterpretation} />
           </div>
         </div>
 
@@ -948,106 +964,6 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
           onOpenChange={setIsQrModalOpen}
           onConnected={() => handleWhatsApp()}
         />
-
-        {/* WhatsApp Phone Number Input Prompt Dialog */}
-        <Dialog open={isPhonePromptOpen} onOpenChange={setIsPhonePromptOpen}>
-          <DialogContent className="sm:max-w-[420px] p-6 rounded-2xl">
-            <DialogHeader>
-              <div className="flex items-center gap-3 mb-1">
-                <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600">
-                  <Phone className="h-5 w-5" />
-                </div>
-                <div>
-                  <DialogTitle className="text-lg font-bold">WhatsApp Number Required</DialogTitle>
-                  <DialogDescription className="text-xs text-muted-foreground">
-                    Enter patient&apos;s mobile number to send the official PDF report.
-                  </DialogDescription>
-                </div>
-              </div>
-            </DialogHeader>
-
-            <div className="space-y-4 py-2">
-              <div className="bg-muted/40 p-3 rounded-xl border text-xs space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Patient:</span>
-                  <span className="font-semibold">{report?.patient?.name || "N/A"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Report ID:</span>
-                  <span className="font-mono font-medium">{report?.customId || report?.id}</span>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">Mobile / WhatsApp Number</label>
-                <div className="relative flex items-center">
-                  <div className="absolute left-3 flex items-center gap-1.5 text-xs font-bold text-foreground/80 select-none pointer-events-none border-r border-zinc-200 dark:border-zinc-700 pr-2">
-                    <span className="text-sm leading-none">🇮🇳</span>
-                    <span className="font-mono text-xs">+91</span>
-                  </div>
-                  <Input
-                    type="tel"
-                    maxLength={10}
-                    placeholder="98765 43210"
-                    value={customPhone}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/\D/g, "");
-                      let digits = raw;
-                      if (digits.startsWith("91") && digits.length > 10) {
-                        digits = digits.slice(2);
-                      } else if (digits.startsWith("0") && digits.length > 10) {
-                        digits = digits.slice(1);
-                      }
-                      setCustomPhone(digits.slice(0, 10));
-                    }}
-                    className="pl-16 h-11 text-sm font-semibold tracking-wider font-mono rounded-xl"
-                    autoFocus
-                  />
-                </div>
-                <p className="text-[11px] text-muted-foreground">Enter 10-digit Indian WhatsApp mobile number without country code</p>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <Checkbox
-                  id="savePhonePreview"
-                  checked={savePhoneToProfile}
-                  onCheckedChange={(c) => setSavePhoneToProfile(!!c)}
-                />
-                <label htmlFor="savePhonePreview" className="text-xs text-muted-foreground cursor-pointer select-none">
-                  Save mobile number to patient profile permanently
-                </label>
-              </div>
-            </div>
-
-            <DialogFooter className="gap-2 sm:gap-0 mt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsPhonePromptOpen(false)}
-                className="rounded-xl h-10 text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={() => {
-                  const cleaned = customPhone.replace(/\D/g, "");
-                  if (cleaned.length < 10) {
-                    toast.error("Invalid Number", "Please enter a valid 10-digit mobile number.");
-                    return;
-                  }
-                  setIsPhonePromptOpen(false);
-                  handleWhatsApp(cleaned);
-                }}
-                disabled={customPhone.replace(/\D/g, "").length < 10 || isSendingWhatsApp}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 text-xs font-semibold gap-1.5"
-              >
-                <Send className="h-3.5 w-3.5" />
-                <span>Send WhatsApp Report</span>
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </DialogContent>
 
       <AiReportGenerationModal

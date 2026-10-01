@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
-  Building2, FlaskConical, Users, CheckCircle2, Clock, IndianRupee,
+  Building2, FlaskConical, Users, CheckCircle2, Clock,
   RefreshCw, PlusCircle, ArrowRight, Printer, Search, ShieldCheck,
   Tag, Copy, Check, FileText, ChevronRight, Activity, Sparkles,
   TrendingUp, Layers, AlertCircle, ArrowUpRight, BarChart3
@@ -39,8 +39,50 @@ export function CollectionCenterOverview({ user }: Props) {
 
       const repList = Array.isArray(reportsData) ? reportsData : (reportsData?.data || []);
       const patList = Array.isArray(patientsData) ? patientsData : (patientsData?.data || []);
-      setReports(repList);
-      setPatients(patList);
+
+      const userIdStr = String(user?.id || user?.user_id || "");
+      const userName = (user?.name || "").toLowerCase().trim();
+      const centerLabName = (user?.lab_name || user?.labName || "").toLowerCase().trim();
+      const centerCode = (user?.center_code || user?.centerCode || "").toLowerCase().trim();
+
+      const scopedReports = repList.filter((r: any) => {
+        const p = r?.patient || {};
+        const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
+        const repMeta = (r && typeof r.meta === "object" && r.meta !== null) ? r.meta : {};
+        const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
+
+        const createdById = String(r?.createdById || r?.created_by_id || p?.createdById || p?.created_by_id || repMeta?.createdById || repMeta?.created_by_id || meta?.createdById || meta?.created_by_id || "");
+        const collectionCenterId = String(repMeta?.collectionCenterId || repMeta?.collection_center_id || meta?.collectionCenterId || meta?.collection_center_id || "");
+        const metaCenterCode = String(repMeta?.centerCode || repMeta?.center_code || meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
+
+        const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
+        const isAssigned =
+          (userName && collectedAt.includes(userName)) ||
+          (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
+          (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
+
+        return isMine || isAssigned;
+      });
+
+      const scopedPatients = patList.filter((p: any) => {
+        const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
+        const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
+
+        const createdById = String(p?.createdById || p?.created_by_id || meta?.createdById || meta?.created_by_id || "");
+        const collectionCenterId = String(meta?.collectionCenterId || meta?.collection_center_id || "");
+        const metaCenterCode = String(meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
+
+        const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
+        const isAssigned =
+          (userName && collectedAt.includes(userName)) ||
+          (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
+          (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
+
+        return isMine || isAssigned;
+      });
+
+      setReports(scopedReports);
+      setPatients(scopedPatients);
     } catch (err) {
       console.error("Error loading collection center overview:", err);
     } finally {
@@ -50,16 +92,9 @@ export function CollectionCenterOverview({ user }: Props) {
 
   // 100% Dynamic metrics from active reports
   const totalSamples = reports.length;
-  const completedSamples = reports.filter((r) => r.status === "COMPLETED" || r.status === "READY").length;
+  const completedSamples = reports.filter((r) => r.status === "COMPLETED" || r.status === "READY" || r.status === "APPROVED" || r.status === "FINAL").length;
   const inTransitSamples = reports.filter((r) => r.status === "IN_TRANSIT" || r.status === "PROCESSING").length;
-  const newCollectedSamples = reports.filter((r) => r.status !== "COMPLETED" && r.status !== "READY" && r.status !== "IN_TRANSIT" && r.status !== "PROCESSING").length;
-
-  const totalCollectedRevenue = reports.reduce((sum, r) => sum + (Number(r.bill?.paid_amount || r.bill?.paidAmount) || 0), 0);
-  const totalDueRevenue = reports.reduce((sum, r) => {
-    const total = Number(r.bill?.total || r.bill?.totalAmount || 0);
-    const paid = Number(r.bill?.paid_amount || r.bill?.paidAmount || 0);
-    return sum + Math.max(0, total - paid);
-  }, 0);
+  const newCollectedSamples = reports.filter((r) => r.status !== "COMPLETED" && r.status !== "READY" && r.status !== "APPROVED" && r.status !== "FINAL" && r.status !== "IN_TRANSIT" && r.status !== "PROCESSING").length;
 
   // 100% Dynamic 7-day intake chart data based on actual report created_at
   const weeklyIntakeData = useMemo(() => {
@@ -83,7 +118,7 @@ export function CollectionCenterOverview({ user }: Props) {
     return result;
   }, [reports]);
 
-  // Donut 1: Sample Processing Stages (Dynamic)
+  // Donut: Sample Processing Lifecycle Stages (Dynamic)
   const stagePieData = useMemo(() => {
     if (totalSamples === 0) {
       return [{ name: "Awaiting Samples", value: 1, color: "hsl(var(--muted)/0.5)" }];
@@ -94,17 +129,6 @@ export function CollectionCenterOverview({ user }: Props) {
       { name: "Sample Collected", value: newCollectedSamples, color: "#f59e0b" },
     ].filter(item => item.value > 0);
   }, [totalSamples, completedSamples, inTransitSamples, newCollectedSamples]);
-
-  // Donut 2: Billing & Counter Payment Ratio (Dynamic)
-  const paymentPieData = useMemo(() => {
-    if (totalCollectedRevenue === 0 && totalDueRevenue === 0) {
-      return [{ name: "No Billing Data", value: 1, color: "hsl(var(--muted)/0.5)" }];
-    }
-    return [
-      { name: "Paid at Counter", value: totalCollectedRevenue, color: "#10b981" },
-      { name: "Due / Online Pay Later", value: totalDueRevenue, color: "#f43f5e" },
-    ].filter(item => item.value > 0);
-  }, [totalCollectedRevenue, totalDueRevenue]);
 
   return (
     <div className="space-y-7 animate-fade-in pb-10">
@@ -127,7 +151,7 @@ export function CollectionCenterOverview({ user }: Props) {
             <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">
               Official satellite sample collection point for{" "}
               <strong className="text-foreground">{user?.lab_name || user?.lab?.name || "OnePath Central Pathology Laboratory"}</strong>.
-              Register patients, enter sample barcodes, and collect diagnostic counter fees.
+              Register patients, enter sample barcodes, and monitor sample transit in real-time.
             </p>
           </div>
 
@@ -153,8 +177,8 @@ export function CollectionCenterOverview({ user }: Props) {
         </div>
       </div>
 
-      {/* ── 4 Key Metric Stat Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── 3 Key Metric Stat Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Stat 1 */}
         <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col justify-between hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
@@ -203,27 +227,6 @@ export function CollectionCenterOverview({ user }: Props) {
             <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Reports Approved</p>
             <p className="text-3xl font-extrabold text-foreground tracking-tight mt-0.5 font-mono">{completedSamples}</p>
             <p className="text-[11px] text-muted-foreground mt-1">Authorized by Pathologist</p>
-          </div>
-        </div>
-
-        {/* Stat 4 */}
-        <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col justify-between hover:shadow-md transition-all">
-          <div className="flex items-center justify-between">
-            <div className="w-11 h-11 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-              <IndianRupee className="h-5 w-5" />
-            </div>
-            <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full">
-              Counter
-            </span>
-          </div>
-          <div className="mt-4">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Counter Collections</p>
-            <p className="text-3xl font-extrabold text-foreground tracking-tight mt-0.5 font-mono">
-              ₹{totalCollectedRevenue.toLocaleString("en-IN")}
-            </p>
-            <p className="text-[11px] text-muted-foreground mt-1">
-              ₹{totalDueRevenue.toLocaleString("en-IN")} Due online
-            </p>
           </div>
         </div>
       </div>
@@ -289,95 +292,65 @@ export function CollectionCenterOverview({ user }: Props) {
           </div>
         </div>
 
-        {/* Chart 2: Dual Donut Breakdown (5 Columns) */}
-        <div className="lg:col-span-5 p-6 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col justify-between space-y-5">
+        {/* Chart 2: Sample Lifecycle Stages Donut Breakdown (5 Columns) */}
+        <div className="lg:col-span-5 p-6 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col justify-between space-y-4">
           <div>
             <h3 className="font-display font-bold text-base text-foreground flex items-center gap-2">
               <Activity className="h-4 w-4 text-primary" />
-              <span>Sample Status & Billing Breakdown</span>
+              <span>Sample Processing Lifecycle</span>
             </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Real-time processing lifecycle and clearance</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Real-time status of collected patient specimens</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 items-center">
-            {/* Donut 1: Processing Stages */}
-            <div className="flex flex-col items-center text-center">
-              <div className="h-[130px] w-[130px] relative">
-                {isMounted && (
-                  <ResponsiveContainer width={130} height={130} minWidth={0} minHeight={0} debounce={50}>
-                    <PieChart>
-                      <Pie
-                        data={stagePieData}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={36}
-                        outerRadius={58}
-                        paddingAngle={3}
-                      >
-                        {stagePieData.map((entry, idx) => (
-                          <Cell key={`donut1-${idx}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-sm font-extrabold text-foreground">{totalSamples}</span>
-                  <span className="text-[9px] uppercase font-bold text-muted-foreground">Vials</span>
-                </div>
+          <div className="flex flex-col items-center justify-center my-auto py-3">
+            <div className="h-[155px] w-[155px] relative">
+              {isMounted && (
+                <ResponsiveContainer width={155} height={155} minWidth={0} minHeight={0} debounce={50}>
+                  <PieChart>
+                    <Pie
+                      data={stagePieData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={46}
+                      outerRadius={72}
+                      paddingAngle={4}
+                    >
+                      {stagePieData.map((entry, idx) => (
+                        <Cell key={`donut1-${idx}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-xl font-extrabold text-foreground">{totalSamples}</span>
+                <span className="text-[10px] uppercase font-bold text-muted-foreground">Total Vials</span>
               </div>
-              <p className="text-[11px] font-bold text-foreground mt-2">Lifecycle Status</p>
-              <span className="text-[10px] text-muted-foreground">{completedSamples} Approved</span>
-            </div>
-
-            {/* Donut 2: Payment Clearance Ratio */}
-            <div className="flex flex-col items-center text-center">
-              <div className="h-[130px] w-[130px] relative">
-                {isMounted && (
-                  <ResponsiveContainer width={130} height={130} minWidth={0} minHeight={0} debounce={50}>
-                    <PieChart>
-                      <Pie
-                        data={paymentPieData}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={36}
-                        outerRadius={58}
-                        paddingAngle={3}
-                      >
-                        {paymentPieData.map((entry, idx) => (
-                          <Cell key={`donut2-${idx}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
-                    {totalCollectedRevenue + totalDueRevenue > 0
-                      ? `${Math.round((totalCollectedRevenue / (totalCollectedRevenue + totalDueRevenue)) * 100)}%`
-                      : "0%"}
-                  </span>
-                  <span className="text-[9px] uppercase font-bold text-muted-foreground">Paid</span>
-                </div>
-              </div>
-              <p className="text-[11px] font-bold text-foreground mt-2">Counter Clearance</p>
-              <span className="text-[10px] text-rose-500 font-semibold">₹{totalDueRevenue.toLocaleString("en-IN")} Due</span>
             </div>
           </div>
 
-          {/* Mini Legend */}
-          <div className="pt-3 border-t border-border/70 grid grid-cols-3 gap-2 text-[10px]">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span className="text-muted-foreground truncate">Approved</span>
+          {/* Detailed Status Breakdown */}
+          <div className="pt-3 border-t border-border/70 space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span className="font-medium text-foreground">Ready / Approved</span>
+              </div>
+              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{completedSamples}</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              <span className="text-muted-foreground truncate">Central Hub</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                <span className="font-medium text-foreground">Central Hub Testing</span>
+              </div>
+              <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{inTransitSamples}</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-rose-500" />
-              <span className="text-muted-foreground truncate">Due (PayU Lock)</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span className="font-medium text-foreground">Sample Collected</span>
+              </div>
+              <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{newCollectedSamples}</span>
             </div>
           </div>
         </div>

@@ -248,7 +248,7 @@ export default function DashboardOverviewPage() {
     return <DashboardShimmer />;
   }
 
-  if (user?.role === "COLLECTION_CENTER") {
+  if (user?.role === "COLLECTION_CENTER" || user?.role === "COLLECTION_CENTRE") {
     return <CollectionCenterOverview user={user} />;
   }
 

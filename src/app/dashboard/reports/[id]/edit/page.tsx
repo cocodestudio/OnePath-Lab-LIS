@@ -2464,8 +2464,6 @@ function ResultEntryContent() {
       if (reportRef.current) {
         reportRef.current.status = "APPROVED";
       }
-
-      toast.success("Report Approved", "Results saved and marked as APPROVED.");
     } catch (err: any) {
       console.error("Auto-approve on print failed:", err);
       toast.error("Auto-Approve Notice", "Opening print modal, but saving approval failed: " + (err.message || "Network error"));

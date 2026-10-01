@@ -179,62 +179,97 @@ export default function TodaySamplesPage() {
 
   const isDateToday = (dateStr?: string) => {
     if (!dateStr) return false;
-    let d: Date;
-    if (dateStr.includes(" ") && !dateStr.includes("T")) {
-      d = new Date(dateStr.replace(" ", "T"));
-    } else {
-      d = new Date(dateStr);
+    try {
+      const now = new Date();
+      const todayYear = now.getFullYear();
+      const todayMonth = now.getMonth();
+      const todayDate = now.getDate();
+
+      let d: Date;
+      if (dateStr.includes(" ") && !dateStr.includes("T")) {
+        d = new Date(dateStr.replace(" ", "T"));
+      } else {
+        d = new Date(dateStr);
+      }
+
+      if (!isNaN(d.getTime())) {
+        if (
+          d.getDate() === todayDate &&
+          d.getMonth() === todayMonth &&
+          d.getFullYear() === todayYear
+        ) {
+          return true;
+        }
+      }
+
+      const localIso = `${todayYear}-${String(todayMonth + 1).padStart(2, "0")}-${String(todayDate).padStart(2, "0")}`;
+      if (dateStr.startsWith(localIso)) return true;
+
+      const todayUtcIso = now.toISOString().split("T")[0];
+      if (dateStr.startsWith(todayUtcIso)) return true;
+
+      return false;
+    } catch {
+      return false;
     }
-    if (isNaN(d.getTime())) {
-      const todayIso = new Date().toISOString().split("T")[0];
-      return dateStr.startsWith(todayIso);
-    }
-    const now = new Date();
-    return (
-      d.getDate() === now.getDate() &&
-      d.getMonth() === now.getMonth() &&
-      d.getFullYear() === now.getFullYear()
-    );
   };
 
   const isReportFromToday = (r: any) => {
     if (!r) return false;
-    const p = r.patient || {};
-    const meta = typeof p.meta === "object" ? p.meta : {};
-    const repMeta = typeof r.meta === "object" ? r.meta : {};
+    const p = r?.patient || {};
+    const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
+    const repMeta = (r && typeof r.meta === "object" && r.meta !== null) ? r.meta : {};
 
     const rawDates = [
-      r.created_at,
-      r.createdAt,
-      p.created_at,
-      p.createdAt,
-      meta.collected_time,
-      meta.registered_at,
-      repMeta.collected_time,
+      r?.createdAt,
+      r?.created_at,
+      p?.createdAt,
+      p?.created_at,
+      meta?.collectedTime,
+      meta?.collected_time,
+      meta?.registeredAt,
+      meta?.registered_at,
+      repMeta?.collectedTime,
+      repMeta?.collected_time,
     ].filter(Boolean);
 
-    if (rawDates.length === 0) return false;
+    if (rawDates.length === 0) return true;
     return rawDates.some((dateVal) => isDateToday(String(dateVal)));
   };
 
   const isReportPermittedForRole = (r: any, role: string, user: any) => {
     if (!r) return false;
-    if (role !== "COLLECTION_CENTER" || !user) return true;
-    const p = r.patient || {};
-    const meta = typeof p.meta === "object" ? p.meta : {};
-    const userIdStr = String(user.id || user.user_id || "");
-    const userName = (user.name || "").toLowerCase().trim();
-    const centerCode = (user.center_code || user.centerCode || "").toLowerCase().trim();
-    const collectedAt = String(p.collected_at || meta.collected_at || "").toLowerCase();
+    const normalizedRole = String(role || user?.role || "").toUpperCase();
+    if (normalizedRole !== "COLLECTION_CENTER" && normalizedRole !== "COLLECTION_CENTRE") return true;
+    if (!user) return true;
 
-    // 1. Created by this Collection Center user
-    const createdById = String(p.created_by_id || meta.created_by_id || "");
-    if (userIdStr && createdById === userIdStr) return true;
+    const p = r?.patient || {};
+    const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
+    const repMeta = (r && typeof r.meta === "object" && r.meta !== null) ? r.meta : {};
+    const userIdStr = String(user?.id || user?.user_id || "");
+    const userName = (user?.name || "").toLowerCase().trim();
+    const centerLabName = (user?.lab_name || user?.labName || "").toLowerCase().trim();
+    const centerCode = (user?.center_code || user?.centerCode || "").toLowerCase().trim();
+    const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
 
-    // 2. Explicitly assigned to this Collection Center
+    // 1. Created by this Collection Center user (check both report and patient)
+    const reportCreatedById = String(r?.createdById || r?.created_by_id || repMeta?.createdById || repMeta?.created_by_id || "");
+    const patientCreatedById = String(p?.createdById || p?.created_by_id || meta?.createdById || meta?.created_by_id || "");
+    if (userIdStr && (reportCreatedById === userIdStr || patientCreatedById === userIdStr)) return true;
+
+    // 2. Collection center ID match in report meta or patient meta
+    const reportCcId = String(repMeta?.collectionCenterId || repMeta?.collection_center_id || "");
+    const patientCcId = String(meta?.collectionCenterId || meta?.collection_center_id || "");
+    if (userIdStr && (reportCcId === userIdStr || patientCcId === userIdStr)) return true;
+
+    // 3. Center code match
+    const repCenterCode = String(repMeta?.centerCode || repMeta?.center_code || "").toLowerCase().trim();
+    const patCenterCode = String(meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
+    if (centerCode && (centerCode === repCenterCode || centerCode === patCenterCode || collectedAt.includes(centerCode))) return true;
+
+    // 4. Center name match
     if (userName && collectedAt.includes(userName)) return true;
-    if (centerCode && (collectedAt.includes(centerCode) || String(meta.center_code || "").toLowerCase() === centerCode)) return true;
-    if (meta.collection_center_id && String(meta.collection_center_id) === userIdStr) return true;
+    if (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) return true;
 
     return false;
   };

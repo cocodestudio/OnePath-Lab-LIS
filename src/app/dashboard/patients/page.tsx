@@ -327,6 +327,7 @@ const getTodayStr = () => {
     }
     return true;
   });
+  const [isFetching, setIsFetching] = useState<boolean>(true);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
   const [currentUser, setCurrentUser] = useState<any>(() => {
@@ -339,8 +340,8 @@ const getTodayStr = () => {
     return null;
   });
 
-  const isB2B = currentUser?.role === "B2B" || currentUser?.role === "COLLECTION_CENTER" || currentUser?.role === "RECEPTIONIST";
-  const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER";
+  const isB2B = currentUser?.role === "B2B" || currentUser?.role === "COLLECTION_CENTER" || currentUser?.role === "COLLECTION_CENTRE" || currentUser?.role === "RECEPTIONIST";
+  const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER" || currentUser?.role === "COLLECTION_CENTRE";
 
   const canEditDemographics = (() => {
     // If not a Collection Centre (e.g. Admin, Receptionist, etc.), keep existing edit rights
@@ -477,8 +478,9 @@ const getTodayStr = () => {
 
   const fetchPatients = async (forceRefresh?: boolean | any) => {
     const isForce = forceRefresh === true;
+    setIsFetching(true);
     try {
-      if (isForce && patients.length === 0) {
+      if (patients.length === 0) {
         setLoading(true);
       }
       const data = await fetchFromLaravel("/patients?per_page=150&order=asc", { skipCache: isForce });
@@ -491,6 +493,7 @@ const getTodayStr = () => {
       console.error("Failed to fetch patients:", err);
       if (patients.length === 0) setPatients([]);
     } finally {
+      setIsFetching(false);
       setLoading(false);
     }
   };
@@ -518,18 +521,22 @@ const getTodayStr = () => {
 
     // Strictly ensure Collection Center only sees patients belonging to their center
     if (isCollectionCenter && currentUser) {
-      const meta = typeof p.meta === "object" ? p.meta : {};
+      const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
       const userIdStr = String(currentUser.id || currentUser.user_id || "");
       const userName = (currentUser.name || "").toLowerCase().trim();
+      const centerLabName = (currentUser.lab_name || currentUser.labName || "").toLowerCase().trim();
       const centerCode = (currentUser.center_code || currentUser.centerCode || "").toLowerCase().trim();
-      const collectedAt = String(p.collected_at || meta.collected_at || "").toLowerCase();
+      const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
 
-      const createdById = String(p.created_by_id || meta.created_by_id || "");
-      const isMine = userIdStr && createdById === userIdStr;
+      const createdById = String(p?.createdById || p?.created_by_id || meta?.createdById || meta?.created_by_id || "");
+      const collectionCenterId = String(meta?.collectionCenterId || meta?.collection_center_id || "");
+      const metaCenterCode = String(meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
+
+      const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
       const isAssigned =
         (userName && collectedAt.includes(userName)) ||
-        (centerCode && (collectedAt.includes(centerCode) || String(meta.center_code || "").toLowerCase() === centerCode)) ||
-        (meta.collection_center_id && String(meta.collection_center_id) === userIdStr);
+        (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
+        (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
 
       if (!isMine && !isAssigned) return false;
     }
@@ -730,7 +737,7 @@ const getTodayStr = () => {
             className="h-9 w-9 shrink-0 cursor-pointer"
             title="Refresh List"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin text-primary" : ""}`} />
           </Button>
         </div>
       </div>
@@ -738,7 +745,7 @@ const getTodayStr = () => {
       {/* Patients Table Card */}
       <div className="bg-card border border-border/80 rounded-xl shadow-xs overflow-hidden">
         <div className="table-responsive-container">
-          {loading ? (
+          {loading || isFetching ? (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-xs text-left border-collapse">
                 <thead>
