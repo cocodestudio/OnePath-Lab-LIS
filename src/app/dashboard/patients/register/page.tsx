@@ -1142,7 +1142,7 @@ function RegisterPatientPage() {
     setAgeMonths("0");
     setAgeDays("0");
     setGender(patientData.gender || "Male");
-    setPhone(patientData.phone && patientData.phone !== "N/A" ? patientData.phone : "");
+    setPhone(patientData.phone && patientData.phone !== "N/A" ? patientData.phone.replace(/\D/g, "").slice(-10) : "");
     setEmail(patientData.email || "");
     setAddress(patientData.address && patientData.address !== "N/A" ? patientData.address : "");
     setPincode(patientData.pincode || "");
@@ -2631,21 +2631,36 @@ function RegisterPatientPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {isFieldEnabled("phone") && (
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
-                          Phone Number {isFieldRequired("phone") && <span className="text-rose-500 font-extrabold">*</span>}
+                        <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider flex items-center justify-between">
+                          <span>Phone / WhatsApp Number {isFieldRequired("phone") && <span className="text-rose-500 font-extrabold">*</span>}</span>
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold lowercase">reports sent here</span>
                         </label>
-                        <div className="relative">
-                          <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <div className="relative flex items-center">
+                          <div className="absolute left-3 flex items-center gap-1.5 text-xs font-bold text-foreground/80 select-none pointer-events-none border-r border-zinc-300 dark:border-zinc-700 pr-2.5 z-10">
+                            <span className="text-sm leading-none">🇮🇳</span>
+                            <span className="font-mono text-[12.5px] tracking-tight">+91</span>
+                          </div>
                           <input
                             type="tel"
-                            className="w-full pl-10 pr-4 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-sm placeholder:text-muted-foreground/50 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white outline-none text-foreground font-medium transition-all shadow-2xs"
-                            placeholder="Enter 10-digit Phone Number"
+                            maxLength={10}
+                            className="w-full pl-[74px] pr-4 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-sm placeholder:text-muted-foreground/50 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white outline-none text-foreground font-semibold tracking-wider transition-all shadow-2xs font-mono"
+                            placeholder="98765 43210"
                             value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/\D/g, "");
+                              let digits = raw;
+                              if (digits.startsWith("91") && digits.length > 10) {
+                                digits = digits.slice(2);
+                              } else if (digits.startsWith("0") && digits.length > 10) {
+                                digits = digits.slice(1);
+                              }
+                              setPhone(digits.slice(0, 10));
+                            }}
                             disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("phone")}
                           />
                         </div>
+                        <p className="text-[10.5px] text-muted-foreground">Enter 10-digit number without country code (auto-prefixed with +91)</p>
                       </div>
                     )}
 

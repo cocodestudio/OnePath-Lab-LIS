@@ -326,12 +326,17 @@ export function FullscreenPrintReportModal({
 
   // ── Automated WhatsApp Dispatch via Meta Cloud API ──────────────────
   const handleWhatsApp = async (overridePhone?: string | unknown) => {
-    const phone = (typeof overridePhone === "string" ? overridePhone : (report?.patient?.phone || "")).trim();
-    if (!phone) {
+    const rawPhone = (typeof overridePhone === "string" ? overridePhone : (report?.patient?.phone || "")).trim();
+    const digitsOnly = rawPhone.replace(/\D/g, "");
+    const isInvalidPhone = !rawPhone || rawPhone === "N/A" || rawPhone === "NA" || rawPhone === "-" || digitsOnly.length < 10;
+
+    if (isInvalidPhone) {
       setCustomPhone("");
       setIsPhonePromptOpen(true);
       return;
     }
+
+    const phone = digitsOnly.length >= 10 ? digitsOnly : rawPhone;
 
     if (!printRef.current || !activeReportData) {
       toast.error("Not Ready", "Report preview is still rendering. Please wait a moment.");
@@ -339,7 +344,7 @@ export function FullscreenPrintReportModal({
     }
 
     setIsSendingWhatsApp(true);
-    const displayPhone = phone.replace(/\D/g, "");
+    const displayPhone = phone.replace(/\D/g, "").slice(-10);
     toast.info("Preparing WhatsApp", "Rendering crisp native PDF report...");
 
     try {
@@ -843,18 +848,30 @@ export function FullscreenPrintReportModal({
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">Mobile / WhatsApp Number</label>
                 <div className="relative flex items-center">
-                  <span className="absolute left-3 text-xs font-semibold text-muted-foreground select-none">+91</span>
+                  <div className="absolute left-3 flex items-center gap-1.5 text-xs font-bold text-foreground/80 select-none pointer-events-none border-r border-zinc-200 dark:border-zinc-700 pr-2">
+                    <span className="text-sm leading-none">🇮🇳</span>
+                    <span className="font-mono text-xs">+91</span>
+                  </div>
                   <Input
                     type="tel"
                     maxLength={10}
-                    placeholder="9045757272"
+                    placeholder="98765 43210"
                     value={customPhone}
-                    onChange={(e) => setCustomPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    className="pl-11 h-11 text-sm font-medium tracking-wide rounded-xl"
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/\D/g, "");
+                      let digits = raw;
+                      if (digits.startsWith("91") && digits.length > 10) {
+                        digits = digits.slice(2);
+                      } else if (digits.startsWith("0") && digits.length > 10) {
+                        digits = digits.slice(1);
+                      }
+                      setCustomPhone(digits.slice(0, 10));
+                    }}
+                    className="pl-16 h-11 text-sm font-semibold tracking-wider font-mono rounded-xl"
                     autoFocus
                   />
                 </div>
-                <p className="text-[11px] text-muted-foreground">Enter 10-digit Indian WhatsApp mobile number</p>
+                <p className="text-[11px] text-muted-foreground">Enter 10-digit Indian WhatsApp mobile number without country code</p>
               </div>
 
               <div className="flex items-center gap-2 pt-1">
