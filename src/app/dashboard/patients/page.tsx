@@ -460,13 +460,24 @@ export default function PatientsPage() {
   const [rejecting, setRejecting] = useState(false);
 
   useEffect(() => {
-    fetchPatients();
+    fetchPatients(true);
 
     const handleSync = () => {
       fetchPatients(true);
     };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchPatients(true);
+      }
+    };
     window.addEventListener("lis_online_sync", handleSync);
-    return () => window.removeEventListener("lis_online_sync", handleSync);
+    window.addEventListener("lis_patient_updated", handleSync);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("lis_online_sync", handleSync);
+      window.removeEventListener("lis_patient_updated", handleSync);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   const fetchPatients = async (forceRefresh?: boolean | any) => {
@@ -900,32 +911,8 @@ export default function PatientsPage() {
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
                           {(() => {
-                            // Hide edit button for Collection Centre unless Admin explicitly granted demographic edit access
-                            if (isCollectionCenter && !canEditDemographics) {
+                            if (currentUser?.role === 'TECHNICIAN' || currentUser?.role === 'DOCTOR') {
                               return null;
-                            }
-
-                            const isReportApproved = Boolean(
-                              (patient as any).reports?.some((r: any) => 
-                                ["APPROVED", "FINAL", "COMPLETED"].includes(String(r.status || "").toUpperCase())
-                              ) || 
-                              patient.meta?.is_approved || 
-                              patient.meta?.report_approved
-                            );
-                            const isLockedForB2B = isB2B && isReportApproved;
-
-                            if (isLockedForB2B) {
-                              return (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  disabled
-                                  className="h-8 w-8 text-amber-600 bg-amber-500/10 border border-amber-500/20 cursor-not-allowed hover:bg-amber-500/10"
-                                  title="🔒 Locked: Diagnostic report has been approved by Central Lab. Editing is disabled."
-                                >
-                                  <Lock className="h-3.5 w-3.5" />
-                                </Button>
-                              );
                             }
 
                             return (

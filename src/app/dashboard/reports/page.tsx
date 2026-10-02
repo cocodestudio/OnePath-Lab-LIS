@@ -149,7 +149,12 @@ export default function ReportsListPage() {
           outstandingBalance: Number(data.outstanding_balance || 0),
           message: data.message,
         });
-        setReports([]);
+        // Still show reports even when outstanding — don't clear the list
+        const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+        if (list.length > 0) {
+          setReports(list);
+          try { localStorage.setItem("lis_cached_reports", JSON.stringify(list)); } catch {}
+        }
       } else {
         setOutstandingLock(null);
         const list = Array.isArray(data) ? data : (data?.data || []);
@@ -393,60 +398,37 @@ export default function ReportsListPage() {
         </div>
       </div>
 
-      {outstandingLock?.isLocked ? (
-        <div className="rounded-2xl border-2 border-red-500/30 bg-card p-8 md:p-12 text-center shadow-xl space-y-6 my-6 max-w-2xl mx-auto animate-in fade-in zoom-in-95 duration-200">
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto text-red-600 shadow-sm">
-            <AlertTriangle className="w-8 h-8" />
-          </div>
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 text-red-600 text-xs font-bold uppercase tracking-wider">
-              Outstanding Due Pending
+      {outstandingLock?.isLocked && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/8 px-4 py-3 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0 text-amber-600">
+              <AlertTriangle className="w-4 h-4" />
             </div>
-            <h2 className="text-2xl font-black tracking-tight text-foreground">Reports Access Locked</h2>
-            <p className="text-muted-foreground text-sm max-w-md mx-auto leading-relaxed">
-              Your B2B account has an outstanding balance of{" "}
-              <span className="font-extrabold text-red-600">
-                ₹{outstandingLock.outstandingBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-              </span>
-              . As per lab policy, patient reports are hidden and locked until outstanding dues are cleared.
-            </p>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-amber-700 dark:text-amber-400">Outstanding Balance Pending</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                ₹{outstandingLock.outstandingBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })} due — reports are visible but printing requires wallet recharge.
+              </p>
+            </div>
           </div>
-
-          <div className="p-4 rounded-xl bg-accent/40 border border-border/70 max-w-sm mx-auto flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-semibold">Outstanding Balance:</span>
-            <span className="text-lg font-black text-red-600">
-              -₹{outstandingLock.outstandingBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <Button
-              onClick={() => {
-                setInsufficientBalanceModal({
-                  open: true,
-                  cost: outstandingLock.outstandingBalance,
-                  balance: -outstandingLock.outstandingBalance,
-                  deficit: outstandingLock.outstandingBalance,
-                  repCode: "Clear Outstanding",
-                });
-              }}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-lg shadow-primary/25 hover:scale-[1.02] transition-all px-6 py-2.5 h-auto rounded-xl gap-2 cursor-pointer"
-            >
-              <Wallet className="w-4 h-4" />
-              Pay Outstanding (₹{outstandingLock.outstandingBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })})
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => fetchReports(true)}
-              className="rounded-xl px-4 py-2.5 h-auto gap-2 cursor-pointer font-semibold"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Refresh Status
-            </Button>
-          </div>
+          <Button
+            size="sm"
+            onClick={() => setInsufficientBalanceModal({
+              open: true,
+              cost: outstandingLock.outstandingBalance,
+              balance: -outstandingLock.outstandingBalance,
+              deficit: outstandingLock.outstandingBalance,
+              repCode: "Clear Outstanding",
+            })}
+            className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-8 px-3 rounded-lg shrink-0 gap-1.5 cursor-pointer"
+          >
+            <Wallet className="w-3.5 h-3.5" />
+            Recharge Wallet
+          </Button>
         </div>
-      ) : (
-        <>
+      )}
+
+      <>
           {/* Filters */}
           <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card">
         <div className="flex flex-col sm:flex-row flex-wrap items-start gap-4">
@@ -996,7 +978,6 @@ export default function ReportsListPage() {
         )}
       </div>
       </>
-      )}
 
       <FullscreenPrintReportModal 
         open={showPrintOptions} 

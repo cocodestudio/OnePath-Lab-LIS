@@ -20,7 +20,7 @@ import {
 import {
   Dialog, DialogContent, DialogTitle
 } from "@/components/ui/dialog";
-import { fetchFromLaravel, getStoredUser, getStoredToken, getAuthBaseUrl, updateStoredUser } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser, getStoredToken, getAuthBaseUrl, updateStoredUser, clearApiCache } from "@/lib/api-client";
 import {
   ALL_DESIGNATIONS,
   normalizeDesignation,
@@ -397,24 +397,15 @@ function RegisterPatientPage() {
   const isReceptionist = currentUserRole === "RECEPTIONIST";
   const isRestrictedRole = isB2B || isCollectionCenter || isReceptionist;
 
-  const canEditDemographics = (() => {
-    if (!isCollectionCenter) return true;
-    if (Array.isArray(currentUserPermissions)) {
-      return currentUserPermissions.includes("can_edit_demographics");
-    }
-    if (typeof currentUserPermissions === "object" && currentUserPermissions !== null) {
-      return Boolean((currentUserPermissions as any).can_edit_demographics);
-    }
-    return false;
-  })();
+  const canEditDemographics = true;
 
   const isApprovedReport = existingReport && (
     existingReport.status === "APPROVED" ||
     existingReport.status === "FINAL" ||
     existingReport.status === "COMPLETED"
   );
-  const isCcEditLocked = isEditMode && isCollectionCenter && !canEditDemographics;
-  const isEditLocked = (isEditMode && isRestrictedRole && Boolean(isApprovedReport)) || isCcEditLocked;
+  const isCcEditLocked = false;
+  const isEditLocked = false;
 
   // Multi-Vial Barcode Mapping: tubeType => barcode string
   const [vialBarcodes, setVialBarcodes] = useState<Record<string, string>>({});
@@ -1363,7 +1354,7 @@ function RegisterPatientPage() {
     // 2. Fetch authoritative data from API
     (async () => {
       try {
-        const patientData = await fetchFromLaravel(`/patients/${editId}`);
+        const patientData = await fetchFromLaravel(`/patients/${editId}`, { skipCache: true });
         if (patientData) {
           applyPatientDemographics(patientData);
 
@@ -1561,19 +1552,11 @@ function RegisterPatientPage() {
   };
 
   // Patient Registration Submit
-  const handleRegisterPatient = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setRegisterError(null);
-
-    if (isEditLocked) {
-      setRegisterError(
-        isCcEditLocked
-          ? "Editing patient demographics is restricted for Collection Centres. Please contact the Central Lab Administrator to grant edit access."
-          : "This patient's report has already been approved by the central lab. Editing is locked."
-      );
-      return;
+  const handleRegisterPatient = async (e?: React.FormEvent, openModal: boolean = false) => {
+    if (e && typeof e.preventDefault === "function") {
+      e.preventDefault();
     }
-
+    setRegisterError(null);
     setRegistering(true);
 
     const missing: string[] = [];
@@ -1612,7 +1595,15 @@ function RegisterPatientPage() {
     }
 
     try {
-      const fullName = `${designation} ${firstName.trim()} ${lastName.trim()}`.trim();
+      let cleanFirst = firstName.trim();
+      let cleanLast = lastName.trim();
+      const desTrimmed = (designation || "").trim();
+      if (desTrimmed && cleanFirst.toLowerCase().startsWith(desTrimmed.toLowerCase())) {
+        cleanFirst = cleanFirst.substring(desTrimmed.length).trim();
+      }
+      const fullName = desTrimmed
+        ? `${desTrimmed} ${cleanFirst}${cleanLast ? ` ${cleanLast}` : ""}`.trim()
+        : `${cleanFirst}${cleanLast ? ` ${cleanLast}` : ""}`.trim();
       const calculatedAge = parseInt(ageYears) || (parseInt(ageMonths) > 0 ? 1 : 0) || 0;
 
       const effectiveVialBarcodes = Object.keys(vialBarcodes).length > 0 ? vialBarcodes : (newPatient?.meta?.vial_barcodes || {});
@@ -1643,13 +1634,17 @@ function RegisterPatientPage() {
             phone: phone.trim() || "N/A",
             email: email.trim() || null,
             ref_doctor: refDoctorSelect || "Self",
+            refDoctor: refDoctorSelect || "Self",
             second_referral: secondReferral.trim() || null,
+            secondReferral: secondReferral.trim() || null,
             address: address.trim() || "N/A",
             city: city.trim() || null,
             district: district.trim() || null,
             state: state.trim() || null,
             pincode: pincode.trim() || null,
             collected_at: effectiveCollectedAt,
+            collectedAt: effectiveCollectedAt,
+            collected_by: collectedBySelect || null,
             collectedBy: collectedBySelect || null,
             b2b_user_id: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             b2bUserId: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
@@ -1682,11 +1677,15 @@ function RegisterPatientPage() {
               } : {}),
             },
             aadhaar_no: aadhaarNo.trim() || null,
+            aadhaarNo: aadhaarNo.trim() || null,
             insurance_no: insuranceNo.trim() || null,
+            insuranceNo: insuranceNo.trim() || null,
             tpa: tpa.trim() || null,
             hfr_id: hfrId.trim() || null,
+            hfrId: hfrId.trim() || null,
             uhid: uhid.trim() || null,
             passport_number: passportNumber.trim() || null,
+            passportNumber: passportNumber.trim() || null,
             abha_number: abhaNumber.trim() || null,
             abhaNumber: abhaNumber.trim() || null,
             abha_address: abhaAddress.trim() || null,
@@ -1695,11 +1694,15 @@ function RegisterPatientPage() {
             isAbhaVerified: Boolean(isAbhaVerified),
             abha_profile_photo: abhaProfilePhoto || null,
             corporate_name: corporateName.trim() || null,
+            corporateName: corporateName.trim() || null,
             corporate_plan: corporatePlan.trim() || null,
+            corporatePlan: corporatePlan.trim() || null,
             gov_panel: govPanel.trim() || null,
+            govPanel: govPanel.trim() || null,
             height: height.trim() || null,
             weight: weight.trim() || null,
             owner_name: ownerName.trim() || null,
+            ownerName: ownerName.trim() || null,
             breed: breed.trim() || null,
             species: species.trim() || null,
           }),
@@ -1715,7 +1718,9 @@ function RegisterPatientPage() {
             phone: phone.trim() || "N/A",
             email: email.trim() || null,
             refDoctor: refDoctorSelect || "Self",
+            ref_doctor: refDoctorSelect || "Self",
             secondReferral: secondReferral.trim() || null,
+            second_referral: secondReferral.trim() || null,
             address: address.trim() || "N/A",
             city: city.trim() || null,
             district: district.trim() || null,
@@ -1724,6 +1729,7 @@ function RegisterPatientPage() {
             collectedAt: effectiveCollectedAt,
             collected_at: effectiveCollectedAt,
             collectedBy: collectedBySelect || null,
+            collected_by: collectedBySelect || null,
             b2b_user_id: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             b2bUserId: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             collection_center_id: isCollectionCenterUser && storedUser ? storedUser.id : null,
@@ -1754,11 +1760,15 @@ function RegisterPatientPage() {
               } : {}),
             },
             aadhaarNo: aadhaarNo.trim() || null,
+            aadhaar_no: aadhaarNo.trim() || null,
             insuranceNo: insuranceNo.trim() || null,
+            insurance_no: insuranceNo.trim() || null,
             tpa: tpa.trim() || null,
             hfrId: hfrId.trim() || null,
+            hfr_id: hfrId.trim() || null,
             uhid: uhid.trim() || null,
             passportNumber: passportNumber.trim() || null,
+            passport_number: passportNumber.trim() || null,
             abha_number: abhaNumber.trim() || null,
             abhaNumber: abhaNumber.trim() || null,
             abha_address: abhaAddress.trim() || null,
@@ -1767,11 +1777,15 @@ function RegisterPatientPage() {
             isAbhaVerified: Boolean(isAbhaVerified),
             abha_profile_photo: abhaProfilePhoto || null,
             corporateName: corporateName.trim() || null,
+            corporate_name: corporateName.trim() || null,
             corporatePlan: corporatePlan.trim() || null,
+            corporate_plan: corporatePlan.trim() || null,
             govPanel: govPanel.trim() || null,
+            gov_panel: govPanel.trim() || null,
             height: height.trim() || null,
             weight: weight.trim() || null,
             ownerName: ownerName.trim() || null,
+            owner_name: ownerName.trim() || null,
             breed: breed.trim() || null,
             species: species.trim() || null,
           }),
@@ -1782,6 +1796,7 @@ function RegisterPatientPage() {
         id: data?.id || editPatientId,
         customId: data?.customId || data?.custom_id || data?.customID || (newPatient?.customId || ""),
         name: data?.name || fullName,
+        designation: data?.designation || designation,
         age: calculatedAge,
         gender,
         phone: phone.trim() || "N/A",
@@ -1791,6 +1806,7 @@ function RegisterPatientPage() {
         address: address.trim() || "N/A",
         city: city.trim() || undefined,
         district: district.trim() || undefined,
+        state: state.trim() || undefined,
         pincode: pincode.trim() || undefined,
         collectedAt: effectiveCollectedAt,
         collectedBy: collectedBySelect || undefined,
@@ -1825,9 +1841,34 @@ function RegisterPatientPage() {
         },
       };
 
+      try {
+        const pId = patientObj.id;
+        sessionStorage.setItem(`edit_patient_cache_${pId}`, JSON.stringify(data || patientObj));
+        if (patientObj.customId) {
+          sessionStorage.setItem(`edit_patient_cache_${patientObj.customId}`, JSON.stringify(data || patientObj));
+        }
+        localStorage.removeItem("lis_cached_patients");
+      } catch (_) {}
+
+      clearApiCache("/patients");
+      clearApiCache("/reports");
+      clearApiCache("/bills");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("lis_online_sync"));
+        window.dispatchEvent(new Event("lis_patient_updated"));
+      }
+
       setNewPatient(patientObj);
       setRegistering(false);
-      setIsModalOpen(true);
+
+      if (isEditMode) {
+        toastSuccess("Patient Details Updated", `${patientObj.name}'s details have been updated successfully.`);
+        if (openModal) {
+          setIsModalOpen(true);
+        }
+      } else {
+        setIsModalOpen(true);
+      }
     } catch (err: any) {
       console.error("Registration error:", err);
       setRegisterError(err.message || "Failed to save patient. Please verify your details.");
@@ -2090,6 +2131,28 @@ function RegisterPatientPage() {
 
       const assignedPatientCustomId = newPatient.customId || (newPatient as any).custom_id || "";
 
+      let cleanFirst = firstName.trim();
+      let cleanLast = lastName.trim();
+      const desTrimmed = (designation || "").trim();
+      if (desTrimmed && cleanFirst.toLowerCase().startsWith(desTrimmed.toLowerCase())) {
+        cleanFirst = cleanFirst.substring(desTrimmed.length).trim();
+      }
+      const fullName = desTrimmed
+        ? `${desTrimmed} ${cleanFirst}${cleanLast ? ` ${cleanLast}` : ""}`.trim()
+        : `${cleanFirst}${cleanLast ? ` ${cleanLast}` : ""}`.trim();
+      const calculatedAge = parseInt(ageYears) || (parseInt(ageMonths) > 0 ? 1 : 0) || 0;
+
+      const storedUser = getStoredUser();
+      const isCollectionCenterUser = currentUserRole === "COLLECTION_CENTER" || currentUserRole === "COLLECTION_CENTRE" || storedUser?.role === "COLLECTION_CENTER" || storedUser?.role === "COLLECTION_CENTRE";
+      const isB2BUser = currentUserRole === "B2B" || storedUser?.role === "B2B";
+      const effectiveCollectedAt = selectedB2bCenter
+        ? (selectedB2bCenter.name || collectedAtSelect)
+        : (isB2BUser
+            ? (storedUser?.name || collectedAtSelect)
+            : (isCollectionCenterUser
+                ? (storedUser?.lab_name || storedUser?.labName || storedUser?.name || collectedAtSelect)
+                : `${collectedAtSelect} (${collectedBySelect})`));
+
       // Persist multi-vial barcodes & outsource metadata to patient
       const activeVialBarcodes = { ...vialBarcodes };
       const barcodeValues = Object.values(activeVialBarcodes).map(b => String(b).trim()).filter(Boolean);
@@ -2111,34 +2174,87 @@ function RegisterPatientPage() {
                 is_outsource: false,
               };
 
-          await fetchFromLaravel(`/patients/${newPatient.id}`, {
-            method: "PUT",
-            body: JSON.stringify({
+          const updatePatientPayload: any = {
+            name: fullName || newPatient.name,
+            designation: designation || newPatient.designation,
+            age: calculatedAge,
+            gender: gender || newPatient.gender,
+            phone: phone.trim() || newPatient.phone || "N/A",
+            email: email.trim() || null,
+            ref_doctor: refDoctorSelect || "Self",
+            refDoctor: refDoctorSelect || "Self",
+            second_referral: secondReferral.trim() || null,
+            secondReferral: secondReferral.trim() || null,
+            address: address.trim() || "N/A",
+            city: city.trim() || null,
+            district: district.trim() || null,
+            state: state.trim() || null,
+            pincode: pincode.trim() || null,
+            collected_at: effectiveCollectedAt,
+            collectedAt: effectiveCollectedAt,
+            collected_by: collectedBySelect || null,
+            collectedBy: collectedBySelect || null,
+            aadhaar_no: aadhaarNo.trim() || null,
+            aadhaarNo: aadhaarNo.trim() || null,
+            insurance_no: insuranceNo.trim() || null,
+            insuranceNo: insuranceNo.trim() || null,
+            tpa: tpa.trim() || null,
+            hfr_id: hfrId.trim() || null,
+            hfrId: hfrId.trim() || null,
+            uhid: uhid.trim() || null,
+            passport_number: passportNumber.trim() || null,
+            passportNumber: passportNumber.trim() || null,
+            corporate_name: corporateName.trim() || null,
+            corporateName: corporateName.trim() || null,
+            vial_barcode: joinedBarcodes,
+            vialBarcode: joinedBarcodes,
+            vial_barcodes: activeVialBarcodes,
+            meta: {
+              ...(newPatient.meta || {}),
               vial_barcode: joinedBarcodes,
-              vialBarcode: joinedBarcodes,
               vial_barcodes: activeVialBarcodes,
-              meta: {
-                ...(newPatient.meta || {}),
-                vial_barcode: joinedBarcodes,
-                vial_barcodes: activeVialBarcodes,
-                ...outsourceMeta,
-              },
-            }),
+              ...outsourceMeta,
+            },
+          };
+
+          const updatedPatientRes = await fetchFromLaravel(`/patients/${newPatient.id}`, {
+            method: "PUT",
+            body: JSON.stringify(updatePatientPayload),
           });
+
+          const freshPat = updatedPatientRes || { ...newPatient, ...updatePatientPayload };
 
           setNewPatient((prev: any) => prev ? {
             ...prev,
+            ...freshPat,
             vial_barcode: joinedBarcodes,
             vialBarcode: joinedBarcodes,
             meta: {
               ...(prev.meta || {}),
+              ...(freshPat.meta || {}),
               vial_barcode: joinedBarcodes,
               vial_barcodes: activeVialBarcodes,
               ...outsourceMeta,
             },
           } : prev);
+
+          try {
+            sessionStorage.setItem(`edit_patient_cache_${newPatient.id}`, JSON.stringify(freshPat));
+            if (newPatient.customId) {
+              sessionStorage.setItem(`edit_patient_cache_${newPatient.customId}`, JSON.stringify(freshPat));
+            }
+            localStorage.removeItem("lis_cached_patients");
+          } catch (_) {}
+
+          clearApiCache("/patients");
+          clearApiCache("/reports");
+          clearApiCache("/bills");
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new Event("lis_online_sync"));
+            window.dispatchEvent(new Event("lis_patient_updated"));
+          }
         } catch (e) {
-          console.error("Error updating patient vial barcodes and outsource meta:", e);
+          console.error("Error updating patient demographics and barcodes in handleConfirmBooking:", e);
         }
       }
 
@@ -2193,13 +2309,13 @@ function RegisterPatientPage() {
         balanceDue: computedBalance,
         paymentStatus: computedStatus,
         paymentMode: initialMode,
-        patientName: newPatient.name,
-        patientAge: newPatient.age,
-        patientGender: newPatient.gender,
-        patientPhone: newPatient.phone,
-        patientAddress: newPatient.address,
-        refDoctor: newPatient.refDoctor,
-        collectedAt: newPatient.collectedAt,
+        patientName: fullName || newPatient.name,
+        patientAge: calculatedAge || newPatient.age,
+        patientGender: gender || newPatient.gender,
+        patientPhone: phone.trim() || newPatient.phone,
+        patientAddress: address.trim() || newPatient.address,
+        refDoctor: refDoctorSelect || newPatient.refDoctor,
+        collectedAt: effectiveCollectedAt || newPatient.collectedAt,
         packageName: selectedPackage?.name || null,
         tests: invoiceTests,
         vialBarcodes: { ...vialBarcodes },
@@ -2516,26 +2632,6 @@ function RegisterPatientPage() {
             {/* Left 8 Cols: High-Contrast Seamless Form */}
             <div className="lg:col-span-8 space-y-6">
 
-              {isEditLocked && (
-                <div className={`p-4 sm:p-5 rounded-2xl ${isCcEditLocked ? "bg-amber-500/10 border-2 border-amber-500/30 text-amber-700 dark:text-amber-400" : "bg-rose-500/10 border-2 border-rose-500/30 text-rose-700 dark:text-rose-400"} flex items-start gap-3 shadow-xs animate-fade-in`}>
-                  <ShieldCheck className={`h-5 w-5 shrink-0 mt-0.5 ${isCcEditLocked ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"}`} />
-                  <div className="space-y-1 text-xs">
-                    <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
-                      <span>{isCcEditLocked ? "Patient Demographics Editing Disabled" : "Report Approved & Finalized — Patient Editing Locked"}</span>
-                      {!isCcEditLocked && (
-                        <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-mono font-extrabold uppercase">
-                          {existingReport?.status || "FINAL"}
-                        </span>
-                      )}
-                    </h4>
-                    <p className="leading-relaxed text-muted-foreground">
-                      {isCcEditLocked
-                        ? "Collection Centre accounts do not have permission to edit patient demographics by default. If you need to make corrections, please contact the Central Lab Administrator to grant edit access in the lab management settings."
-                        : "This patient's diagnostic investigation report has already been reviewed, approved, and finalized by the central laboratory administration. Modification of patient demographics and clinical investigations is strictly locked for partner accounts."}
-                    </p>
-                  </div>
-                </div>
-              )}
 
               {registerError && (
                 <div className="flex items-center gap-3 rounded-xl bg-destructive/10 border border-destructive/30 p-4 text-sm text-destructive font-medium shadow-sm animate-fade-in">
@@ -3444,30 +3540,66 @@ function RegisterPatientPage() {
 
                 {/* Form Action CTA */}
                 {(!newPatient || isEditMode) && (
-                  <div className="flex items-center justify-end gap-3 pt-5 border-t border-border/80">
-                    {isEditLocked ? (
-                      <div className="flex items-center gap-2.5 px-6 py-3.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 font-bold text-xs shadow-xs">
-                        <Lock className="h-4 w-4 shrink-0 text-amber-600" />
-                        <span>{isCcEditLocked ? "Demographics Editing Locked — Collection Centre Restricted" : `Demographics Locked — Report is ${existingReport?.status || "APPROVED"}`}</span>
+                  <div className="pt-5 border-t border-border/80">
+                    {isEditMode ? (
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                        <Link
+                          href="/dashboard/patients"
+                          className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-border bg-card/80 hover:bg-accent text-foreground font-semibold text-xs sm:text-sm transition-all shadow-2xs hover:shadow-xs cursor-pointer"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          <span>Back to Patients</span>
+                        </Link>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={(e) => handleRegisterPatient(e, true)}
+                            disabled={registering}
+                            className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs sm:text-sm transition-all shadow-2xs cursor-pointer disabled:opacity-60"
+                          >
+                            <FlaskConical className="h-4 w-4" />
+                            <span>Update & Select Tests</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleRegisterPatient(e, false)}
+                            disabled={registering}
+                            className="gradient-primary text-primary-foreground font-bold px-7 py-3 rounded-xl ring-inset-top transition-all hover:-translate-y-px hover:shadow-lg active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-60 text-xs sm:text-sm shadow-md cursor-pointer"
+                          >
+                            {registering ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span>Updating Details…</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="h-4 w-4" />
+                                <span>Update Patient Details</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <button
-                        type="submit"
-                        disabled={registering}
-                        className="gradient-primary text-primary-foreground font-bold px-8 py-3.5 rounded-xl ring-inset-top transition-all hover:-translate-y-px hover:shadow-lg active:scale-[0.99] flex items-center gap-2 disabled:opacity-60 text-sm shadow-md cursor-pointer"
-                      >
-                        {registering ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span>{isEditMode ? "Updating Patient Info…" : "Saving Demographics…"}</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>{isEditMode ? "Save Changes & Select Clinical Tests" : "Save & Select Clinical Tests"}</span>
-                            <ArrowRight className="h-4 w-4" />
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          type="submit"
+                          disabled={registering}
+                          className="gradient-primary text-primary-foreground font-bold px-8 py-3.5 rounded-xl ring-inset-top transition-all hover:-translate-y-px hover:shadow-lg active:scale-[0.99] flex items-center gap-2 disabled:opacity-60 text-sm shadow-md cursor-pointer"
+                        >
+                          {registering ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>Saving Demographics…</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Save & Select Clinical Tests</span>
+                              <ArrowRight className="h-4 w-4" />
+                            </>
+                          )}
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
