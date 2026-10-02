@@ -355,7 +355,7 @@ function DoctorPatientsContent() {
         </div>
 
         {/* Responsive Table Container */}
-        <div className="overflow-x-auto">
+        <div className="table-responsive-container">
           <table className="w-full text-left border-collapse min-w-[850px]">
             <thead>
               <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">

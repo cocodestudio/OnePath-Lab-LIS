@@ -1510,7 +1510,7 @@ export default function ManageInventoryPage() {
           </div>
 
           <Card className="border-border/70 shadow-xs overflow-hidden bg-card/60 backdrop-blur-xs w-full">
-            <div className="overflow-x-auto w-full scrollbar-thin">
+            <div className="table-responsive-container w-full">
               <table className="w-full text-left border-collapse text-xs sm:text-sm min-w-[950px]">
                 <thead>
                   <tr className="border-b border-border/70 bg-muted/40 text-[11px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wider">

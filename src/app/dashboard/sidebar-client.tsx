@@ -261,7 +261,7 @@ export default function Sidebar() {
     : [];
 
   const content = (
-    <aside className="flex h-full w-[256px] max-w-[85vw] flex-col bg-card border-r border-border/70">
+    <aside className="flex h-full w-[280px] max-w-[88vw] flex-col bg-card border-r border-border/70">
       {/* Brand */}
       <div className="flex h-[68px] items-center gap-3 px-6 shrink-0 border-b border-border/60">
         <div className="relative h-8 w-8 shrink-0">
@@ -547,10 +547,12 @@ export default function Sidebar() {
     <>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-3.5 left-3.5 z-50 h-10 w-10 flex items-center justify-center rounded-xl bg-card/95 backdrop-blur-md border border-border/90 text-foreground md:hidden shadow-elevated transition-all active:scale-95 cursor-pointer"
+        className={`fixed top-3.5 left-3.5 z-50 h-10 w-10 flex items-center justify-center rounded-xl bg-card/95 backdrop-blur-md border border-border/90 text-foreground md:hidden shadow-elevated transition-all active:scale-95 cursor-pointer ${
+          isOpen ? "opacity-0 pointer-events-none" : "opacity-100"
+        }`}
         aria-label="Toggle Menu"
       >
-        {isOpen ? <X className="h-5 w-5 text-destructive" /> : <Menu className="h-5 w-5" />}
+        <Menu className="h-5 w-5" />
       </button>
 
       {isOpen && (

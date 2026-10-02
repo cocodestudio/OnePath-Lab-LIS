@@ -797,8 +797,8 @@ export default function RateListPage() {
         {/* ── Client Rate Sheet Table ── */}
         {b2bSubTab === "TESTS" ? (
           <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="table-responsive-container">
+              <table className="w-full min-w-[700px] text-left text-xs">
                 <thead>
                   <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
                     <th className="py-3 px-4 w-12">#</th>
@@ -923,8 +923,8 @@ export default function RateListPage() {
         ) : (
           /* Health Packages Table for B2B Client */
           <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="table-responsive-container">
+              <table className="w-full min-w-[700px] text-left text-xs">
                 <thead>
                   <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
                     <th className="py-3 px-4 w-12">#</th>
@@ -1493,8 +1493,8 @@ export default function RateListPage() {
           {/* Rates Table: Tests vs Packages */}
           {ratesSubTab === "PACKAGES" ? (
             <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+              <div className="table-responsive-container">
+                <table className="w-full min-w-[760px] text-left text-xs">
                   <thead>
                     <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
                       <th className="py-3 px-3.5 w-12">#</th>
@@ -1633,8 +1633,8 @@ export default function RateListPage() {
             </div>
           ) : (
             <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+              <div className="table-responsive-container">
+                <table className="w-full min-w-[760px] text-left text-xs">
                   <thead>
                     <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
                       <th className="py-3 px-3.5 w-12">#</th>
@@ -1814,8 +1814,8 @@ export default function RateListPage() {
           </div>
 
           <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+            <div className="table-responsive-container">
+              <table className="w-full min-w-[720px] text-left text-xs">
                 <thead>
                   <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
                     <th className="py-3 px-4">Partner Details</th>

@@ -1258,7 +1258,7 @@ function SettingsContent() {
           </p>
 
           {/* Top Sub-Navigation Tabs */}
-          <div className="flex items-center gap-2 mt-3 bg-muted/60 p-1 rounded-xl w-full sm:w-fit overflow-x-auto border border-border/60 scrollbar-none">
+          <div className="flex items-center gap-2 mt-3 bg-muted/60 p-1 rounded-xl w-full sm:w-fit overflow-x-auto border border-border/60 scrollbar-none table-responsive-container flex-nowrap">
             <button
               type="button"
               onClick={() => setActiveTab("letterhead")}

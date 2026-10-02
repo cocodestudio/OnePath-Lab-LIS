@@ -1278,8 +1278,8 @@ export default function TestMasterPage() {
       {/* Tests Table */}
       {loading ? (
         <div className="bg-card border border-border/90 rounded-xl shadow-xs overflow-hidden">
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="hidden md:block table-responsive-container">
+            <table className="w-full min-w-[760px] text-left text-xs">
               <thead className="bg-muted/50 text-[11px] font-bold text-muted-foreground uppercase border-b border-border/80">
                 <tr>
                   <th className="py-3 px-4 w-10"></th>
@@ -1339,8 +1339,8 @@ export default function TestMasterPage() {
       ) : (
         <div className="bg-card border border-border/90 rounded-xl shadow-xs overflow-hidden">
           {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          <div className="hidden md:block table-responsive-container">
+            <table className="w-full min-w-[760px] text-left text-xs">
               <thead className="bg-muted/50 text-[11px] font-bold text-muted-foreground uppercase border-b border-border/80">
                 <tr>
                   <th className="py-3 px-4 w-10"></th>

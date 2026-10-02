@@ -623,7 +623,7 @@ export default function OutsourceCasesPage() {
           TABLE DISPLAY (Edge-to-edge, responsive patient list)
       ═══════════════════════════════════════════════════════════════ */}
       <div className="bg-card border border-border/70 rounded-2xl shadow-card overflow-hidden w-full">
-        <div className="overflow-x-auto w-full custom-scrollbar">
+        <div className="table-responsive-container w-full">
           <table className="w-full min-w-[860px] text-left">
             <thead>
               <tr className="bg-muted/30 border-b border-border/60">

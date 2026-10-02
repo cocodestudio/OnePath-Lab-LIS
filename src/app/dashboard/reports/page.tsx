@@ -449,7 +449,7 @@ export default function ReportsListPage() {
         <>
           {/* Filters */}
           <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card">
-        <div className="flex flex-col sm:flex-row flex-wrap items-end gap-4">
+        <div className="flex flex-col sm:flex-row flex-wrap items-start gap-4">
           <div className="space-y-1.5 flex-1 min-w-[200px]">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Search</label>
             <div className="relative">
@@ -460,7 +460,7 @@ export default function ReportsListPage() {
           
           <div className="space-y-1.5 w-full sm:w-auto">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Filter Date</label>
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               <div className="flex items-center bg-background border border-border/90 rounded-xl p-0.5 shadow-xs">
                 <button
                   type="button"

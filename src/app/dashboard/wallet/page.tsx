@@ -972,8 +972,8 @@ export default function WalletPage() {
             </div>
 
             {/* Passbook Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
+            <div className="table-responsive-container">
+              <table className="w-full min-w-[780px] text-xs text-left">
                 <thead className="bg-muted/50 text-muted-foreground font-bold uppercase tracking-wider border-b border-border/60">
                   <tr>
                     <th className="py-3 px-4">Date & Time</th>

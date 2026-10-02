@@ -805,8 +805,8 @@ export default function ManageDoctorsPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
+            <div className="table-responsive-container">
+              <table className="w-full min-w-[780px] text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-border/70 bg-muted/40 text-[10.5px] font-bold text-muted-foreground uppercase tracking-wider">
                     <th className="py-2.5 px-4 sm:px-6">Test Code & Name</th>
@@ -1029,8 +1029,8 @@ export default function ManageDoctorsPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
+            <div className="table-responsive-container">
+              <table className="w-full min-w-[780px] text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-border/70 bg-muted/40 text-[10.5px] font-bold text-muted-foreground uppercase tracking-wider">
                     <th className="py-2.5 px-4 sm:px-6">Doctor Name</th>

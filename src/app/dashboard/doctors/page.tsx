@@ -481,8 +481,8 @@ export default function DoctorsOverviewPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="table-responsive-container">
+          <table className="w-full min-w-[780px] text-left border-collapse">
             <thead>
               <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                 <th className="py-3 px-4 sm:px-6">Doctor Details</th>

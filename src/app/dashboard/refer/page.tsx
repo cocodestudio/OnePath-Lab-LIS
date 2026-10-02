@@ -57,42 +57,42 @@ function ReferShimmerSkeleton() {
   return (
     <div className="w-full space-y-6">
       {/* 1. Header Banner Shimmer */}
-      <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-6 sm:p-8 shadow-xs">
+      <div className="rounded-2xl bg-card border border-border/80 p-6 sm:p-8 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="space-y-3.5 max-w-2xl flex-1">
-            <div className="h-6 w-52 rounded-full bg-slate-200 dark:bg-zinc-800 animate-pulse" />
-            <div className="h-9 w-4/5 rounded-lg bg-slate-200 dark:bg-zinc-800 animate-pulse" />
+            <div className="h-6 w-52 rounded-full shimmer-gradient" />
+            <div className="h-9 w-4/5 rounded-lg shimmer-gradient" />
             <div className="space-y-2">
-              <div className="h-4 w-full rounded bg-slate-200/80 dark:bg-zinc-800/80 animate-pulse" />
-              <div className="h-4 w-11/12 rounded bg-slate-200/80 dark:bg-zinc-800/80 animate-pulse" />
+              <div className="h-4 w-full rounded shimmer-gradient" />
+              <div className="h-4 w-11/12 rounded shimmer-gradient" />
             </div>
-            <div className="h-7 w-64 rounded-lg bg-slate-200 dark:bg-zinc-800 animate-pulse pt-1" />
+            <div className="h-7 w-64 rounded-lg shimmer-gradient pt-1" />
           </div>
-          <div className="shrink-0 w-full md:w-52 h-28 rounded-xl bg-slate-100 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-800 p-4 flex flex-col items-center justify-center space-y-2 animate-pulse">
-            <div className="h-3 w-28 rounded bg-slate-200 dark:bg-zinc-700" />
-            <div className="h-8 w-24 rounded bg-slate-200 dark:bg-zinc-700" />
-            <div className="h-3 w-32 rounded bg-slate-200 dark:bg-zinc-700" />
+          <div className="shrink-0 w-full md:w-52 h-28 rounded-xl bg-muted/40 border border-border/80 p-4 flex flex-col items-center justify-center space-y-2">
+            <div className="h-3 w-28 rounded shimmer-gradient" />
+            <div className="h-8 w-24 rounded shimmer-gradient" />
+            <div className="h-3 w-32 rounded shimmer-gradient" />
           </div>
         </div>
       </div>
 
       {/* 2. Credentials & Stats Shimmer */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-7 bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow-xs border border-slate-200 dark:border-zinc-800 space-y-5">
+        <div className="lg:col-span-7 bg-card rounded-2xl p-6 shadow-xs border border-border/80 space-y-5">
           <div className="space-y-2">
-            <div className="h-6 w-48 rounded bg-slate-200 dark:bg-zinc-800 animate-pulse" />
-            <div className="h-3.5 w-72 rounded bg-slate-200/80 dark:bg-zinc-800/80 animate-pulse" />
+            <div className="h-6 w-48 rounded shimmer-gradient" />
+            <div className="h-3.5 w-72 rounded shimmer-gradient" />
           </div>
-          <div className="h-24 w-full rounded-xl bg-slate-100 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-4 flex items-center justify-between animate-pulse">
+          <div className="h-24 w-full rounded-xl bg-muted/30 border border-border/80 p-4 flex items-center justify-between">
             <div className="space-y-2">
-              <div className="h-3 w-36 rounded bg-slate-200 dark:bg-zinc-800" />
-              <div className="h-9 w-40 rounded bg-slate-200 dark:bg-zinc-800" />
+              <div className="h-3 w-36 rounded shimmer-gradient" />
+              <div className="h-9 w-40 rounded shimmer-gradient" />
             </div>
-            <div className="h-10 w-28 rounded-xl bg-slate-200 dark:bg-zinc-800" />
+            <div className="h-10 w-28 rounded-xl shimmer-gradient" />
           </div>
           <div className="space-y-2">
-            <div className="h-3.5 w-60 rounded bg-slate-200 dark:bg-zinc-800 animate-pulse" />
-            <div className="h-10 w-full rounded-xl bg-slate-100 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 animate-pulse" />
+            <div className="h-3.5 w-60 rounded shimmer-gradient" />
+            <div className="h-10 w-full rounded-xl bg-muted/30 border border-border/80 shimmer-gradient" />
           </div>
         </div>
 
@@ -100,15 +100,15 @@ function ReferShimmerSkeleton() {
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between h-[126px] animate-pulse"
+              className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col justify-between h-[126px]"
             >
               <div className="flex items-center justify-between">
-                <div className="h-3.5 w-24 rounded bg-slate-200 dark:bg-zinc-800" />
-                <div className="w-5 h-5 rounded-md bg-slate-200 dark:bg-zinc-800" />
+                <div className="h-3.5 w-24 rounded shimmer-gradient" />
+                <div className="w-5 h-5 rounded-md shimmer-gradient" />
               </div>
               <div>
-                <div className="h-8 w-16 rounded bg-slate-200 dark:bg-zinc-800" />
-                <div className="h-3 w-28 rounded bg-slate-200/80 dark:bg-zinc-800/80 mt-1.5" />
+                <div className="h-8 w-16 rounded shimmer-gradient" />
+                <div className="h-3 w-28 rounded shimmer-gradient mt-1.5" />
               </div>
             </div>
           ))}
@@ -278,7 +278,7 @@ export default function ReferAndEarnPage() {
         </p>
         <button
           onClick={() => router.push("/dashboard")}
-          className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs transition-colors shadow-sm cursor-pointer"
+          className="px-5 py-2.5 rounded-xl gradient-primary text-primary-foreground font-semibold text-xs transition-colors shadow-sm cursor-pointer"
         >
           Return to Dashboard
         </button>
@@ -295,36 +295,36 @@ export default function ReferAndEarnPage() {
       {/* =========================================================================
           1. CLEAN PROFESSIONAL HERO BANNER (HIGH CONTRAST & CLEAR READABILITY)
       ========================================================================= */}
-      <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-6 sm:p-8 shadow-xs">
+      <div className="rounded-2xl bg-card border border-border/80 p-5 sm:p-7 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
           <div className="space-y-3 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900/60 text-xs font-semibold text-blue-700 dark:text-blue-300">
-              <Gift className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary dark:text-emerald-400">
+              <Gift className="w-3.5 h-3.5 text-primary dark:text-emerald-400" />
               <span>Referral Program &bull; Unlimited Plan Extensions</span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
               Invite Pathology Labs &amp; Earn{" "}
-              <span className="text-blue-600 dark:text-blue-400">3 Months Free Validity</span>
+              <span className="text-primary dark:text-emerald-400 font-extrabold">3 Months Free Validity</span>
             </h1>
 
-            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
               Share your referral code or registration link with fellow diagnostic laboratory owners.
               When they sign up and purchase any subscription plan, you automatically receive a{" "}
-              <strong className="text-slate-900 dark:text-white font-semibold">+90 Days (3 Months) Free Plan Extension Voucher</strong>.
+              <strong className="text-foreground font-semibold">+90 Days (3 Months) Free Plan Extension Voucher</strong>.
               You can refer unlimited labs and stack your free validity anytime.
             </p>
 
             {data?.lab_plan?.expires_formatted && (
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-xs text-slate-700 dark:text-zinc-300">
-                <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/80 text-xs text-muted-foreground">
+                <Calendar className="w-3.5 h-3.5 text-primary dark:text-emerald-400" />
                 <span>
                   Current Plan:{" "}
-                  <strong className="text-slate-900 dark:text-white">
+                  <strong className="text-foreground font-semibold">
                     {data.lab_plan.plan_name || "Active License"}
                   </strong>{" "}
                   &bull; Expires:{" "}
-                  <strong className="text-blue-700 dark:text-blue-300 font-semibold">
+                  <strong className="text-primary dark:text-emerald-400 font-bold">
                     {data.lab_plan.expires_formatted}
                   </strong>
                 </span>
@@ -333,14 +333,14 @@ export default function ReferAndEarnPage() {
           </div>
 
           {/* Clean Reward Callout Box */}
-          <div className="shrink-0 p-5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 text-center md:min-w-[210px]">
-            <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block">
+          <div className="shrink-0 p-5 rounded-2xl bg-primary/5 dark:bg-primary/10 border border-primary/20 text-center md:min-w-[210px] shadow-xs">
+            <span className="text-[11px] font-bold text-primary dark:text-emerald-400 uppercase tracking-wider block">
               Reward Per Referral
             </span>
-            <div className="text-3xl font-extrabold text-blue-700 dark:text-blue-300 mt-1">
+            <div className="text-3xl font-extrabold text-primary dark:text-emerald-400 mt-1 font-display">
               +90 Days
             </div>
-            <span className="text-xs text-slate-600 dark:text-slate-400 block mt-1 font-medium">
+            <span className="text-xs text-muted-foreground block mt-1 font-medium">
               3 Months Free Validity
             </span>
           </div>
@@ -352,28 +352,28 @@ export default function ReferAndEarnPage() {
       ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Referral Code & Link */}
-        <div className="lg:col-span-7 bg-white dark:bg-zinc-900 rounded-2xl p-6 shadow-xs border border-slate-200 dark:border-zinc-800 space-y-5">
+        <div className="lg:col-span-7 bg-card rounded-2xl p-5 sm:p-6 shadow-xs border border-border/80 space-y-5">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary dark:text-emerald-400" />
               <span>Your Referral Credentials</span>
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               Share your 6-character code or direct registration link with diagnostic laboratories.
             </p>
           </div>
 
           {/* 6-Digit Code Box */}
-          <div className="p-4 sm:p-5 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="p-4 sm:p-5 rounded-xl bg-muted/40 border border-border/80 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-center sm:text-left">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Your 6-Character Referral Code
               </span>
               <div className="mt-1 flex items-center justify-center sm:justify-start gap-3">
-                <span className="text-3xl sm:text-4xl font-mono font-black tracking-wider text-blue-700 dark:text-blue-400">
+                <span className="text-3xl sm:text-4xl font-mono font-black tracking-wider text-primary dark:text-emerald-400">
                   {loading ? "••••••" : data?.referral_code || "OPXXXX"}
                 </span>
-                <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold text-[10px] uppercase">
+                <span className="px-2 py-0.5 rounded-md bg-primary/15 text-primary dark:text-emerald-400 font-bold text-[10px] uppercase border border-primary/20">
                   Active
                 </span>
               </div>
@@ -383,33 +383,33 @@ export default function ReferAndEarnPage() {
               type="button"
               onClick={handleCopyCode}
               disabled={loading || !data?.referral_code}
-              className="w-full sm:w-auto h-10 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+              className="w-full sm:w-auto h-10 px-5 rounded-xl gradient-primary text-primary-foreground font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-50"
             >
-              {copiedCode ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+              {copiedCode ? <Check className="w-4 h-4 text-emerald-200" /> : <Copy className="w-4 h-4" />}
               <span>{copiedCode ? "Copied Code!" : "Copy Code"}</span>
             </button>
           </div>
 
           {/* Full Link Input */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+            <label className="text-xs font-semibold text-foreground/80">
               Direct Referral Link (Autofills your code on registration page)
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <input
                 type="text"
                 readOnly
                 value={data?.referral_url || ""}
                 placeholder="https://onepathlab.com/trial?ref=..."
-                className="flex-1 h-10 px-3.5 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 text-xs font-mono text-slate-800 dark:text-zinc-200 focus:outline-none select-all"
+                className="flex-1 h-10 px-3.5 rounded-xl bg-background border border-border/90 text-xs font-mono text-foreground focus:outline-none select-all shadow-2xs"
               />
               <button
                 type="button"
                 onClick={handleCopyLink}
                 disabled={loading || !data?.referral_url}
-                className="h-10 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                className="h-10 px-4 rounded-xl bg-card hover:bg-muted border border-border/90 text-foreground font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-2xs"
               >
-                {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {copiedLink ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                 <span>{copiedLink ? "Copied" : "Copy Link"}</span>
               </button>
             </div>
@@ -417,22 +417,22 @@ export default function ReferAndEarnPage() {
         </div>
 
         {/* Right: Key Stat Metrics Cards */}
-        <div className="lg:col-span-5 grid grid-cols-2 gap-4">
-          <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
-            <div className="flex items-center justify-between text-slate-400 mb-2">
+        <div className="lg:col-span-5 grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="p-4 sm:p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col justify-between">
+            <div className="flex items-center justify-between text-muted-foreground mb-2">
               <span className="text-xs font-semibold">Total Referrals</span>
-              <Users className="w-4 h-4 text-blue-500" />
+              <Users className="w-4 h-4 text-primary dark:text-emerald-400" />
             </div>
             <div>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
+              <div className="text-2xl sm:text-3xl font-black text-foreground">
                 {loading ? "-" : data?.stats?.total_referred || 0}
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">Labs joined with your code</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Labs joined with code</p>
             </div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
-            <div className="flex items-center justify-between text-slate-400 mb-2">
+          <div className="p-4 sm:p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col justify-between">
+            <div className="flex items-center justify-between text-muted-foreground mb-2">
               <span className="text-xs font-semibold">Paid Conversions</span>
               <Award className="w-4 h-4 text-emerald-500" />
             </div>
@@ -440,12 +440,12 @@ export default function ReferAndEarnPage() {
               <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">
                 {loading ? "-" : data?.stats?.completed_count || 0}
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">Subscribed labs (+90 days each)</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Subscribed labs (+90d)</p>
             </div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-xs flex flex-col justify-between">
-            <div className="flex items-center justify-between text-slate-400 mb-2">
+          <div className="p-4 sm:p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col justify-between">
+            <div className="flex items-center justify-between text-muted-foreground mb-2">
               <span className="text-xs font-semibold">Validity Earned</span>
               <Calendar className="w-4 h-4 text-amber-500" />
             </div>
@@ -453,22 +453,22 @@ export default function ReferAndEarnPage() {
               <div className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400">
                 {loading ? "-" : `+${data?.stats?.total_validity_earned_days || 0}d`}
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                {Math.round((data?.stats?.total_validity_earned_days || 0) / 30)} Months total free
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {Math.round((data?.stats?.total_validity_earned_days || 0) / 30)} Months free
               </p>
             </div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-blue-200 dark:border-blue-900/60 shadow-xs flex flex-col justify-between">
-            <div className="flex items-center justify-between text-blue-600 dark:text-blue-400 mb-2">
+          <div className="p-4 sm:p-5 rounded-2xl bg-card border border-primary/25 dark:border-primary/30 shadow-xs flex flex-col justify-between">
+            <div className="flex items-center justify-between text-primary dark:text-emerald-400 mb-2">
               <span className="text-xs font-semibold">Available Vouchers</span>
-              <Gift className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <Gift className="w-4 h-4 text-primary dark:text-emerald-400" />
             </div>
             <div>
-              <div className="text-2xl sm:text-3xl font-black text-blue-700 dark:text-blue-300">
+              <div className="text-2xl sm:text-3xl font-black text-primary dark:text-emerald-400">
                 {loading ? "-" : data?.stats?.available_vouchers_count || 0}
               </div>
-              <p className="text-[11px] text-blue-600/80 dark:text-blue-400/80 mt-1">Ready to redeem</p>
+              <p className="text-[11px] text-primary/80 dark:text-emerald-400/80 mt-1">Ready to redeem</p>
             </div>
           </div>
         </div>
@@ -477,39 +477,39 @@ export default function ReferAndEarnPage() {
       {/* =========================================================================
           3. 3-STEP PROCESS TIMELINE (CLEAN, PROFESSIONAL & NON-LAGGY)
       ========================================================================= */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 sm:p-8 shadow-xs border border-slate-200 dark:border-zinc-800 space-y-6">
+      <div className="bg-card rounded-2xl p-5 sm:p-7 shadow-xs border border-border/80 space-y-6">
         <div>
-          <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-zinc-100">
+          <h2 className="text-base sm:text-lg font-bold text-foreground">
             How The Referral Process Works
           </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Simple 3-step lifecycle for earning free validity extensions.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
           {/* Step 1 */}
-          <div className="p-5 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 space-y-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center justify-center">
+          <div className="p-5 rounded-xl bg-muted/30 border border-border/80 space-y-2.5">
+            <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary dark:text-emerald-400 font-bold text-xs flex items-center justify-center border border-primary/20">
               1
             </div>
-            <h3 className="font-bold text-sm text-slate-900 dark:text-zinc-100">Share Your Link or Code</h3>
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            <h3 className="font-bold text-sm text-foreground">Share Your Link or Code</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Send your unique 6-character referral code or registration link to any pathology lab director.
             </p>
-            <div className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1 pt-1">
+            <div className="text-[11px] text-primary dark:text-emerald-400 font-semibold flex items-center gap-1 pt-1">
               <span>Auto-filled on website</span>
               <ArrowRight className="w-3 h-3" />
             </div>
           </div>
 
           {/* Step 2 */}
-          <div className="p-5 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 space-y-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-bold text-xs flex items-center justify-center">
+          <div className="p-5 rounded-xl bg-muted/30 border border-border/80 space-y-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-400 font-bold text-xs flex items-center justify-center border border-amber-500/25">
               2
             </div>
-            <h3 className="font-bold text-sm text-slate-900 dark:text-zinc-100">They Register in LIS</h3>
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            <h3 className="font-bold text-sm text-foreground">They Register in LIS</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
               They sign up on onepathlab.com/trial and receive a 7-Day Free Trial. Their lab appears as{" "}
               <strong className="text-amber-600 dark:text-amber-400">Pending</strong> in your tracking list.
             </p>
@@ -520,12 +520,12 @@ export default function ReferAndEarnPage() {
           </div>
 
           {/* Step 3 */}
-          <div className="p-5 rounded-xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 space-y-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold text-xs flex items-center justify-center">
+          <div className="p-5 rounded-xl bg-muted/30 border border-border/80 space-y-2.5">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-bold text-xs flex items-center justify-center border border-emerald-500/25">
               3
             </div>
-            <h3 className="font-bold text-sm text-slate-900 dark:text-zinc-100">Buy Plan &rarr; Voucher Unlocked</h3>
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            <h3 className="font-bold text-sm text-foreground">Buy Plan &rarr; Voucher Unlocked</h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
               As soon as they purchase any paid plan, a{" "}
               <strong className="text-emerald-600 dark:text-emerald-400">+90 Days (3 Months) Free Voucher</strong> is
               immediately credited to your account.
@@ -541,14 +541,14 @@ export default function ReferAndEarnPage() {
       {/* =========================================================================
           4. "MY VOUCHERS" COLLECTION & REDEEM
       ========================================================================= */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl p-6 sm:p-8 shadow-xs border border-slate-200 dark:border-zinc-800 space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-zinc-800">
+      <div className="bg-card rounded-2xl p-5 sm:p-7 shadow-xs border border-border/80 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/70">
           <div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
               <Gift className="w-5 h-5 text-amber-500" />
               <span>My Validity Extension Vouchers</span>
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               Click &lsquo;Redeem Voucher&rsquo; on any available voucher to immediately extend your lab&rsquo;s subscription by +90 days.
             </p>
           </div>
@@ -557,7 +557,7 @@ export default function ReferAndEarnPage() {
             type="button"
             onClick={loadReferralInfo}
             disabled={loading}
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors self-start sm:self-auto cursor-pointer"
+            className="p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors self-start sm:self-auto cursor-pointer"
             title="Refresh vouchers"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -565,12 +565,12 @@ export default function ReferAndEarnPage() {
         </div>
 
         {!data?.vouchers || data.vouchers.length === 0 ? (
-          <div className="p-8 text-center rounded-xl bg-slate-50 dark:bg-zinc-950 border border-dashed border-slate-200 dark:border-zinc-800">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-3">
+          <div className="p-8 text-center rounded-xl bg-muted/30 border border-dashed border-border/80">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-3">
               <Gift className="w-6 h-6" />
             </div>
-            <h3 className="text-sm font-bold text-slate-800 dark:text-zinc-200 mb-1">No Vouchers Earned Yet</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+            <h3 className="text-sm font-bold text-foreground mb-1">No Vouchers Earned Yet</h3>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
               Once a referred laboratory registers with your code and activates a subscription plan, your 3-month free
               extension voucher will appear here ready to redeem!
             </p>
@@ -586,8 +586,8 @@ export default function ReferAndEarnPage() {
                   key={voucher.id}
                   className={`rounded-2xl p-5 border transition-colors ${
                     isAvailable
-                      ? "bg-amber-50/40 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800/60 shadow-xs"
-                      : "bg-slate-50 dark:bg-zinc-950 border-slate-200 dark:border-zinc-800 opacity-75"
+                      ? "bg-amber-500/[0.06] dark:bg-amber-500/10 border-amber-500/30 shadow-xs"
+                      : "bg-muted/30 border-border/70 opacity-75"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3 mb-3">
@@ -595,17 +595,17 @@ export default function ReferAndEarnPage() {
                       <div
                         className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
                           isAvailable
-                            ? "bg-amber-500 text-white"
-                            : "bg-slate-200 dark:bg-zinc-800 text-slate-500"
+                            ? "bg-amber-500 text-white shadow-2xs"
+                            : "bg-muted text-muted-foreground"
                         }`}
                       >
                         <Gift className="w-4 h-4" />
                       </div>
                       <div>
-                        <span className="font-mono font-bold text-sm text-slate-900 dark:text-zinc-100">
+                        <span className="font-mono font-bold text-sm text-foreground">
                           {voucher.code}
                         </span>
-                        <p className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate max-w-[150px]">
+                        <p className="text-[10.5px] text-muted-foreground truncate max-w-[150px]">
                           From: {voucher.unlocked_from}
                         </p>
                       </div>
@@ -614,26 +614,26 @@ export default function ReferAndEarnPage() {
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                         isAvailable
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                          : "bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-zinc-400"
+                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                          : "bg-muted text-muted-foreground border border-border/70"
                       }`}
                     >
                       {isAvailable ? "Ready to Redeem" : "Redeemed"}
                     </span>
                   </div>
 
-                  <div className="my-3 py-2 px-3 rounded-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex items-center justify-between">
+                  <div className="my-3 py-2 px-3 rounded-xl bg-card border border-border/80 flex items-center justify-between">
                     <div>
-                      <span className="text-[10.5px] text-slate-500">Validity Reward:</span>
-                      <div className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                      <span className="text-[10.5px] text-muted-foreground">Validity Reward:</span>
+                      <div className="text-sm font-bold text-amber-600 dark:text-amber-400">
                         +3 Months Free ({voucher.validity_days} Days)
                       </div>
                     </div>
                     <Sparkles className="w-4 h-4 text-amber-500" />
                   </div>
 
-                  <div className="mt-3 pt-3 border-t border-slate-200 dark:border-zinc-800 flex items-center justify-between">
-                    <span className="text-[10.5px] text-slate-500">
+                  <div className="mt-3 pt-3 border-t border-border/70 flex items-center justify-between">
+                    <span className="text-[10.5px] text-muted-foreground">
                       {isAvailable
                         ? "Can be applied anytime"
                         : `Redeemed on ${new Date(voucher.redeemed_at || "").toLocaleDateString()}`}
@@ -661,30 +661,30 @@ export default function ReferAndEarnPage() {
       {/* =========================================================================
           5. REFERRED LABORATORIES TRACKING TABLE
       ========================================================================= */}
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xs border border-slate-200 dark:border-zinc-800 overflow-hidden">
-        <div className="p-6 border-b border-slate-100 dark:border-zinc-800">
-          <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2">
-            <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+      <div className="bg-card rounded-2xl shadow-xs border border-border/80 overflow-hidden">
+        <div className="p-5 sm:p-6 border-b border-border/70">
+          <h2 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary dark:text-emerald-400" />
             <span>Referred Laboratories Tracking</span>
           </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Track laboratories that joined using your referral credentials and their current subscription status.
           </p>
         </div>
 
         {!data?.history || data.history.length === 0 ? (
           <div className="p-10 text-center">
-            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+            <p className="text-sm font-medium text-muted-foreground">
               No laboratories have registered with your code yet.
             </p>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-muted-foreground/70 mt-1">
               Share your referral code or link above to start earning vouchers!
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-zinc-950 text-slate-500 font-semibold border-b border-slate-200 dark:border-zinc-800">
+          <div className="table-responsive-container">
+            <table className="w-full min-w-[620px] text-left text-xs border-collapse">
+              <thead className="bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px] border-b border-border/70">
                 <tr>
                   <th className="py-3 px-4">Laboratory Name</th>
                   <th className="py-3 px-4">Registered Date</th>
@@ -692,26 +692,26 @@ export default function ReferAndEarnPage() {
                   <th className="py-3 px-4">Reward Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
+              <tbody className="divide-y divide-border/60">
                 {data.history.map((item) => {
                   const isCompleted = item.status === "completed";
 
                   return (
-                    <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-zinc-950/60 transition-colors">
-                      <td className="py-3.5 px-4 font-semibold text-slate-900 dark:text-zinc-100">
+                    <tr key={item.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="py-3.5 px-4 font-semibold text-foreground">
                         {item.lab_name}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-500">
+                      <td className="py-3.5 px-4 text-muted-foreground">
                         {item.registered_at ? new Date(item.registered_at).toLocaleDateString() : "N/A"}
                       </td>
                       <td className="py-3.5 px-4">
                         {isCompleted ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>Plan Purchased</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/25">
                             <Clock className="w-3.5 h-3.5" />
                             <span>Pending Plan Purchase</span>
                           </span>
@@ -724,7 +724,7 @@ export default function ReferAndEarnPage() {
                             <span>3-Month Voucher Unlocked!</span>
                           </span>
                         ) : (
-                          <span className="text-slate-400 italic">Unlocks after subscription purchase</span>
+                          <span className="text-muted-foreground/60 italic">Unlocks after subscription purchase</span>
                         )}
                       </td>
                     </tr>
@@ -740,23 +740,23 @@ export default function ReferAndEarnPage() {
           6. VOUCHER REDEMPTION CONFIRMATION MODAL
       ========================================================================= */}
       {confirmVoucher && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div
-            className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150"
+            className="bg-card border border-border/80 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150"
             role="dialog"
             aria-modal="true"
             aria-labelledby="confirm-voucher-title"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-200 dark:border-amber-800/60">
+                <div className="w-11 h-11 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center border border-amber-500/20">
                   <Sparkles className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 id="confirm-voucher-title" className="text-base sm:text-lg font-bold text-slate-900 dark:text-zinc-100">
+                  <h3 id="confirm-voucher-title" className="text-base sm:text-lg font-bold text-foreground">
                     Confirm Voucher Redemption
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-muted-foreground">
                     Extend your laboratory subscription validity
                   </p>
                 </div>
@@ -765,47 +765,47 @@ export default function ReferAndEarnPage() {
                 type="button"
                 onClick={() => !redeemingVoucherId && setConfirmVoucher(null)}
                 disabled={Boolean(redeemingVoucherId)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/40 space-y-2.5">
+            <div className="p-4 rounded-xl bg-amber-500/[0.08] dark:bg-amber-500/10 border border-amber-500/25 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-amber-900 dark:text-amber-300 font-medium">Voucher Code</span>
-                <span className="font-mono font-bold text-sm text-amber-800 dark:text-amber-300 px-2.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-800">
+                <span className="font-mono font-bold text-sm text-amber-800 dark:text-amber-300 px-2.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30">
                   {confirmVoucher.code}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-xs pt-1.5 border-t border-amber-200/60 dark:border-amber-900/40">
+              <div className="flex items-center justify-between text-xs pt-1.5 border-t border-amber-500/20">
                 <span className="text-amber-900 dark:text-amber-300">Free Validity Reward</span>
-                <span className="font-bold text-amber-700 dark:text-amber-400">
+                <span className="font-bold text-amber-600 dark:text-amber-400">
                   +3 Months (+90 Days) Free Extension
                 </span>
               </div>
 
               {data?.lab_plan?.expires_formatted && (
-                <div className="flex items-center justify-between text-xs pt-1.5 border-t border-amber-200/60 dark:border-amber-900/40">
+                <div className="flex items-center justify-between text-xs pt-1.5 border-t border-amber-500/20">
                   <span className="text-amber-900 dark:text-amber-300">Current Plan Expiry</span>
-                  <span className="font-semibold text-slate-700 dark:text-zinc-300">
+                  <span className="font-semibold text-foreground">
                     {data.lab_plan.expires_formatted}
                   </span>
                 </div>
               )}
             </div>
 
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Are you sure you want to apply this voucher? Your active subscription plan will be extended by <strong>strictly 3 months</strong>. Once redeemed, this voucher cannot be used again.
             </p>
 
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100 dark:border-zinc-800">
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-border/80">
               <button
                 type="button"
                 onClick={() => setConfirmVoucher(null)}
                 disabled={Boolean(redeemingVoucherId)}
-                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-zinc-700 hover:bg-slate-50 dark:hover:bg-zinc-800 text-xs font-semibold text-slate-700 dark:text-zinc-300 transition-colors cursor-pointer disabled:opacity-50"
+                className="px-4 py-2 rounded-xl border border-border hover:bg-muted text-xs font-semibold text-foreground transition-colors cursor-pointer disabled:opacity-50"
               >
                 Cancel
               </button>

@@ -641,8 +641,8 @@ export default function B2bSalesPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        <div className="table-responsive-container">
+          <table className="w-full min-w-[780px] text-left text-xs">
             <thead>
               <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
                 <th className="py-3 px-4">Patient Demographics</th>

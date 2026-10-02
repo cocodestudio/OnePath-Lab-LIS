@@ -257,7 +257,7 @@ function ProfileContent() {
           <User className="h-4 w-4" />
           <span>Profile</span>
           {activeTab === "PROFILE" && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full animate-fade-in" />
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
           )}
         </button>
 
@@ -270,7 +270,7 @@ function ProfileContent() {
           <Laptop className="h-4 w-4" />
           <span>Sessions</span>
           {activeTab === "SESSIONS" && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full animate-fade-in" />
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
           )}
         </button>
       </div>
@@ -321,7 +321,7 @@ function ProfileContent() {
                 <label className="text-xs font-semibold text-muted-foreground">Diagnostic Laboratory / Centre Name</label>
                 <Link
                   href="/dashboard/account/lab?tab=centre"
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-primary dark:text-emerald-400 hover:underline cursor-pointer"
                 >
                   <Building2 className="h-3 w-3" />
                   <span>Manage in Lab Profile</span>
@@ -348,7 +348,7 @@ function ProfileContent() {
                       setEditingField("name");
                       setEditName(profile?.name || "");
                     }}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary dark:text-emerald-400 hover:underline cursor-pointer"
                   >
                     <Edit3 className="h-3 w-3" />
                     <span>Edit</span>
@@ -416,7 +416,7 @@ function ProfileContent() {
                       setEditingField("phone");
                       setEditPhone(profile?.phone || "");
                     }}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary dark:text-emerald-400 hover:underline cursor-pointer"
                   >
                     <Edit3 className="h-3 w-3" />
                     <span>Edit</span>
@@ -538,7 +538,7 @@ function ProfileContent() {
           ) : (
             <form onSubmit={handleResetPassword} className="space-y-4 pt-3 text-xs">
               {demoOtp && (
-                <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-blue-300 font-mono text-xs">
+                <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 text-primary dark:text-emerald-300 font-mono text-xs">
                   Development OTP: <strong>{demoOtp}</strong>
                 </div>
               )}

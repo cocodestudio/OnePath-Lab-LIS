@@ -456,13 +456,13 @@ export default function DashboardOverviewPage() {
 
                   return (
                     <tr key={rep.id} className="border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors">
-                      <td className="px-6 py-3.5 font-mono text-[11px] text-muted-foreground">{pid}</td>
-                      <td className="px-6 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">{pName}</td>
-                      <td className="px-6 py-3.5 text-xs text-muted-foreground max-w-[200px] truncate">{testTypeString}</td>
-                      <td className="px-6 py-3.5">
+                      <td className="px-4 sm:px-6 py-3.5 font-mono text-[11px] text-muted-foreground">{pid}</td>
+                      <td className="px-4 sm:px-6 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">{pName}</td>
+                      <td className="px-4 sm:px-6 py-3.5 text-xs text-muted-foreground max-w-[200px] truncate">{testTypeString}</td>
+                      <td className="px-4 sm:px-6 py-3.5">
                         <span className={`inline-block whitespace-nowrap px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider ${pill}`}>{statusLabel}</span>
                       </td>
-                      <td className="px-6 py-3.5 text-right">
+                      <td className="px-4 sm:px-6 py-3.5 text-right">
                         <Link href={`/dashboard/reports/${rep.id}/edit`} className="text-[11px] font-semibold text-primary hover:text-secondary transition-colors">Open</Link>
                       </td>
                     </tr>

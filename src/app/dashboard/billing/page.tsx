@@ -746,17 +746,11 @@ export default function BillingPage() {
     return getMainBillItems(selectedBillForInvoice, allTestsMap);
   }, [selectedBillForInvoice, allTestsMap]);
 
-  // True whenever initial load is underway or live data is being fetched and no bills are visible yet
-  const isTableLoading = loading || (isFetching && filteredBills.length === 0);
+  // True whenever initial load is underway or live data is being fetched
+  const isTableLoading = loading || isFetching;
 
   return (
     <div className="w-full space-y-7 pb-12 animate-fade-in text-foreground">
-      {/* Subtle Background Sync Progress Bar */}
-      {isFetching && filteredBills.length > 0 && (
-        <div className="w-full bg-primary/10 h-1 overflow-hidden rounded-full -mb-5 shadow-sm">
-          <div className="w-full h-full bg-primary animate-pulse" />
-        </div>
-      )}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-5">
@@ -883,8 +877,9 @@ export default function BillingPage() {
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-card/70 p-4 rounded-xl border border-border/80 shadow-sm">
-        <div className="relative w-full sm:max-w-md">
+      <div className="flex flex-col gap-3 bg-card/70 p-4 rounded-xl border border-border/80 shadow-sm">
+        {/* Row 1: Search */}
+        <div className="relative w-full">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 pointer-events-none" />
           <input
             type="text"
@@ -895,9 +890,10 @@ export default function BillingPage() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+        {/* Row 2: Date filter + Status filter */}
+        <div className="flex flex-wrap items-center gap-2 w-full">
           {/* Date Filter with < > Arrow Buttons */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <div className="flex items-center bg-background border border-border/90 rounded-xl p-0.5 shadow-xs">
               <button
                 type="button"
@@ -963,7 +959,7 @@ export default function BillingPage() {
           </div>
 
           {/* Status Filter */}
-          <div className="w-36">
+          <div className="min-w-[140px] flex-1 sm:flex-none sm:w-36">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue placeholder="Status" />
@@ -1157,7 +1153,7 @@ export default function BillingPage() {
 
         {/* Pagination Footer */}
         {totalRows > rowsPerPage && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border/80 text-xs text-muted-foreground">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-border/80 text-xs text-muted-foreground text-center sm:text-left">
             <span>
               Showing <strong>{indexOfFirstRow + 1}</strong> to <strong>{Math.min(indexOfLastRow, totalRows)}</strong> of <strong>{totalRows}</strong> invoices
             </span>

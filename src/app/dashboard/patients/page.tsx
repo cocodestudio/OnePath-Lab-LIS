@@ -639,12 +639,6 @@ export default function PatientsPage() {
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">Patients Registry</h1>
           <p className="text-xs text-muted-foreground mt-0.5">Directory of all registered laboratory patients & demographics.</p>
         </div>
-        <Link href="/dashboard/patients/register">
-          <Button size="sm" className="gradient-primary text-primary-foreground font-bold text-xs gap-2 shadow-xs cursor-pointer ring-inset-top">
-            <UserPlus className="h-4 w-4" />
-            <span>{currentUser?.role === "COLLECTION_CENTER" ? "Sample Entry" : "Register Patient"}</span>
-          </Button>
-        </Link>
       </div>
 
       {/* Filter / Search Ribbon */}
@@ -738,8 +732,7 @@ export default function PatientsPage() {
       <div className="bg-card border border-border/80 rounded-xl shadow-xs overflow-hidden">
         <div className="table-responsive-container">
           {loading || isFetching ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-xs text-left border-collapse">
+            <table className="w-full min-w-[760px] text-xs text-left border-collapse">
                 <thead>
                   <tr className="border-b border-border/80 bg-muted/30 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
                     <th className="px-5 py-3.5">Patient Details</th>
@@ -775,7 +768,6 @@ export default function PatientsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
           ) : currentRows.length === 0 ? (
             <div className="text-center py-16 px-4 space-y-3">
               <Users className="h-10 w-10 mx-auto text-muted-foreground/40" />
@@ -785,7 +777,7 @@ export default function PatientsPage() {
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                 {safePatients.length > 0
                   ? `You have ${safePatients.length} patient records in your laboratory archive.`
-                  : "No patient records exist yet. Click 'Register Patient' to create one."}
+                  : "No patient records exist yet."}
               </p>
               {safePatients.length > 0 && (filterDate || search) && (
                 <button
@@ -993,7 +985,7 @@ export default function PatientsPage() {
 
         {/* Pagination Bar */}
         {totalRows > 0 && (
-          <div className="bg-muted/20 px-5 py-3 border-t border-border/60 flex items-center justify-between gap-4">
+          <div className="bg-muted/20 px-4 sm:px-5 py-3 border-t border-border/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
             <span className="text-xs text-muted-foreground">
               Showing <strong className="text-foreground">{indexOfFirstRow + 1}</strong>–<strong className="text-foreground">{Math.min(indexOfLastRow, totalRows)}</strong> of <strong className="text-foreground">{totalRows}</strong> patients
             </span>
