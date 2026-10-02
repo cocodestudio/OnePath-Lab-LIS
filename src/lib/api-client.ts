@@ -185,7 +185,10 @@ function cloneData(data: any): any {
 
 export async function fetchFromLaravel<T = any>(endpoint: string, options: FetchFromLaravelOptions = {}): Promise<T> {
   const token = getStoredToken();
-  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  let cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  if (cleanEndpoint.startsWith("/lis/")) {
+    cleanEndpoint = cleanEndpoint.replace(/^\/lis/, "");
+  }
 
   // Allow ABHA & public endpoints to proceed even if token isn't in localStorage yet
   if (!token && !cleanEndpoint.includes("/abha/") && !cleanEndpoint.includes("/public/")) {

@@ -2473,7 +2473,7 @@ function ResultEntryContent() {
     }
   };
 
-  const handleSaveResults = async (targetStatus?: "PENDING" | "FINAL" | "APPROVED", andNext: boolean = false) => {
+  const handleSaveResults = async (targetStatus?: "IN_PROGRESS" | "FINAL" | "APPROVED", andNext: boolean = false) => {
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -2493,7 +2493,9 @@ function ResultEntryContent() {
       };
     });
 
-    const resolvedStatus = targetStatus || report?.status || "PENDING";
+    const resolvedStatus = targetStatus 
+      ? targetStatus 
+      : (report?.status === "FINAL" || report?.status === "APPROVED" ? report.status : "IN_PROGRESS");
 
     try {
       const updateRes = await fetchFromLaravel(`/reports/${reportId}`, {
@@ -2508,6 +2510,9 @@ function ResultEntryContent() {
       });
 
       let successMsg = "Diagnostic results saved successfully.";
+      if (resolvedStatus === "IN_PROGRESS") {
+        successMsg = "Report results saved & marked as IN PROGRESS.";
+      }
       if (targetStatus === "FINAL" || resolvedStatus === "FINAL") {
         successMsg = "Report results saved & marked as FINAL.";
       }
@@ -2526,6 +2531,14 @@ function ResultEntryContent() {
 
       setSuccess(successMsg);
       toast.success("Success", successMsg);
+
+      // Update in-memory state so UI updates immediately
+      if (report) {
+        setReport((prev) => prev ? { ...prev, status: resolvedStatus } : prev);
+      }
+      if (reportRef.current) {
+        reportRef.current.status = resolvedStatus;
+      }
 
       if (andNext) {
         if (nextReportId) {
@@ -2909,7 +2922,7 @@ function ResultEntryContent() {
 
             <Button
               type="button"
-              onClick={() => handleSaveResults()}
+              onClick={() => handleSaveResults("IN_PROGRESS")}
               disabled={saving}
               className="h-10 px-5 gap-2 font-bold shadow-sm cursor-pointer gradient-primary text-primary-foreground hover:-translate-y-px transition-all rounded-xl w-full sm:w-auto"
             >
@@ -2930,6 +2943,30 @@ function ResultEntryContent() {
                 <h2 className="font-display text-lg font-semibold text-foreground leading-none">{report.patient.name}</h2>
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-muted text-muted-foreground uppercase">
                   {report.patient.gender}, {report.patient.age}y
+                </span>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider ${
+                  report.status === "APPROVED" || report.status === "COMPLETED"
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                    : report.status === "FINAL"
+                    ? "bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30"
+                    : report.status === "IN_PROGRESS"
+                    ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                    : report.status === "NEW"
+                    ? "bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30"
+                    : "bg-slate-500/15 text-slate-600 dark:text-slate-400 border border-slate-500/30"
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    report.status === "APPROVED" || report.status === "COMPLETED"
+                      ? "bg-emerald-500"
+                      : report.status === "FINAL"
+                      ? "bg-blue-500"
+                      : report.status === "IN_PROGRESS"
+                      ? "bg-amber-500 animate-pulse"
+                      : report.status === "NEW"
+                      ? "bg-sky-500"
+                      : "bg-slate-400"
+                  }`} />
+                  {report.status === "IN_PROGRESS" ? "In Progress" : report.status === "NEW" ? "New" : report.status}
                 </span>
                 {activePackageName && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
@@ -2975,7 +3012,7 @@ function ResultEntryContent() {
         </div>
 
         {/* Form Container with Enter Key Navigation */}
-        <form onSubmit={(e) => { e.preventDefault(); handleSaveResults("PENDING"); }} onKeyDown={handleFormKeyDown} className="flex-1 flex flex-col justify-between">
+        <form onSubmit={(e) => { e.preventDefault(); handleSaveResults("IN_PROGRESS"); }} onKeyDown={handleFormKeyDown} className="flex-1 flex flex-col justify-between">
           <div className="space-y-6 flex-1 pb-8">
             {error && (
               <div className="flex items-center gap-3 rounded-xl bg-destructive/8 border border-destructive/20 p-4 text-sm text-destructive font-medium">
@@ -3694,9 +3731,13 @@ function ResultEntryContent() {
                       ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
                       : report?.status === "FINAL"
                         ? "bg-blue-500/15 text-blue-600 border border-blue-500/30"
-                        : "bg-amber-500/15 text-amber-600 border border-amber-500/30"
+                        : report?.status === "IN_PROGRESS"
+                          ? "bg-amber-500/15 text-amber-600 border border-amber-500/30"
+                          : report?.status === "NEW"
+                            ? "bg-sky-500/15 text-sky-600 border border-sky-500/30"
+                            : "bg-slate-500/15 text-slate-600 border border-slate-500/30"
                     }`}>
-                    {report?.status}
+                    {report?.status === "IN_PROGRESS" ? "In Progress" : report?.status === "NEW" ? "New" : report?.status}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">

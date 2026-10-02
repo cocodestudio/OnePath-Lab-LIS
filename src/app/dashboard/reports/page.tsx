@@ -278,8 +278,15 @@ export default function ReportsListPage() {
       statusFilter === "ALL" ||
       (statusFilter === "REJECTED" && isRepRejected) ||
       (!isRepRejected && (
-        r.status === statusFilter ||
-        (statusFilter === "APPROVED" && (r.status === "COMPLETED" || r.status === "APPROVED"))
+        statusFilter === "NEW"
+          ? r.status === "NEW" || r.status === "PENDING"
+          : statusFilter === "IN_PROGRESS"
+          ? r.status === "IN_PROGRESS"
+          : statusFilter === "FINAL"
+          ? r.status === "FINAL"
+          : statusFilter === "APPROVED"
+          ? r.status === "COMPLETED" || r.status === "APPROVED"
+          : r.status === statusFilter
       ));
     const resultsList = Array.isArray(r.results) ? r.results : [];
     const matchesCategory =
@@ -525,35 +532,105 @@ export default function ReportsListPage() {
             </div>
           </div>
 
-          <div className="space-y-1.5 w-full sm:w-[160px]">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Status</label>
-            <select className={selectClass} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="ALL">All Statuses</option>
-              <option value="PENDING">Pending</option>
-              <option value="FINAL">Final</option>
-              <option value="APPROVED">Approved</option>
-              <option value="REJECTED">Sample Rejected</option>
-            </select>
+          {/* Status Dropdown */}
+          <div className="space-y-1.5 w-full sm:w-[170px]">
+            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
+              Status
+            </label>
+            <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val)}>
+              <SelectTrigger className="h-10 w-full rounded-xl bg-background border border-border/80 font-medium text-xs hover:border-primary/50 transition-all shadow-xs focus:ring-2 focus:ring-primary/20 cursor-pointer">
+                <SelectValue placeholder="All Statuses" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border border-border/70 shadow-lg bg-popover/95 backdrop-blur-md p-1">
+                <SelectItem value="ALL" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                  <span className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-slate-400" />
+                    All Statuses
+                  </span>
+                </SelectItem>
+                <SelectItem value="NEW" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                  <span className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
+                    <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
+                    New
+                  </span>
+                </SelectItem>
+                <SelectItem value="IN_PROGRESS" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                  <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    In Progress
+                  </span>
+                </SelectItem>
+                <SelectItem value="FINAL" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                  <span className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    Final
+                  </span>
+                </SelectItem>
+                <SelectItem value="APPROVED" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                  <span className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    Approved
+                  </span>
+                </SelectItem>
+                <SelectItem value="REJECTED" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                  <span className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+                    <span className="w-2 h-2 rounded-full bg-rose-500" />
+                    Sample Rejected
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          <div className="space-y-1.5 w-full sm:w-[160px]">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Department</label>
-            <select className={selectClass} value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-              <option value="ALL">All Departments</option>
-              {categories.map((c) => (<option key={c} value={c}>{c}</option>))}
-            </select>
+          {/* Department Dropdown */}
+          <div className="space-y-1.5 w-full sm:w-[190px]">
+            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
+              Department
+            </label>
+            <Select value={categoryFilter} onValueChange={(val) => setCategoryFilter(val)}>
+              <SelectTrigger className="h-10 w-full rounded-xl bg-background border border-border/80 font-medium text-xs hover:border-primary/50 transition-all shadow-xs focus:ring-2 focus:ring-primary/20 cursor-pointer">
+                <SelectValue placeholder="All Departments" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border border-border/70 shadow-lg bg-popover/95 backdrop-blur-md p-1 max-h-72">
+                <SelectItem value="ALL" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                  <span className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary/60" />
+                    All Departments
+                  </span>
+                </SelectItem>
+                {categories.map((c) => (
+                  <SelectItem key={c} value={c} className="rounded-lg text-xs font-medium py-2 cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
+                      {c}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
+          {/* Sort By Dropdown */}
           <div className="space-y-1.5 w-full sm:w-[160px]">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sort By</label>
-            <select 
-              className={selectClass} 
-              value={sortOrder} 
-              onChange={(e) => setSortOrder(e.target.value as "oldest" | "recent")}
-            >
-              <option value="oldest">Oldest First</option>
-              <option value="recent">Recent First</option>
-            </select>
+            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
+              Sort By
+            </label>
+            <Select value={sortOrder} onValueChange={(val) => setSortOrder(val as "oldest" | "recent")}>
+              <SelectTrigger className="h-10 w-full rounded-xl bg-background border border-border/80 font-medium text-xs hover:border-primary/50 transition-all shadow-xs focus:ring-2 focus:ring-primary/20 cursor-pointer">
+                <SelectValue placeholder="Sort order" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border border-border/70 shadow-lg bg-popover/95 backdrop-blur-md p-1">
+                <SelectItem value="recent" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                  Recent First
+                </SelectItem>
+                <SelectItem value="oldest" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                  Oldest First
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {hasFilters && (
@@ -771,7 +848,7 @@ export default function ReportsListPage() {
 
                             if (rep.status === "APPROVED" || rep.status === "COMPLETED") {
                               return (
-                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                   APPROVED
                                 </span>
@@ -780,17 +857,26 @@ export default function ReportsListPage() {
 
                             if (rep.status === "FINAL") {
                               return (
-                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
                                   <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                                   FINAL
                                 </span>
                               );
                             }
 
+                            if (rep.status === "IN_PROGRESS") {
+                              return (
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                  IN PROGRESS
+                                </span>
+                              );
+                            }
+
                             return (
-                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-600 border border-amber-500/20">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                PENDING
+                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">
+                                <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                                NEW
                               </span>
                             );
                           })()}

@@ -143,6 +143,7 @@ function LabAccountContent() {
   const [loadingDispatchSettings, setLoadingDispatchSettings] = useState(false);
   const [savingDispatchSettings, setSavingDispatchSettings] = useState(false);
   const [dispatchSaveSuccess, setDispatchSaveSuccess] = useState(false);
+  const [testingDispatch, setTestingDispatch] = useState(false);
 
   // Daily Patient Volume State
   const [selectedVolumeTier, setSelectedVolumeTier] = useState("1_50");
@@ -373,6 +374,28 @@ function LabAccountContent() {
       toast.error("Failed to save summary dispatch settings", err.message || "");
     } finally {
       setSavingDispatchSettings(false);
+    }
+  };
+
+  const handleTestDispatch = async () => {
+    try {
+      setTestingDispatch(true);
+      const res = await fetchFromLaravel("/lab/summary-dispatch/test", {
+        method: "POST",
+        body: JSON.stringify({
+          frequency: dispatchSettings.frequency,
+          force_email: true,
+        }),
+      });
+      if (res && (res.status === "success" || res.data?.email?.success)) {
+        toast.success(`Test ${dispatchSettings.frequency} summary report dispatched with CSV attachment to your registered email!`);
+      } else {
+        toast.info(res?.message || "Test summary dispatch completed.");
+      }
+    } catch (err: any) {
+      toast.error("Failed to dispatch test summary report", err.message || "");
+    } finally {
+      setTestingDispatch(false);
     }
   };
 
@@ -1988,12 +2011,31 @@ function LabAccountContent() {
               </div>
             </div>
 
-            {/* Save Action Footer */}
-            <div className="flex items-center justify-end pt-2">
+            {/* Save & Test Action Footer */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleTestDispatch}
+                disabled={testingDispatch || savingDispatchSettings}
+                className="w-full sm:w-auto px-5 py-3 rounded-xl border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 font-bold text-xs transition-all inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {testingDispatch ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Sending Test Email...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    <span>Send Test Report to My Email</span>
+                  </>
+                )}
+              </button>
+
               <button
                 type="submit"
                 disabled={savingDispatchSettings}
-                className="px-7 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all shadow-md inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full sm:w-auto px-7 py-3 rounded-xl bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 transition-all shadow-md inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {savingDispatchSettings ? (
                   <>

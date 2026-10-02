@@ -598,7 +598,7 @@ export default function PatientsPage() {
     setRejecting(true);
     try {
       const finalReason = rejectReason === "Other" ? (customRejectReason.trim() || "Sample Rejected") : rejectReason;
-      await fetchFromLaravel(`/lis/patients/${rejectPatient.id}/reject-sample`, {
+      await fetchFromLaravel(`/patients/${rejectPatient.id}/reject-sample`, {
         method: "POST",
         body: JSON.stringify({
           reason: finalReason,
@@ -1690,7 +1690,7 @@ export default function PatientsPage() {
                     if (!rejectPatient) return;
                     setRejecting(true);
                     try {
-                      await fetchFromLaravel(`/lis/patients/${rejectPatient.id}/reject-sample`, {
+                      await fetchFromLaravel(`/patients/${rejectPatient.id}/reject-sample`, {
                         method: "POST",
                         body: JSON.stringify({ action: "RESTORE" })
                       });
