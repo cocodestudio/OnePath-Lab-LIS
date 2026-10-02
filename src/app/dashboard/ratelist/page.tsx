@@ -72,12 +72,16 @@ interface B2BPartner {
   id: string | number;
   name: string;
   lab_name?: string;
+  labName?: string;
   email: string;
   phone?: string;
   role?: string;
   rate_tier?: string;
+  rateTier?: string;
   rate_list_id?: number | null;
+  rateListId?: number | null;
   rate_list_name?: string | null;
+  rateListName?: string | null;
 }
 
 export default function RateListPage() {
@@ -229,7 +233,20 @@ export default function RateListPage() {
     try {
       const data = await fetchFromLaravel("/collection-centers", { skipCache: true });
       const list = Array.isArray(data) ? data : (data?.data || []);
-      const b2bList = list.filter((c: any) => c.role === "B2B");
+      const b2bList = list
+        .filter((c: any) => c.role === "B2B" || c.role === "COLLECTION_CENTER")
+        .map((c: any) => {
+          const rlId = c.rate_list_id ?? c.rateListId ?? c.rateList?.id ?? null;
+          return {
+            ...c,
+            rate_list_id: rlId ? Number(rlId) : null,
+            rateListId: rlId ? Number(rlId) : null,
+            rate_tier: c.rate_tier ?? c.rateTier ?? "HIGH",
+            rateTier: c.rate_tier ?? c.rateTier ?? "HIGH",
+            rate_list_name: c.rate_list_name ?? c.rateListName ?? c.rateList?.name ?? null,
+            lab_name: c.lab_name ?? c.labName ?? c.name,
+          };
+        });
       setPartners(b2bList);
     } catch (e) {
       console.error("Failed to load partners:", e);
@@ -500,6 +517,24 @@ export default function RateListPage() {
   // Assign Partner to Rate List
   const handleAssignPartner = async (partnerId: string | number, rateListId: number | null) => {
     setAssigningPartnerId(partnerId);
+
+    // Optimistically update partner in local state immediately
+    setPartners((prev) =>
+      prev.map((p) => {
+        if (String(p.id) === String(partnerId)) {
+          const selectedRl = rateLists.find((r) => Number(r.id) === Number(rateListId));
+          return {
+            ...p,
+            rate_list_id: rateListId,
+            rateListId: rateListId,
+            rate_list_name: selectedRl?.name ?? null,
+            rateListName: selectedRl?.name ?? null,
+          };
+        }
+        return p;
+      })
+    );
+
     try {
       const res = await fetchFromLaravel("/rate-lists/assign-partner", {
         method: "POST",
@@ -511,13 +546,15 @@ export default function RateListPage() {
 
       if (res && res.status === "success") {
         toast.success("Assigned", res.message || "Partner rate list updated.");
-        loadPartners();
-        loadAdminRateLists(false);
+        await loadPartners();
+        await loadAdminRateLists(false);
       } else {
         toast.error("Error", res?.message || "Failed to assign partner.");
+        await loadPartners();
       }
     } catch (err: any) {
       toast.error("Error", err?.message || "Failed to assign partner.");
+      await loadPartners();
     } finally {
       setAssigningPartnerId(null);
     }
@@ -1855,27 +1892,32 @@ export default function RateListPage() {
                           </td>
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-2">
-                              <select
-                                value={p.rate_list_id || ""}
-                                onChange={(e) => {
-                                  const val = e.target.value === "" ? null : Number(e.target.value);
-                                  handleAssignPartner(p.id, val);
-                                }}
-                                disabled={isAssigning}
-                                className="h-8 px-2.5 rounded-xl bg-background border border-border/80 text-xs font-bold text-foreground focus:ring-1 focus:ring-primary outline-none min-w-[200px]"
-                              >
-                                <option value="">Standard (Tier {p.rate_tier || "HIGH"})</option>
-                                {rateLists.map((rl) => (
-                                  <option key={rl.id} value={rl.id}>
-                                    {rl.name} ({rl.items_count || 0} custom rates)
-                                  </option>
-                                ))}
-                              </select>
+                              {(() => {
+                                const currentRateListId = p.rate_list_id ?? p.rateListId ?? "";
+                                return (
+                                  <select
+                                    value={currentRateListId ? String(currentRateListId) : ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value === "" ? null : Number(e.target.value);
+                                      handleAssignPartner(p.id, val);
+                                    }}
+                                    disabled={isAssigning}
+                                    className="h-8 px-2.5 rounded-xl bg-background border border-border/80 text-xs font-bold text-foreground focus:ring-1 focus:ring-primary outline-none min-w-[200px]"
+                                  >
+                                    <option value="">Standard (Tier {p.rate_tier || p.rateTier || "HIGH"})</option>
+                                    {rateLists.map((rl) => (
+                                      <option key={rl.id} value={String(rl.id)}>
+                                        {rl.name} ({rl.items_count || 0} custom rates)
+                                      </option>
+                                    ))}
+                                  </select>
+                                );
+                              })()}
                               {isAssigning && <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />}
                             </div>
                           </td>
                           <td className="py-3.5 px-4 text-center">
-                            {p.rate_list_id ? (
+                            {(p.rate_list_id || p.rateListId) ? (
                               <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
                                 Custom List Active
                               </span>

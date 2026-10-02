@@ -22,6 +22,7 @@ export default function B2BRevenuePage() {
   const [reports, setReports] = useState<any[]>([]);
   const [tests, setTests] = useState<any[]>([]);
   const [labInfo, setLabInfo] = useState<any>(null);
+  const [b2bRateData, setB2bRateData] = useState<any>(null);
 
   // Filters
   const [dateFilter, setDateFilter] = useState<DateFilterType>("MONTHLY");
@@ -50,16 +51,20 @@ export default function B2BRevenuePage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [reportsRes, labRes, testsRes] = await Promise.all([
+      const [reportsRes, labRes, testsRes, myRateListRes] = await Promise.all([
         fetchFromLaravel("/reports").catch(() => []),
         fetchFromLaravel("/lab").catch(() => null),
         fetchFromLaravel("/tests").catch(() => []),
+        fetchFromLaravel("/rate-lists/my-rate-list").catch(() => null),
       ]);
       const repList = Array.isArray(reportsRes) ? reportsRes : (reportsRes?.data || []);
       setReports(repList);
       if (labRes) setLabInfo(labRes);
       const testList = Array.isArray(testsRes) ? testsRes : (testsRes?.data || []);
       setTests(testList);
+      if (myRateListRes?.status === "success" && myRateListRes?.data) {
+        setB2bRateData(myRateListRes.data);
+      }
     } catch (err) {
       console.error("Failed to load revenue telemetry:", err);
     } finally {
@@ -77,6 +82,35 @@ export default function B2BRevenuePage() {
     });
     return map;
   }, [tests]);
+
+  // Map assigned B2B rate list (custom rates & standard MRPs) for accurate financial audit
+  const b2bRateMap = useMemo(() => {
+    const map = new Map<string, { mrp: number; b2b_price: number; name: string }>();
+    if (b2bRateData?.tests && Array.isArray(b2bRateData.tests)) {
+      b2bRateData.tests.forEach((t: any) => {
+        const item = {
+          mrp: Number(t.mrp || 0),
+          b2b_price: Number(t.b2b_price || 0),
+          name: t.name || "",
+        };
+        if (t.id) map.set(t.id.toString(), item);
+        if (t.test_code) map.set(t.test_code.toLowerCase().trim(), item);
+        if (t.name) map.set(t.name.toLowerCase().trim(), item);
+      });
+    }
+    if (b2bRateData?.packages && Array.isArray(b2bRateData.packages)) {
+      b2bRateData.packages.forEach((p: any) => {
+        const item = {
+          mrp: Number(p.mrp || 0),
+          b2b_price: Number(p.b2b_price || 0),
+          name: p.name || "",
+        };
+        if (p.id) map.set(p.id.toString(), item);
+        if (p.name) map.set(p.name.toLowerCase().trim(), item);
+      });
+    }
+    return map;
+  }, [b2bRateData]);
 
   // Helper to compute test-level wholesale cost & partner margin based on admin's ratelist
   const getTestFinancials = (t: any, partnerTier?: string) => {
@@ -108,46 +142,88 @@ export default function B2BRevenuePage() {
 
   // Compute financial breakdown for a single report
   const getReportBreakdown = (r: any) => {
-    const gross = Number(r.bill?.total || r.bill?.totalAmount || 0);
+    const billTotal = Number(r.bill?.total || r.bill?.totalAmount || 0);
     const paid = Number(r.bill?.paid_amount || r.bill?.paidAmount || 0);
     const partnerTier = currentUser?.rate_tier || currentUser?.rateTier;
 
-    let calculatedLabCost = 0;
     let calculatedTestMrp = 0;
-    let testCount = 0;
+    let calculatedLabRate = 0;
 
-    if (Array.isArray(r.results) && r.results.length > 0) {
-      r.results.forEach((res: any) => {
-        const testRef = res.test || (res.test_id ? testsMap.get(res.test_id.toString()) : null);
-        if (testRef) {
-          const tf = getTestFinancials(testRef, partnerTier);
-          calculatedLabCost += tf.labRate;
-          calculatedTestMrp += tf.mrp;
-          testCount++;
+    // 1. Check if the report has an explicit package assigned
+    const pkgName = r.package_name || r.patient?.meta?.package_name || r.patient?.meta?.selected_package;
+    if (pkgName && b2bRateMap.has(pkgName.toLowerCase().trim())) {
+      const pkgInfo = b2bRateMap.get(pkgName.toLowerCase().trim())!;
+      calculatedTestMrp = pkgInfo.mrp;
+      calculatedLabRate = pkgInfo.b2b_price;
+    } else {
+      // 2. Aggregate unique top-level tests (profiles or standalone tests)
+      const uniqueTopTests = new Map<string, any>();
+      if (Array.isArray(r.results) && r.results.length > 0) {
+        r.results.forEach((res: any) => {
+          const parent = res.test?.parent;
+          if (parent && parent.id) {
+            uniqueTopTests.set(String(parent.id), parent);
+          } else if (res.test && res.test.id) {
+            if (!res.test.parent_id) {
+              uniqueTopTests.set(String(res.test.id), res.test);
+            }
+          } else if (res.test_id) {
+            uniqueTopTests.set(String(res.test_id), { id: res.test_id });
+          }
+        });
+      }
+
+      uniqueTopTests.forEach((t) => {
+        let itemMrp = 0;
+        let itemLab = 0;
+
+        // Check assigned B2B rate list first
+        const b2bItem = b2bRateMap.get(String(t.id))
+          || (t.name ? b2bRateMap.get(t.name.toLowerCase().trim()) : null)
+          || (t.test_code ? b2bRateMap.get(t.test_code.toLowerCase().trim()) : null);
+
+        if (b2bItem && (b2bItem.mrp > 0 || b2bItem.b2b_price > 0)) {
+          itemMrp = b2bItem.mrp;
+          itemLab = b2bItem.b2b_price;
+        } else {
+          // Fallback to test catalog & standard partner tier
+          const catalogTest = testsMap.get(String(t.id))
+            || (t.name ? testsMap.get(t.name.toLowerCase().trim()) : null)
+            || t;
+          const tf = getTestFinancials(catalogTest, partnerTier);
+          itemMrp = tf.mrp;
+          itemLab = tf.labRate;
         }
+
+        calculatedTestMrp += itemMrp;
+        calculatedLabRate += itemLab;
       });
     }
 
-    let labMargin = 0;
-    if (testCount > 0 && calculatedLabCost > 0) {
-      if (gross > 0 && calculatedTestMrp > 0) {
-        // Scale proportionally to the actual billed amount
-        labMargin = Math.round((calculatedLabCost / calculatedTestMrp) * gross);
-      } else {
-        labMargin = calculatedLabCost;
-      }
-    } else {
-      // Standard tier-based fallback set by admin in ratelist
-      const tier = (partnerTier || "HIGH").toUpperCase();
-      const ratio = tier === "LOW" ? 0.5 : tier === "MEDIUM" ? 0.6 : 0.7;
-      labMargin = Math.round(gross * ratio);
+    // Lab Margin is the wholesale tariff that the B2B partner owes the Central Lab
+    // For test bookings, billTotal is that exact rate
+    let labMargin = billTotal > 0 ? billTotal : calculatedLabRate;
+
+    // Total MRP is the true retail patient MRP from admin catalog
+    let totalMrp = calculatedTestMrp > 0 ? calculatedTestMrp : labMargin;
+    if (totalMrp < labMargin) {
+      totalMrp = labMargin;
     }
 
-    labMargin = Math.min(gross, Math.max(0, labMargin));
-    const b2bMargin = Math.max(0, gross - labMargin);
-    const due = Math.max(0, gross - paid);
+    // B2B Centre Margin is the retained earnings for the B2B center
+    const b2bMargin = Math.max(0, totalMrp - labMargin);
 
-    return { gross, paid, labMargin, b2bMargin, due };
+    // Settlement due: payable wholesale fee minus what has been paid
+    const due = Math.max(0, labMargin - paid);
+
+    return {
+      gross: totalMrp,
+      totalMrp,
+      paid,
+      labMargin,
+      b2bMargin,
+      due,
+    };
   };
 
   // Date filtering logic
@@ -225,7 +301,7 @@ export default function B2BRevenuePage() {
 
     filteredReports.forEach((r) => {
       const fin = getReportBreakdown(r);
-      grossSum += fin.gross;
+      grossSum += fin.totalMrp;
       labSum += fin.labMargin;
       b2bSum += fin.b2bMargin;
       paidSum += fin.paid;
@@ -237,9 +313,9 @@ export default function B2BRevenuePage() {
       totalB2BCentreMargin: b2bSum,
       totalPaid: paidSum,
     };
-  }, [filteredReports, testsMap, currentUser]);
+  }, [filteredReports, testsMap, b2bRateMap, currentUser]);
 
-  const totalDue = Math.max(0, grossB2BVolume - totalPaid);
+  const totalDue = Math.max(0, totalLabMargin - totalPaid);
 
   // Date range display string
   const periodLabel = useMemo(() => {
@@ -300,7 +376,7 @@ export default function B2BRevenuePage() {
       const testsStr = Array.isArray(r.results)
         ? r.results.map((res: any) => res.test?.name).filter(Boolean).join(" | ") || `${r.results.length} tests`
         : "Standard Panel";
-      const isPaid = fin.paid >= fin.gross && fin.gross > 0;
+      const isPaid = fin.paid >= fin.labMargin && fin.labMargin > 0;
       const payStatus = isPaid ? "PAID" : fin.paid > 0 ? "PARTIAL" : "UNPAID";
 
       rows.push([
@@ -311,7 +387,7 @@ export default function B2BRevenuePage() {
         escapeCsv(patId),
         escapeCsv(patPhone),
         escapeCsv(testsStr),
-        escapeCsv(fin.gross.toFixed(2)),
+        escapeCsv(fin.totalMrp.toFixed(2)),
         escapeCsv(fin.paid.toFixed(2)),
         escapeCsv(fin.due.toFixed(2)),
         escapeCsv(fin.labMargin.toFixed(2)),
@@ -683,7 +759,7 @@ export default function B2BRevenuePage() {
               <tbody className="divide-y divide-border/40">
                 {paginatedReports.map((r) => {
                   const fin = getReportBreakdown(r);
-                  const isPaid = fin.paid >= fin.gross && fin.gross > 0;
+                  const isPaid = fin.paid >= fin.labMargin && fin.labMargin > 0;
                   const isFinal = r.status === "FINAL" || r.status === "APPROVED" || r.status === "COMPLETED";
 
                   return (
@@ -704,7 +780,7 @@ export default function B2BRevenuePage() {
                         </span>
                       </td>
                       <td className="px-6 py-3.5 text-right font-mono font-bold text-foreground">
-                        ₹{fin.gross.toLocaleString("en-IN")}
+                        ₹{fin.totalMrp.toLocaleString("en-IN")}
                       </td>
                       <td className="px-6 py-3.5 text-right font-mono text-muted-foreground">
                         ₹{fin.labMargin.toLocaleString("en-IN")}
