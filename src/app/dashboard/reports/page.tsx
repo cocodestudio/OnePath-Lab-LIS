@@ -287,32 +287,6 @@ export default function ReportsListPage() {
       resultsList.some((res: any) => res.test?.category === categoryFilter);
     const matchesDate = filterDate ? repDate === filterDate : true;
 
-    // Strictly ensure Collection Center only sees reports belonging to their center
-    if (isCollectionCenter && currentUser) {
-      const p = r?.patient || {};
-      const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
-      const repMeta = (r && typeof r.meta === "object" && r.meta !== null) ? r.meta : {};
-      const userIdStr = String(currentUser.id || currentUser.user_id || "");
-      const userName = (currentUser.name || "").toLowerCase().trim();
-      const centerLabName = (currentUser.lab_name || currentUser.labName || "").toLowerCase().trim();
-      const centerCode = (currentUser.center_code || currentUser.centerCode || "").toLowerCase().trim();
-      const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
-
-      const createdById = String(r?.createdById || r?.created_by_id || p?.createdById || p?.created_by_id || repMeta?.createdById || repMeta?.created_by_id || meta?.createdById || meta?.created_by_id || "");
-      const collectionCenterId = String(repMeta?.collectionCenterId || repMeta?.collection_center_id || meta?.collectionCenterId || meta?.collection_center_id || "");
-      const metaCenterCode = String(repMeta?.centerCode || repMeta?.center_code || meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
-      const collCenterName = String(meta?.collection_center_name || meta?.collectionCenterName || repMeta?.centerName || "").toLowerCase();
-
-      const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
-      const isAssigned =
-        (userName && collectedAt.includes(userName)) ||
-        (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
-        (centerLabName && collCenterName.includes(centerLabName)) ||
-        (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
-
-      if (!isMine && !isAssigned) return false;
-    }
-
     return matchesSearch && matchesStatus && matchesCategory && matchesDate;
   });
 

@@ -519,31 +519,7 @@ export default function PatientsPage() {
       patAbhaAddress.toLowerCase().includes(search.toLowerCase()) ||
       patAbhaNumber.toLowerCase().includes(search.toLowerCase());
 
-    const matchesDate = filterDate ? patDate === filterDate : true;
-
-    // Strictly ensure Collection Center only sees patients belonging to their center
-    if (isCollectionCenter && currentUser) {
-      const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
-      const userIdStr = String(currentUser.id || currentUser.user_id || "");
-      const userName = (currentUser.name || "").toLowerCase().trim();
-      const centerLabName = (currentUser.lab_name || currentUser.labName || "").toLowerCase().trim();
-      const centerCode = (currentUser.center_code || currentUser.centerCode || "").toLowerCase().trim();
-      const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
-
-      const createdById = String(p?.createdById || p?.created_by_id || meta?.createdById || meta?.created_by_id || "");
-      const collectionCenterId = String(meta?.collectionCenterId || meta?.collection_center_id || "");
-      const metaCenterCode = String(meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
-      const collCenterName = String(meta?.collection_center_name || meta?.collectionCenterName || "").toLowerCase();
-
-      const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
-      const isAssigned =
-        (userName && collectedAt.includes(userName)) ||
-        (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
-        (centerLabName && collCenterName.includes(centerLabName)) ||
-        (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
-
-      if (!isMine && !isAssigned) return false;
-    }
+    const matchesDate = filterDate ? (patDate === filterDate || (p.meta?.sample_date && getRecordLocalDate(p.meta.sample_date) === filterDate)) : true;
 
     return matchesSearch && matchesDate;
   });

@@ -690,11 +690,11 @@ export default function BillingPage() {
   const safeBills = Array.isArray(bills) ? bills : [];
 
   const filteredBills = safeBills.filter((b) => {
-    if (!b || !b.patient) return false;
-    const patName = b.patient.name || "";
-    const patId = b.patient.custom_id || (b.patient as any)?.customId || "";
+    if (!b) return false;
+    const patName = b.patient?.name || "Direct Patient";
+    const patId = b.patient?.custom_id || (b.patient as any)?.customId || "";
     const billId = getBillInvoiceNo(b);
-    const phone = b.patient.phone || "";
+    const phone = b.patient?.phone || "";
     const billDate = getRecordLocalDate(b.createdAt || b.created_at);
 
     const matchesSearch =
@@ -705,31 +705,6 @@ export default function BillingPage() {
 
     const matchesStatus = statusFilter === "ALL" || b.status === statusFilter;
     const matchesDate = filterDate ? billDate === filterDate : true;
-
-    // Strictly ensure Collection Center only sees bills belonging to their center
-    if (isCollectionCenter && currentUser) {
-      const p: any = b?.patient || {};
-      const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
-      const userIdStr = String(currentUser.id || currentUser.user_id || "");
-      const userName = (currentUser.name || "").toLowerCase().trim();
-      const centerLabName = (currentUser.lab_name || currentUser.labName || "").toLowerCase().trim();
-      const centerCode = (currentUser.center_code || currentUser.centerCode || "").toLowerCase().trim();
-      const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
-
-      const createdById = String(p?.createdById || p?.created_by_id || meta?.createdById || meta?.created_by_id || "");
-      const collectionCenterId = String(meta?.collectionCenterId || meta?.collection_center_id || "");
-      const metaCenterCode = String(meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
-      const collCenterName = String(meta?.collection_center_name || meta?.collectionCenterName || "").toLowerCase();
-
-      const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
-      const isAssigned =
-        (userName && collectedAt.includes(userName)) ||
-        (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
-        (centerLabName && collCenterName.includes(centerLabName)) ||
-        (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
-
-      if (!isMine && !isAssigned) return false;
-    }
 
     return matchesSearch && matchesStatus && matchesDate;
   });
