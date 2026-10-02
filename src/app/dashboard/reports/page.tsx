@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
 import { Checkbox } from "@/components/ui/checkbox";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
+import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
 
 interface Test { 
   name: string; 
@@ -40,19 +41,6 @@ interface Report {
   abdmStatus?: string;
   abdm_care_context_id?: string;
   abdmCareContextId?: string;
-}
-
-function getTodayStr() {
-  try {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Kolkata",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
-  } catch {
-    return new Date().toISOString().split("T")[0];
-  }
 }
 
 const DEFAULT_LAB = { name: "OnePath Lab Main", email: "info@onepathlab.com", address: "123 Healthcare Blvd, Medical District, Delhi", logoUrl: "/onepath-logo.png" };
@@ -82,7 +70,7 @@ export default function ReportsListPage() {
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filterDate, setFilterDate] = useState(() => getTodayStr());
-  const [sortOrder, setSortOrder] = useState<"oldest" | "recent">("oldest");
+  const [sortOrder, setSortOrder] = useState<"oldest" | "recent">("recent");
 
   const isB2B = currentUser?.role === "B2B";
   const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER" || currentUser?.role === "COLLECTION_CENTRE";
@@ -90,9 +78,15 @@ export default function ReportsListPage() {
   const isPartnerOrCC = isCollectionCenter || isB2B || isReceptionist;
 
   const shiftDate = (days: number) => {
-    const base = filterDate ? new Date(filterDate) : new Date();
-    base.setDate(base.getDate() + days);
-    setFilterDate(base.toISOString().split("T")[0]);
+    setCurrentPage(1);
+    setFilterDate((prev) => calcShiftDate(prev, days));
+  };
+
+  const setPreset = (preset: "today" | "yesterday" | "all") => {
+    setCurrentPage(1);
+    if (preset === "all") { setFilterDate(""); return; }
+    if (preset === "yesterday") { setFilterDate(getYesterdayStr()); return; }
+    setFilterDate(getTodayStr());
   };
 
   const [printReport, setPrintReport] = useState<any | null>(null);
@@ -148,7 +142,7 @@ export default function ReportsListPage() {
       if (reports.length === 0) {
         setLoading(true);
       }
-      const data = await fetchFromLaravel(`/reports?limit=250&sort=${sortOrder}`, { skipCache: isForce });
+      const data = await fetchFromLaravel(`/reports?limit=300&sort=${sortOrder}`, { skipCache: isForce });
       if (data?.is_outstanding_locked) {
         setOutstandingLock({
           isLocked: true,
@@ -271,7 +265,7 @@ export default function ReportsListPage() {
     const patName = r.patient?.name || "";
     const patId = r.patient?.custom_id || r.patient?.customId || "";
     const repId = r.custom_id || r.customId || "";
-    const repDate = r.created_at || r.createdAt || "";
+    const repDate = getRecordLocalDate(r.createdAt || r.created_at);
 
     const matchesSearch =
       patName.toLowerCase().includes(search.toLowerCase()) ||
@@ -291,7 +285,7 @@ export default function ReportsListPage() {
     const matchesCategory =
       categoryFilter === "ALL" ||
       resultsList.some((res: any) => res.test?.category === categoryFilter);
-    const matchesDate = filterDate && repDate ? repDate.startsWith(filterDate) : true;
+    const matchesDate = filterDate ? repDate === filterDate : true;
 
     // Strictly ensure Collection Center only sees reports belonging to their center
     if (isCollectionCenter && currentUser) {
@@ -307,11 +301,13 @@ export default function ReportsListPage() {
       const createdById = String(r?.createdById || r?.created_by_id || p?.createdById || p?.created_by_id || repMeta?.createdById || repMeta?.created_by_id || meta?.createdById || meta?.created_by_id || "");
       const collectionCenterId = String(repMeta?.collectionCenterId || repMeta?.collection_center_id || meta?.collectionCenterId || meta?.collection_center_id || "");
       const metaCenterCode = String(repMeta?.centerCode || repMeta?.center_code || meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
+      const collCenterName = String(meta?.collection_center_name || meta?.collectionCenterName || repMeta?.centerName || "").toLowerCase();
 
       const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
       const isAssigned =
         (userName && collectedAt.includes(userName)) ||
         (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
+        (centerLabName && collCenterName.includes(centerLabName)) ||
         (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
 
       if (!isMine && !isAssigned) return false;
@@ -498,7 +494,7 @@ export default function ReportsListPage() {
                   type="date" 
                   className="h-8 px-2 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer"
                   value={filterDate} 
-                  onChange={(e) => setFilterDate(e.target.value)} 
+                  onChange={(e) => { setFilterDate(e.target.value); setCurrentPage(1); }} 
                 />
 
                 <button
@@ -515,27 +511,43 @@ export default function ReportsListPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setFilterDate(getTodayStr())}
-                className={`h-10 px-3 text-xs font-bold ${
+                onClick={() => setPreset("today")}
+                className={`h-10 px-3 text-xs font-bold cursor-pointer transition-all ${
                   filterDate === getTodayStr()
-                    ? "bg-primary/10 text-primary border-primary/30"
-                    : "text-muted-foreground"
+                    ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Today
               </Button>
 
-              {filterDate && (
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setFilterDate("")} 
-                  className="h-10 text-xs px-2.5 text-muted-foreground hover:text-foreground"
-                >
-                  All Dates
-                </Button>
-              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPreset("yesterday")}
+                className={`h-10 px-3 text-xs font-bold cursor-pointer transition-all ${
+                  filterDate === getYesterdayStr()
+                    ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Yesterday
+              </Button>
+
+              <Button 
+                type="button" 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setPreset("all")} 
+                className={`h-10 text-xs px-2.5 cursor-pointer font-bold transition-all ${
+                  !filterDate
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                All Dates
+              </Button>
             </div>
           </div>
 

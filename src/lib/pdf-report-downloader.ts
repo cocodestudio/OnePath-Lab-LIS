@@ -124,7 +124,8 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
   let pageArray: HTMLElement[] = [];
   if (
     printContainer.classList.contains("smart-report-a4-page") ||
-    printContainer.classList.contains("report-print-page")
+    printContainer.classList.contains("report-print-page") ||
+    printContainer.classList.contains("invoice-print-sheet")
   ) {
     pageArray = [printContainer];
   } else {
@@ -139,13 +140,25 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
         const previewCards = printContainer.querySelectorAll<HTMLElement>(".report-preview-page-card");
         if (previewCards.length > 0) {
           pageArray = Array.from(previewCards);
+        } else {
+          const invoiceSheets = printContainer.querySelectorAll<HTMLElement>(".invoice-print-sheet");
+          if (invoiceSheets.length > 0) {
+            pageArray = Array.from(invoiceSheets);
+          } else {
+            const childSheet = printContainer.querySelector<HTMLElement>(".invoice-print-sheet, .report-print-page, .smart-report-a4-page");
+            if (childSheet) {
+              pageArray = [childSheet];
+            } else {
+              pageArray = [printContainer];
+            }
+          }
         }
       }
     }
   }
 
   if (!pageArray || pageArray.length === 0) {
-    throw new Error("No printable report pages found to generate PDF.");
+    throw new Error("No printable report or invoice pages found to generate PDF.");
   }
 
   const styles: string[] = [];
@@ -312,11 +325,10 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
       page-break-after: avoid !important;
       break-after: avoid !important;
     }
-    .smart-report-a4-page {
+    .smart-report-a4-page,
+    .invoice-print-sheet {
       width: 794px !important;
-      height: 1123px !important;
       min-height: 1123px !important;
-      max-height: 1123px !important;
       margin: 0 auto !important;
       position: relative !important;
       overflow: hidden !important;
@@ -326,7 +338,8 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
       break-after: page !important;
       box-sizing: border-box !important;
     }
-    .smart-report-a4-page:last-child {
+    .smart-report-a4-page:last-child,
+    .invoice-print-sheet:last-child {
       page-break-after: avoid !important;
       break-after: avoid !important;
     }
@@ -356,8 +369,12 @@ export function prepareReportHtml(printContainer: HTMLElement): string {
     pageElements = printContainer.querySelectorAll<HTMLElement>(".report-preview-page-card");
   }
   if (!pageElements || pageElements.length === 0) {
-    throw new Error("No printable report pages found to generate PDF.");
+    pageElements = printContainer.querySelectorAll<HTMLElement>(".smart-report-a4-page");
   }
+  if (!pageElements || pageElements.length === 0) {
+    pageElements = printContainer.querySelectorAll<HTMLElement>(".invoice-print-sheet");
+  }
+  const pageArray = (pageElements && pageElements.length > 0) ? Array.from(pageElements) : [printContainer];
 
   const styles: string[] = [];
   document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]').forEach((link) => {
@@ -544,7 +561,8 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
   let pageList: HTMLElement[] = [];
   if (
     printContainer.classList.contains("smart-report-a4-page") ||
-    printContainer.classList.contains("report-print-page")
+    printContainer.classList.contains("report-print-page") ||
+    printContainer.classList.contains("invoice-print-sheet")
   ) {
     pageList = [printContainer];
   } else {
@@ -559,13 +577,25 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
         const previewCards = printContainer.querySelectorAll<HTMLElement>(".report-preview-page-card");
         if (previewCards.length > 0) {
           pageList = Array.from(previewCards);
+        } else {
+          const invoiceSheets = printContainer.querySelectorAll<HTMLElement>(".invoice-print-sheet");
+          if (invoiceSheets.length > 0) {
+            pageList = Array.from(invoiceSheets);
+          } else {
+            const childSheet = printContainer.querySelector<HTMLElement>(".invoice-print-sheet, .report-print-page, .smart-report-a4-page");
+            if (childSheet) {
+              pageList = [childSheet];
+            } else {
+              pageList = [printContainer];
+            }
+          }
         }
       }
     }
   }
 
   if (!pageList || pageList.length === 0) {
-    throw new Error("No printable report pages found.");
+    throw new Error("No printable report or invoice pages found.");
   }
 
   // Ensure all web fonts are fully loaded
@@ -623,7 +653,7 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
       clone.style.setProperty("box-sizing", "border-box", "important");
       clone.style.setProperty("background-color", "#ffffff", "important");
 
-      if (el.classList.contains("smart-report-a4-page")) {
+      if (el.classList.contains("smart-report-a4-page") || el.classList.contains("invoice-print-sheet")) {
         clone.style.setProperty("border-radius", "0px", "important");
       } else {
         clone.style.setProperty("padding", "0px", "important");

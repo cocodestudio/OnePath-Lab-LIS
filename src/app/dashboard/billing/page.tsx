@@ -7,7 +7,7 @@ import {
   Loader2, ArrowRight, ChevronLeft, ChevronRight, FileDown, TrendingUp,
   Wallet, X, FileText, Printer, CheckCircle, Clock, AlertCircle, RefreshCw,
   Phone, Eye, Download, Sparkles, Plus, Trash2, PlusCircle, Check, Stethoscope,
-  Building2, BadgeCheck, Boxes
+  Building2, BadgeCheck, Boxes, MessageSquare
 } from "lucide-react";
 import { getStoredPackages, getReportPackage, type LabPackage } from "@/lib/packages";
 import {
@@ -20,6 +20,9 @@ import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { InvoiceSheet } from "@/components/invoice-sheet";
 import { normalizeBillSettings, type BillLayoutSettings } from "@/lib/bill-settings";
 import { printInvoiceElement } from "@/lib/print-invoice";
+import { getNativePdfBase64, downloadNativePdf } from "@/lib/pdf-report-downloader";
+import { useToast } from "@/components/ui/toast";
+import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
 
 interface Patient {
   name: string;
@@ -192,19 +195,6 @@ function normalizeBillObj(b: any): Bill {
   };
 }
 
-function getTodayStr() {
-  try {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Kolkata",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
-  } catch {
-    return new Date().toISOString().split("T")[0];
-  }
-}
-
 export default function BillingPage() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [labData, setLabData] = useState<any>(() => {
@@ -261,14 +251,23 @@ export default function BillingPage() {
   const rowsPerPage = 10;
 
   const shiftDate = (days: number) => {
-    const base = filterDate ? new Date(filterDate) : new Date();
-    base.setDate(base.getDate() + days);
-    setFilterDate(base.toISOString().split("T")[0]);
+    setCurrentPage(1);
+    setFilterDate((prev) => calcShiftDate(prev, days));
+  };
+
+  const setPreset = (preset: "today" | "yesterday" | "all") => {
+    setCurrentPage(1);
+    if (preset === "all") { setFilterDate(""); return; }
+    if (preset === "yesterday") { setFilterDate(getYesterdayStr()); return; }
+    setFilterDate(getTodayStr());
   };
 
   // Invoice Preview Modal State (Wide Landscape Layout)
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
   const [selectedBillForInvoice, setSelectedBillForInvoice] = useState<Bill | null>(null);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const toast = useToast();
 
   // Edit Bill & Tests Modal State (Spacious Landscape)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -356,7 +355,7 @@ export default function BillingPage() {
       if (isForce && bills.length === 0) {
         setLoading(true);
       }
-      const data = await fetchFromLaravel("/bills", { skipCache: isForce });
+      const data = await fetchFromLaravel("/bills?limit=300", { skipCache: isForce });
       const rawList = Array.isArray(data) ? data : (data?.data || []);
       const billsList = rawList.map(normalizeBillObj);
       setBills(billsList);
@@ -621,6 +620,72 @@ export default function BillingPage() {
     }
   };
 
+  const handleSendWhatsAppInvoice = async () => {
+    if (!selectedBillForInvoice) return;
+    const phone = selectedBillForInvoice.patient?.phone;
+    const digitsOnly = phone ? phone.replace(/[^0-9]/g, "") : "";
+    if (!digitsOnly || digitsOnly.length < 10) {
+      toast.error("Invalid Phone", "Patient does not have a valid 10-digit mobile number for WhatsApp delivery.");
+      return;
+    }
+    if (!invoicePrintRef.current) {
+      toast.error("Not Ready", "Invoice preview is still rendering. Please wait a moment.");
+      return;
+    }
+
+    setIsSendingWhatsApp(true);
+    try {
+      const pName = (selectedBillForInvoice.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const invNo = getBillInvoiceNo(selectedBillForInvoice).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `Invoice_${invNo}_${pName}.pdf`;
+
+      const pdfBase64 = await getNativePdfBase64({
+        printContainer: invoicePrintRef.current,
+        filename,
+      });
+
+      const res = await fetchFromLaravel(`/bills/${selectedBillForInvoice.id}/send-whatsapp`, {
+        method: "POST",
+        body: JSON.stringify({
+          pdf_base64: pdfBase64,
+          phone: digitsOnly,
+        }),
+      });
+
+      if (res?.status === "success" || res?.success) {
+        toast.success("Sent on WhatsApp!", "Tax invoice PDF sent to patient's WhatsApp successfully.");
+      } else {
+        toast.error("WhatsApp Dispatch Failed", res?.message || "Could not deliver WhatsApp message via Meta Cloud API.");
+      }
+    } catch (err: any) {
+      console.error("WhatsApp invoice dispatch error:", err);
+      toast.error("WhatsApp Error", err?.message || "An unexpected error occurred while delivering invoice via WhatsApp.");
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  };
+
+  const handleDownloadInvoicePdf = async () => {
+    if (!selectedBillForInvoice || !invoicePrintRef.current) return;
+    setIsDownloadingPdf(true);
+    try {
+      const pName = (selectedBillForInvoice.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const invNo = getBillInvoiceNo(selectedBillForInvoice).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `Invoice_${invNo}_${pName}.pdf`;
+
+      await downloadNativePdf({
+        printContainer: invoicePrintRef.current,
+        filename,
+      });
+      toast.success("Downloaded!", "Tax invoice vector PDF downloaded successfully.");
+    } catch (err: any) {
+      console.error("PDF download error:", err);
+      toast.error("Download Failed", err?.message || "Could not generate vector PDF.");
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   // Calculations & Filters
   const safeBills = Array.isArray(bills) ? bills : [];
 
@@ -630,7 +695,7 @@ export default function BillingPage() {
     const patId = b.patient.custom_id || (b.patient as any)?.customId || "";
     const billId = getBillInvoiceNo(b);
     const phone = b.patient.phone || "";
-    const billDate = (b.createdAt || b.created_at || "").slice(0, 10);
+    const billDate = getRecordLocalDate(b.createdAt || b.created_at);
 
     const matchesSearch =
       patName.toLowerCase().includes(search.toLowerCase()) ||
@@ -639,7 +704,7 @@ export default function BillingPage() {
       phone.includes(search);
 
     const matchesStatus = statusFilter === "ALL" || b.status === statusFilter;
-    const matchesDate = filterDate ? billDate.startsWith(filterDate) : true;
+    const matchesDate = filterDate ? billDate === filterDate : true;
 
     // Strictly ensure Collection Center only sees bills belonging to their center
     if (isCollectionCenter && currentUser) {
@@ -654,11 +719,13 @@ export default function BillingPage() {
       const createdById = String(p?.createdById || p?.created_by_id || meta?.createdById || meta?.created_by_id || "");
       const collectionCenterId = String(meta?.collectionCenterId || meta?.collection_center_id || "");
       const metaCenterCode = String(meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
+      const collCenterName = String(meta?.collection_center_name || meta?.collectionCenterName || "").toLowerCase();
 
       const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
       const isAssigned =
         (userName && collectedAt.includes(userName)) ||
         (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
+        (centerLabName && collCenterName.includes(centerLabName)) ||
         (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
 
       if (!isMine && !isAssigned) return false;
@@ -869,7 +936,7 @@ export default function BillingPage() {
               <input
                 type="date"
                 value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
+                onChange={(e) => { setFilterDate(e.target.value); setCurrentPage(1); }}
                 className="h-8 px-2 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer"
               />
 
@@ -885,25 +952,39 @@ export default function BillingPage() {
 
             <button
               type="button"
-              onClick={() => setFilterDate(getTodayStr())}
+              onClick={() => setPreset("today")}
               className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                 filterDate === getTodayStr()
-                  ? "bg-primary/10 text-primary border-primary/30"
+                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
                   : "bg-background text-muted-foreground hover:text-foreground border-border/90"
               }`}
             >
               Today
             </button>
 
-            {filterDate && (
-              <button
-                type="button"
-                onClick={() => setFilterDate("")}
-                className="px-3 py-2 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground bg-background border border-border/90 hover:bg-muted transition-all cursor-pointer"
-              >
-                All Dates
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setPreset("yesterday")}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                filterDate === getYesterdayStr()
+                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                  : "bg-background text-muted-foreground hover:text-foreground border-border/90"
+              }`}
+            >
+              Yesterday
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPreset("all")}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                !filterDate
+                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                  : "bg-background text-muted-foreground hover:text-foreground border-border/90"
+              }`}
+            >
+              All Dates
+            </button>
           </div>
 
           {/* Status Filter */}
@@ -1156,13 +1237,45 @@ export default function BillingPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 mr-0 sm:mr-6 shrink-0 flex-wrap">
               <button
-                onClick={handlePrintWindow}
-                className="gradient-primary text-primary-foreground font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-sm hover:-translate-y-px transition-all cursor-pointer w-full sm:w-auto mr-0 sm:mr-6"
+                type="button"
+                onClick={handleSendWhatsAppInvoice}
+                disabled={isSendingWhatsApp}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Send Invoice PDF directly to Patient on WhatsApp"
               >
-                <Printer className="h-3.5 w-3.5" />
-                <span>Print / Download PDF</span>
+                {isSendingWhatsApp ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <MessageSquare className="h-3.5 w-3.5" />
+                )}
+                <span>{isSendingWhatsApp ? "Sending..." : "Send on WhatsApp"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadInvoicePdf}
+                disabled={isDownloadingPdf}
+                className="gradient-primary text-primary-foreground font-bold text-xs px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-sm hover:-translate-y-px transition-all cursor-pointer disabled:opacity-50"
+                title="Download pristine high-resolution vector PDF"
+              >
+                {isDownloadingPdf ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                <span>{isDownloadingPdf ? "Downloading..." : "Download PDF"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrintWindow}
+                className="bg-card hover:bg-muted text-foreground border border-border/80 font-bold text-xs px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-xs hover:-translate-y-px transition-all cursor-pointer"
+                title="Open browser print dialog"
+              >
+                <Printer className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Print</span>
               </button>
             </div>
           </div>

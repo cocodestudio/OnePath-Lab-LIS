@@ -11,7 +11,7 @@ import {
   Percent, DollarSign, Receipt, RefreshCw, X, Check, ExternalLink,
   Mail, Shield, CreditCard, Building2, Calendar, CheckSquare, RotateCcw,
   ClipboardList, Asterisk, Activity, Scale, Ruler, HeartPulse, ShieldCheck, Tag, Clock,
-  Banknote, QrCode, Globe, Wallet, Boxes, Lock, TestTube2, Barcode
+  Banknote, QrCode, Globe, Wallet, Boxes, Lock, TestTube2, Barcode, MessageSquare, Download
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -32,6 +32,7 @@ import { getStoredPackages, type LabPackage, saveReportPackage, resolvePackageTe
 import { InvoiceSheet } from "@/components/invoice-sheet";
 import { normalizeBillSettings, type BillLayoutSettings } from "@/lib/bill-settings";
 import { printInvoiceElement } from "@/lib/print-invoice";
+import { getNativePdfBase64, downloadNativePdf } from "@/lib/pdf-report-downloader";
 import { useToast } from "@/components/ui/toast";
 import { AbhaLinkModal, type AbhaVerifiedPatient } from "@/components/abha-link-modal";
 import { AbhaQrPosterModal } from "@/components/abha-qr-poster-modal";
@@ -381,7 +382,7 @@ function RegisterPageShimmer({ pid }: { pid?: string | null }) {
 
 function RegisterPatientPage() {
   const searchParams = useSearchParams();
-  const { toast } = useToast();
+  const { toast, success: toastSuccess, error: toastError } = useToast();
   const editId = searchParams?.get("edit");
   const [isEditMode, setIsEditMode] = useState(false);
   const [editPatientId, setEditPatientId] = useState<string | null>(null);
@@ -620,6 +621,74 @@ function RegisterPatientPage() {
   } | null>(null);
 
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  const handleDownloadInvoicePdf = async () => {
+    if (!successDetails?.billId || !registerPrintRef.current) return;
+    setIsDownloadingPdf(true);
+    try {
+      const pName = (successDetails?.patientName || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const invNo = (successDetails?.billCustomId || "Receipt").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `Invoice_${invNo}_${pName}.pdf`;
+
+      await downloadNativePdf({
+        printContainer: registerPrintRef.current,
+        filename,
+      });
+      toastSuccess("Downloaded!", "Tax invoice vector PDF downloaded successfully.");
+    } catch (err: any) {
+      console.error("PDF download error:", err);
+      toastError("Download Failed", err?.message || "Could not generate vector PDF.");
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  const handleSendWhatsAppInvoice = async () => {
+    if (!successDetails?.billId) return;
+    const targetPhone = successDetails.patientPhone || phone || newPatient?.phone || "";
+    const digitsOnly = targetPhone.replace(/[^0-9]/g, "");
+    if (!digitsOnly || digitsOnly.length < 10) {
+      toastError("Invalid Phone", "Patient does not have a valid 10-digit mobile number for WhatsApp delivery.");
+      return;
+    }
+    if (!registerPrintRef.current) {
+      toastError("Not Ready", "Invoice preview is still rendering. Please wait a moment.");
+      return;
+    }
+
+    setIsSendingWhatsApp(true);
+    try {
+      const pName = (successDetails?.patientName || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const invNo = (successDetails?.billCustomId || "Receipt").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `Invoice_${invNo}_${pName}.pdf`;
+
+      const pdfBase64 = await getNativePdfBase64({
+        printContainer: registerPrintRef.current,
+        filename,
+      });
+
+      const res = await fetchFromLaravel(`/bills/${successDetails.billId}/send-whatsapp`, {
+        method: "POST",
+        body: JSON.stringify({
+          pdf_base64: pdfBase64,
+          phone: digitsOnly,
+        }),
+      });
+
+      if (res?.status === "success" || res?.success) {
+        toastSuccess("Sent on WhatsApp!", "Tax invoice PDF sent to patient's WhatsApp successfully.");
+      } else {
+        toastError("WhatsApp Dispatch Failed", res?.message || "Could not deliver WhatsApp message via Meta Cloud API.");
+      }
+    } catch (err: any) {
+      console.error("WhatsApp invoice dispatch error:", err);
+      toastError("WhatsApp Error", err?.message || "An unexpected error occurred while delivering invoice via WhatsApp.");
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  };
 
   // Automatically scroll to the top of the page / DashboardScroller container
   const scrollToTop = (smooth = true) => {
@@ -5004,14 +5073,50 @@ function RegisterPatientPage() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => printInvoiceElement(registerPrintRef.current, `Invoice_${successDetails?.billCustomId || "Receipt"}`)}
-              className="gradient-primary text-primary-foreground font-bold text-xs px-3 sm:px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-sm hover:-translate-y-px transition-all cursor-pointer shrink-0"
-            >
-              <Printer className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Print / Download PDF</span>
-              <span className="sm:hidden">Print</span>
-            </button>
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={handleSendWhatsAppInvoice}
+                disabled={isSendingWhatsApp}
+                className="px-3 sm:px-3.5 py-2 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                title="Send Invoice PDF directly to Patient on WhatsApp"
+              >
+                {isSendingWhatsApp ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <MessageSquare className="h-3.5 w-3.5" />
+                )}
+                <span className="hidden sm:inline">{isSendingWhatsApp ? "Sending..." : "Send on WhatsApp"}</span>
+                <span className="sm:hidden">WhatsApp</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadInvoicePdf}
+                disabled={isDownloadingPdf}
+                className="gradient-primary text-primary-foreground font-bold text-xs px-3 sm:px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm hover:-translate-y-px transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                title="Download pristine high-resolution vector PDF"
+              >
+                {isDownloadingPdf ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                <span className="hidden sm:inline">{isDownloadingPdf ? "Downloading..." : "Download PDF"}</span>
+                <span className="sm:hidden">PDF</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => printInvoiceElement(registerPrintRef.current, `Invoice_${successDetails?.billCustomId || "Receipt"}`)}
+                className="bg-card hover:bg-muted text-foreground border border-border/80 font-bold text-xs px-3 sm:px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs hover:-translate-y-px transition-all cursor-pointer shrink-0"
+                title="Open browser print dialog"
+              >
+                <Printer className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="hidden sm:inline">Print</span>
+                <span className="sm:hidden">Print</span>
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 bg-zinc-100 dark:bg-zinc-900/60 flex justify-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">

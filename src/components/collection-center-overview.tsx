@@ -18,11 +18,111 @@ interface Props {
   user: any;
 }
 
+export function CollectionCenterOverviewShimmer() {
+  return (
+    <div className="space-y-7 animate-fade-in select-none pb-10" aria-busy="true" aria-label="Loading Collection Center Overview">
+      {/* Top Hero Banner Shimmer */}
+      <div className="relative overflow-hidden rounded-2xl bg-card border border-border/80 p-6 sm:p-7 shadow-xs shimmer-card-pulse">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="space-y-2.5">
+            <div className="h-6 w-44 rounded-full shimmer-gradient" />
+            <div className="h-8 w-72 rounded-xl shimmer-gradient" />
+            <div className="h-4 w-96 max-w-full rounded shimmer-gradient" />
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="h-10 w-24 rounded-xl shimmer-gradient" />
+            <div className="h-10 w-32 rounded-xl shimmer-gradient" />
+          </div>
+        </div>
+      </div>
+
+      {/* 3 Metric Cards Shimmer */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col justify-between min-h-[140px] shimmer-card-pulse">
+            <div className="flex items-center justify-between">
+              <div className="w-11 h-11 rounded-xl shimmer-gradient" />
+              <div className="h-5 w-20 rounded-full shimmer-gradient" />
+            </div>
+            <div className="mt-4 space-y-2">
+              <div className="h-3 w-28 rounded shimmer-gradient" />
+              <div className="h-8 w-16 rounded-md shimmer-gradient" />
+              <div className="h-3 w-36 rounded shimmer-gradient" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Charts Grid Shimmer */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Bar Chart (7 Cols) */}
+        <div className="lg:col-span-7 p-6 rounded-2xl bg-card border border-border/80 shadow-xs space-y-5 shimmer-card-pulse flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1.5">
+              <div className="h-5 w-60 rounded-md shimmer-gradient" />
+              <div className="h-3 w-48 rounded shimmer-gradient" />
+            </div>
+            <div className="h-6 w-24 rounded-lg shimmer-gradient" />
+          </div>
+          <div className="h-[210px] flex items-end justify-between gap-3 pt-4 px-2">
+            {[40, 65, 30, 85, 55, 90, 75].map((h, idx) => (
+              <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                <div className="w-full max-w-[42px] rounded-t-lg shimmer-gradient" style={{ height: `${h}%` }} />
+                <div className="h-3 w-8 rounded shimmer-gradient" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Donut Chart (5 Cols) */}
+        <div className="lg:col-span-5 p-6 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col justify-between space-y-5 shimmer-card-pulse">
+          <div className="space-y-1.5">
+            <div className="h-5 w-52 rounded-md shimmer-gradient" />
+            <div className="h-3 w-40 rounded shimmer-gradient" />
+          </div>
+          <div className="flex items-center justify-center py-4">
+            <div className="w-36 h-36 rounded-full border-[14px] border-muted/50 relative flex items-center justify-center shimmer-gradient">
+              <div className="w-16 h-16 rounded-full bg-card" />
+            </div>
+          </div>
+          <div className="pt-3 border-t border-border/70 space-y-2.5">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full shimmer-gradient" />
+                  <div className="h-3 w-28 rounded shimmer-gradient" />
+                </div>
+                <div className="h-3.5 w-8 rounded shimmer-gradient" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CollectionCenterOverview({ user }: Props) {
   const [isMounted, setIsMounted] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [reports, setReports] = useState<any[]>([]);
-  const [patients, setPatients] = useState<any[]>([]);
+  const [cachedOverview, setCachedOverview] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("lis_cached_cc_overview");
+        if (raw) return JSON.parse(raw);
+      } catch {}
+    }
+    return null;
+  });
+
+  const [loading, setLoading] = useState(() => !cachedOverview);
+  const [stats, setStats] = useState<any>(() => cachedOverview?.stats || {
+    total_samples: 0,
+    completed_samples: 0,
+    in_transit_samples: 0,
+    new_collected_samples: 0,
+    total_patients: 0,
+  });
+  const [weeklyIntake, setWeeklyIntake] = useState<any[]>(() => cachedOverview?.weekly_intake || []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -31,58 +131,103 @@ export function CollectionCenterOverview({ user }: Props) {
 
   const loadData = async () => {
     try {
-      setLoading(true);
-      const [reportsData, patientsData] = await Promise.all([
-        fetchFromLaravel("/reports").catch(() => []),
-        fetchFromLaravel("/patients").catch(() => []),
-      ]);
+      if (!stats.total_samples && weeklyIntake.length === 0) {
+        setLoading(true);
+      }
+      
+      // Fast path: dedicated overview stats endpoint (15ms SQL)
+      let overviewData: any = null;
+      try {
+        overviewData = await fetchFromLaravel("/collection-centers/overview-stats", { skipCache: true });
+      } catch (e) {
+        overviewData = null;
+      }
 
-      const repList = Array.isArray(reportsData) ? reportsData : (reportsData?.data || []);
-      const patList = Array.isArray(patientsData) ? patientsData : (patientsData?.data || []);
+      if (overviewData && overviewData.stats) {
+        setStats(overviewData.stats);
+        if (Array.isArray(overviewData.weekly_intake)) {
+          setWeeklyIntake(overviewData.weekly_intake);
+        }
+        try {
+          localStorage.setItem("lis_cached_cc_overview", JSON.stringify(overviewData));
+        } catch {}
+      } else {
+        // Fallback path: compute from /reports and /patients
+        const [reportsData, patientsData] = await Promise.all([
+          fetchFromLaravel("/reports?limit=150&sort=recent", { skipCache: true }).catch(() => []),
+          fetchFromLaravel("/patients?per_page=150&order=desc", { skipCache: true }).catch(() => []),
+        ]);
 
-      const userIdStr = String(user?.id || user?.user_id || "");
-      const userName = (user?.name || "").toLowerCase().trim();
-      const centerLabName = (user?.lab_name || user?.labName || "").toLowerCase().trim();
-      const centerCode = (user?.center_code || user?.centerCode || "").toLowerCase().trim();
+        const repList = Array.isArray(reportsData) ? reportsData : (reportsData?.data || []);
+        const patList = Array.isArray(patientsData) ? patientsData : (patientsData?.data || []);
 
-      const scopedReports = repList.filter((r: any) => {
-        const p = r?.patient || {};
-        const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
-        const repMeta = (r && typeof r.meta === "object" && r.meta !== null) ? r.meta : {};
-        const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
+        const userIdStr = String(user?.id || user?.user_id || "");
+        const userName = (user?.name || "").toLowerCase().trim();
+        const centerLabName = (user?.lab_name || user?.labName || "").toLowerCase().trim();
+        const centerCode = (user?.center_code || user?.centerCode || "").toLowerCase().trim();
 
-        const createdById = String(r?.createdById || r?.created_by_id || p?.createdById || p?.created_by_id || repMeta?.createdById || repMeta?.created_by_id || meta?.createdById || meta?.created_by_id || "");
-        const collectionCenterId = String(repMeta?.collectionCenterId || repMeta?.collection_center_id || meta?.collectionCenterId || meta?.collection_center_id || "");
-        const metaCenterCode = String(repMeta?.centerCode || repMeta?.center_code || meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
+        const scopedReports = repList.filter((r: any) => {
+          const p = r?.patient || {};
+          const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
+          const repMeta = (r && typeof r.meta === "object" && r.meta !== null) ? r.meta : {};
+          const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
 
-        const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
-        const isAssigned =
-          (userName && collectedAt.includes(userName)) ||
-          (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
-          (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
+          const createdById = String(r?.createdById || r?.created_by_id || p?.createdById || p?.created_by_id || repMeta?.createdById || repMeta?.created_by_id || meta?.createdById || meta?.created_by_id || "");
+          const collectionCenterId = String(repMeta?.collectionCenterId || repMeta?.collection_center_id || meta?.collectionCenterId || meta?.collection_center_id || "");
+          const metaCenterCode = String(repMeta?.centerCode || repMeta?.center_code || meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
+          const collCenterName = String(meta?.collection_center_name || meta?.collectionCenterName || repMeta?.centerName || "").toLowerCase();
 
-        return isMine || isAssigned;
-      });
+          const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
+          const isAssigned =
+            (userName && collectedAt.includes(userName)) ||
+            (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
+            (centerLabName && collCenterName.includes(centerLabName)) ||
+            (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
 
-      const scopedPatients = patList.filter((p: any) => {
-        const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
-        const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
+          return isMine || isAssigned;
+        });
 
-        const createdById = String(p?.createdById || p?.created_by_id || meta?.createdById || meta?.created_by_id || "");
-        const collectionCenterId = String(meta?.collectionCenterId || meta?.collection_center_id || "");
-        const metaCenterCode = String(meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
+        const totalSamples = scopedReports.length;
+        const completedSamples = scopedReports.filter((r: any) => r.status === "COMPLETED" || r.status === "READY" || r.status === "APPROVED" || r.status === "FINAL").length;
+        const inTransitSamples = scopedReports.filter((r: any) => r.status === "IN_TRANSIT" || r.status === "PROCESSING").length;
+        const newCollectedSamples = Math.max(0, totalSamples - completedSamples - inTransitSamples);
 
-        const isMine = Boolean(userIdStr && (createdById === userIdStr || collectionCenterId === userIdStr));
-        const isAssigned =
-          (userName && collectedAt.includes(userName)) ||
-          (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) ||
-          (centerCode && (collectedAt.includes(centerCode) || metaCenterCode === centerCode));
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const today = new Date();
+        const intakeArr = [];
 
-        return isMine || isAssigned;
-      });
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(today);
+          d.setDate(today.getDate() - i);
+          const dateStr = d.toISOString().split("T")[0];
+          const dayName = i === 0 ? "Today" : days[d.getDay()];
 
-      setReports(scopedReports);
-      setPatients(scopedPatients);
+          const count = scopedReports.filter((r: any) => {
+            const repDate = (r.created_at || r.createdAt || "").split("T")[0];
+            return repDate === dateStr;
+          }).length;
+
+          intakeArr.push({ day: dayName, count, isToday: i === 0 });
+        }
+
+        const fallbackObj = {
+          stats: {
+            total_samples: totalSamples,
+            completed_samples: completedSamples,
+            in_transit_samples: inTransitSamples,
+            new_collected_samples: newCollectedSamples,
+            total_patients: patList.length,
+          },
+          weekly_intake: intakeArr,
+        };
+
+        setStats(fallbackObj.stats);
+        setWeeklyIntake(intakeArr);
+
+        try {
+          localStorage.setItem("lis_cached_cc_overview", JSON.stringify(fallbackObj));
+        } catch {}
+      }
     } catch (err) {
       console.error("Error loading collection center overview:", err);
     } finally {
@@ -90,33 +235,30 @@ export function CollectionCenterOverview({ user }: Props) {
     }
   };
 
-  // 100% Dynamic metrics from active reports
-  const totalSamples = reports.length;
-  const completedSamples = reports.filter((r) => r.status === "COMPLETED" || r.status === "READY" || r.status === "APPROVED" || r.status === "FINAL").length;
-  const inTransitSamples = reports.filter((r) => r.status === "IN_TRANSIT" || r.status === "PROCESSING").length;
-  const newCollectedSamples = reports.filter((r) => r.status !== "COMPLETED" && r.status !== "READY" && r.status !== "APPROVED" && r.status !== "FINAL" && r.status !== "IN_TRANSIT" && r.status !== "PROCESSING").length;
+  // 100% Dynamic metrics from active overview stats
+  const totalSamples = Number(stats?.total_samples || 0);
+  const completedSamples = Number(stats?.completed_samples || 0);
+  const inTransitSamples = Number(stats?.in_transit_samples || 0);
+  const newCollectedSamples = Number(stats?.new_collected_samples || 0);
 
-  // 100% Dynamic 7-day intake chart data based on actual report created_at
-  const weeklyIntakeData = useMemo(() => {
+  // Dynamic 7-day intake chart data
+  const chartData = useMemo(() => {
+    if (Array.isArray(weeklyIntake) && weeklyIntake.length > 0) {
+      return weeklyIntake;
+    }
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const today = new Date();
-    const result = [];
-
-    for (let i = 6; i >= 0; i--) {
+    return Array.from({ length: 7 }, (_, idx) => {
+      const i = 6 - idx;
       const d = new Date(today);
       d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
-      const dayName = i === 0 ? "Today" : days[d.getDay()];
-
-      const count = reports.filter((r) => {
-        const repDate = (r.created_at || r.createdAt || "").split("T")[0];
-        return repDate === dateStr;
-      }).length;
-
-      result.push({ day: dayName, count, isToday: i === 0 });
-    }
-    return result;
-  }, [reports]);
+      return {
+        day: i === 0 ? "Today" : days[d.getDay()],
+        count: 0,
+        isToday: i === 0,
+      };
+    });
+  }, [weeklyIntake]);
 
   // Donut: Sample Processing Lifecycle Stages (Dynamic)
   const stagePieData = useMemo(() => {
@@ -129,6 +271,10 @@ export function CollectionCenterOverview({ user }: Props) {
       { name: "Sample Collected", value: newCollectedSamples, color: "#f59e0b" },
     ].filter(item => item.value > 0);
   }, [totalSamples, completedSamples, inTransitSamples, newCollectedSamples]);
+
+  if (!isMounted || (loading && totalSamples === 0 && weeklyIntake.length === 0)) {
+    return <CollectionCenterOverviewShimmer />;
+  }
 
   return (
     <div className="space-y-7 animate-fade-in pb-10">
@@ -231,7 +377,7 @@ export function CollectionCenterOverview({ user }: Props) {
         </div>
       </div>
 
-      {/* ── Charts Grid (Bar Chart + 2 Donut Charts) ── */}
+      {/* ── Charts Grid (Bar Chart + Donut Chart) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Chart 1: Bar Chart of Sample Intake (7 Columns) */}
         <div className="lg:col-span-7 p-6 rounded-2xl bg-card border border-border/80 shadow-xs space-y-4">
@@ -251,7 +397,7 @@ export function CollectionCenterOverview({ user }: Props) {
           <div className="h-[250px] w-full pt-2" style={{ minHeight: 240 }}>
             {isMounted && (
               <ResponsiveContainer width="100%" height={240} minWidth={0} minHeight={0} debounce={50}>
-                <BarChart data={weeklyIntakeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <XAxis
                     dataKey="day"
                     axisLine={false}
@@ -279,7 +425,7 @@ export function CollectionCenterOverview({ user }: Props) {
                     }}
                   />
                   <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                    {weeklyIntakeData.map((entry, index) => (
+                    {chartData.map((entry, index) => (
                       <Cell
                         key={`cell-${index}`}
                         fill={entry.isToday ? "hsl(var(--primary))" : "hsl(var(--primary)/0.4)"}

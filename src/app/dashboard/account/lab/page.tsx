@@ -56,6 +56,20 @@ interface LabData {
   sms_credits?: number;
   smsFreeCredits?: number;
   sms_free_credits?: number;
+  whatsappFreeCredits?: number;
+  whatsapp_free_credits?: number;
+  whatsappMessagesSent?: number;
+  whatsapp_messages_sent?: number;
+  whatsappUsageSettled?: number;
+  whatsapp_usage_settled?: number;
+  whatsappRemainingCredits?: number;
+  whatsapp_remaining_credits?: number;
+  whatsappOverlimitCount?: number;
+  whatsapp_overlimit_count?: number;
+  whatsappOverlimitRate?: number;
+  whatsapp_overlimit_rate?: number;
+  whatsappOverlimitCharge?: number;
+  whatsapp_overlimit_charge?: number;
   centreName?: string;
   centre_name?: string;
   logoUrl?: string;
@@ -100,9 +114,9 @@ interface InvoiceItem {
 
 const VOLUME_TIERS = [
   { id: "1_50", label: "1–50 Patients / day", subtitle: "Included FREE in base plan (0 extra charge)", limit: 50, rate: 0, tag: "FREE", tagColor: "#16a34a", tagBg: "#dcfce7" },
-  { id: "51_200", label: "51–200 Patients / day", subtitle: "1–50 Free · 40 Paise (₹0.40) per bill beyond 50", limit: 200, rate: 0.40, tag: "+ Additional Charge", tagColor: "#d97706", tagBg: "#fffbeb" },
+  { id: "51_200", label: "51–200 Patients / day", subtitle: "1–50 Free · 30 Paise (₹0.30) per bill beyond 50", limit: 200, rate: 0.30, tag: "+ Additional Charge", tagColor: "#d97706", tagBg: "#fffbeb" },
   { id: "201_500", label: "201–500 Patients / day", subtitle: "1–50 Free · 40 Paise (₹0.40) per bill beyond 50", limit: 500, rate: 0.40, tag: "+ Additional Charge", tagColor: "#d97706", tagBg: "#fffbeb" },
-  { id: "500_PLUS", label: "500+ High Volume", subtitle: "1–50 Free · 40 Paise (₹0.40) per bill beyond 50", limit: 99999, rate: 0.40, tag: "+ Additional Charge", tagColor: "#d97706", tagBg: "#fffbeb" },
+  { id: "500_PLUS", label: "500+ High Volume", subtitle: "1–50 Free · 50 Paise (₹0.50) per bill beyond 50", limit: 99999, rate: 0.50, tag: "+ Additional Charge", tagColor: "#d97706", tagBg: "#fffbeb" },
 ];
 
 function LabAccountContent() {
@@ -171,6 +185,7 @@ function LabAccountContent() {
     // Check PayU payment redirect params
     const payment = searchParams.get("payment");
     const usagePayment = searchParams.get("usage_payment");
+    const whatsappPayment = searchParams.get("whatsapp_payment");
     const txnid = searchParams.get("txnid");
     const msg = searchParams.get("msg");
 
@@ -201,6 +216,20 @@ function LabAccountContent() {
     } else if (usagePayment === "failed") {
       setPaymentBanner({
         title: "Usage Settlement Payment Failed",
+        message: msg ? decodeURIComponent(msg) : "The transaction could not be completed. Please try again.",
+        type: "error",
+      });
+    } else if (whatsappPayment === "success") {
+      clearApiCache("/lab");
+      setPaymentBanner({
+        title: "WhatsApp Usage Settlement Completed!",
+        message: `Your WhatsApp overlimit messages settlement was completed successfully via PayU (Ref #${txnid || "COMPLETED"}). Official GST Tax Invoice has been generated below.`,
+        type: "success",
+      });
+      loadData();
+    } else if (whatsappPayment === "failed") {
+      setPaymentBanner({
+        title: "WhatsApp Settlement Payment Failed",
         message: msg ? decodeURIComponent(msg) : "The transaction could not be completed. Please try again.",
         type: "error",
       });
@@ -514,6 +543,36 @@ function LabAccountContent() {
     }
   };
 
+  // Initiate WhatsApp Overlimit Settlement Payment with PayU
+  const handlePayWhatsAppUsage = async () => {
+    if (!isCentreSaved) {
+      setActiveTab("CENTRE");
+      toast.warning("Profile Incomplete", "Please complete and save your Diagnostic Centre details under Centre & GST Profile first.");
+      return;
+    }
+
+    try {
+      setInitiatingPayment("whatsapp");
+      const res = await fetchFromLaravel("/payments/initiate-whatsapp-usage", {
+        method: "POST",
+        body: JSON.stringify({
+          messages_count: whatsappOverlimitCount,
+          lab_id: lab?.id,
+        }),
+      });
+
+      if (res && res.action_url && res.params) {
+        submitPayuForm(res.action_url, res.params);
+      } else {
+        toast.error("Settlement Failed", res?.error || res?.message || "Failed to initiate WhatsApp usage settlement payment.");
+      }
+    } catch (err: any) {
+      toast.error("Payment Error", err.message || "Failed to initiate WhatsApp settlement with PayU.");
+    } finally {
+      setInitiatingPayment(null);
+    }
+  };
+
   const mapInvoiceToData = (inv: InvoiceItem): SubscriptionInvoiceData => {
     const pName = lab?.planName || lab?.plan_name || "OnePath Pathology LIS Pro";
     return {
@@ -789,12 +848,27 @@ function LabAccountContent() {
   const isCurrent6Month = (planName.toLowerCase().includes("6 month") || planPeriod.toLowerCase().includes("6 month") || planPeriod.toLowerCase().includes("180")) && !planName.toLowerCase().includes("trial");
   const isCurrentTrial = planName.toLowerCase().includes("trial") || planPeriod.toLowerCase().includes("7");
 
-  // Daily Patient Volume & Extra Usage Calculations (40 paise = ₹0.40 per bill)
+  // Daily Patient Volume & Extra Usage Calculations
+  const currentTierRate = VOLUME_TIERS.find(t => t.id === selectedVolumeTier)?.rate ?? 0.30;
   const todayBills = lab?.todayBillsCount ?? lab?.today_bills_count ?? 8;
   const extraBills = Math.max(0, todayBills - 50);
-  const extraCharges = (extraBills * 0.40).toFixed(2);
+  const extraCharges = (extraBills * currentTierRate).toFixed(2);
   const yearlyExtraBills = lab?.yearlyExtraBills ?? lab?.yearly_extra_bills ?? extraBills;
-  const yearlyExtraCharges = (yearlyExtraBills * 0.40).toFixed(2);
+  const yearlyExtraCharges = (yearlyExtraBills * currentTierRate).toFixed(2);
+
+  // WhatsApp Free Credits & Overlimit Metrics:
+  // 1 Year Plan = 3,500 Free Messages (Bills + Reports combined)
+  // 6 Months Plan = 1,500 Free Messages (Bills + Reports combined)
+  // Overlimit @ 30 Paise (₹0.30) per message
+  const defaultFreeQuota = isCurrent1Year ? 3500 : 1500;
+  const whatsappFreeCredits = lab?.whatsappFreeCredits ?? lab?.whatsapp_free_credits ?? defaultFreeQuota;
+  const whatsappMessagesSent = lab?.whatsappMessagesSent ?? lab?.whatsapp_messages_sent ?? 0;
+  const whatsappUsageSettled = lab?.whatsappUsageSettled ?? lab?.whatsapp_usage_settled ?? 0;
+  const whatsappRemainingCredits = lab?.whatsappRemainingCredits ?? lab?.whatsapp_remaining_credits ?? Math.max(0, whatsappFreeCredits - whatsappMessagesSent);
+  const totalOverlimit = Math.max(0, whatsappMessagesSent - whatsappFreeCredits);
+  const whatsappOverlimitCount = lab?.whatsappOverlimitCount ?? lab?.whatsapp_overlimit_count ?? Math.max(0, totalOverlimit - whatsappUsageSettled);
+  const whatsappOverlimitCharge = (lab?.whatsappOverlimitCharge ?? lab?.whatsapp_overlimit_charge ?? (whatsappOverlimitCount * 0.30)).toFixed(2);
+  const whatsappUsagePercent = Math.min(100, Math.round((whatsappMessagesSent / (whatsappFreeCredits || 1)) * 100));
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-16 animate-fade-in">
@@ -1053,7 +1127,7 @@ function LabAccountContent() {
                     <span>Daily Patient Volume &amp; Over-Limit Billing</span>
                   </h4>
                   <p className="text-xs text-muted-foreground">
-                    1–50 patients per day are included <strong>FREE</strong> in both plans. Bills beyond 50/day are billed at <strong>40 paise (₹0.40) per bill</strong> and settled annually.
+                    1–50 patients per day are included <strong>FREE</strong> in both plans. Bills beyond 50/day are billed based on volume tier (30–50 paise/bill) and settled annually.
                   </p>
                 </div>
                 {volumeSaved && (
@@ -1128,7 +1202,7 @@ function LabAccountContent() {
                     <div>
                       <span className="font-bold text-foreground">Yearly Volume Over-Quota Due:</span>
                       <p className="text-[11px] text-muted-foreground">
-                        Total <strong>{yearlyExtraBills}</strong> extra reports @ ₹0.40/report
+                        Total <strong>{yearlyExtraBills}</strong> extra reports @ ₹{currentTierRate}/report
                       </p>
                     </div>
                   </div>
@@ -1142,6 +1216,112 @@ function LabAccountContent() {
                       className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs hover:opacity-95 transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                     >
                       {initiatingPayment === "usage" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CreditCard className="h-3.5 w-3.5" />
+                      )}
+                      <span>Pay with PayU</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* WhatsApp Free Credit & Overlimit Billing Section */}
+            <div className="pt-6 border-t border-border/70 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h4 className="font-display font-bold text-sm text-foreground flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>WhatsApp Free Credits &amp; Overlimit Billing</span>
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Included with your plan: <strong>{whatsappFreeCredits.toLocaleString()} Free Messages</strong> ({isCurrent1Year ? "1-Year Plan: 3,500" : "6-Month Plan: 1,500"} free messages for Bills &amp; Reports combined). Messages beyond free quota are billed at <strong>30 paise (₹0.30) per message</strong>.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
+                    whatsappOverlimitCount > 0 
+                      ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30" 
+                      : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                  }`}>
+                    {whatsappOverlimitCount > 0 ? "Overlimit Active (Pay-As-You-Go)" : "Free Quota Active"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="bg-muted/30 border border-border/80 rounded-xl p-4 space-y-2.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-foreground flex items-center gap-1.5">
+                    <span>Usage Progress:</span>
+                    <span className="font-mono text-muted-foreground">{whatsappMessagesSent.toLocaleString()} / {whatsappFreeCredits.toLocaleString()} Free Quota</span>
+                  </span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                    {whatsappRemainingCredits.toLocaleString()} Free Messages Remaining
+                  </span>
+                </div>
+                <div className="w-full h-3 bg-muted rounded-full overflow-hidden p-0.5 border border-border/60">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      whatsappUsagePercent >= 100
+                        ? "bg-gradient-to-r from-amber-500 to-rose-500"
+                        : "bg-gradient-to-r from-emerald-500 to-teal-500"
+                    }`}
+                    style={{ width: `${whatsappUsagePercent}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>Both Patient Bills + Diagnostic Reports share this unified free quota.</span>
+                  <span>{whatsappUsagePercent}% utilized</span>
+                </div>
+              </div>
+
+              {/* WhatsApp Metrics & PayU Settlement Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Free Quota Breakdown Card */}
+                <div className="p-4 bg-muted/40 rounded-xl border border-border flex items-center justify-between gap-4 text-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
+                      <MessageSquare className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-foreground">Dispatched Messages:</span>
+                      <p className="text-[11px] text-muted-foreground">
+                        Total <strong>{whatsappMessagesSent.toLocaleString()}</strong> WhatsApp messages sent
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Remaining Free:</span>
+                    <p className="font-mono font-bold text-emerald-600">{whatsappRemainingCredits.toLocaleString()} msgs</p>
+                  </div>
+                </div>
+
+                {/* Overlimit Settlement Card */}
+                <div className="p-4 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent rounded-xl border border-emerald-500/30 flex items-center justify-between gap-4 text-xs">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-700 dark:text-emerald-400 shrink-0">
+                      <Receipt className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-foreground">Overlimit Bill Due:</span>
+                      <p className="text-[11px] text-muted-foreground">
+                        <strong>{whatsappOverlimitCount.toLocaleString()}</strong> extra msgs @ ₹0.30/msg
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <span className="font-mono font-black text-sm text-foreground">₹{whatsappOverlimitCharge}</span>
+                    <button
+                      type="button"
+                      onClick={() => handlePayWhatsAppUsage()}
+                      disabled={initiatingPayment === "whatsapp" || Number(whatsappOverlimitCharge) <= 0}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs hover:opacity-95 transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      {initiatingPayment === "whatsapp" ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       ) : (
                         <CreditCard className="h-3.5 w-3.5" />
@@ -1215,7 +1395,11 @@ function LabAccountContent() {
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                      <span><strong>1–50 Daily Patients Free</strong> (Extra @ 40 paise / ₹0.40 per bill)</span>
+                      <span><strong>3,500 WhatsApp Messages Free</strong> (Bills + Reports combined)</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span><strong>1–50 Daily Patients Free</strong> (Extra @ 30–50 paise / bill)</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -1326,7 +1510,11 @@ function LabAccountContent() {
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                      <span><strong>1–50 Daily Patients Free</strong> (Extra @ 40 paise / ₹0.40 per bill)</span>
+                      <span><strong>1,500 WhatsApp Messages Free</strong> (Bills + Reports combined)</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span><strong>1–50 Daily Patients Free</strong> (Extra @ 30–50 paise / bill)</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -1602,12 +1790,12 @@ function LabAccountContent() {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-display text-lg font-bold text-foreground">Auto-Dispatch &amp; Summaries</h3>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                  Email &bull; WhatsApp &bull; .CSV
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  Email &bull; .CSV Audit Ledger
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Configure automated periodic delivery of diagnostic summaries, revenue statistics, and complete patient audit ledgers (.csv) to your email and WhatsApp.
+                Configure automated periodic delivery of diagnostic summaries, revenue statistics, and complete patient audit ledgers (.csv) to your email.
               </p>
             </div>
           </div>
@@ -1634,12 +1822,12 @@ function LabAccountContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="max-w-md">
                 {/* Email Toggle Button */}
                 <button
                   type="button"
                   onClick={() => setDispatchSettings(prev => ({ ...prev, emailEnabled: !prev.emailEnabled }))}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer select-none flex items-center justify-between text-left ${
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer select-none flex items-center justify-between text-left w-full ${
                     dispatchSettings.emailEnabled 
                       ? "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-xs" 
                       : "border-border bg-muted/15 hover:bg-muted/30 opacity-75"
@@ -1666,42 +1854,6 @@ function LabAccountContent() {
                     <span
                       className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition duration-200 ease-in-out ${
                         dispatchSettings.emailEnabled ? "translate-x-5" : "translate-x-0"
-                      }`}
-                    />
-                  </div>
-                </button>
-
-                {/* WhatsApp Toggle Button */}
-                <button
-                  type="button"
-                  onClick={() => setDispatchSettings(prev => ({ ...prev, whatsappEnabled: !prev.whatsappEnabled }))}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer select-none flex items-center justify-between text-left ${
-                    dispatchSettings.whatsappEnabled 
-                      ? "border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500/20 shadow-xs" 
-                      : "border-border bg-muted/15 hover:bg-muted/30 opacity-75"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-xl ${dispatchSettings.whatsappEnabled ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"}`}>
-                      <MessageSquare className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <span className="text-sm font-bold text-foreground block">WhatsApp</span>
-                      <span className="text-[11px] font-medium text-muted-foreground">
-                        {dispatchSettings.whatsappEnabled ? "Status: Enabled" : "Status: Disabled"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Switch indicator */}
-                  <div
-                    className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
-                      dispatchSettings.whatsappEnabled ? "bg-emerald-600" : "bg-muted-foreground/30"
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition duration-200 ease-in-out ${
-                        dispatchSettings.whatsappEnabled ? "translate-x-5" : "translate-x-0"
                       }`}
                     />
                   </div>
