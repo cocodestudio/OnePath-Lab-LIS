@@ -18,12 +18,62 @@ type DateFilterType = "SPECIFIC_DATE" | "WEEKLY" | "MONTHLY" | "YEARLY" | "CUSTO
 
 export default function B2BRevenuePage() {
   const toast = useToast();
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [reports, setReports] = useState<any[]>([]);
-  const [tests, setTests] = useState<any[]>([]);
-  const [labInfo, setLabInfo] = useState<any>(null);
-  const [b2bRateData, setB2bRateData] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      return getStoredUser();
+    }
+    return null;
+  });
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [reports, setReports] = useState<any[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_b2b_revenue_reports") || localStorage.getItem("lis_cached_reports");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [tests, setTests] = useState<any[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_tests");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return [];
+  });
+  const [labInfo, setLabInfo] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_lab");
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return null;
+  });
+  const [b2bRateData, setB2bRateData] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_b2b_ratelist");
+        if (cached) return JSON.parse(cached);
+      } catch {}
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("lis_cached_b2b_revenue_reports") || localStorage.getItem("lis_cached_reports");
+      return !cached;
+    }
+    return true;
+  });
 
   // Filters
   const [dateFilter, setDateFilter] = useState<DateFilterType>("MONTHLY");
@@ -39,7 +89,7 @@ export default function B2BRevenuePage() {
 
   useEffect(() => {
     const user = getStoredUser();
-    setCurrentUser(user);
+    if (user) setCurrentUser(user);
     loadData();
 
     const handleSync = () => {
@@ -56,25 +106,47 @@ export default function B2BRevenuePage() {
 
   const loadData = async () => {
     try {
-      setLoading(true);
+      setIsSyncing(true);
+      if (reports.length === 0) setLoading(true);
+
       const [reportsRes, labRes, testsRes, myRateListRes] = await Promise.all([
         fetchFromLaravel("/reports", { skipCache: true }).catch(() => []),
-        fetchFromLaravel("/lab", { skipCache: true }).catch(() => null),
-        fetchFromLaravel("/tests", { skipCache: true }).catch(() => []),
-        fetchFromLaravel("/rate-lists/my-rate-list", { skipCache: true }).catch(() => null),
+        fetchFromLaravel("/lab").catch(() => null),
+        fetchFromLaravel("/tests").catch(() => []),
+        fetchFromLaravel("/rate-lists/my-rate-list").catch(() => null),
       ]);
+
       const repList = Array.isArray(reportsRes) ? reportsRes : (reportsRes?.data || []);
-      setReports(repList);
-      if (labRes) setLabInfo(labRes);
+      if (repList.length > 0 || reports.length === 0) {
+        setReports(repList);
+        try {
+          localStorage.setItem("lis_cached_b2b_revenue_reports", JSON.stringify(repList));
+        } catch {}
+      }
+
+      if (labRes) {
+        setLabInfo(labRes);
+        try {
+          localStorage.setItem("lis_cached_lab", JSON.stringify(labRes));
+        } catch {}
+      }
+
       const testList = Array.isArray(testsRes) ? testsRes : (testsRes?.data || []);
-      setTests(testList);
+      if (testList.length > 0) {
+        setTests(testList);
+      }
+
       if (myRateListRes?.status === "success" && myRateListRes?.data) {
         setB2bRateData(myRateListRes.data);
+        try {
+          localStorage.setItem("lis_cached_b2b_ratelist", JSON.stringify(myRateListRes.data));
+        } catch {}
       }
     } catch (err) {
       console.error("Failed to load revenue telemetry:", err);
     } finally {
       setLoading(false);
+      setIsSyncing(false);
     }
   };
 
@@ -220,12 +292,15 @@ export default function B2BRevenuePage() {
     const b2bMargin = Math.max(0, totalMrp - labMargin);
 
     // Settlement due: payable wholesale fee minus what has been paid
-    const due = Math.max(0, labMargin - paid);
+    // If the B2B partner's bill is paid, wallet-deducted, or viewed in B2B portal, due is 0
+    const isWalletPaid = r.bill?.status === "PAID" || Boolean(r.is_b2b_paid) || Boolean(r.bill?.meta?.is_b2b_paid) || (currentUser?.role === "B2B" && paid >= 0);
+    const effectivePaid = isWalletPaid ? labMargin : paid;
+    const due = isWalletPaid ? 0 : Math.max(0, labMargin - effectivePaid);
 
     return {
       gross: totalMrp,
       totalMrp,
-      paid,
+      paid: effectivePaid,
       labMargin,
       b2bMargin,
       due,
@@ -447,10 +522,10 @@ export default function B2BRevenuePage() {
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <button
             onClick={loadData}
-            disabled={loading}
+            disabled={isSyncing}
             className="flex items-center gap-2 h-10 px-3.5 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground text-xs font-bold shadow-xs hover:bg-muted/60 transition-colors cursor-pointer"
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-purple-600" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${isSyncing || loading ? "animate-spin text-purple-600" : ""}`} />
             <span>Sync Ledger</span>
           </button>
 

@@ -1887,6 +1887,21 @@ function RegisterPatientPage() {
     }
   };
 
+  const handleRemoveSelectedTest = (test: Test) => {
+    const idsToRemove = new Set<string>();
+    idsToRemove.add(test.id);
+    if (test.subTests && Array.isArray(test.subTests)) {
+      test.subTests.forEach((sub) => idsToRemove.add(sub.id));
+    }
+    setSelectedTests((prev) => prev.filter((id) => !idsToRemove.has(id)));
+    if (selectedPackage) {
+      const pkgTestIds = resolvePackageTestIds(selectedPackage, availableTests);
+      if (pkgTestIds.includes(test.id)) {
+        setSelectedPackage(null);
+      }
+    }
+  };
+
   // Outsource Test Helpers
   const handleToggleOutsourceTest = (test: any) => {
     const exists = selectedOutsourceTests.some(
@@ -3857,23 +3872,33 @@ function RegisterPatientPage() {
                         const b2bRate = test.b2bPrice ?? (test as any).b2b_price;
                         const showB2B = isB2B && (b2bRate !== undefined && b2bRate !== null);
                         return (
-                          <li key={`inhouse-${test.id}`} className="py-2.5 flex justify-between items-center gap-2">
-                            <div className="min-w-0">
+                          <li key={`inhouse-${test.id}`} className="py-2.5 flex justify-between items-center gap-2 group">
+                            <div className="min-w-0 flex-1">
                               <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
                               <p className="text-[10px] text-muted-foreground">{test.category || "Pathology"}</p>
                             </div>
-                            {showB2B ? (
-                              <div className="text-right leading-tight shrink-0">
-                                <div className="font-mono text-xs font-bold text-purple-600 dark:text-purple-400">
-                                  B2B ₹{Number(b2bRate ?? test.price).toFixed(0)}
+                            <div className="flex items-center gap-2 shrink-0">
+                              {showB2B ? (
+                                <div className="text-right leading-tight">
+                                  <div className="font-mono text-xs font-bold text-purple-600 dark:text-purple-400">
+                                    B2B ₹{Number(b2bRate ?? test.price).toFixed(0)}
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground font-medium">
+                                    MRP ₹{Number(test.price).toFixed(0)}
+                                  </div>
                                 </div>
-                                <div className="text-[10px] text-muted-foreground font-medium">
-                                  MRP ₹{Number(test.price).toFixed(0)}
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="font-mono text-xs font-bold text-foreground">₹{Number(test.price).toFixed(0)}</span>
-                            )}
+                              ) : (
+                                <span className="font-mono text-xs font-bold text-foreground">₹{Number(test.price).toFixed(0)}</span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSelectedTest(test)}
+                                className="text-muted-foreground hover:text-destructive p-1 rounded-md hover:bg-destructive/10 transition-colors cursor-pointer"
+                                title={`Remove ${test.name}`}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </li>
                         );
                       })}

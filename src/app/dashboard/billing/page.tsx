@@ -177,13 +177,21 @@ function getBillInvoiceNo(bill: Bill | any | null | undefined): string {
   );
 }
 
-function normalizeBillObj(b: any): Bill {
+function normalizeBillObj(b: any, isB2BUser = false): Bill {
   const invNo = b.custom_id || b.customId || (b.id ? `OPL-INV-${String(b.id).slice(0, 6).toUpperCase()}` : "");
+  const isPaid = isB2BUser || b.status === "PAID" || Boolean(b.meta?.is_b2b_paid);
+  const total = Number(b.total || 0);
+  const paid = isPaid ? total : Number(b.paid_amount ?? b.paidAmount ?? 0);
+  const status = isPaid ? "PAID" : (b.status || "UNPAID");
+
   return {
     ...b,
     custom_id: invNo,
     customId: invNo,
-    paid_amount: b.paid_amount ?? b.paidAmount ?? 0,
+    total,
+    paid_amount: paid,
+    paidAmount: paid,
+    status,
     created_at: b.created_at || b.createdAt,
     createdAt: b.createdAt || b.created_at,
     patient: b.patient ? {
@@ -319,7 +327,7 @@ export default function BillingPage() {
       if (cachedBills) {
         const parsed = JSON.parse(cachedBills);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const mapped = parsed.map(normalizeBillObj);
+          const mapped = parsed.map((b: any) => normalizeBillObj(b));
           setBills(mapped);
           // Only cancel skeleton if cached bills actually contain items matching today's active filter!
           const todayStr = getTodayStr();
@@ -363,7 +371,8 @@ export default function BillingPage() {
       }
       const data = await fetchFromLaravel("/bills?limit=300", { skipCache: isForce });
       const rawList = Array.isArray(data) ? data : (data?.data || []);
-      const billsList = rawList.map(normalizeBillObj);
+      const isB2BUser = currentUserRole === "B2B" || getStoredUser()?.role === "B2B";
+      const billsList = rawList.map((b: any) => normalizeBillObj(b, isB2BUser));
       setBills(billsList);
 
       try {
@@ -715,11 +724,12 @@ export default function BillingPage() {
     return matchesSearch && matchesStatus && matchesDate;
   });
 
+  const isBillFullyPaid = (b: any) => isB2B || b.status === "PAID" || Boolean((b as any).meta?.is_b2b_paid);
   const totalInvoiced = filteredBills.reduce((acc, b) => acc + (Number(b.total) || 0), 0);
-  const totalCollected = filteredBills.reduce((acc, b) => acc + (b.status === "PAID" ? (Number(b.total) || 0) : (Number(b.paid_amount) || 0)), 0);
-  const totalDue = filteredBills.reduce((acc, b) => acc + (b.status === "PAID" ? 0 : Math.max(0, (Number(b.total) || 0) - (Number(b.paid_amount) || 0))), 0);
-  const paidCount = filteredBills.filter((b) => b.status === "PAID").length;
-  const unpaidCount = filteredBills.filter((b) => b.status !== "PAID").length;
+  const totalCollected = filteredBills.reduce((acc, b) => acc + (isBillFullyPaid(b) ? (Number(b.total) || 0) : (Number(b.paid_amount) || 0)), 0);
+  const totalDue = filteredBills.reduce((acc, b) => acc + (isBillFullyPaid(b) ? 0 : Math.max(0, (Number(b.total) || 0) - (Number(b.paid_amount) || 0))), 0);
+  const paidCount = filteredBills.filter((b) => isBillFullyPaid(b)).length;
+  const unpaidCount = filteredBills.filter((b) => !isBillFullyPaid(b)).length;
 
   const totalRows = filteredBills.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
@@ -1057,7 +1067,8 @@ export default function BillingPage() {
               ) : (
                 currentRows.map((bill) => {
                   const billDate = formatBillDate((bill.createdAt || bill.created_at) as string);
-                  const isBillPaid = bill.status === "PAID";
+                  const isBillPaid = isB2B || bill.status === "PAID" || Boolean((bill as any).meta?.is_b2b_paid);
+                  const effectiveStatus = isBillPaid ? "PAID" : bill.status;
                   const due = isBillPaid ? 0 : Math.max(0, (Number(bill.total) || 0) - (Number(bill.paid_amount) || 0));
                   const displayPaid = isBillPaid ? (Number(bill.total) || 0) : (Number(bill.paid_amount) || 0);
                   const mainItems = getMainBillItems(bill, allTestsMap);
@@ -1099,19 +1110,19 @@ export default function BillingPage() {
 
                       <td className="py-3.5 px-4 text-center">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          bill.status === "PAID"
+                          effectiveStatus === "PAID"
                             ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                            : bill.status === "PARTIAL"
+                            : effectiveStatus === "PARTIAL"
                             ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
                             : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
                         }`}>
-                          {bill.status}
+                          {effectiveStatus}
                         </span>
                       </td>
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {!isB2B && bill.status !== "PAID" && (
+                          {!isB2B && effectiveStatus !== "PAID" && (
                             <button
                               type="button"
                               disabled={updatingBillId === bill.id}
@@ -1136,17 +1147,6 @@ export default function BillingPage() {
                           >
                             <Printer className="h-4 w-4" />
                           </button>
-
-                          {!isCollectionCenter && (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenEditDialog(bill)}
-                              className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-primary cursor-pointer transition-colors"
-                              title="Edit Invoice & Panels"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -1269,10 +1269,10 @@ export default function BillingPage() {
                     createdAt: (selectedBillForInvoice.createdAt || selectedBillForInvoice.created_at) as string || new Date().toISOString(),
                     total: Number(selectedBillForInvoice.total || 0),
                     discount: Number(selectedBillForInvoice.discount || 0),
-                    paidAmount: selectedBillForInvoice.status === "PAID"
+                    paidAmount: (selectedBillForInvoice.status === "PAID" || isB2B || Boolean((selectedBillForInvoice as any).meta?.is_b2b_paid))
                       ? Number(selectedBillForInvoice.total || 0)
                       : Number(selectedBillForInvoice.paid_amount ?? (selectedBillForInvoice as any).paidAmount ?? 0),
-                    status: selectedBillForInvoice.status || "UNPAID",
+                    status: (isB2B || Boolean((selectedBillForInvoice as any).meta?.is_b2b_paid) || selectedBillForInvoice.status === "PAID") ? "PAID" : (selectedBillForInvoice.status || "UNPAID"),
                     paymentMode: (selectedBillForInvoice as any).payment_mode || (selectedBillForInvoice as any).paymentMode || "CASH / UPI",
                     billedBy: "Accounts / Billing Desk",
                     packageName: (selectedBillForInvoice.reports && (
