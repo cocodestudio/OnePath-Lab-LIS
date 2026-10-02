@@ -14,6 +14,7 @@ import {
   PieChart, Pie
 } from "recharts";
 import { fetchFromLaravel } from "@/lib/api-client";
+import { getTodayStr, shiftDate, getRecordLocalDate } from "@/lib/date-utils";
 
 interface Props {
   user: any;
@@ -179,9 +180,9 @@ export function B2BOverview({ user }: Props) {
       else setRefreshing(true);
 
       const [reportsData, patientsData, walletData] = await Promise.all([
-        fetchFromLaravel("/reports", { skipCache: !isInitial }).catch(() => []),
-        fetchFromLaravel("/patients", { skipCache: !isInitial }).catch(() => []),
-        fetchFromLaravel("/b2b/wallet/summary", { skipCache: !isInitial }).catch(() => null),
+        fetchFromLaravel("/reports", { skipCache: true }).catch(() => []),
+        fetchFromLaravel("/patients", { skipCache: true }).catch(() => []),
+        fetchFromLaravel("/b2b/wallet/summary", { skipCache: true }).catch(() => null),
       ]);
 
       const repList = Array.isArray(reportsData) ? reportsData : (reportsData?.data || []);
@@ -209,8 +210,14 @@ export function B2BOverview({ user }: Props) {
       loadData(false);
     };
 
+    const handleCacheInvalidated = () => {
+      loadData(false);
+    };
+
     window.addEventListener("b2b_wallet_updated", handleWalletUpdated);
     window.addEventListener("focus", handleFocus);
+    window.addEventListener("lis_cache_invalidated", handleCacheInvalidated);
+    window.addEventListener("storage", handleCacheInvalidated);
 
     // Real-time polling every 20s for live telemetry & balance updates
     const interval = setInterval(() => {
@@ -220,6 +227,8 @@ export function B2BOverview({ user }: Props) {
     return () => {
       window.removeEventListener("b2b_wallet_updated", handleWalletUpdated);
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("lis_cache_invalidated", handleCacheInvalidated);
+      window.removeEventListener("storage", handleCacheInvalidated);
       clearInterval(interval);
     };
   }, []);
@@ -235,20 +244,21 @@ export function B2BOverview({ user }: Props) {
   const totalCredited = Number(walletSummary?.total_credited) || 0;
   const totalDebited = Number(walletSummary?.total_debited) || 0;
 
-  // 7-day intake trend
+  // 7-day intake trend strictly anchored to IST
   const weeklyIntakeData = useMemo(() => {
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const today = new Date();
+    const todayStr = getTodayStr();
     const result = [];
 
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0];
-      const dayName = i === 0 ? "Today" : days[d.getDay()];
+      const dateStr = shiftDate(todayStr, -i);
+      const [y, m, d] = dateStr.split("-").map(Number);
+      const dayOfWeek = new Date(y, m - 1, d).getDay();
+      const dayName = i === 0 ? "Today" : days[dayOfWeek];
 
       const count = reports.filter((r) => {
-        const repDate = (r.created_at || r.createdAt || "").split("T")[0];
+        const rawDate = r.created_at || r.createdAt || "";
+        const repDate = getRecordLocalDate(rawDate);
         return repDate === dateStr;
       }).length;
 

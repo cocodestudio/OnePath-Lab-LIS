@@ -10,6 +10,7 @@ import {
   TestTube2, Send, Tag, Building2, Trash2, Activity
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
+import { getTodayStr, getRecordLocalDate } from "@/lib/date-utils";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -177,38 +178,14 @@ export default function TodaySamplesPage() {
 
   const [currentUserRole, setCurrentUserRole] = useState<string>("");
 
-  const isDateToday = (dateStr?: string) => {
+  const isDateToday = (dateStr?: string | number | null) => {
     if (!dateStr) return false;
     try {
-      const now = new Date();
-      const todayYear = now.getFullYear();
-      const todayMonth = now.getMonth();
-      const todayDate = now.getDate();
-
-      let d: Date;
-      if (dateStr.includes(" ") && !dateStr.includes("T")) {
-        d = new Date(dateStr.replace(" ", "T"));
-      } else {
-        d = new Date(dateStr);
-      }
-
-      if (!isNaN(d.getTime())) {
-        if (
-          d.getDate() === todayDate &&
-          d.getMonth() === todayMonth &&
-          d.getFullYear() === todayYear
-        ) {
-          return true;
-        }
-      }
-
-      const localIso = `${todayYear}-${String(todayMonth + 1).padStart(2, "0")}-${String(todayDate).padStart(2, "0")}`;
-      if (dateStr.startsWith(localIso)) return true;
-
-      const todayUtcIso = now.toISOString().split("T")[0];
-      if (dateStr.startsWith(todayUtcIso)) return true;
-
-      return false;
+      const today = getTodayStr();
+      const str = String(dateStr).trim();
+      if (str.startsWith(today)) return true;
+      const recDate = getRecordLocalDate(str);
+      return recDate === today;
     } catch {
       return false;
     }
@@ -289,6 +266,11 @@ export default function TodaySamplesPage() {
           const todayOnly = parsed
             .filter(isReportFromToday)
             .filter((r) => isReportPermittedForRole(r, parsedUser?.role || "", parsedUser));
+          todayOnly.sort((a: any, b: any) => {
+            const timeA = new Date(a.createdAt || a.created_at || 0).getTime();
+            const timeB = new Date(b.createdAt || b.created_at || 0).getTime();
+            return timeB - timeA;
+          });
           if (todayOnly.length > 0) {
             setReports(todayOnly);
             setLoading(false);
@@ -296,7 +278,26 @@ export default function TodaySamplesPage() {
         }
       }
     } catch (e) {}
-    loadData(false, parsedUser);
+
+    loadData(true, parsedUser);
+
+    const handleCacheInvalidated = () => {
+      loadData(true);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadData(true);
+      }
+    };
+    window.addEventListener("lis_cache_invalidated", handleCacheInvalidated);
+    window.addEventListener("storage", handleCacheInvalidated);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("lis_cache_invalidated", handleCacheInvalidated);
+      window.removeEventListener("storage", handleCacheInvalidated);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   const loadData = async (forceRefresh?: boolean | any, userOverride?: any) => {
@@ -320,6 +321,11 @@ export default function TodaySamplesPage() {
       const finalReports = repList
         .filter(isReportFromToday)
         .filter((r: any) => isReportPermittedForRole(r, activeUser?.role || currentUserRole, activeUser));
+      finalReports.sort((a: any, b: any) => {
+        const timeA = new Date(a.createdAt || a.created_at || 0).getTime();
+        const timeB = new Date(b.createdAt || b.created_at || 0).getTime();
+        return timeB - timeA;
+      });
       setReports(finalReports);
       try {
         localStorage.setItem("lis_cached_today_samples", JSON.stringify(finalReports));

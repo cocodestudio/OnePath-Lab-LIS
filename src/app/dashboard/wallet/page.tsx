@@ -11,6 +11,7 @@ import {
   ChevronsLeft, ChevronsRight, HelpCircle, Lock
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
+import { getTodayStr, shiftDate, getRecordLocalDate } from "@/lib/date-utils";
 import { useToast } from "@/components/ui/toast";
 
 interface Transaction {
@@ -90,10 +91,14 @@ export default function WalletPage() {
 
     window.addEventListener("b2b_wallet_updated", handleWalletUpdated);
     window.addEventListener("focus", handleFocus);
+    window.addEventListener("lis_cache_invalidated", handleWalletUpdated);
+    window.addEventListener("storage", handleWalletUpdated);
 
     return () => {
       window.removeEventListener("b2b_wallet_updated", handleWalletUpdated);
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("lis_cache_invalidated", handleWalletUpdated);
+      window.removeEventListener("storage", handleWalletUpdated);
     };
   }, []);
 
@@ -144,23 +149,20 @@ export default function WalletPage() {
 
   const handleDatePreset = (preset: "ALL" | "TODAY" | "7DAYS" | "MONTH") => {
     setDatePreset(preset);
-    const now = new Date();
+    const today = getTodayStr();
     if (preset === "ALL") {
       setFromDate("");
       setToDate("");
     } else if (preset === "TODAY") {
-      const todayStr = now.toISOString().split("T")[0];
-      setFromDate(todayStr);
-      setToDate(todayStr);
+      setFromDate(today);
+      setToDate(today);
     } else if (preset === "7DAYS") {
-      const past = new Date(now);
-      past.setDate(past.getDate() - 7);
-      setFromDate(past.toISOString().split("T")[0]);
-      setToDate(now.toISOString().split("T")[0]);
+      setFromDate(shiftDate(today, -7));
+      setToDate(today);
     } else if (preset === "MONTH") {
-      const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      setFromDate(firstOfMonth.toISOString().split("T")[0]);
-      setToDate(now.toISOString().split("T")[0]);
+      const [y, m] = today.split("-");
+      setFromDate(`${y}-${m}-01`);
+      setToDate(today);
     }
     setCurrentPage(1);
   };
@@ -229,20 +231,12 @@ export default function WalletPage() {
     return transactions.filter((t) => {
       if (typeFilter !== "ALL" && t.type !== typeFilter) return false;
 
-      // Date range filter
-      const dateStr = t.createdAt || t.created_at;
-      if (dateStr) {
-        const itemDate = new Date(dateStr);
-        if (fromDate) {
-          const from = new Date(fromDate);
-          from.setHours(0, 0, 0, 0);
-          if (itemDate < from) return false;
-        }
-        if (toDate) {
-          const to = new Date(toDate);
-          to.setHours(23, 59, 59, 999);
-          if (itemDate > to) return false;
-        }
+      // Date range filter anchored to IST
+      const rawDate = t.createdAt || t.created_at;
+      if (rawDate) {
+        const itemDateStr = getRecordLocalDate(rawDate);
+        if (fromDate && itemDateStr < fromDate) return false;
+        if (toDate && itemDateStr > toDate) return false;
       }
 
       if (!searchQuery) return true;

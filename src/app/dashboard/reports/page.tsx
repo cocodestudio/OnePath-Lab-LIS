@@ -118,13 +118,24 @@ export default function ReportsListPage() {
 
   useEffect(() => {
     setCurrentUser(getStoredUser());
-    fetchReports();
+    fetchReports(true);
 
     const handleSync = () => {
       fetchReports(true);
     };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchReports(true);
+      }
+    };
     window.addEventListener("lis_online_sync", handleSync);
-    return () => window.removeEventListener("lis_online_sync", handleSync);
+    window.addEventListener("lis_cache_invalidated", handleSync);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("lis_online_sync", handleSync);
+      window.removeEventListener("lis_cache_invalidated", handleSync);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   useEffect(() => {
@@ -616,9 +627,19 @@ export default function ReportsListPage() {
           </div>
 
           {hasFilters && (
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Button onClick={clearFilters} variant="outline" className="h-10 text-xs gap-1.5">
-                <X className="h-4 w-4" /> Reset Filters
+            <div className="space-y-1.5 w-full sm:w-auto">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-transparent select-none hidden sm:flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-transparent" />
+                Reset
+              </label>
+              <Button
+                type="button"
+                onClick={clearFilters}
+                variant="outline"
+                className="h-10 px-4 rounded-xl text-xs font-semibold gap-1.5 border border-border/80 hover:border-destructive/40 hover:text-destructive hover:bg-destructive/5 dark:hover:bg-destructive/10 transition-all shadow-xs cursor-pointer w-full sm:w-auto flex items-center justify-center"
+              >
+                <X className="h-3.5 w-3.5" />
+                <span>Clear Filters</span>
               </Button>
             </div>
           )}

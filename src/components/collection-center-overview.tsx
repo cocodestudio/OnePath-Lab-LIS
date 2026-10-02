@@ -13,6 +13,7 @@ import {
   PieChart, Pie
 } from "recharts";
 import { fetchFromLaravel } from "@/lib/api-client";
+import { getTodayStr, shiftDate, getRecordLocalDate } from "@/lib/date-utils";
 
 interface Props {
   user: any;
@@ -127,6 +128,17 @@ export function CollectionCenterOverview({ user }: Props) {
   useEffect(() => {
     setIsMounted(true);
     loadData();
+
+    const handleSync = () => {
+      loadData();
+    };
+    window.addEventListener("lis_cache_invalidated", handleSync);
+    window.addEventListener("storage", handleSync);
+
+    return () => {
+      window.removeEventListener("lis_cache_invalidated", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
   }, []);
 
   const loadData = async () => {
@@ -193,17 +205,18 @@ export function CollectionCenterOverview({ user }: Props) {
         const newCollectedSamples = Math.max(0, totalSamples - completedSamples - inTransitSamples);
 
         const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        const today = new Date();
+        const todayStr = getTodayStr();
         const intakeArr = [];
 
         for (let i = 6; i >= 0; i--) {
-          const d = new Date(today);
-          d.setDate(today.getDate() - i);
-          const dateStr = d.toISOString().split("T")[0];
-          const dayName = i === 0 ? "Today" : days[d.getDay()];
+          const dateStr = shiftDate(todayStr, -i);
+          const [y, m, d] = dateStr.split("-").map(Number);
+          const dayOfWeek = new Date(y, m - 1, d).getDay();
+          const dayName = i === 0 ? "Today" : days[dayOfWeek];
 
           const count = scopedReports.filter((r: any) => {
-            const repDate = (r.created_at || r.createdAt || "").split("T")[0];
+            const rawDate = r.created_at || r.createdAt || "";
+            const repDate = getRecordLocalDate(rawDate);
             return repDate === dateStr;
           }).length;
 

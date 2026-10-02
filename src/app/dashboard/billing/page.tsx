@@ -334,7 +334,7 @@ export default function BillingPage() {
       }
     } catch {}
 
-    fetchBills();
+    fetchBills(true);
     fetchAvailableTests();
 
     try {
@@ -345,7 +345,13 @@ export default function BillingPage() {
       fetchBills(true);
     };
     window.addEventListener("lis_online_sync", handleSync);
-    return () => window.removeEventListener("lis_online_sync", handleSync);
+    window.addEventListener("lis_cache_invalidated", handleSync);
+    window.addEventListener("storage", handleSync);
+    return () => {
+      window.removeEventListener("lis_online_sync", handleSync);
+      window.removeEventListener("lis_cache_invalidated", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
   }, []);
 
   const fetchBills = async (forceRefresh?: boolean | any) => {

@@ -489,7 +489,7 @@ export default function RateListPage() {
     }
   };
 
-  // Bulk % Discount Applier
+  // Bulk % Discount Applier (Supports both Individual Tests and Health Packages depending on active sub-tab)
   const handleApplyBulkDiscount = () => {
     const pct = parseFloat(bulkDiscountPct);
     if (isNaN(pct) || pct < 0 || pct > 100) {
@@ -500,18 +500,31 @@ export default function RateListPage() {
     const newEdits: Record<string, string> = { ...editedRates };
     let count = 0;
 
-    filteredTests.forEach((t) => {
-      const mrp = Number(t.mrp || 0);
-      if (mrp > 0) {
-        const discounted = Math.round(mrp * (1 - pct / 100));
-        newEdits[t.id] = String(discounted);
-        count++;
-      }
-    });
-
-    setEditedRates(newEdits);
-    setIsBulkDiscountModalOpen(false);
-    toast.success("Preset Applied", `Applied ${pct}% off MRP on ${count} tests. Click 'Save Changes' to persist.`);
+    if (ratesSubTab === "PACKAGES") {
+      filteredPackages.forEach((pkg) => {
+        const mrp = Number(pkg.mrp || 0);
+        if (mrp > 0) {
+          const discounted = Math.round(mrp * (1 - pct / 100));
+          newEdits[pkg.id] = String(discounted);
+          count++;
+        }
+      });
+      setEditedRates(newEdits);
+      setIsBulkDiscountModalOpen(false);
+      toast.success("Preset Applied", `Applied ${pct}% off MRP on ${count} packages. Click 'Save Changes' to persist.`);
+    } else {
+      filteredTests.forEach((t) => {
+        const mrp = Number(t.mrp || 0);
+        if (mrp > 0) {
+          const discounted = Math.round(mrp * (1 - pct / 100));
+          newEdits[t.id] = String(discounted);
+          count++;
+        }
+      });
+      setEditedRates(newEdits);
+      setIsBulkDiscountModalOpen(false);
+      toast.success("Preset Applied", `Applied ${pct}% off MRP on ${count} tests. Click 'Save Changes' to persist.`);
+    }
   };
 
   // Assign Partner to Rate List
@@ -1374,7 +1387,9 @@ export default function RateListPage() {
                 className="text-xs h-9 px-3 gap-1.5 font-semibold text-purple-600 dark:text-purple-400 border-purple-500/30 hover:bg-purple-500/10 cursor-pointer"
               >
                 <Percent className="h-3.5 w-3.5" />
-                <span>1-Click % Discount Preset</span>
+                <span>
+                  1-Click % Discount ({ratesSubTab === "PACKAGES" ? "Packages" : "Tests"})
+                </span>
               </Button>
 
               <Button
@@ -2186,10 +2201,16 @@ export default function RateListPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold">
               <Percent className="h-4 w-4 text-primary" />
-              <span>Apply Bulk % Discount</span>
+              <span>
+                Apply Bulk % Discount ({ratesSubTab === "PACKAGES" ? "Health Packages" : "Individual Tests"})
+              </span>
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Sets a percentage discount off standard MRP for all {filteredTests.length} tests currently filtered.
+              Sets a percentage discount off standard MRP for all{" "}
+              {ratesSubTab === "PACKAGES"
+                ? `${filteredPackages.length} health packages`
+                : `${filteredTests.length} tests`}{" "}
+              currently filtered.
             </DialogDescription>
           </DialogHeader>
 
@@ -2243,7 +2264,9 @@ export default function RateListPage() {
               className="text-xs font-bold gradient-primary text-primary-foreground gap-1.5"
             >
               <Check className="h-3.5 w-3.5" />
-              <span>Apply to {filteredTests.length} Tests</span>
+              <span>
+                Apply to {ratesSubTab === "PACKAGES" ? `${filteredPackages.length} Packages` : `${filteredTests.length} Tests`}
+              </span>
             </Button>
           </DialogFooter>
         </DialogContent>

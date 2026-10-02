@@ -1848,6 +1848,8 @@ function RegisterPatientPage() {
           sessionStorage.setItem(`edit_patient_cache_${patientObj.customId}`, JSON.stringify(data || patientObj));
         }
         localStorage.removeItem("lis_cached_patients");
+        localStorage.removeItem("lis_cached_reports");
+        localStorage.removeItem("lis_cached_today_samples");
       } catch (_) {}
 
       clearApiCache("/patients");
@@ -1856,6 +1858,7 @@ function RegisterPatientPage() {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("lis_online_sync"));
         window.dispatchEvent(new Event("lis_patient_updated"));
+        window.dispatchEvent(new Event("lis_cache_invalidated"));
       }
 
       setNewPatient(patientObj);
@@ -2244,6 +2247,8 @@ function RegisterPatientPage() {
               sessionStorage.setItem(`edit_patient_cache_${newPatient.customId}`, JSON.stringify(freshPat));
             }
             localStorage.removeItem("lis_cached_patients");
+            localStorage.removeItem("lis_cached_reports");
+            localStorage.removeItem("lis_cached_today_samples");
           } catch (_) {}
 
           clearApiCache("/patients");
@@ -2252,6 +2257,7 @@ function RegisterPatientPage() {
           if (typeof window !== "undefined") {
             window.dispatchEvent(new Event("lis_online_sync"));
             window.dispatchEvent(new Event("lis_patient_updated"));
+            window.dispatchEvent(new Event("lis_cache_invalidated"));
           }
         } catch (e) {
           console.error("Error updating patient demographics and barcodes in handleConfirmBooking:", e);

@@ -472,10 +472,12 @@ export default function PatientsPage() {
     };
     window.addEventListener("lis_online_sync", handleSync);
     window.addEventListener("lis_patient_updated", handleSync);
+    window.addEventListener("lis_cache_invalidated", handleSync);
     document.addEventListener("visibilitychange", handleVisibility);
     return () => {
       window.removeEventListener("lis_online_sync", handleSync);
       window.removeEventListener("lis_patient_updated", handleSync);
+      window.removeEventListener("lis_cache_invalidated", handleSync);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
@@ -631,8 +633,8 @@ export default function PatientsPage() {
     return [...filteredPatients].sort((a: any, b: any) => {
       const timeA = new Date(a.created_at || a.createdAt || 0).getTime();
       const timeB = new Date(b.created_at || b.createdAt || 0).getTime();
-      if (timeA !== timeB) return timeA - timeB; // Ascending: first registered patient shows first
-      return String(a.id || "").localeCompare(String(b.id || ""));
+      if (timeA !== timeB) return timeB - timeA; // Descending: newest registered patient shows first on Page 1
+      return String(b.id || "").localeCompare(String(a.id || ""));
     });
   }, [filteredPatients]);
 

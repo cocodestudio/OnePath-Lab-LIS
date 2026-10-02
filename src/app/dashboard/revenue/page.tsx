@@ -10,6 +10,7 @@ import {
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from "lucide-react";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
+import { getTodayStr, getRecordLocalDate, shiftDate } from "@/lib/date-utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 
@@ -26,15 +27,9 @@ export default function B2BRevenuePage() {
 
   // Filters
   const [dateFilter, setDateFilter] = useState<DateFilterType>("MONTHLY");
-  const [specificDate, setSpecificDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
-  const [customStartDate, setCustomStartDate] = useState<string>(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString().split("T")[0];
-  });
-  const [customEndDate, setCustomEndDate] = useState<string>(() => {
-    return new Date().toISOString().split("T")[0];
-  });
+  const [specificDate, setSpecificDate] = useState<string>(() => getTodayStr());
+  const [customStartDate, setCustomStartDate] = useState<string>(() => shiftDate(getTodayStr(), -30));
+  const [customEndDate, setCustomEndDate] = useState<string>(() => getTodayStr());
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
 
@@ -46,16 +41,27 @@ export default function B2BRevenuePage() {
     const user = getStoredUser();
     setCurrentUser(user);
     loadData();
+
+    const handleSync = () => {
+      loadData();
+    };
+    window.addEventListener("lis_cache_invalidated", handleSync);
+    window.addEventListener("storage", handleSync);
+
+    return () => {
+      window.removeEventListener("lis_cache_invalidated", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
   }, []);
 
   const loadData = async () => {
     try {
       setLoading(true);
       const [reportsRes, labRes, testsRes, myRateListRes] = await Promise.all([
-        fetchFromLaravel("/reports").catch(() => []),
-        fetchFromLaravel("/lab").catch(() => null),
-        fetchFromLaravel("/tests").catch(() => []),
-        fetchFromLaravel("/rate-lists/my-rate-list").catch(() => null),
+        fetchFromLaravel("/reports", { skipCache: true }).catch(() => []),
+        fetchFromLaravel("/lab", { skipCache: true }).catch(() => null),
+        fetchFromLaravel("/tests", { skipCache: true }).catch(() => []),
+        fetchFromLaravel("/rate-lists/my-rate-list", { skipCache: true }).catch(() => null),
       ]);
       const repList = Array.isArray(reportsRes) ? reportsRes : (reportsRes?.data || []);
       setReports(repList);
@@ -226,37 +232,29 @@ export default function B2BRevenuePage() {
     };
   };
 
-  // Date filtering logic
+  // Date filtering logic anchored strictly to IST
   const filteredReports = useMemo(() => {
-    const now = new Date();
+    const todayStr = getTodayStr();
     return reports.filter((r) => {
       const rawDate = r.created_at || r.createdAt;
       if (!rawDate) return false;
-      const repDate = new Date(rawDate);
-      const repDateString = repDate.toISOString().split("T")[0];
+      const repDateString = getRecordLocalDate(rawDate);
 
       // Period filter
       if (dateFilter === "SPECIFIC_DATE") {
         if (specificDate && repDateString !== specificDate) return false;
       } else if (dateFilter === "WEEKLY") {
-        const weekAgo = new Date();
-        weekAgo.setDate(now.getDate() - 7);
-        if (repDate < weekAgo) return false;
+        const weekAgoStr = shiftDate(todayStr, -7);
+        if (repDateString < weekAgoStr) return false;
       } else if (dateFilter === "MONTHLY") {
-        const monthAgo = new Date();
-        monthAgo.setDate(now.getDate() - 30);
-        if (repDate < monthAgo) return false;
+        const monthAgoStr = shiftDate(todayStr, -30);
+        if (repDateString < monthAgoStr) return false;
       } else if (dateFilter === "YEARLY") {
-        const yearAgo = new Date();
-        yearAgo.setFullYear(now.getFullYear() - 1);
-        if (repDate < yearAgo) return false;
+        const yearAgoStr = shiftDate(todayStr, -365);
+        if (repDateString < yearAgoStr) return false;
       } else if (dateFilter === "CUSTOM") {
-        if (customStartDate && new Date(customStartDate) > repDate) return false;
-        if (customEndDate) {
-          const end = new Date(customEndDate);
-          end.setHours(23, 59, 59, 999);
-          if (repDate > end) return false;
-        }
+        if (customStartDate && repDateString < customStartDate) return false;
+        if (customEndDate && repDateString > customEndDate) return false;
       }
 
       // Search filter
@@ -577,8 +575,8 @@ export default function B2BRevenuePage() {
 
       {/* ── Financial KPI Stat Cards ── */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
             <div key={i} className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs space-y-3 animate-pulse">
               <div className="flex items-center justify-between">
                 <div className="h-4 w-24 bg-muted/80 rounded" />
@@ -593,7 +591,7 @@ export default function B2BRevenuePage() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Card 1: Total MRP */}
           <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
             <div className="flex items-center justify-between">
@@ -642,27 +640,6 @@ export default function B2BRevenuePage() {
             <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
               <span>Centre Earnings</span>
               <span className="font-bold text-purple-600">Retained Margin</span>
-            </div>
-          </div>
-
-          {/* Card 4: Outstanding Due vs Paid */}
-          <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Settlement Balance</span>
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                totalDue > 0
-                  ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 border border-amber-200/60 dark:border-amber-800/40"
-                  : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 border border-emerald-200/60 dark:border-emerald-800/40"
-              }`}>
-                {totalDue > 0 ? <Clock className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
-              </div>
-            </div>
-            <p className={`text-3xl font-extrabold mt-3 tracking-tight ${totalDue > 0 ? "text-amber-600" : "text-emerald-600"}`}>
-              ₹{totalDue.toLocaleString("en-IN")}
-            </p>
-            <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
-              <span>Collected / Paid:</span>
-              <span className="font-bold text-emerald-600">₹{totalPaid.toLocaleString("en-IN")}</span>
             </div>
           </div>
         </div>

@@ -123,18 +123,83 @@ export interface FetchFromLaravelOptions extends RequestInit {
 
 /**
  * Invalidate cached endpoints. If prefix is provided, only matches are cleared.
+ * Automatically broadcasts cache invalidation across all open browser tabs.
  */
 export function clearApiCache(prefix?: string) {
   if (!prefix) {
     apiMemoryCache.clear();
-    return;
+  } else {
+    const cleanPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
+    apiMemoryCache.forEach((_, key) => {
+      if (key.startsWith(cleanPrefix) || key.includes(cleanPrefix)) {
+        apiMemoryCache.delete(key);
+      }
+    });
   }
-  const cleanPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
-  apiMemoryCache.forEach((_, key) => {
-    if (key.startsWith(cleanPrefix) || key.includes(cleanPrefix)) {
-      apiMemoryCache.delete(key);
+
+  if (typeof window !== "undefined") {
+    // 1. Notify current window listeners
+    window.dispatchEvent(new CustomEvent("lis_cache_invalidated", { detail: { prefix } }));
+
+    // 2. Broadcast across tabs via BroadcastChannel (modern browsers)
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        const channel = new BroadcastChannel("lis_cache_sync");
+        channel.postMessage({ type: "INVALIDATE_CACHE", prefix });
+        channel.close();
+      }
+    } catch {}
+
+    // 3. Fallback broadcast across tabs via storage event
+    try {
+      localStorage.setItem("lis_cache_bust", JSON.stringify({ prefix, t: Date.now() }));
+    } catch {}
+  }
+}
+
+// Global Cross-Tab Listener for Cache Invalidation
+if (typeof window !== "undefined") {
+  try {
+    if (typeof BroadcastChannel !== "undefined") {
+      const listenChannel = new BroadcastChannel("lis_cache_sync");
+      listenChannel.onmessage = (event) => {
+        if (event.data?.type === "INVALIDATE_CACHE") {
+          const pfx = event.data?.prefix;
+          if (!pfx) {
+            apiMemoryCache.clear();
+          } else {
+            const cleanPrefix = pfx.startsWith("/") ? pfx : `/${pfx}`;
+            apiMemoryCache.forEach((_, key) => {
+              if (key.startsWith(cleanPrefix) || key.includes(cleanPrefix)) {
+                apiMemoryCache.delete(key);
+              }
+            });
+          }
+          window.dispatchEvent(new CustomEvent("lis_cache_invalidated", { detail: { prefix: pfx } }));
+        }
+      };
     }
-  });
+
+    window.addEventListener("storage", (e) => {
+      if (e.key === "lis_cache_bust" && e.newValue) {
+        try {
+          const data = JSON.parse(e.newValue);
+          const pfx = data?.prefix;
+          if (!pfx) {
+            apiMemoryCache.clear();
+          } else {
+            const cleanPrefix = pfx.startsWith("/") ? pfx : `/${pfx}`;
+            apiMemoryCache.forEach((_, key) => {
+              if (key.startsWith(cleanPrefix) || key.includes(cleanPrefix)) {
+                apiMemoryCache.delete(key);
+              }
+            });
+          }
+          window.dispatchEvent(new CustomEvent("lis_cache_invalidated", { detail: { prefix: pfx } }));
+        } catch {}
+      }
+    });
+  } catch {}
 }
 
 /**
@@ -145,17 +210,26 @@ function autoInvalidateCache(endpoint: string) {
   if (ep.includes("patient")) {
     clearApiCache("/patients");
     clearApiCache("/analytics");
+    try { localStorage.removeItem("lis_cached_patients"); } catch {}
   }
   if (ep.includes("report")) {
     clearApiCache("/reports");
     clearApiCache("/analytics");
     clearApiCache("/bills");
     clearApiCache("/today-sales");
+    try {
+      localStorage.removeItem("lis_cached_reports");
+      localStorage.removeItem("lis_cached_today_samples");
+    } catch {}
   }
   if (ep.includes("bill")) {
     clearApiCache("/bills");
     clearApiCache("/analytics");
     clearApiCache("/today-sales");
+    try {
+      localStorage.removeItem("lis_cached_reports");
+      localStorage.removeItem("lis_cached_today_samples");
+    } catch {}
   }
   if (ep.includes("test")) {
     clearApiCache("/tests");
@@ -197,7 +271,7 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
 
   const method = (options.method || "GET").toUpperCase();
   const isGet = method === "GET";
-  const defaultTtl = options.cacheTtlMs ?? 60000; // 60s default cache TTL
+  const defaultTtl = options.cacheTtlMs ?? 5000; // 5s lean cache TTL to avoid stale clinical data
 
   // 1. Fast path: Serve from memory cache if GET and fresh
   if (isGet && !options.skipCache) {
@@ -217,6 +291,7 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
 
   const headers: Record<string, string> = {
     "Accept": "application/json",
+    "X-Timezone": "Asia/Kolkata",
     ...(token ? { "Authorization": `Bearer ${token}` } : {}),
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers as Record<string, string> || {}),

@@ -6,7 +6,7 @@ import {
   Briefcase, Users, TrendingUp, FlaskConical, Search, RefreshCw,
   Calendar, Clock, Check, Copy, ChevronLeft, ChevronRight,
   AlertCircle, CheckCircle2, Building, Phone, Mail, Wallet,
-  ShieldCheck, ArrowRight, X, Filter, Sparkles, PlusCircle
+  ShieldCheck, ArrowRight, X, Filter, Sparkles, PlusCircle, IndianRupee
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -75,6 +75,7 @@ export default function B2bSalesPage() {
 
   const [summary, setSummary] = useState({
     total_sales: 0,
+    total_mrp: 0,
     total_patients: 0,
     total_tests: 0,
   });
@@ -124,7 +125,7 @@ export default function B2bSalesPage() {
 
       const res = await fetchFromLaravel(`/b2b/sales?${params.toString()}`, { skipCache: true });
       if (res && res.status === "success") {
-        setSummary(res.summary || { total_sales: 0, total_patients: 0, total_tests: 0 });
+        setSummary(res.summary || { total_sales: 0, total_mrp: 0, total_patients: 0, total_tests: 0 });
         if (res.patients) {
           setPatients(res.patients.data || []);
           setPagination({
@@ -295,25 +296,25 @@ export default function B2bSalesPage() {
           </div>
         </div>
 
-        {/* Total Tests Investigated */}
+        {/* Total MRP */}
         <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-xs flex items-center justify-between">
           <div className="space-y-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Clinical Tests Ordered
+              Total MRP
             </span>
             {isLoadingSales ? (
-              <div className="h-8 w-16 rounded-lg shimmer-gradient mt-1 mb-0.5" />
+              <div className="h-8 w-28 rounded-lg shimmer-gradient mt-1 mb-0.5" />
             ) : (
               <div className="font-display text-2xl font-bold text-foreground">
-                {summary.total_tests}
+                {formatCurrency(summary.total_mrp || 0)}
               </div>
             )}
             <p className="text-[11px] text-muted-foreground">
-              Across all diagnostic panels
+              Cumulative catalog MRP
             </p>
           </div>
           <div className="h-11 w-11 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-            <FlaskConical className="h-5 w-5" />
+            <IndianRupee className="h-5 w-5" />
           </div>
         </div>
 
