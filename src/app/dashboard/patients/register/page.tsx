@@ -1596,7 +1596,7 @@ function RegisterPatientPage() {
 
     try {
       let cleanFirst = firstName.trim();
-      let cleanLast = lastName.trim();
+      const cleanLast = lastName.trim();
       const desTrimmed = (designation || "").trim();
       if (desTrimmed && cleanFirst.toLowerCase().startsWith(desTrimmed.toLowerCase())) {
         cleanFirst = cleanFirst.substring(desTrimmed.length).trim();
@@ -2132,7 +2132,7 @@ function RegisterPatientPage() {
       const assignedPatientCustomId = newPatient.customId || (newPatient as any).custom_id || "";
 
       let cleanFirst = firstName.trim();
-      let cleanLast = lastName.trim();
+      const cleanLast = lastName.trim();
       const desTrimmed = (designation || "").trim();
       if (desTrimmed && cleanFirst.toLowerCase().startsWith(desTrimmed.toLowerCase())) {
         cleanFirst = cleanFirst.substring(desTrimmed.length).trim();

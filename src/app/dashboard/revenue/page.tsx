@@ -202,7 +202,7 @@ export default function B2BRevenuePage() {
 
     // Lab Margin is the wholesale tariff that the B2B partner owes the Central Lab
     // For test bookings, billTotal is that exact rate
-    let labMargin = billTotal > 0 ? billTotal : calculatedLabRate;
+    const labMargin = billTotal > 0 ? billTotal : calculatedLabRate;
 
     // Total MRP is the true retail patient MRP from admin catalog
     let totalMrp = calculatedTestMrp > 0 ? calculatedTestMrp : labMargin;
