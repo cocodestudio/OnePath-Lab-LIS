@@ -121,6 +121,10 @@ export default function LoginPage() {
 
       localStorage.setItem("lis_token", token);
       localStorage.setItem("lis_user", JSON.stringify(user || {}));
+      localStorage.removeItem("lis_cached_reports");
+      localStorage.removeItem("lis_cached_patients");
+      localStorage.removeItem("lis_cached_bills");
+      localStorage.removeItem("lis_cached_today_samples");
       sessionStorage.removeItem("lis_subscription_locked");
       const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";
       document.cookie = `lis_token=${token}; path=/; max-age=86400; SameSite=Lax${isSecure ? "; Secure" : ""}`;

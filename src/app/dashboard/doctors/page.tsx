@@ -11,7 +11,7 @@ import {
   SlidersHorizontal, Award, ArrowUpRight, BadgePercent, ChevronDown,
   Printer, Loader2, ExternalLink
 } from "lucide-react";
-import { fetchFromLaravel } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
@@ -51,6 +51,13 @@ export default function DoctorsOverviewPage() {
   const [customEnd, setCustomEnd] = useState<string>("");
   const [search, setSearch] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    const user = getStoredUser();
+    if (user && (user.role === "B2B" || user.role === "COLLECTION_CENTER" || user.role === "COLLECTION_CENTRE")) {
+      window.location.replace("/dashboard");
+    }
+  }, []);
 
   const [doctors, setDoctors] = useState<DoctorStat[]>([]);
   const [summary, setSummary] = useState({

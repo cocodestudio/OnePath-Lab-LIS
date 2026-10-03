@@ -102,7 +102,8 @@ export default function TrackSamplesPage() {
 
   const executeFetch = useCallback(async (query: string, type: string, force = false) => {
     const trimmed = query.trim();
-    if (!trimmed) {
+    // Minimum 3 chars to avoid hammering DB on partial input
+    if (!trimmed || trimmed.length < 2) {
       setSearchResults([]);
       setIsSearching(false);
       return;
@@ -117,8 +118,9 @@ export default function TrackSamplesPage() {
 
     try {
       setIsSearching(true);
-      const url = `/reports?search=${encodeURIComponent(trimmed)}&search_type=${encodeURIComponent(type)}`;
-      const res = await fetchFromLaravel(url, { cacheTtlMs: 30000 });
+      // limit=20: track-samples is a lookup screen, 20 results is plenty — reduces server load significantly
+      const url = `/reports?search=${encodeURIComponent(trimmed)}&search_type=${encodeURIComponent(type)}&limit=20`;
+      const res = await fetchFromLaravel(url, { cacheTtlMs: 60000 });
       const list = Array.isArray(res) ? res : (res?.data || []);
       queryCache.current.set(cacheKey, list);
       setSearchResults(list);
@@ -165,12 +167,13 @@ export default function TrackSamplesPage() {
 
   // Helper to extract specimen tubes for a sample
   const getSampleTubes = (rep: any): TubeInfo[] => {
-    const patient = rep.patient || {};
-    const meta = typeof patient.meta === "object" ? patient.meta : {};
+    const patient = rep?.patient || {};
+    // typeof null === "object" in JS — must guard against null explicitly
+    const meta = (patient.meta !== null && typeof patient.meta === "object") ? patient.meta : {};
     const tubes: TubeInfo[] = [];
     const seen = new Set<string>();
 
-    let vb = meta.vial_barcodes || {};
+    let vb = meta?.vial_barcodes ?? {};
     if (typeof vb === "string") {
       try { vb = JSON.parse(vb); } catch {}
     }
@@ -216,8 +219,10 @@ export default function TrackSamplesPage() {
 
   // Stage calculation for each sample
   const getSampleStage = (rep: any) => {
-    const repStatus = String(rep.status || "").toUpperCase();
-    const patientMeta = typeof rep.patient?.meta === "object" ? rep.patient.meta : {};
+    const repStatus = String(rep?.status || "").toUpperCase();
+    // Guard null meta same as getSampleTubes
+    const rawMeta = rep?.patient?.meta;
+    const patientMeta = (rawMeta !== null && typeof rawMeta === "object") ? rawMeta : {};
     const sampleStatus = String(patientMeta?.sample_status || "").toUpperCase();
 
     if (repStatus === "REJECTED" || sampleStatus === "REJECTED") {
@@ -390,7 +395,9 @@ export default function TrackSamplesPage() {
 
           {searchResults.map((rep) => {
             const p = rep?.patient || {};
-            const pMeta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
+            // Guard null meta
+            const rawPMeta = p?.meta;
+            const pMeta = (rawPMeta !== null && typeof rawPMeta === "object") ? rawPMeta : {};
             const tubes = getSampleTubes(rep);
             const stageInfo = getSampleStage(rep);
             const currentStep = stageInfo.step;

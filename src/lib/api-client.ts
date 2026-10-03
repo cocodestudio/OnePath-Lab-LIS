@@ -85,6 +85,10 @@ export function logout(reason?: string) {
   clearApiCache();
   localStorage.removeItem("lis_token");
   localStorage.removeItem("lis_user");
+  localStorage.removeItem("lis_cached_reports");
+  localStorage.removeItem("lis_cached_patients");
+  localStorage.removeItem("lis_cached_bills");
+  localStorage.removeItem("lis_cached_today_samples");
   if (typeof window !== "undefined") {
     try {
       sessionStorage.clear();

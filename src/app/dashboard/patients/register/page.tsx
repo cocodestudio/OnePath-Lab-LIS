@@ -390,11 +390,28 @@ function RegisterPatientPage() {
   const [hasPreloadedPreview, setHasPreloadedPreview] = useState<boolean>(false);
   const [existingReport, setExistingReport] = useState<any>(null);
   const [existingBill, setExistingBill] = useState<any>(null);
-  const [currentUserRole, setCurrentUserRole] = useState<string>("STAFF");
-  const [currentUserPermissions, setCurrentUserPermissions] = useState<any[]>([]);
-  const isB2B = currentUserRole === "B2B" || (typeof window !== "undefined" && getStoredUser()?.role === "B2B");
-  const isCollectionCenter = currentUserRole === "COLLECTION_CENTER" || currentUserRole === "COLLECTION_CENTRE" || (typeof window !== "undefined" && (getStoredUser()?.role === "COLLECTION_CENTER" || getStoredUser()?.role === "COLLECTION_CENTRE"));
-  const isReceptionist = currentUserRole === "RECEPTIONIST";
+  const [currentUserRole, setCurrentUserRole] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const u = getStoredUser();
+      if (u?.role) return String(u.role).toUpperCase().trim();
+    }
+    return "STAFF";
+  });
+  const [currentUserPermissions, setCurrentUserPermissions] = useState<any[]>(() => {
+    if (typeof window !== "undefined") {
+      const u = getStoredUser();
+      if (Array.isArray(u?.permissions)) return u.permissions;
+    }
+    return [];
+  });
+  const effectiveRole = (
+    (typeof window !== "undefined" ? getStoredUser()?.role : "") ||
+    currentUserRole ||
+    "STAFF"
+  ).toUpperCase().trim();
+  const isB2B = effectiveRole === "B2B";
+  const isCollectionCenter = effectiveRole === "COLLECTION_CENTER" || effectiveRole === "COLLECTION_CENTRE";
+  const isReceptionist = effectiveRole === "RECEPTIONIST";
   const isRestrictedRole = isB2B || isCollectionCenter || isReceptionist;
 
   const canEditDemographics = true;
@@ -489,6 +506,15 @@ function RegisterPatientPage() {
   const [editingCollectionPoint, setEditingCollectionPoint] = useState<{ oldName: string; newName: string } | null>(null);
 
   const selectedB2bCenter = useMemo(() => {
+    const rawRole = (
+      (typeof window !== "undefined" ? getStoredUser()?.role : "") ||
+      currentUserRole ||
+      ""
+    ).toUpperCase().trim();
+    if (rawRole === "COLLECTION_CENTER" || rawRole === "COLLECTION_CENTRE" || rawRole === "RECEPTIONIST" || rawRole === "B2B") {
+      return null;
+    }
+    if (isB2B || isCollectionCenter || isReceptionist) return null;
     if (!collectedAtSelect || collectedAtSelect === "Main Lab") return null;
     const selNorm = collectedAtSelect.trim().toLowerCase();
     return (
@@ -503,7 +529,7 @@ function RegisterPatientPage() {
         );
       }) || null
     );
-  }, [collectedAtSelect, collectionCentersList]);
+  }, [collectedAtSelect, collectionCentersList, isB2B, isCollectionCenter, isReceptionist, currentUserRole]);
 
   const [phlebotomists, setPhlebotomists] = useState<string[]>(defaultPhlebotomists);
   const [collectedBySelect, setCollectedBySelect] = useState("Self / Lab Staff");
@@ -835,17 +861,22 @@ function RegisterPatientPage() {
                   : `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`)),
         collected_by: collectedBySelect || null,
         collectedBy: collectedBySelect || null,
-        b2b_user_id: selectedB2bCenter ? selectedB2bCenter.id : undefined,
-        b2bUserId: selectedB2bCenter ? selectedB2bCenter.id : undefined,
+        b2b_user_id: (!isCollectionCenter && !isReceptionist && selectedB2bCenter) ? selectedB2bCenter.id : undefined,
+        b2bUserId: (!isCollectionCenter && !isReceptionist && selectedB2bCenter) ? selectedB2bCenter.id : undefined,
         collection_center_id: isCollectionCenter && getStoredUser() ? getStoredUser().id : undefined,
         collectionCenterId: isCollectionCenter && getStoredUser() ? getStoredUser().id : undefined,
         meta: {
-          ...(selectedB2bCenter ? {
+          ...((!isCollectionCenter && !isReceptionist && selectedB2bCenter) ? {
             b2b_user_id: selectedB2bCenter.id,
+            b2bUserId: selectedB2bCenter.id,
             b2b_name: selectedB2bCenter.name,
+            b2bName: selectedB2bCenter.name,
             created_by_id: selectedB2bCenter.id,
+            createdById: selectedB2bCenter.id,
             created_by_name: selectedB2bCenter.name,
+            createdByName: selectedB2bCenter.name,
             created_by_role: "B2B",
+            createdByRole: "B2B",
           } : {}),
           ...(isCollectionCenter && getStoredUser() ? {
             collection_center_id: getStoredUser().id,
@@ -856,7 +887,17 @@ function RegisterPatientPage() {
             created_by_id: getStoredUser().id,
             createdById: getStoredUser().id,
             created_by_name: getStoredUser().name,
+            createdByName: getStoredUser().name,
             created_by_role: "COLLECTION_CENTER",
+            createdByRole: "COLLECTION_CENTER",
+          } : {}),
+          ...(isReceptionist && getStoredUser() ? {
+            created_by_id: getStoredUser().id,
+            createdById: getStoredUser().id,
+            created_by_name: getStoredUser().name,
+            createdByName: getStoredUser().name,
+            created_by_role: "RECEPTIONIST",
+            createdByRole: "RECEPTIONIST",
           } : {}),
         },
       };
@@ -1612,8 +1653,10 @@ function RegisterPatientPage() {
       const joinedBarcodes = barcodeValues.length > 0 ? barcodeValues.join(",") : primaryBarcode;
 
       const storedUser = getStoredUser();
-      const isCollectionCenterUser = currentUserRole === "COLLECTION_CENTER" || currentUserRole === "COLLECTION_CENTRE" || storedUser?.role === "COLLECTION_CENTER" || storedUser?.role === "COLLECTION_CENTRE";
-      const isB2BUser = currentUserRole === "B2B" || storedUser?.role === "B2B";
+      const userRole = (currentUserRole || storedUser?.role || "").toUpperCase().trim();
+      const isCollectionCenterUser = userRole === "COLLECTION_CENTER" || userRole === "COLLECTION_CENTRE";
+      const isB2BUser = userRole === "B2B";
+      const isReceptionistUser = userRole === "RECEPTIONIST";
       const effectiveCollectedAt = selectedB2bCenter
         ? (selectedB2bCenter.name || collectedAtSelect)
         : (isB2BUser
@@ -1646,8 +1689,8 @@ function RegisterPatientPage() {
             collectedAt: effectiveCollectedAt,
             collected_by: collectedBySelect || null,
             collectedBy: collectedBySelect || null,
-            b2b_user_id: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
-            b2bUserId: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
+            b2b_user_id: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
+            b2bUserId: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             collection_center_id: isCollectionCenterUser && storedUser ? storedUser.id : (newPatient?.meta?.collection_center_id || null),
             collectionCenterId: isCollectionCenterUser && storedUser ? storedUser.id : (newPatient?.meta?.collectionCenterId || null),
             vial_barcode: joinedBarcodes,
@@ -1657,12 +1700,17 @@ function RegisterPatientPage() {
               ...(newPatient?.meta || {}),
               vial_barcode: joinedBarcodes,
               vial_barcodes: effectiveVialBarcodes,
-              ...(selectedB2bCenter ? {
+              ...((!isCollectionCenterUser && !isReceptionistUser && !isB2BUser && selectedB2bCenter) ? {
                 b2b_user_id: selectedB2bCenter.id,
+                b2bUserId: selectedB2bCenter.id,
                 b2b_name: selectedB2bCenter.name,
+                b2bName: selectedB2bCenter.name,
                 created_by_id: selectedB2bCenter.id,
+                createdById: selectedB2bCenter.id,
                 created_by_name: selectedB2bCenter.name,
+                createdByName: selectedB2bCenter.name,
                 created_by_role: "B2B",
+                createdByRole: "B2B",
               } : {}),
               ...(isCollectionCenterUser && storedUser ? {
                 collection_center_id: storedUser.id,
@@ -1673,7 +1721,17 @@ function RegisterPatientPage() {
                 created_by_id: storedUser.id,
                 createdById: storedUser.id,
                 created_by_name: storedUser.name,
+                createdByName: storedUser.name,
                 created_by_role: "COLLECTION_CENTER",
+                createdByRole: "COLLECTION_CENTER",
+              } : {}),
+              ...(isReceptionistUser && storedUser ? {
+                created_by_id: storedUser.id,
+                createdById: storedUser.id,
+                created_by_name: storedUser.name,
+                createdByName: storedUser.name,
+                created_by_role: "RECEPTIONIST",
+                createdByRole: "RECEPTIONIST",
               } : {}),
             },
             aadhaar_no: aadhaarNo.trim() || null,
@@ -1730,8 +1788,8 @@ function RegisterPatientPage() {
             collected_at: effectiveCollectedAt,
             collectedBy: collectedBySelect || null,
             collected_by: collectedBySelect || null,
-            b2b_user_id: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
-            b2bUserId: selectedB2bCenter ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
+            b2b_user_id: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
+            b2bUserId: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             collection_center_id: isCollectionCenterUser && storedUser ? storedUser.id : null,
             collectionCenterId: isCollectionCenterUser && storedUser ? storedUser.id : null,
             vialBarcode: joinedBarcodes,
@@ -1740,12 +1798,17 @@ function RegisterPatientPage() {
             meta: {
               vial_barcode: joinedBarcodes,
               vial_barcodes: effectiveVialBarcodes,
-              ...(selectedB2bCenter ? {
+              ...((!isCollectionCenterUser && !isReceptionistUser && !isB2BUser && selectedB2bCenter) ? {
                 b2b_user_id: selectedB2bCenter.id,
+                b2bUserId: selectedB2bCenter.id,
                 b2b_name: selectedB2bCenter.name,
+                b2bName: selectedB2bCenter.name,
                 created_by_id: selectedB2bCenter.id,
+                createdById: selectedB2bCenter.id,
                 created_by_name: selectedB2bCenter.name,
+                createdByName: selectedB2bCenter.name,
                 created_by_role: "B2B",
+                createdByRole: "B2B",
               } : {}),
               ...(isCollectionCenterUser && storedUser ? {
                 collection_center_id: storedUser.id,
@@ -1756,7 +1819,17 @@ function RegisterPatientPage() {
                 created_by_id: storedUser.id,
                 createdById: storedUser.id,
                 created_by_name: storedUser.name,
+                createdByName: storedUser.name,
                 created_by_role: "COLLECTION_CENTER",
+                createdByRole: "COLLECTION_CENTER",
+              } : {}),
+              ...(isReceptionistUser && storedUser ? {
+                created_by_id: storedUser.id,
+                createdById: storedUser.id,
+                created_by_name: storedUser.name,
+                createdByName: storedUser.name,
+                created_by_role: "RECEPTIONIST",
+                createdByRole: "RECEPTIONIST",
               } : {}),
             },
             aadhaarNo: aadhaarNo.trim() || null,
@@ -1820,12 +1893,17 @@ function RegisterPatientPage() {
           ...(data?.meta || newPatient?.meta || {}),
           vial_barcode: joinedBarcodes,
           vial_barcodes: effectiveVialBarcodes,
-          ...(selectedB2bCenter ? {
+          ...((!isCollectionCenterUser && !isReceptionistUser && !isB2BUser && selectedB2bCenter) ? {
             b2b_user_id: selectedB2bCenter.id,
+            b2bUserId: selectedB2bCenter.id,
             b2b_name: selectedB2bCenter.name,
+            b2bName: selectedB2bCenter.name,
             created_by_id: selectedB2bCenter.id,
+            createdById: selectedB2bCenter.id,
             created_by_name: selectedB2bCenter.name,
+            createdByName: selectedB2bCenter.name,
             created_by_role: "B2B",
+            createdByRole: "B2B",
           } : {}),
           ...(isCollectionCenterUser && storedUser ? {
             collection_center_id: storedUser.id,
@@ -1836,7 +1914,17 @@ function RegisterPatientPage() {
             created_by_id: storedUser.id,
             createdById: storedUser.id,
             created_by_name: storedUser.name,
+            createdByName: storedUser.name,
             created_by_role: "COLLECTION_CENTER",
+            createdByRole: "COLLECTION_CENTER",
+          } : {}),
+          ...(isReceptionistUser && storedUser ? {
+            created_by_id: storedUser.id,
+            createdById: storedUser.id,
+            created_by_name: storedUser.name,
+            createdByName: storedUser.name,
+            created_by_role: "RECEPTIONIST",
+            createdByRole: "RECEPTIONIST",
           } : {}),
         },
       };
@@ -1957,19 +2045,21 @@ function RegisterPatientPage() {
     }
   };
 
-  const selectedTestObjects = availableTests.flatMap((t) => {
-    let shouldChargeParent = selectedTests.includes(t.id);
-    if (!shouldChargeParent && t.subTests) {
-      if (t.subTests.some(sub => selectedTests.includes(sub.id))) {
-        shouldChargeParent = true;
+  const selectedTestObjects = useMemo(() => {
+    return availableTests.flatMap((t) => {
+      let shouldChargeParent = selectedTests.includes(t.id);
+      if (!shouldChargeParent && t.subTests) {
+        if (t.subTests.some(sub => selectedTests.includes(sub.id))) {
+          shouldChargeParent = true;
+        }
       }
-    }
-    const list = [];
-    if (shouldChargeParent) {
-      list.push(t);
-    }
-    return list;
-  });
+      const list = [];
+      if (shouldChargeParent) {
+        list.push(t);
+      }
+      return list;
+    });
+  }, [availableTests, selectedTests]);
 
   const specimenTubes = useMemo(() => classifyTestsIntoTubes(selectedTestObjects), [selectedTestObjects]);
 
@@ -2017,6 +2107,19 @@ function RegisterPatientPage() {
     setBookingError(null);
     setBooking(true);
     try {
+      const storedUser = getStoredUser();
+      const userRole = (currentUserRole || storedUser?.role || "").toUpperCase().trim();
+      const isCollectionCenterUser = userRole === "COLLECTION_CENTER" || userRole === "COLLECTION_CENTRE";
+      const isB2BUser = userRole === "B2B";
+      const isReceptionistUser = userRole === "RECEPTIONIST";
+      const effectiveCollectedAt = selectedB2bCenter
+        ? (selectedB2bCenter.name || collectedAtSelect)
+        : (isB2BUser
+            ? (storedUser?.name || collectedAtSelect)
+            : (isCollectionCenterUser
+                ? (storedUser?.lab_name || storedUser?.labName || storedUser?.name || collectedAtSelect)
+                : `${collectedAtSelect} (${collectedBySelect})`));
+
       const computedPaid = isEffectiveB2B ? 0 : parsedPaid;
       const computedStatus = isEffectiveB2B ? "UNPAID" : (computedPaid >= grandTotal ? "PAID" : (computedPaid > 0 ? "PARTIAL" : "UNPAID"));
       const computedBalance = isEffectiveB2B ? grandTotal : balanceDue;
@@ -2119,10 +2222,43 @@ function RegisterPatientPage() {
               paymentStatus: computedStatus,
               packageName: selectedPackage?.name || null,
               package_name: selectedPackage?.name || null,
-              b2b_user_id: selectedB2bCenter?.id || (newPatient as any)?.meta?.b2b_user_id || (isB2B ? (getStoredUser()?.id || null) : null),
-              b2bUserId: selectedB2bCenter?.id || (newPatient as any)?.meta?.b2b_user_id || (isB2B ? (getStoredUser()?.id || null) : null),
-              collection_center_id: (newPatient as any)?.meta?.collection_center_id || (newPatient as any)?.meta?.collectionCenterId || (isCollectionCenter ? (getStoredUser()?.id || null) : null),
-              collectionCenterId: (newPatient as any)?.meta?.collection_center_id || (newPatient as any)?.meta?.collectionCenterId || (isCollectionCenter ? (getStoredUser()?.id || null) : null),
+              b2b_user_id: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : ((newPatient as any)?.meta?.b2b_user_id || (isB2BUser ? (storedUser?.id || null) : null)),
+              b2bUserId: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : ((newPatient as any)?.meta?.b2b_user_id || (isB2BUser ? (storedUser?.id || null) : null)),
+              collection_center_id: (newPatient as any)?.meta?.collection_center_id || (newPatient as any)?.meta?.collectionCenterId || (isCollectionCenterUser ? (storedUser?.id || null) : null),
+              collectionCenterId: (newPatient as any)?.meta?.collection_center_id || (newPatient as any)?.meta?.collectionCenterId || (isCollectionCenterUser ? (storedUser?.id || null) : null),
+              meta: {
+                ...((newPatient as any)?.meta || {}),
+                ...(isCollectionCenterUser && storedUser ? {
+                  collection_center_id: storedUser.id,
+                  collectionCenterId: storedUser.id,
+                  collection_center_name: storedUser.lab_name || storedUser.labName || storedUser.name,
+                  center_code: storedUser.center_code || storedUser.centerCode || "",
+                  created_by_id: storedUser.id,
+                  createdById: storedUser.id,
+                  created_by_name: storedUser.name,
+                  createdByName: storedUser.name,
+                  created_by_role: "COLLECTION_CENTER",
+                  createdByRole: "COLLECTION_CENTER",
+                } : {}),
+                ...(isReceptionistUser && storedUser ? {
+                  created_by_id: storedUser.id,
+                  createdById: storedUser.id,
+                  created_by_name: storedUser.name,
+                  createdByName: storedUser.name,
+                  created_by_role: "RECEPTIONIST",
+                  createdByRole: "RECEPTIONIST",
+                } : {}),
+                ...((!isCollectionCenterUser && !isReceptionistUser && (selectedB2bCenter || (isB2BUser && storedUser))) ? {
+                  b2b_user_id: selectedB2bCenter ? selectedB2bCenter.id : storedUser.id,
+                  b2bUserId: selectedB2bCenter ? selectedB2bCenter.id : storedUser.id,
+                  created_by_id: selectedB2bCenter ? selectedB2bCenter.id : storedUser.id,
+                  createdById: selectedB2bCenter ? selectedB2bCenter.id : storedUser.id,
+                  created_by_name: selectedB2bCenter ? selectedB2bCenter.name : storedUser.name,
+                  createdByName: selectedB2bCenter ? selectedB2bCenter.name : storedUser.name,
+                  created_by_role: "B2B",
+                  createdByRole: "B2B",
+                } : {}),
+              },
             }),
           });
           assignedBillCustomId = report.bill?.customId || report.bill?.custom_id || report.customId || report.custom_id || "INV-CONFIRMED";
@@ -2160,16 +2296,6 @@ function RegisterPatientPage() {
         : `${cleanFirst}${cleanLast ? ` ${cleanLast}` : ""}`.trim();
       const calculatedAge = parseInt(ageYears) || (parseInt(ageMonths) > 0 ? 1 : 0) || 0;
 
-      const storedUser = getStoredUser();
-      const isCollectionCenterUser = currentUserRole === "COLLECTION_CENTER" || currentUserRole === "COLLECTION_CENTRE" || storedUser?.role === "COLLECTION_CENTER" || storedUser?.role === "COLLECTION_CENTRE";
-      const isB2BUser = currentUserRole === "B2B" || storedUser?.role === "B2B";
-      const effectiveCollectedAt = selectedB2bCenter
-        ? (selectedB2bCenter.name || collectedAtSelect)
-        : (isB2BUser
-            ? (storedUser?.name || collectedAtSelect)
-            : (isCollectionCenterUser
-                ? (storedUser?.lab_name || storedUser?.labName || storedUser?.name || collectedAtSelect)
-                : `${collectedAtSelect} (${collectedBySelect})`));
 
       // Persist multi-vial barcodes & outsource metadata to patient
       const activeVialBarcodes = { ...vialBarcodes };
@@ -2516,14 +2642,20 @@ function RegisterPatientPage() {
     return trimmed;
   };
 
-  const categories = Array.from(new Set(availableTests.map((t) => normalizeCat(t.category)).filter(Boolean)));
-  const groupedTests: Record<string, Test[]> = {};
-  availableTests.forEach((test) => {
-    const cat = normalizeCat(test.category);
-    (groupedTests[cat] ||= []).push(test);
-  });
+  const categories = useMemo(() => {
+    return Array.from(new Set(availableTests.map((t) => normalizeCat(t.category)).filter(Boolean)));
+  }, [availableTests]);
 
-  const getFilteredGroupedTests = () => {
+  const groupedTests = useMemo(() => {
+    const grouped: Record<string, Test[]> = {};
+    availableTests.forEach((test) => {
+      const cat = normalizeCat(test.category);
+      (grouped[cat] ||= []).push(test);
+    });
+    return grouped;
+  }, [availableTests]);
+
+  const filteredGroups = useMemo(() => {
     const term = testSearch.toLowerCase().trim();
     const filtered: Record<string, Test[]> = {};
     Object.entries(groupedTests).forEach(([category, tests]) => {
@@ -2538,8 +2670,7 @@ function RegisterPatientPage() {
       if (matches.length > 0) filtered[category] = matches;
     });
     return filtered;
-  };
-  const filteredGroups = getFilteredGroupedTests();
+  }, [groupedTests, testSearch, activeCategory]);
 
   const filteredPackagesForCatalog = useMemo(() => {
     const term = testSearch.toLowerCase().trim();
@@ -3977,90 +4108,7 @@ function RegisterPatientPage() {
                     )}
                   </div>
 
-                  {/* Payment Mode & Status Selection at Registration */}
-                  {!isB2B && grandTotal > 0 && (
-                    <div className="space-y-2 pt-2 border-t border-border/60">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                          Payment Settlement
-                        </label>
-                        <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                          parsedPaid >= grandTotal
-                            ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
-                            : parsedPaid > 0
-                            ? "bg-amber-500/15 text-amber-600 border border-amber-500/30"
-                            : "bg-rose-500/15 text-rose-600 border border-rose-500/30"
-                        }`}>
-                          {parsedPaid >= grandTotal ? "PAID FULL" : parsedPaid > 0 ? "PARTIAL" : "UNPAID"}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPaidAmount(grandTotal.toString());
-                            setSelectedPaymentMode("CASH");
-                          }}
-                          className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer text-center ${
-                            selectedPaymentMode === "CASH" && parsedPaid >= grandTotal
-                              ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/50 shadow-2xs font-extrabold"
-                              : "bg-muted/40 text-muted-foreground border-border/80 hover:bg-muted"
-                          }`}
-                        >
-                          Paid (Cash)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPaidAmount(grandTotal.toString());
-                            setSelectedPaymentMode("UPI");
-                          }}
-                          className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer text-center ${
-                            selectedPaymentMode === "UPI" && parsedPaid >= grandTotal
-                              ? "bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-500/50 shadow-2xs font-extrabold"
-                              : "bg-muted/40 text-muted-foreground border-border/80 hover:bg-muted"
-                          }`}
-                        >
-                          Paid (UPI)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPaidAmount("0");
-                            setSelectedPaymentMode("UNPAID");
-                          }}
-                          className={`py-1.5 px-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer text-center ${
-                            parsedPaid === 0 || selectedPaymentMode === "UNPAID"
-                              ? "bg-rose-500/20 text-rose-700 dark:text-rose-400 border-rose-500/50 shadow-2xs font-extrabold"
-                              : "bg-muted/40 text-muted-foreground border-border/80 hover:bg-muted"
-                          }`}
-                        >
-                          Due / Unpaid
-                        </button>
-                      </div>
-
-                      {/* Advance / Received Input if custom or partial */}
-                      <div className="flex items-center justify-between text-[11px] pt-1">
-                        <span className="text-muted-foreground font-medium">Received (₹):</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max={grandTotal}
-                          placeholder="0"
-                          value={paidAmount === "0" ? "" : paidAmount}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setPaidAmount(val);
-                            if (Number(val) > 0 && selectedPaymentMode === "UNPAID") {
-                              setSelectedPaymentMode("CASH");
-                            }
-                          }}
-                          className="w-24 px-2 py-1 bg-background border border-border/80 rounded-md font-mono text-xs font-bold text-right outline-none focus:border-primary text-foreground"
-                        />
-                      </div>
-                    </div>
-                  )}
+                  {/* Settlement is handled on the next step after invoice generation */}
 
                   <button
                     type="button"

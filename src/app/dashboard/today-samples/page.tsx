@@ -217,38 +217,103 @@ export default function TodaySamplesPage() {
   const isReportPermittedForRole = (r: any, role: string, user: any) => {
     if (!r) return false;
     const normalizedRole = String(role || user?.role || "").toUpperCase();
-    if (normalizedRole !== "COLLECTION_CENTER" && normalizedRole !== "COLLECTION_CENTRE") return true;
     if (!user) return true;
+
+    // For ADMIN / SUPER_ADMIN / OWNER / STAFF: everything is permitted
+    if (["ADMIN", "SUPER_ADMIN", "OWNER", "STAFF"].includes(normalizedRole)) return true;
 
     const p = r?.patient || {};
     const meta = (p && typeof p.meta === "object" && p.meta !== null) ? p.meta : {};
     const repMeta = (r && typeof r.meta === "object" && r.meta !== null) ? r.meta : {};
     const userIdStr = String(user?.id || user?.user_id || "");
-    const userName = (user?.name || "").toLowerCase().trim();
-    const centerLabName = (user?.lab_name || user?.labName || "").toLowerCase().trim();
-    const centerCode = (user?.center_code || user?.centerCode || "").toLowerCase().trim();
-    const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
 
-    // 1. Created by this Collection Center user (check both report and patient)
-    const reportCreatedById = String(r?.createdById || r?.created_by_id || repMeta?.createdById || repMeta?.created_by_id || "");
-    const patientCreatedById = String(p?.createdById || p?.created_by_id || meta?.createdById || meta?.created_by_id || "");
-    if (userIdStr && (reportCreatedById === userIdStr || patientCreatedById === userIdStr)) return true;
+    const creatorRole = String(
+      repMeta?.created_by_role ||
+      repMeta?.createdByRole ||
+      meta?.created_by_role ||
+      meta?.createdByRole ||
+      r?.creator?.role ||
+      p?.creator?.role ||
+      ""
+    ).toUpperCase();
 
-    // 2. Collection center ID match in report meta or patient meta
-    const reportCcId = String(repMeta?.collectionCenterId || repMeta?.collection_center_id || "");
-    const patientCcId = String(meta?.collectionCenterId || meta?.collection_center_id || "");
-    if (userIdStr && (reportCcId === userIdStr || patientCcId === userIdStr)) return true;
+    const isReceptionistEntry = Boolean(
+      creatorRole === "RECEPTIONIST" ||
+      String(r?.creator?.role || "").toUpperCase() === "RECEPTIONIST" ||
+      String(p?.creator?.role || "").toUpperCase() === "RECEPTIONIST"
+    );
 
-    // 3. Center code match
-    const repCenterCode = String(repMeta?.centerCode || repMeta?.center_code || "").toLowerCase().trim();
-    const patCenterCode = String(meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
-    if (centerCode && (centerCode === repCenterCode || centerCode === patCenterCode || collectedAt.includes(centerCode))) return true;
+    const isCCEntry = Boolean(
+      creatorRole === "COLLECTION_CENTER" ||
+      creatorRole === "COLLECTION_CENTRE" ||
+      String(r?.creator?.role || "").toUpperCase() === "COLLECTION_CENTER" ||
+      String(r?.creator?.role || "").toUpperCase() === "COLLECTION_CENTRE" ||
+      String(p?.creator?.role || "").toUpperCase() === "COLLECTION_CENTER" ||
+      String(p?.creator?.role || "").toUpperCase() === "COLLECTION_CENTRE" ||
+      meta?.collection_center_id ||
+      meta?.collectionCenterId ||
+      repMeta?.collection_center_id ||
+      repMeta?.collectionCenterId
+    );
 
-    // 4. Center name match
-    if (userName && collectedAt.includes(userName)) return true;
-    if (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) return true;
+    const isB2BEntry = Boolean(
+      !isReceptionistEntry &&
+      !isCCEntry &&
+      (
+        creatorRole === "B2B" ||
+        String(r?.creator?.role || "").toUpperCase() === "B2B" ||
+        String(p?.creator?.role || "").toUpperCase() === "B2B" ||
+        meta?.b2b_user_id ||
+        meta?.b2bUserId ||
+        repMeta?.b2b_user_id ||
+        repMeta?.b2bUserId
+      )
+    );
 
-    return false;
+    // 1. B2B role: Must ONLY see their own B2B samples (strictly isolated)
+    if (normalizedRole === "B2B") {
+      if (isCCEntry || isReceptionistEntry) return false;
+      const b2bId = String(meta?.b2b_user_id || meta?.b2bUserId || repMeta?.b2b_user_id || repMeta?.b2bUserId || "");
+      const createdBy = String(r?.createdById || r?.created_by_id || p?.createdById || p?.created_by_id || repMeta?.created_by_id || repMeta?.createdById || meta?.created_by_id || meta?.createdById || "");
+      return Boolean(userIdStr && (b2bId === userIdStr || createdBy === userIdStr));
+    }
+
+    // 2. RECEPTIONIST role: Can see regular lab entries & CC entries, but NEVER B2B
+    if (normalizedRole === "RECEPTIONIST") {
+      if (isB2BEntry) return false;
+      return true;
+    }
+
+    // 3. COLLECTION CENTER role: Can see own CC entries + Receptionist entries, but NEVER B2B
+    if (normalizedRole === "COLLECTION_CENTER" || normalizedRole === "COLLECTION_CENTRE") {
+      if (isB2BEntry) return false;
+      if (isReceptionistEntry) return true;
+
+      // Check if belongs to this CC
+      const reportCreatedById = String(r?.createdById || r?.created_by_id || repMeta?.createdById || repMeta?.created_by_id || "");
+      const patientCreatedById = String(p?.createdById || p?.created_by_id || meta?.createdById || meta?.created_by_id || "");
+      if (userIdStr && (reportCreatedById === userIdStr || patientCreatedById === userIdStr)) return true;
+
+      const reportCcId = String(repMeta?.collectionCenterId || repMeta?.collection_center_id || "");
+      const patientCcId = String(meta?.collectionCenterId || meta?.collection_center_id || "");
+      if (userIdStr && (reportCcId === userIdStr || patientCcId === userIdStr)) return true;
+
+      const centerCode = (user?.center_code || user?.centerCode || "").toLowerCase().trim();
+      const repCenterCode = String(repMeta?.centerCode || repMeta?.center_code || "").toLowerCase().trim();
+      const patCenterCode = String(meta?.centerCode || meta?.center_code || "").toLowerCase().trim();
+      const collectedAt = String(p?.collectedAt || p?.collected_at || meta?.collectedAt || meta?.collected_at || "").toLowerCase();
+
+      if (centerCode && (centerCode === repCenterCode || centerCode === patCenterCode || collectedAt.includes(centerCode))) return true;
+
+      const userName = (user?.name || "").toLowerCase().trim();
+      const centerLabName = (user?.lab_name || user?.labName || "").toLowerCase().trim();
+      if (userName && collectedAt.includes(userName)) return true;
+      if (centerLabName && !["onepath laboratory", "onepath lab", "main lab", "my laboratory"].includes(centerLabName) && collectedAt.includes(centerLabName)) return true;
+
+      return false;
+    }
+
+    return true;
   };
 
   useEffect(() => {

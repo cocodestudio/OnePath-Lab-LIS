@@ -7,6 +7,7 @@ import { normalizeReportSettings, type ReportLayoutSettings, defaultReportLayout
 import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 import { getReportPackage } from "@/lib/packages";
 import { compareClinicalTests, compareClinicalParameters, getClinicalTestPriority } from "@/lib/clinical-order";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 interface Test { 
   id: string; name: string; category: string; price: number; unit: string; 
@@ -931,7 +932,7 @@ export function buildReportBlocks(
                     fontSize: `${typo.testParameterFontSize || 11}px`,
                     textAlign: "left",
                   }}
-                  dangerouslySetInnerHTML={{ __html: content }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
                 />
               ),
             });
@@ -1294,7 +1295,7 @@ export function buildReportBlocks(
               </p>
               <div 
                 className="[&_table]:border-collapse [&_table]:w-full [&_table]:my-1 [&_table]:border [&_table]:border-zinc-300 [&_th]:border [&_th]:border-zinc-300 [&_th]:px-2 [&_th]:py-1 [&_th]:bg-zinc-100 [&_th]:font-bold [&_th]:text-[9.5px] [&_th]:text-left [&_td]:border [&_td]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 [&_td]:text-[9px] [&_td]:leading-snug text-zinc-800" 
-                dangerouslySetInnerHTML={{ __html: interpContent || "" }} 
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(interpContent || "") }} 
               />
             </div>
           ),

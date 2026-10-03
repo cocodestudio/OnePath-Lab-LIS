@@ -23,7 +23,7 @@ import { MachineIntegrationTab } from "@/components/machine-integration-tab";
 import { AbhaIntegrationSection } from "@/components/abha-integration-section";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
-import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
+import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache, getStoredUser } from "@/lib/api-client";
 import {
   ALL_DESIGNATIONS,
   normalizeDesignation,
@@ -340,6 +340,13 @@ function SettingsContent() {
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    const user = getStoredUser();
+    if (user && (user.role === "B2B" || user.role === "COLLECTION_CENTER" || user.role === "COLLECTION_CENTRE")) {
+      window.location.replace("/dashboard");
+    }
+  }, []);
   const { success: toastSuccess, error: toastError, toast: showGlobalToast } = useToast();
   const setToast = React.useCallback((input: { text: string; type: "success" | "error" } | null) => {
     if (!input) return;
