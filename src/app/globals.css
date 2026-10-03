@@ -442,3 +442,13 @@ html.lenis, html.lenis body {
 .safe-pb {
   padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
 }
+
+@keyframes input-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: input-shake 0.3s ease-in-out;
+}

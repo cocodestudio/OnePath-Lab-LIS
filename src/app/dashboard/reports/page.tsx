@@ -118,14 +118,14 @@ export default function ReportsListPage() {
 
   useEffect(() => {
     setCurrentUser(getStoredUser());
-    fetchReports(true);
+    fetchReports(false);
 
     const handleSync = () => {
-      fetchReports(true);
+      fetchReports(false);
     };
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        fetchReports(true);
+        fetchReports(false);
       }
     };
     window.addEventListener("lis_online_sync", handleSync);
@@ -140,7 +140,7 @@ export default function ReportsListPage() {
 
   useEffect(() => {
     const handleWalletUpdated = () => {
-      fetchReports(true);
+      fetchReports(false);
     };
     window.addEventListener("b2b_wallet_updated", handleWalletUpdated);
     return () => window.removeEventListener("b2b_wallet_updated", handleWalletUpdated);

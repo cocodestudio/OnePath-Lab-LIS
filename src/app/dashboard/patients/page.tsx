@@ -460,14 +460,14 @@ export default function PatientsPage() {
   const [rejecting, setRejecting] = useState(false);
 
   useEffect(() => {
-    fetchPatients(true);
+    fetchPatients(false);
 
     const handleSync = () => {
-      fetchPatients(true);
+      fetchPatients(false);
     };
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        fetchPatients(true);
+        fetchPatients(false);
       }
     };
     window.addEventListener("lis_online_sync", handleSync);

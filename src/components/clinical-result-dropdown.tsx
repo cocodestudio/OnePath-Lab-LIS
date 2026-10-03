@@ -27,6 +27,7 @@ interface ClinicalResultDropdownProps {
   abnormal?: boolean;
   className?: string;
   isTextOnlyTable?: boolean;
+  valueType?: string;
 }
 
 // Visual color swatches for urine / fluid color options
@@ -64,6 +65,7 @@ export function ClinicalResultDropdown({
   abnormal = false,
   className = "",
   isTextOnlyTable = false,
+  valueType,
 }: ClinicalResultDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -88,13 +90,21 @@ export function ClinicalResultDropdown({
   // Retrieve complete options for this parameter
   const { options, key: paramKey, isColorParam, hasDropdown } = useMemo(() => {
     try {
+      // Auto-calculated fields or purely numeric parameters with no explicit custom DB options should NEVER have dropdowns
+      if (
+        isCalculated ||
+        (valueType === "Numeric" &&
+          (!customDbOptions || (Array.isArray(customDbOptions) && customDbOptions.length === 0)))
+      ) {
+        return { options: [], key: "", isColorParam: false, hasDropdown: false };
+      }
       return getCompleteParameterOptions(paramName, testName, category, customDbOptions);
     } catch (err) {
       console.error("ClinicalResultDropdown error in getCompleteParameterOptions:", err);
       return { options: [], key: "", isColorParam: false, hasDropdown: false };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramName, testName, category, customDbOptions, customVersion]);
+  }, [paramName, testName, category, customDbOptions, customVersion, isCalculated, valueType]);
 
   // Saved user custom options for this parameter (for deletion support)
   const savedCustomList = useMemo(() => {

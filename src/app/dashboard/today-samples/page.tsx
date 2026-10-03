@@ -344,14 +344,14 @@ export default function TodaySamplesPage() {
       }
     } catch (e) {}
 
-    loadData(true, parsedUser);
+    loadData(false, parsedUser);
 
     const handleCacheInvalidated = () => {
-      loadData(true);
+      loadData(false);
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        loadData(true);
+        loadData(false);
       }
     };
     window.addEventListener("lis_cache_invalidated", handleCacheInvalidated);

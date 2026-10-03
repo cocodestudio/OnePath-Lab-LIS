@@ -569,6 +569,16 @@ function RegisterPatientPage() {
 
   const [registering, setRegistering] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (key: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
   const [labInfo, setLabInfo] = useState<any>(null);
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(() => normalizeBillSettings({}));
   const registerPrintRef = useRef<HTMLDivElement>(null);
@@ -1600,38 +1610,183 @@ function RegisterPatientPage() {
     setRegisterError(null);
     setRegistering(true);
 
+    const errors: Record<string, string> = {};
     const missing: string[] = [];
-    if (isFieldRequired("name") && !firstName.trim()) missing.push("First Name");
-    if (isFieldRequired("ageGender") && (!ageYears && !ageMonths && !ageDays)) missing.push("Age");
-    if (isFieldRequired("ageGender") && !gender) missing.push("Gender");
-    if (isFieldRequired("phone") && !phone.trim()) missing.push("Phone Number");
-    if (isFieldRequired("email") && !email.trim()) missing.push("Email Address");
-    if (isFieldRequired("address") && !address.trim()) missing.push("Residential Address");
-    if (isFieldRequired("pincode") && !pincode.trim()) missing.push("Pincode");
-    if (isFieldRequired("city") && !city.trim()) missing.push("City / Town");
-    if (isFieldRequired("district") && !district.trim()) missing.push("District");
-    if (isFieldRequired("refDoctor") && !refDoctorSelect) missing.push("Referred By");
-    if (isFieldRequired("secondReferral") && !secondReferral.trim()) missing.push("Second Referral");
-    if (isFieldRequired("collectedAt") && !collectedAtSelect) missing.push("Collection Center");
-    if (isFieldRequired("collectedBy") && !collectedBySelect) missing.push("Sample Collected By");
-    if (isFieldRequired("aadhaarNo") && !aadhaarNo.trim()) missing.push("Aadhaar No.");
-    if (isFieldRequired("insuranceNo") && !insuranceNo.trim()) missing.push("Insurance Policy No.");
-    if (isFieldRequired("tpa") && !tpa.trim()) missing.push("TPA / Insurance Desk");
-    if (isFieldRequired("hfrId") && !hfrId.trim()) missing.push("HFR / ABHA Health ID");
-    if (isFieldRequired("uhid") && !uhid.trim()) missing.push("UHID");
-    if (isFieldRequired("passportNumber") && !passportNumber.trim()) missing.push("Passport Number");
-    if (isFieldRequired("corporateName") && !corporateName.trim()) missing.push("Corporate Client");
-    if (isFieldRequired("corporatePlan") && !corporatePlan.trim()) missing.push("Corporate Plan");
-    if (isFieldRequired("govPanel") && !govPanel.trim()) missing.push("Government Panel");
-    if (isFieldRequired("height") && !height.trim()) missing.push("Height");
-    if (isFieldRequired("weight") && !weight.trim()) missing.push("Weight");
-    if (isFieldRequired("ownerName") && !ownerName.trim()) missing.push("Owner Name");
-    if (isFieldRequired("breed") && !breed.trim()) missing.push("Breed");
-    if (isFieldRequired("species") && !species.trim()) missing.push("Species");
 
-    if (missing.length > 0) {
+    // 1. First Name (Always mandatory)
+    if (!firstName.trim()) {
+      errors["firstName"] = "First name is required.";
+      missing.push("First Name");
+    } else if (firstName.trim().length < 2) {
+      errors["firstName"] = "First name must be at least 2 characters.";
+      missing.push("First Name (min 2 chars)");
+    }
+
+    // 2. Age (Always mandatory for medical reference ranges)
+    const hasAge = !!(ageYears.trim() || ageMonths.trim() || ageDays.trim());
+    if (!hasAge) {
+      errors["age"] = "Patient age is required (Years, Months, or Days).";
+      missing.push("Age");
+    } else {
+      const parsedY = parseInt(ageYears) || 0;
+      const parsedM = parseInt(ageMonths) || 0;
+      const parsedD = parseInt(ageDays) || 0;
+      if (parsedY <= 0 && parsedM <= 0 && parsedD <= 0) {
+        errors["age"] = "Age must be greater than zero.";
+        missing.push("Valid Age");
+      }
+    }
+
+    // 3. Gender (Always mandatory for clinical test reference ranges)
+    if (!gender || !gender.trim()) {
+      errors["gender"] = "Please select gender.";
+      missing.push("Gender");
+    }
+
+    // 4. Phone Number
+    const cleanPhone = phone.trim().replace(/\D/g, "");
+    if (isFieldRequired("phone") && !cleanPhone) {
+      errors["phone"] = "Phone / WhatsApp number is required.";
+      missing.push("Phone Number");
+    } else if (cleanPhone && cleanPhone.length !== 10) {
+      errors["phone"] = "Please enter a valid 10-digit mobile number.";
+      missing.push("Valid 10-digit Phone");
+    }
+
+    // 5. Referral Doctor
+    if (isFieldRequired("refDoctor") && (!refDoctorSelect || !refDoctorSelect.trim())) {
+      errors["refDoctor"] = "Please select referral doctor.";
+      missing.push("Referred By");
+    }
+
+    // 6. Dynamic Intake Fields
+    if (isFieldRequired("email") && !email.trim()) {
+      errors["email"] = "Email address is required.";
+      missing.push("Email Address");
+    }
+    if (isFieldRequired("address") && !address.trim()) {
+      errors["address"] = "Residential address is required.";
+      missing.push("Residential Address");
+    }
+    if (isFieldRequired("pincode") && !pincode.trim()) {
+      errors["pincode"] = "Pincode is required.";
+      missing.push("Pincode");
+    }
+    if (isFieldRequired("city") && !city.trim()) {
+      errors["city"] = "City / Town is required.";
+      missing.push("City / Town");
+    }
+    if (isFieldRequired("district") && !district.trim()) {
+      errors["district"] = "District is required.";
+      missing.push("District");
+    }
+    if (isFieldRequired("secondReferral") && !secondReferral.trim()) {
+      errors["secondReferral"] = "Second referral is required.";
+      missing.push("Second Referral");
+    }
+    if (isFieldRequired("collectedAt") && !collectedAtSelect) {
+      errors["collectedAt"] = "Collection center is required.";
+      missing.push("Collection Center");
+    }
+    if (isFieldRequired("collectedBy") && !collectedBySelect) {
+      errors["collectedBy"] = "Sample collector is required.";
+      missing.push("Sample Collected By");
+    }
+    if (isFieldRequired("aadhaarNo") && !aadhaarNo.trim()) {
+      errors["aadhaarNo"] = "Aadhaar number is required.";
+      missing.push("Aadhaar No.");
+    }
+    if (isFieldRequired("insuranceNo") && !insuranceNo.trim()) {
+      errors["insuranceNo"] = "Insurance policy number is required.";
+      missing.push("Insurance Policy No.");
+    }
+    if (isFieldRequired("tpa") && !tpa.trim()) {
+      errors["tpa"] = "TPA / Insurance desk is required.";
+      missing.push("TPA / Insurance Desk");
+    }
+    if (isFieldRequired("hfrId") && !hfrId.trim()) {
+      errors["hfrId"] = "HFR / ABHA health ID is required.";
+      missing.push("HFR / ABHA Health ID");
+    }
+    if (isFieldRequired("uhid") && !uhid.trim()) {
+      errors["uhid"] = "UHID is required.";
+      missing.push("UHID");
+    }
+    if (isFieldRequired("passportNumber") && !passportNumber.trim()) {
+      errors["passportNumber"] = "Passport number is required.";
+      missing.push("Passport Number");
+    }
+    if (isFieldRequired("corporateName") && !corporateName.trim()) {
+      errors["corporateName"] = "Corporate client name is required.";
+      missing.push("Corporate Client");
+    }
+    if (isFieldRequired("corporatePlan") && !corporatePlan.trim()) {
+      errors["corporatePlan"] = "Corporate plan is required.";
+      missing.push("Corporate Plan");
+    }
+    if (isFieldRequired("govPanel") && !govPanel.trim()) {
+      errors["govPanel"] = "Government panel is required.";
+      missing.push("Government Panel");
+    }
+    if (isFieldRequired("height") && !height.trim()) {
+      errors["height"] = "Height is required.";
+      missing.push("Height");
+    }
+    if (isFieldRequired("weight") && !weight.trim()) {
+      errors["weight"] = "Weight is required.";
+      missing.push("Weight");
+    }
+    if (isFieldRequired("ownerName") && !ownerName.trim()) {
+      errors["ownerName"] = "Owner name is required.";
+      missing.push("Owner Name");
+    }
+    if (isFieldRequired("breed") && !breed.trim()) {
+      errors["breed"] = "Breed is required.";
+      missing.push("Breed");
+    }
+    if (isFieldRequired("species") && !species.trim()) {
+      errors["species"] = "Species is required.";
+      missing.push("Species");
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       setRegisterError(`Please fill in the required fields: ${missing.join(", ")}`);
       setRegistering(false);
+
+      const fieldDomMap: Record<string, string> = {
+        firstName: "input-first-name",
+        age: "input-age-years",
+        gender: "input-gender-trigger",
+        phone: "input-phone",
+        refDoctor: "input-ref-doctor",
+        email: "input-email",
+        address: "input-address",
+        pincode: "input-pincode",
+        city: "input-city",
+        district: "input-district",
+        collectedAt: "input-collected-at",
+        collectedBy: "input-collected-by",
+        aadhaarNo: "input-aadhaar",
+      };
+
+      const firstErrKey = Object.keys(errors)[0];
+      const targetId = fieldDomMap[firstErrKey] || `input-${firstErrKey}`;
+      const targetEl = document.getElementById(targetId);
+
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        setTimeout(() => {
+          try {
+            targetEl.focus();
+          } catch (_) {}
+        }, 250);
+      }
+
+      toastError(
+        "Required Fields Missing",
+        errors[firstErrKey] || "Please fill in all highlighted patient details before proceeding."
+      );
       return;
     }
 
@@ -2910,20 +3065,34 @@ function RegisterPatientPage() {
 
                     <div className="sm:col-span-5 space-y-1.5">
                       <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
-                        First Name {isFieldRequired("name") && <span className="text-rose-500 font-extrabold">*</span>}
+                        First Name <span className="text-rose-500 font-extrabold">*</span>
                       </label>
                       <div className="relative">
                         <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <input
+                          id="input-first-name"
                           type="text"
-                          className="w-full pl-10 pr-4 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-sm placeholder:text-muted-foreground/50 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white outline-none text-foreground font-medium transition-all shadow-2xs"
+                          className={`w-full pl-10 pr-4 h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-medium transition-all shadow-2xs ${
+                            fieldErrors.firstName
+                              ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                              : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                          }`}
                           placeholder="Enter First Name"
                           value={firstName}
-                          onChange={(e) => setFirstName(e.target.value)}
+                          onChange={(e) => {
+                            setFirstName(e.target.value);
+                            clearFieldError("firstName");
+                          }}
                           disabled={registering || (!!newPatient && !isEditMode)}
-                          required={isFieldRequired("name")}
+                          required
                         />
                       </div>
+                      {fieldErrors.firstName && (
+                        <p className="text-xs text-rose-500 font-semibold flex items-center gap-1 mt-1 animate-shake">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          <span>{fieldErrors.firstName}</span>
+                        </p>
+                      )}
                     </div>
 
                     <div className="sm:col-span-4 space-y-1.5">
@@ -2947,58 +3116,102 @@ function RegisterPatientPage() {
                     {/* Age Breakdown */}
                     <div className="sm:col-span-7 space-y-1.5">
                       <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
-                        Age (Years / Months / Days) {isFieldRequired("ageGender") && <span className="text-rose-500 font-extrabold">*</span>}
+                        Age (Years / Months / Days) <span className="text-rose-500 font-extrabold">*</span>
                       </label>
                       <div className="grid grid-cols-3 gap-2">
                         <div className="relative">
                           <input
+                            id="input-age-years"
                             type="number"
                             min="0"
                             max="120"
                             placeholder="Years"
-                            className="w-full text-center h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-sm placeholder:text-muted-foreground/50 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white outline-none text-foreground font-bold shadow-2xs"
+                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs ${
+                              fieldErrors.age
+                                ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                                : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                            }`}
                             value={ageYears}
-                            onChange={(e) => setAgeYears(e.target.value)}
+                            onChange={(e) => {
+                              setAgeYears(e.target.value);
+                              clearFieldError("age");
+                            }}
                             disabled={registering || (!!newPatient && !isEditMode)}
                           />
                           <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-muted-foreground pointer-events-none">Y</span>
                         </div>
                         <div className="relative">
                           <input
+                            id="input-age-months"
                             type="number"
                             min="0"
                             max="11"
                             placeholder="Months"
-                            className="w-full text-center h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-sm placeholder:text-muted-foreground/50 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white outline-none text-foreground font-bold shadow-2xs"
+                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs ${
+                              fieldErrors.age
+                                ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                                : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                            }`}
                             value={ageMonths}
-                            onChange={(e) => setAgeMonths(e.target.value)}
+                            onChange={(e) => {
+                              setAgeMonths(e.target.value);
+                              clearFieldError("age");
+                            }}
                             disabled={registering || (!!newPatient && !isEditMode)}
                           />
                           <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-muted-foreground pointer-events-none">M</span>
                         </div>
                         <div className="relative">
                           <input
+                            id="input-age-days"
                             type="number"
                             min="0"
                             max="30"
                             placeholder="Days"
-                            className="w-full text-center h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-sm placeholder:text-muted-foreground/50 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white outline-none text-foreground font-bold shadow-2xs"
+                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs ${
+                              fieldErrors.age
+                                ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                                : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                            }`}
                             value={ageDays}
-                            onChange={(e) => setAgeDays(e.target.value)}
+                            onChange={(e) => {
+                              setAgeDays(e.target.value);
+                              clearFieldError("age");
+                            }}
                             disabled={registering || (!!newPatient && !isEditMode)}
                           />
                           <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-muted-foreground pointer-events-none">D</span>
                         </div>
                       </div>
+                      {fieldErrors.age && (
+                        <p className="text-xs text-rose-500 font-semibold flex items-center gap-1 mt-1 animate-shake">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          <span>{fieldErrors.age}</span>
+                        </p>
+                      )}
                     </div>
 
                     {/* Gender */}
                     <div className="sm:col-span-5 space-y-1.5">
                       <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
-                        Gender {isFieldRequired("ageGender") && <span className="text-rose-500 font-extrabold">*</span>}
+                        Gender <span className="text-rose-500 font-extrabold">*</span>
                       </label>
-                      <Select value={gender} onValueChange={setGender} disabled={registering || (!!newPatient && !isEditMode)}>
-                        <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
+                      <Select
+                        value={gender}
+                        onValueChange={(val) => {
+                          setGender(val);
+                          clearFieldError("gender");
+                        }}
+                        disabled={registering || (!!newPatient && !isEditMode)}
+                      >
+                        <SelectTrigger
+                          id="input-gender-trigger"
+                          className={`h-11 bg-background rounded-xl font-medium text-foreground shadow-2xs ${
+                            fieldErrors.gender
+                              ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                              : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                          }`}
+                        >
                           <SelectValue placeholder="Select Gender" />
                         </SelectTrigger>
                         <SelectContent>
@@ -3007,6 +3220,12 @@ function RegisterPatientPage() {
                           <SelectItem value="Other">Other</SelectItem>
                         </SelectContent>
                       </Select>
+                      {fieldErrors.gender && (
+                        <p className="text-xs text-rose-500 font-semibold flex items-center gap-1 mt-1 animate-shake">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          <span>{fieldErrors.gender}</span>
+                        </p>
+                      )}
                     </div>
 
                   </div>
@@ -3024,9 +3243,14 @@ function RegisterPatientPage() {
                             <span className="font-mono text-[12.5px] tracking-tight">+91</span>
                           </div>
                           <input
+                            id="input-phone"
                             type="tel"
                             maxLength={10}
-                            className="w-full pl-[74px] pr-4 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-sm placeholder:text-muted-foreground/50 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white outline-none text-foreground font-semibold tracking-wider transition-all shadow-2xs font-mono"
+                            className={`w-full pl-[74px] pr-4 h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-semibold tracking-wider transition-all shadow-2xs font-mono ${
+                              fieldErrors.phone
+                                ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                                : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                            }`}
                             placeholder="98765 43210"
                             value={phone}
                             onChange={(e) => {
@@ -3038,12 +3262,20 @@ function RegisterPatientPage() {
                                 digits = digits.slice(1);
                               }
                               setPhone(digits.slice(0, 10));
+                              clearFieldError("phone");
                             }}
                             disabled={registering || (!!newPatient && !isEditMode)}
                             required={isFieldRequired("phone")}
                           />
                         </div>
-                        <p className="text-[10.5px] text-muted-foreground">Enter 10-digit number without country code (auto-prefixed with +91)</p>
+                        {fieldErrors.phone ? (
+                          <p className="text-xs text-rose-500 font-semibold flex items-center gap-1 mt-1 animate-shake">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                            <span>{fieldErrors.phone}</span>
+                          </p>
+                        ) : (
+                          <p className="text-[10.5px] text-muted-foreground">Enter 10-digit number without country code (auto-prefixed with +91)</p>
+                        )}
                       </div>
                     )}
 
@@ -3296,8 +3528,22 @@ function RegisterPatientPage() {
                             <span>+ Doctor</span>
                           </button>
                         </div>
-                        <Select value={refDoctorSelect} onValueChange={setRefDoctorSelect} disabled={registering || (!!newPatient && !isEditMode)}>
-                          <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
+                        <Select
+                          value={refDoctorSelect}
+                          onValueChange={(val) => {
+                            setRefDoctorSelect(val);
+                            clearFieldError("refDoctor");
+                          }}
+                          disabled={registering || (!!newPatient && !isEditMode)}
+                        >
+                          <SelectTrigger
+                            id="input-ref-doctor"
+                            className={`h-11 bg-background rounded-xl font-medium text-foreground shadow-2xs ${
+                              fieldErrors.refDoctor
+                                ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                                : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                            }`}
+                          >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -3306,6 +3552,12 @@ function RegisterPatientPage() {
                             ))}
                           </SelectContent>
                         </Select>
+                        {fieldErrors.refDoctor && (
+                          <p className="text-xs text-rose-500 font-semibold flex items-center gap-1 mt-1 animate-shake">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                            <span>{fieldErrors.refDoctor}</span>
+                          </p>
+                        )}
                       </div>
                     )}
 

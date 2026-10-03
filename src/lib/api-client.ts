@@ -275,13 +275,26 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
 
   const method = (options.method || "GET").toUpperCase();
   const isGet = method === "GET";
-  const defaultTtl = options.cacheTtlMs ?? 5000; // 5s lean cache TTL to avoid stale clinical data
+  const defaultTtl = options.cacheTtlMs ?? 60000; // 60s fresh cache TTL
+  const maxStaleTtl = 5 * 60 * 1000; // 5m stale window for instant 0ms page transitions
 
-  // 1. Fast path: Serve from memory cache if GET and fresh
+  // 1. Fast path: Serve from memory cache if GET (Stale-While-Revalidate pattern)
   if (isGet && !options.skipCache) {
     const cached = apiMemoryCache.get(cleanEndpoint);
-    if (cached && Date.now() - cached.timestamp < defaultTtl) {
-      return cloneData(cached.data);
+    if (cached) {
+      const age = Date.now() - cached.timestamp;
+      if (age < defaultTtl) {
+        // Cache is fresh, return immediately without network call
+        return cloneData(cached.data);
+      } else if (age < maxStaleTtl) {
+        // Cache is stale: return immediately for 0ms transition, revalidate in background
+        if (!inFlightRequests.has(cleanEndpoint)) {
+          setTimeout(() => {
+            fetchFromLaravel(cleanEndpoint, { ...options, skipCache: true }).catch(() => {});
+          }, 30);
+        }
+        return cloneData(cached.data);
+      }
     }
     // 2. Request coalescing: reuse in-flight promise to prevent duplicate network calls
     if (inFlightRequests.has(cleanEndpoint)) {

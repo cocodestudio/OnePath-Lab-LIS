@@ -91,7 +91,7 @@ export const CLINICAL_PARAM_DICTIONARY: ClinicalOptionDef[] = [
   },
   {
     key: "urine_protein",
-    namePatterns: ["urine protein", "urine albumin", "protein (albumin)", "protein/albumin", "urine protein / albumin", "protein", "albumin (urine)"],
+    namePatterns: ["urine protein", "urine albumin", "protein (albumin)", "protein/albumin", "urine protein / albumin", "albumin (urine)"],
     options: [
       "Nil",
       "Negative",
@@ -158,7 +158,7 @@ export const CLINICAL_PARAM_DICTIONARY: ClinicalOptionDef[] = [
   },
   {
     key: "urine_bile_pigments",
-    namePatterns: ["bile pigment", "bile pigments", "bilirubin (urine)", "urine bilirubin", "bilirubin (bile pigments)", "bilirubin"],
+    namePatterns: ["bile pigment", "bile pigments", "bilirubin (urine)", "urine bilirubin", "bilirubin (bile pigments)"],
     options: [
       "Negative",
       "Nil",
@@ -185,7 +185,7 @@ export const CLINICAL_PARAM_DICTIONARY: ClinicalOptionDef[] = [
   },
   {
     key: "urine_blood",
-    namePatterns: ["urine blood", "occult blood (urine)", "blood (urine)", "chemical blood", "blood (hemoglobin)", "urine hemoglobin", "blood"],
+    namePatterns: ["urine blood", "occult blood (urine)", "blood (urine)", "chemical blood", "blood (hemoglobin)", "urine hemoglobin"],
     options: [
       "Negative",
       "Nil",
@@ -822,48 +822,99 @@ export function getClinicalOptionsForParameter(
     normalizedCat.includes("biochemistry") ||
     normalizedCat.includes("hematology");
 
-  // Prevent Serum Total Protein / Albumin in LFT from receiving Urine Protein dropdown
+  // 1. KFT Parameters: Blood Urea, BUN, Creatinine, Uric Acid, eGFR, Ratios
   if (
+    normalized.includes("urea") ||
+    normalized.includes("bun") ||
+    normalized.includes("creatinine") ||
+    normalized.includes("uric acid") ||
+    normalized.includes("egfr")
+  ) {
+    return null;
+  }
+
+  // 2. LFT Bilirubin (Total, Direct, Indirect, Serum Bilirubin, Unconjugated, etc.)
+  // Only qualitative if explicitly designated as urine examination
+  if (
+    normalized.includes("bilirubin") &&
+    !normalized.includes("urine") &&
+    !normalizedTest.includes("urine")
+  ) {
+    return null;
+  }
+
+  // 3. LFT Enzymes & Serum Proteins
+  if (
+    normalized.includes("sgot") ||
+    normalized.includes("ast") ||
+    normalized.includes("sgpt") ||
+    normalized.includes("alt") ||
+    normalized.includes("alkaline phosphatase") ||
+    normalized.includes("alp") ||
+    normalized.includes("ggt") ||
+    normalized.includes("ggtp") ||
     normalized.includes("total protein") ||
     normalized.includes("serum protein") ||
     normalized.includes("plasma protein") ||
+    normalized.includes("globulin") ||
+    normalized.includes("a/g ratio") ||
+    normalized.includes("ag ratio") ||
     normalized.includes("crp") ||
     normalized.includes("c reactive") ||
-    normalized.includes("microalbumin") ||
-    (normalized === "albumin" && isBloodOrSerumTest)
+    (normalized.includes("albumin") && !normalized.includes("urine") && !normalized.includes("micro"))
   ) {
     return null;
   }
 
-  // Prevent Fasting / PP / Random Blood Sugar from receiving Urine Sugar dropdown
+  // 4. Lipid Profile Parameters
   if (
-    normalized.includes("blood sugar") ||
-    normalized.includes("fasting") ||
-    normalized.includes("post prandial") ||
-    normalized.includes("ppbs") ||
-    normalized.includes("rbs") ||
-    normalized.includes("fbs") ||
-    normalized.includes("serum glucose") ||
-    normalized.includes("plasma glucose") ||
-    normalized.includes("hba1c") ||
-    normalized.includes("random blood sugar") ||
-    ((normalized === "glucose" || normalized === "sugar") && isBloodOrSerumTest)
+    normalized.includes("cholesterol") ||
+    normalized.includes("triglyceride") ||
+    normalized.includes("hdl") ||
+    normalized.includes("ldl") ||
+    normalized.includes("vldl") ||
+    normalized.includes("apolipoprotein") ||
+    normalized.includes("apo a") ||
+    normalized.includes("apo b")
   ) {
     return null;
   }
 
-  // Prevent Serum Bilirubin (Total/Direct/Indirect) in LFT from receiving Urine Bilirubin dropdown
+  // 5. Electrolytes & Minerals
   if (
-    normalized.includes("total bilirubin") ||
-    normalized.includes("direct bilirubin") ||
-    normalized.includes("indirect bilirubin") ||
-    normalized.includes("serum bilirubin") ||
-    (normalized === "bilirubin" && isBloodOrSerumTest)
+    normalized.includes("sodium") ||
+    normalized.includes("potassium") ||
+    normalized.includes("chloride") ||
+    normalized.includes("bicarbonate") ||
+    normalized.includes("calcium") ||
+    normalized.includes("phosphorus") ||
+    normalized.includes("magnesium") ||
+    normalized.includes("lithium")
   ) {
     return null;
   }
 
-  // Prevent CBC numeric counts from receiving microscopic sediment dropdown
+  // 6. Blood Glucose & Sugar Parameters
+  if (
+    (normalized.includes("blood sugar") ||
+      normalized.includes("fasting") ||
+      normalized.includes("post prandial") ||
+      normalized.includes("ppbs") ||
+      normalized.includes("rbs") ||
+      normalized.includes("fbs") ||
+      normalized.includes("serum glucose") ||
+      normalized.includes("plasma glucose") ||
+      normalized.includes("hba1c") ||
+      normalized.includes("random blood sugar") ||
+      normalized.includes("glucose") ||
+      normalized.includes("sugar")) &&
+    !normalized.includes("urine") &&
+    !normalizedTest.includes("urine")
+  ) {
+    return null;
+  }
+
+  // 7. CBC / Hematology Counts & Indices
   if (
     normalized === "wbc" ||
     normalized === "total wbc" ||
@@ -875,7 +926,53 @@ export function getClinicalOptionsForParameter(
     normalized === "platelet count" ||
     normalized === "platelets" ||
     normalized.includes("hemoglobin") ||
-    normalized.includes("haemoglobin")
+    normalized.includes("haemoglobin") ||
+    normalized.includes("pcv") ||
+    normalized.includes("hematocrit") ||
+    normalized.includes("haematocrit") ||
+    normalized.includes("mcv") ||
+    normalized.includes("mch") ||
+    normalized.includes("mchc") ||
+    normalized.includes("rdw") ||
+    normalized.includes("mpv") ||
+    normalized.includes("pct") ||
+    normalized.includes("pdw") ||
+    normalized.includes("esr") ||
+    normalized.includes("absolute neutrophil") ||
+    normalized.includes("absolute lymphocyte") ||
+    normalized.includes("absolute eosinophil") ||
+    normalized.includes("absolute monocyte") ||
+    normalized.includes("absolute basophil") ||
+    (isBloodOrSerumTest &&
+      (normalized.includes("neutrophil") ||
+        normalized.includes("lymphocyte") ||
+        normalized.includes("eosinophil") ||
+        normalized.includes("monocyte") ||
+        normalized.includes("basophil")))
+  ) {
+    return null;
+  }
+
+  // 8. Thyroid, Hormones, Vitamins & Cardiac Markers
+  if (
+    normalized.includes("tsh") ||
+    normalized.includes("t3") ||
+    normalized.includes("t4") ||
+    normalized.includes("thyroxine") ||
+    normalized.includes("triiodothyronine") ||
+    normalized.includes("vitamin b12") ||
+    normalized.includes("vitamin d") ||
+    normalized.includes("ferritin") ||
+    normalized.includes("iron") ||
+    normalized.includes("tibc") ||
+    normalized.includes("uibc") ||
+    normalized.includes("transferrin") ||
+    normalized.includes("troponin") ||
+    normalized.includes("ck mb") ||
+    normalized.includes("cpk") ||
+    normalized.includes("d dimer") ||
+    normalized.includes("amylase") ||
+    normalized.includes("lipase")
   ) {
     return null;
   }

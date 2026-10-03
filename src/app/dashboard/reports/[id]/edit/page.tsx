@@ -290,9 +290,9 @@ function canParamBeCalculatedInReport(test: Test, report: Report | null, current
   }
 
   // LFT
-  if (/\bindirect bilirubin\b|\bbilirubin indirect\b|\bunconjugated\b/i.test(name) || /(^|_|-)IBILI($|_|-)/.test(code) || /(^|_|-)BIL_INDIR($|_|-)/.test(code)) {
-    const hasTbili = hasReportParam([/\btotal bilirubin\b|\bbilirubin total\b|\bt\.?bili\b|serum bilirubin \(total\)/i, "LFT_TBILI", "BIO_TBILI", "LFT_BIL_TOT", "SYS_LFT_BILI_TOT"], report, currentResultId);
-    const hasDbili = hasReportParam([/\bdirect bilirubin\b|\bbilirubin direct\b|\bd\.?bili\b|conjugated bilirubin/i, "LFT_DBILI", "BIO_DBILI", "LFT_BIL_DIR", "SYS_LFT_BILI_DIR"], report, currentResultId);
+  if (/\bindirect bilirubin\b|\bbilirubin indirect\b|\bunconjugated\b/i.test(name) || /(^|_|-)IBILI($|_|-)/.test(code) || /(^|_|-)BIL_INDIR($|_|-)/.test(code) || code.includes("SBIL_INDIRECT")) {
+    const hasTbili = hasReportParam([/\btotal bilirubin\b|\bbilirubin total\b|\bt\.?bili\b|serum bilirubin \(total\)/i, "LFT_TBILI", "BIO_TBILI", "LFT_BIL_TOT", "SYS_LFT_BILI_TOT", "BIO_SBIL_TOTAL", "TBILI"], report, currentResultId);
+    const hasDbili = hasReportParam([/\bdirect bilirubin\b|\bbilirubin direct\b|\bd\.?bili\b|conjugated bilirubin/i, "LFT_DBILI", "BIO_DBILI", "LFT_BIL_DIR", "SYS_LFT_BILI_DIR", "BIO_SBIL_DIRECT", "DBILI"], report, currentResultId);
     return hasTbili && hasDbili;
   }
   if (/\bglobulin\b/i.test(name) || /(^|_|-)GLOBULIN($|_|-)/.test(code) || /(^|_|-)GLOB($|_|-)/.test(code)) {
@@ -313,10 +313,10 @@ function canParamBeCalculatedInReport(test: Test, report: Report | null, current
   }
 
   // KFT
-  const hasUrea = hasReportParam([/\bblood urea\b|\bserum urea\b|^urea$/i, "KFT_UREA", "BIO_UREA", "SYS_KFT_UREA", "BIO_043_UREA"], report, currentResultId);
-  const hasCreat = hasReportParam([/\bserum creatinine\b|^creatinine$/i, "KFT_CREAT", "BIO_CREAT", "SYS_KFT_CREAT", "BIO_042_CREAT"], report, currentResultId);
+  const hasUrea = hasReportParam([/\bblood urea\b|\bserum urea\b|^urea$/i, "KFT_UREA", "BIO_UREA", "SYS_KFT_UREA", "BIO_043_UREA", "UREA"], report, currentResultId);
+  const hasCreat = hasReportParam([/\bserum creatinine\b|^creatinine$/i, "KFT_CREAT", "BIO_CREAT", "SYS_KFT_CREAT", "BIO_042_CREAT", "CREAT", "CREATININE"], report, currentResultId);
 
-  if (/\bblood urea nitrogen\b|\bbun\b/i.test(name) || (/(^|_|-)BUN($|_|-)/.test(code) && !code.includes("CREAT"))) {
+  if (/\bblood urea nitrogen\b|\bbun\b/i.test(name) || (/(^|_|-)BUN($|_|-)/.test(code) && !code.includes("CREAT")) || code.includes("065_BUN")) {
     return hasUrea;
   }
   if (/\bbun\s*[\/:]\s*creatinine\b|\bbun.*creat.*ratio/i.test(name) || /(^|_|-)BUN_CREAT($|_|-)/.test(code)) {
@@ -420,13 +420,13 @@ function isParamFormulaCalculated(test: Test): boolean {
   if (/\babc\b|absolute basophil/i.test(name) || /(^|_|-)ABC($|_|-)/.test(code)) return true;
 
   // LFT
-  if (/\bindirect bilirubin\b|\bbilirubin indirect\b|\bunconjugated\b/i.test(name) || /(^|_|-)IBILI($|_|-)/.test(code) || /(^|_|-)BIL_INDIR($|_|-)/.test(code)) return true;
+  if (/\bindirect bilirubin\b|\bbilirubin indirect\b|\bunconjugated\b/i.test(name) || /(^|_|-)IBILI($|_|-)/.test(code) || /(^|_|-)BIL_INDIR($|_|-)/.test(code) || code.includes("SBIL_INDIRECT")) return true;
   if (/\bglobulin\b/i.test(name) || /(^|_|-)GLOBULIN($|_|-)/.test(code) || /(^|_|-)GLOB($|_|-)/.test(code)) return true;
   if (/\ba\s*:\s*g\b|\ba\s*[\/:]\s*g\b|albumin.*globulin.*ratio/i.test(name) || /(^|_|-)AG_RATIO($|_|-)/.test(code)) return true;
   if (/\bsgot\s*[\/:]\s*sgpt\b|\bast\s*[\/:]\s*alt\b|de ritis/i.test(name) || /(^|_|-)AST_ALT($|_|-)/.test(code)) return true;
 
   // KFT
-  if (/\bblood urea nitrogen\b|\bbun\b/i.test(name) || (/(^|_|-)BUN($|_|-)/.test(code) && !code.includes("CREAT"))) return true;
+  if (/\bblood urea nitrogen\b|\bbun\b/i.test(name) || (/(^|_|-)BUN($|_|-)/.test(code) && !code.includes("CREAT")) || code.includes("065_BUN")) return true;
   if (/\bbun\s*[\/:]\s*creatinine\b|\bbun.*creat.*ratio/i.test(name) || /(^|_|-)BUN_CREAT($|_|-)/.test(code)) return true;
   if (/\burea\s*[\/:]\s*creatinine\b|\burea.*creat.*ratio/i.test(name) || /(^|_|-)UREA_CREAT($|_|-)/.test(code)) return true;
   if (/\begfr\b|estimated gfr|calculated egfr/i.test(name) || /(^|_|-)EGFR($|_|-)/.test(code) || code.includes("EGFR")) return true;
@@ -1008,10 +1008,10 @@ function computeAutomatedFormulas(
   // BUN = Blood Urea / 2.14   [WHO standard conversion]
   const bunTarget = fp({
     exactCodes: [
-      "KFT_BUN", "BIO_BUN",
-      "BIO_KFT_PANEL_KFT_BUN", "SYS_KFT_BUN", "BUN",
+      "KFT_BUN", "BIO_BUN", "BIO_065_BUN",
+      "BIO_KFT_PANEL_KFT_BUN", "SYS_KFT_BUN", "SYS_065_BUN", "BUN",
     ],
-    exactNames: ["Blood Urea Nitrogen (BUN)", "BUN"],
+    exactNames: ["Blood Urea Nitrogen (BUN)", "BUN", "Blood Urea Nitrogen"],
     patterns: [/\bblood urea nitrogen\b/i, /\bbun\b/i],
     excludePatterns: [/ratio/i, /creatinine/i],
   });
@@ -3232,6 +3232,7 @@ function ResultEntryContent() {
                                                 testName={group.mainTestName}
                                                 category={item.test.category || (section.sectionName !== "_default" ? section.sectionName : undefined)}
                                                 customDbOptions={item.test?.customOptions ?? item.test?.custom_options}
+                                                valueType={item.test.valueType || item.test.value_type}
                                                 value={val}
                                                 onChange={(newVal) => handleValueChange(item.id, newVal)}
                                                 onKeyDown={(e) => handleInputKeyDown(e, item.id)}
@@ -3281,6 +3282,7 @@ function ResultEntryContent() {
                                                   testName={group.mainTestName}
                                                   category={item.test.category || (section.sectionName !== "_default" ? section.sectionName : undefined)}
                                                   customDbOptions={item.test?.customOptions ?? item.test?.custom_options}
+                                                  valueType={item.test.valueType || item.test.value_type}
                                                   value={val}
                                                   onChange={(newVal) => handleValueChange(item.id, newVal)}
                                                   onKeyDown={(e) => handleInputKeyDown(e, item.id)}

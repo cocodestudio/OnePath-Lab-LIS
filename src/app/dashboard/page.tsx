@@ -10,7 +10,8 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie,
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser, clearApiCache } from "@/lib/api-client";
+import { useToast } from "@/components/ui/toast";
 import { CollectionCenterOverview } from "@/components/collection-center-overview";
 import { B2BOverview } from "@/components/b2b-overview";
 import { DashboardShimmer } from "@/components/dashboard-shimmer";
@@ -74,7 +75,9 @@ const getTodayDateStr = () => {
 };
 
 export default function DashboardOverviewPage() {
+  const toast = useToast();
   const [isMounted, setIsMounted] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [user, setUser] = useState<any>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -186,14 +189,29 @@ export default function DashboardOverviewPage() {
   }, []);
 
   const loadDashboardData = async (forceRefresh = false) => {
+    if (forceRefresh) {
+      setIsRefreshing(true);
+      clearApiCache("/analytics");
+      clearApiCache("/reports");
+      try {
+        localStorage.removeItem("lis_cached_dashboard_stats");
+        localStorage.removeItem("lis_cached_dashboard_charts");
+        localStorage.removeItem("lis_cached_dashboard_recent_reports");
+      } catch {}
+      try {
+        fetchFromLaravel("/lab", { skipCache: true }).then((res) => {
+          if (res) setLabInfo(res);
+        }).catch(() => {});
+      } catch {}
+    }
     try {
       const hasExistingData = stats.totalPatients > 0 || recentReports.length > 0;
       if (forceRefresh && !hasExistingData) {
         setLoading(true);
       }
       const [analytics, reports] = await Promise.all([
-        fetchFromLaravel("/analytics", { skipCache: forceRefresh }),
-        fetchFromLaravel("/reports", { skipCache: forceRefresh }),
+        fetchFromLaravel(forceRefresh ? "/analytics?refresh=1" : "/analytics", { skipCache: forceRefresh }),
+        fetchFromLaravel(forceRefresh ? "/reports?refresh=1" : "/reports", { skipCache: forceRefresh }),
       ]);
 
       const totReports = analytics?.totalReports ?? 0;
@@ -237,9 +255,17 @@ export default function DashboardOverviewPage() {
       try {
         localStorage.setItem("lis_cached_dashboard_recent_reports", JSON.stringify(slicedReports));
       } catch {}
+
+      if (forceRefresh) {
+        toast.success("Overview Refreshed", "Dashboard metrics and reports updated with latest live data.");
+      }
     } catch (err) {
       console.error("Dashboard load error:", err);
+      if (forceRefresh) {
+        toast.error("Refresh Failed", "Could not fetch updated live data. Please try again.");
+      }
     } finally {
+      setIsRefreshing(false);
       setLoading(false);
     }
   };
@@ -292,9 +318,15 @@ export default function DashboardOverviewPage() {
           <p className="text-sm text-muted-foreground mt-1">Here's what's happening today in your laboratory.</p>
         </div>
         <div className="flex gap-2.5">
-          <button onClick={() => loadDashboardData(true)}
-            className="flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-foreground text-xs font-semibold hover:bg-accent hover:text-accent-foreground transition-all cursor-pointer">
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          <button
+            type="button"
+            onClick={() => loadDashboardData(true)}
+            disabled={isRefreshing || loading}
+            title="Refresh latest live analytics and reports"
+            className="flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-foreground text-xs font-semibold hover:bg-accent hover:text-accent-foreground transition-all cursor-pointer disabled:opacity-60 shadow-2xs"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
+            <span>{isRefreshing ? "Refreshing..." : "Refresh"}</span>
           </button>
         </div>
       </div>
