@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, Suspense } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -36,6 +36,12 @@ import { getNativePdfBase64, downloadNativePdf } from "@/lib/pdf-report-download
 import { useToast } from "@/components/ui/toast";
 import { AbhaLinkModal, type AbhaVerifiedPatient } from "@/components/abha-link-modal";
 import { AbhaQrPosterModal } from "@/components/abha-qr-poster-modal";
+import {
+  type OutsourcePartnerLab,
+  getCachedPartnerLabs,
+  setCachedPartnerLabs,
+  DEFAULT_PARTNER_LABS,
+} from "@/lib/outsource-partner-labs";
 
 interface Test {
   id: string; name: string; category: string; price: number;
@@ -201,7 +207,7 @@ function classifyTestsIntoTubes(tests: Array<{ id: string; name: string; categor
 const defaultDoctors = ["Self", "Dr. Rajesh Sharma", "Dr. Amit Verma", "Dr. Anjali Gupta", "Dr. S. K. Roy"];
 const defaultCollectionPoints = ["Main Lab", "Home Collection", "Hospital OPD", "Branch 1 - City Center"];
 const defaultPhlebotomists = ["Self / Lab Staff", "Rahul Phlebotomist", "Pooja Sharma (Tech)", "Vikram Collector"];
-const OUTSOURCE_PARTNER_LABS = [
+const DEFAULT_PARTNER_LAB_NAMES = [
   "Dr. Lal PathLabs",
   "SRL Diagnostics",
   "Metropolis Healthcare",
@@ -210,7 +216,7 @@ const OUTSOURCE_PARTNER_LABS = [
   "Oncquest Laboratories",
   "Apollo Diagnostics",
   "Redcliffe Labs",
-  "Other Partner Lab",
+  "General Diagnostics",
 ];
 
 function RegisterPageShimmer({ pid }: { pid?: string | null }) {
@@ -599,10 +605,14 @@ function RegisterPatientPage() {
   const [selectedPackage, setSelectedPackage] = useState<LabPackage | null>(null);
 
   // Outsource Investigations State
+  const [outsourcePartnerLabsList, setOutsourcePartnerLabsList] = useState<OutsourcePartnerLab[]>(() => getCachedPartnerLabs());
   const [selectedOutsourceTests, setSelectedOutsourceTests] = useState<
     Array<{ id?: string; name: string; code?: string; price: number; category?: string }>
   >([]);
-  const [outsourcePartnerLab, setOutsourcePartnerLab] = useState<string>("Dr. Lal PathLabs");
+  const [outsourcePartnerLab, setOutsourcePartnerLab] = useState<string>(() => {
+    const cached = getCachedPartnerLabs();
+    return cached.length > 0 ? cached[0].name : "Dr. Lal PathLabs";
+  });
   const [outsourcePartnerLabCustom, setOutsourcePartnerLabCustom] = useState<string>("");
   const [outsourceNotes, setOutsourceNotes] = useState<string>("");
   const [customOutsourceName, setCustomOutsourceName] = useState<string>("");
@@ -858,17 +868,17 @@ function RegisterPatientPage() {
         collected_at: selectedB2bCenter
           ? (selectedB2bCenter.name || collectedAtSelect)
           : (isB2B
-              ? (getStoredUser()?.name || collectedAtSelect)
-              : (isCollectionCenter
-                  ? (getStoredUser()?.lab_name || getStoredUser()?.labName || getStoredUser()?.name || collectedAtSelect)
-                  : `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`)),
+            ? (getStoredUser()?.name || collectedAtSelect)
+            : (isCollectionCenter
+              ? (getStoredUser()?.lab_name || getStoredUser()?.labName || getStoredUser()?.name || collectedAtSelect)
+              : `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`)),
         collectedAt: selectedB2bCenter
           ? (selectedB2bCenter.name || collectedAtSelect)
           : (isB2B
-              ? (getStoredUser()?.name || collectedAtSelect)
-              : (isCollectionCenter
-                  ? (getStoredUser()?.lab_name || getStoredUser()?.labName || getStoredUser()?.name || collectedAtSelect)
-                  : `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`)),
+            ? (getStoredUser()?.name || collectedAtSelect)
+            : (isCollectionCenter
+              ? (getStoredUser()?.lab_name || getStoredUser()?.labName || getStoredUser()?.name || collectedAtSelect)
+              : `${collectedAtSelect || "Main Lab"} (${collectedBySelect || "Self / Lab Staff"})`)),
         collected_by: collectedBySelect || null,
         collectedBy: collectedBySelect || null,
         b2b_user_id: (!isCollectionCenter && !isReceptionist && selectedB2bCenter) ? selectedB2bCenter.id : undefined,
@@ -1029,7 +1039,7 @@ function RegisterPatientPage() {
             }
           }
           window.dispatchEvent(new Event("lis_settings_updated"));
-        } catch {}
+        } catch { }
       }
       setIsSettingsOpen(false);
     } catch (e) {
@@ -1049,7 +1059,7 @@ function RegisterPatientPage() {
     try {
       const cachedBill = localStorage.getItem("lis_cached_bill_settings");
       if (cachedBill) setBillSettings(normalizeBillSettings(JSON.parse(cachedBill)));
-    } catch {}
+    } catch { }
 
     const storedUser = getStoredUser();
     if (storedUser) {
@@ -1071,15 +1081,15 @@ function RegisterPatientPage() {
           "Authorization": `Bearer ${token}`
         }
       })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data?.user) {
-          updateStoredUser(data.user);
-          setCurrentUserRole(data.user.role || "STAFF");
-          setCurrentUserPermissions(Array.isArray(data.user.permissions) ? data.user.permissions : []);
-        }
-      })
-      .catch(() => {});
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.user) {
+            updateStoredUser(data.user);
+            setCurrentUserRole(data.user.role || "STAFF");
+            setCurrentUserPermissions(Array.isArray(data.user.permissions) ? data.user.permissions : []);
+          }
+        })
+        .catch(() => { });
     }
 
     const savedIntake = localStorage.getItem("lis_intake_fields");
@@ -1124,7 +1134,7 @@ function RegisterPatientPage() {
             setTempIntakeFields(sanitized);
           }
         }
-      } catch {}
+      } catch { }
     }
 
     const savedDocs = localStorage.getItem("lis_referral_doctors");
@@ -1151,7 +1161,7 @@ function RegisterPatientPage() {
           setAvailableTests(parsed);
         }
       }
-    } catch {}
+    } catch { }
 
     (async () => {
       try {
@@ -1159,7 +1169,7 @@ function RegisterPatientPage() {
         const list = Array.isArray(data) ? data : (data?.data || []);
         if (list.length > 0) {
           setAvailableTests(list);
-          try { localStorage.setItem("lis_cached_tests", JSON.stringify(list)); } catch {}
+          try { localStorage.setItem("lis_cached_tests", JSON.stringify(list)); } catch { }
         }
       } catch (err) { console.error("Error fetching tests:", err); }
 
@@ -1187,7 +1197,7 @@ function RegisterPatientPage() {
               setTempIntakeFields(normalized.intakeFields);
               try {
                 localStorage.setItem("lis_intake_fields", JSON.stringify(normalized.intakeFields));
-              } catch {}
+              } catch { }
             }
             if (normalized.defaultDesignation) {
               setDesignation(normalizeDesignation(normalized.defaultDesignation));
@@ -1199,7 +1209,7 @@ function RegisterPatientPage() {
             setBillSettings(normalizedBill);
             try {
               localStorage.setItem("lis_cached_bill_settings", JSON.stringify(normalizedBill));
-            } catch {}
+            } catch { }
           }
         }
       } catch (err) { console.error("Error fetching lab defaults:", err); }
@@ -1243,8 +1253,70 @@ function RegisterPatientPage() {
       try {
         setAvailablePackages(getStoredPackages());
       } catch (e) { }
+
+      // Fetch dynamic Outsource Partner Labs configured by user
+      try {
+        const opRes = await fetchFromLaravel("/outsource/partner-labs");
+        const labsData = Array.isArray(opRes) ? opRes : (opRes?.data || []);
+        if (Array.isArray(labsData) && labsData.length > 0) {
+          setOutsourcePartnerLabsList(labsData);
+          setCachedPartnerLabs(labsData);
+        }
+      } catch (e) {
+        console.error("Error fetching outsource partner labs:", e);
+      }
     })();
   }, []);
+
+  useEffect(() => {
+    const refreshPartnerLabs = async () => {
+      const cached = getCachedPartnerLabs();
+      if (Array.isArray(cached) && cached.length > 0) {
+        setOutsourcePartnerLabsList(cached);
+      }
+      try {
+        const opRes = await fetchFromLaravel("/outsource/partner-labs");
+        const labsData = Array.isArray(opRes) ? opRes : (opRes?.data || []);
+        if (Array.isArray(labsData) && labsData.length > 0) {
+          setOutsourcePartnerLabsList(labsData);
+          setCachedPartnerLabs(labsData);
+        }
+      } catch (e) { }
+    };
+
+    const handlePartnerLabsUpdated = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setOutsourcePartnerLabsList(e.detail);
+      } else {
+        setOutsourcePartnerLabsList(getCachedPartnerLabs());
+      }
+    };
+
+    window.addEventListener("outsource_partner_labs_updated", handlePartnerLabsUpdated);
+    window.addEventListener("storage", refreshPartnerLabs);
+    window.addEventListener("focus", refreshPartnerLabs);
+
+    return () => {
+      window.removeEventListener("outsource_partner_labs_updated", handlePartnerLabsUpdated);
+      window.removeEventListener("storage", refreshPartnerLabs);
+      window.removeEventListener("focus", refreshPartnerLabs);
+    };
+  }, []);
+
+  // When switching to OUTSOURCE tab, instantly fetch latest rates
+  useEffect(() => {
+    if (catalogMode === "OUTSOURCE") {
+      fetchFromLaravel("/outsource/partner-labs")
+        .then((opRes) => {
+          const labsData = Array.isArray(opRes) ? opRes : (opRes?.data || []);
+          if (Array.isArray(labsData) && labsData.length > 0) {
+            setOutsourcePartnerLabsList(labsData);
+            setCachedPartnerLabs(labsData);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [catalogMode]);
 
   const applyPatientDemographics = (patientData: any) => {
     if (!patientData) return;
@@ -1400,7 +1472,7 @@ function RegisterPatientPage() {
           setHasPreloadedPreview(true);
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // 2. Fetch authoritative data from API
     (async () => {
@@ -1436,7 +1508,7 @@ function RegisterPatientPage() {
                 const allBills = Array.isArray(billsRes) ? billsRes : (billsRes?.data || []);
                 patBill = allBills.find((b: any) => (b.patient_id === editId || b.patientId === editId)) || allBills[0] || null;
               }
-            } catch (_) {}
+            } catch (_) { }
           }
 
           if (patReport) {
@@ -1779,7 +1851,7 @@ function RegisterPatientPage() {
         setTimeout(() => {
           try {
             targetEl.focus();
-          } catch (_) {}
+          } catch (_) { }
         }, 250);
       }
 
@@ -1815,10 +1887,10 @@ function RegisterPatientPage() {
       const effectiveCollectedAt = selectedB2bCenter
         ? (selectedB2bCenter.name || collectedAtSelect)
         : (isB2BUser
-            ? (storedUser?.name || collectedAtSelect)
-            : (isCollectionCenterUser
-                ? (storedUser?.lab_name || storedUser?.labName || storedUser?.name || collectedAtSelect)
-                : `${collectedAtSelect} (${collectedBySelect})`));
+          ? (storedUser?.name || collectedAtSelect)
+          : (isCollectionCenterUser
+            ? (storedUser?.lab_name || storedUser?.labName || storedUser?.name || collectedAtSelect)
+            : `${collectedAtSelect} (${collectedBySelect})`));
 
       let data;
       if (editPatientId) {
@@ -2093,7 +2165,7 @@ function RegisterPatientPage() {
         localStorage.removeItem("lis_cached_patients");
         localStorage.removeItem("lis_cached_reports");
         localStorage.removeItem("lis_cached_today_samples");
-      } catch (_) {}
+      } catch (_) { }
 
       clearApiCache("/patients");
       clearApiCache("/reports");
@@ -2145,6 +2217,91 @@ function RegisterPatientPage() {
     }
   };
 
+  // Outsource Partner Lab Pricing Lookup & Selection
+  const selectedPartnerLabObj = useMemo(() => {
+    const cur = outsourcePartnerLab.toLowerCase().trim();
+    return outsourcePartnerLabsList.find(
+      (l) => l.name.toLowerCase().trim() === cur || l.id === outsourcePartnerLab
+    );
+  }, [outsourcePartnerLabsList, outsourcePartnerLab]);
+
+  const getOutsourceTestPricing = useCallback(
+    (test: any) => {
+      const testId = String(test.id || "").toLowerCase().trim();
+      const testName = String(test.name || "").toLowerCase().trim();
+      const testCode = String(test.testCode || test.test_code || test.code || "").toLowerCase().trim();
+
+      let customRate: number | null = null;
+      if (selectedPartnerLabObj && Array.isArray(selectedPartnerLabObj.tests)) {
+        const match: any = selectedPartnerLabObj.tests.find((t: any) => {
+          const tId = String(t.test_id || t.testId || "").toLowerCase().trim();
+          const tName = String(t.test_name || t.testName || "").toLowerCase().trim();
+          const tCode = String(t.test_code || t.testCode || "").toLowerCase().trim();
+
+          if (tId && testId && tId === testId) return true;
+          if (tName && testName && tName === testName) return true;
+          if (tCode && testCode && tCode === testCode) return true;
+          return false;
+        });
+
+        if (match) {
+          const rate = match.outsource_price ?? match.outsourcePrice;
+          if (rate !== undefined && rate !== null && !isNaN(Number(rate))) {
+            customRate = Number(rate);
+          }
+        }
+      }
+
+      const basePrice = Number(test.price) || 0;
+      const b2bRate = (test as any).b2bPrice ?? (test as any).b2b_price;
+      const effectivePrice = customRate !== null ? customRate : ((isB2B || !!selectedB2bCenter) && b2bRate != null ? Number(b2bRate) : basePrice);
+
+      return {
+        hasCustomRate: customRate !== null,
+        customRate,
+        basePrice,
+        effectivePrice,
+      };
+    },
+    [selectedPartnerLabObj, isB2B, selectedB2bCenter]
+  );
+
+  const handlePartnerLabChange = (newLabName: string) => {
+    setOutsourcePartnerLab(newLabName);
+    const targetName = newLabName.toLowerCase().trim();
+    const newLab = outsourcePartnerLabsList.find(
+      (l) => l.name.toLowerCase().trim() === targetName || l.id === newLabName
+    );
+    // Recalibrate prices of selected catalog outsource tests
+    setSelectedOutsourceTests((prev) =>
+      prev.map((item) => {
+        if (item.code === "OUT-CUST" || !item.id) return item;
+        let matchedPrice = item.price;
+        const itemId = String(item.id || "").toLowerCase().trim();
+        const itemName = String(item.name || "").toLowerCase().trim();
+
+        if (newLab && Array.isArray(newLab.tests)) {
+          const match: any = newLab.tests.find((t: any) => {
+            const tId = String(t.test_id || t.testId || "").toLowerCase().trim();
+            const tName = String(t.test_name || t.testName || "").toLowerCase().trim();
+            return (tId && itemId && tId === itemId) || (tName && itemName && tName === itemName);
+          });
+          const rate = match ? (match.outsource_price ?? match.outsourcePrice) : null;
+          if (rate !== undefined && rate !== null && !isNaN(Number(rate))) {
+            matchedPrice = Number(rate);
+          } else {
+            const orig = availableTests.find((at) => String(at.id).toLowerCase() === itemId);
+            if (orig) matchedPrice = Number(orig.price) || 0;
+          }
+        } else {
+          const orig = availableTests.find((at) => String(at.id).toLowerCase() === itemId);
+          if (orig) matchedPrice = Number(orig.price) || 0;
+        }
+        return { ...item, price: matchedPrice };
+      })
+    );
+  };
+
   // Outsource Test Helpers
   const handleToggleOutsourceTest = (test: any) => {
     const exists = selectedOutsourceTests.some(
@@ -2156,13 +2313,14 @@ function RegisterPatientPage() {
         prev.filter((st) => (st.id ? st.id !== test.id : st.name.toLowerCase() !== test.name.toLowerCase()))
       );
     } else {
+      const pricing = getOutsourceTestPricing(test);
       setSelectedOutsourceTests((prev) => [
         ...prev,
         {
           id: test.id,
           name: test.name,
           code: test.testCode || test.test_code || test.code || "",
-          price: Number(test.price) || 0,
+          price: pricing.effectivePrice,
           category: test.category || "Outsource",
         },
       ]);
@@ -2270,15 +2428,16 @@ function RegisterPatientPage() {
       const effectiveCollectedAt = selectedB2bCenter
         ? (selectedB2bCenter.name || collectedAtSelect)
         : (isB2BUser
-            ? (storedUser?.name || collectedAtSelect)
-            : (isCollectionCenterUser
-                ? (storedUser?.lab_name || storedUser?.labName || storedUser?.name || collectedAtSelect)
-                : `${collectedAtSelect} (${collectedBySelect})`));
+          ? (storedUser?.name || collectedAtSelect)
+          : (isCollectionCenterUser
+            ? (storedUser?.lab_name || storedUser?.labName || storedUser?.name || collectedAtSelect)
+            : `${collectedAtSelect} (${collectedBySelect})`));
 
       const computedPaid = isEffectiveB2B ? 0 : parsedPaid;
       const computedStatus = isEffectiveB2B ? "UNPAID" : (computedPaid >= grandTotal ? "PAID" : (computedPaid > 0 ? "PARTIAL" : "UNPAID"));
       const computedBalance = isEffectiveB2B ? grandTotal : balanceDue;
       const computedDiscount = isEffectiveB2B ? 0 : parsedDiscount;
+      const effectivePaymentMode = (computedPaid > 0 && selectedPaymentMode === "UNPAID") ? "CASH" : (selectedPaymentMode || "CASH");
 
       // Sanitize testIds: Only send valid unique UUIDs to PostgreSQL backend
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -2319,7 +2478,9 @@ function RegisterPatientPage() {
             total: grandTotal,
             discount: computedDiscount,
             paid_amount: computedPaid,
-            payment_mode: selectedPaymentMode || "CASH",
+            paidAmount: computedPaid,
+            payment_mode: effectivePaymentMode,
+            paymentMode: effectivePaymentMode,
             status: computedStatus,
           }),
         });
@@ -2339,6 +2500,9 @@ function RegisterPatientPage() {
                   total: grandTotal,
                   discount: computedDiscount,
                   paid_amount: computedPaid,
+                  paidAmount: computedPaid,
+                  payment_mode: effectivePaymentMode,
+                  paymentMode: effectivePaymentMode,
                   status: computedStatus,
                 }),
               });
@@ -2374,7 +2538,11 @@ function RegisterPatientPage() {
               total: grandTotal,
               discount: computedDiscount,
               paidAmount: computedPaid,
+              paid_amount: computedPaid,
               paymentStatus: computedStatus,
+              payment_status: computedStatus,
+              paymentMode: effectivePaymentMode,
+              payment_mode: effectivePaymentMode,
               packageName: selectedPackage?.name || null,
               package_name: selectedPackage?.name || null,
               b2b_user_id: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : ((newPatient as any)?.meta?.b2b_user_id || (isB2BUser ? (storedUser?.id || null) : null)),
@@ -2462,16 +2630,16 @@ function RegisterPatientPage() {
         try {
           const outsourceMeta = hasOutsource
             ? {
-                has_outsource: true,
-                is_outsource: isPureOutsource,
-                outsource_tests: selectedOutsourceTests,
-                outsource_partner_lab: finalPartnerLab,
-                outsource_notes: outsourceNotes,
-              }
+              has_outsource: true,
+              is_outsource: isPureOutsource,
+              outsource_tests: selectedOutsourceTests,
+              outsource_partner_lab: finalPartnerLab,
+              outsource_notes: outsourceNotes,
+            }
             : {
-                has_outsource: false,
-                is_outsource: false,
-              };
+              has_outsource: false,
+              is_outsource: false,
+            };
 
           const updatePatientPayload: any = {
             name: fullName || newPatient.name,
@@ -2545,7 +2713,7 @@ function RegisterPatientPage() {
             localStorage.removeItem("lis_cached_patients");
             localStorage.removeItem("lis_cached_reports");
             localStorage.removeItem("lis_cached_today_samples");
-          } catch (_) {}
+          } catch (_) { }
 
           clearApiCache("/patients");
           clearApiCache("/reports");
@@ -2569,21 +2737,21 @@ function RegisterPatientPage() {
 
       const inHouseInvoiceTests = selectedTestObjects.length > 0
         ? selectedTestObjects.map(t => ({
-            id: t.id,
-            name: t.name,
-            category: t.category,
-            price: Number(t.price) || 0,
-            code: (t as any).testCode || (t as any).test_code || (t as any).code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
-            sampleType: (t as any).sampleType || (t as any).sample_type || undefined,
-          }))
+          id: t.id,
+          name: t.name,
+          category: t.category,
+          price: Number(t.price) || 0,
+          code: (t as any).testCode || (t as any).test_code || (t as any).code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
+          sampleType: (t as any).sampleType || (t as any).sample_type || undefined,
+        }))
         : (selectedPackage?.tests || []).map((t: any) => ({
-            id: t.id,
-            name: t.name,
-            category: t.category || "General",
-            price: Number(t.price) || 0,
-            code: t.code || t.testCode || t.test_code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
-            sampleType: t.sampleType || t.sample_type || undefined,
-          }));
+          id: t.id,
+          name: t.name,
+          category: t.category || "General",
+          price: Number(t.price) || 0,
+          code: t.code || t.testCode || t.test_code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
+          sampleType: t.sampleType || t.sample_type || undefined,
+        }));
 
       const outsourceInvoiceTests = selectedOutsourceTests.map((t, idx) => ({
         id: t.id || `out-${idx}`,
@@ -2597,7 +2765,7 @@ function RegisterPatientPage() {
 
       setBookingSuccess(true);
       scrollToTop(false);
-      const initialMode = computedStatus === "PAID" ? (selectedPaymentMode !== "UNPAID" ? selectedPaymentMode : "CASH") : "UNPAID";
+      const initialMode = computedPaid > 0 ? (effectivePaymentMode !== "UNPAID" ? effectivePaymentMode : "CASH") : "UNPAID";
       setSelectedPaymentMode(initialMode as any);
       setPaymentUpdateMessage(null);
       setSuccessDetails({
@@ -2990,8 +3158,8 @@ function RegisterPatientPage() {
                         type="button"
                         onClick={() => setIsAbhaModalOpen(true)}
                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer ${isAbhaVerified
-                            ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
-                            : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-blue-600/25 hover:shadow-md"
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
+                          : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-blue-600/25 hover:shadow-md"
                           }`}
                       >
                         <ShieldCheck className="h-3.5 w-3.5" />
@@ -3072,11 +3240,10 @@ function RegisterPatientPage() {
                         <input
                           id="input-first-name"
                           type="text"
-                          className={`w-full pl-10 pr-4 h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-medium transition-all shadow-2xs ${
-                            fieldErrors.firstName
-                              ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
-                              : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
-                          }`}
+                          className={`w-full pl-10 pr-4 h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-medium transition-all shadow-2xs ${fieldErrors.firstName
+                            ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                            : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                            }`}
                           placeholder="Enter First Name"
                           value={firstName}
                           onChange={(e) => {
@@ -3126,11 +3293,10 @@ function RegisterPatientPage() {
                             min="0"
                             max="120"
                             placeholder="Years"
-                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs ${
-                              fieldErrors.age
-                                ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
-                                : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
-                            }`}
+                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs ${fieldErrors.age
+                              ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                              : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                              }`}
                             value={ageYears}
                             onChange={(e) => {
                               setAgeYears(e.target.value);
@@ -3147,11 +3313,10 @@ function RegisterPatientPage() {
                             min="0"
                             max="11"
                             placeholder="Months"
-                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs ${
-                              fieldErrors.age
-                                ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
-                                : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
-                            }`}
+                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs ${fieldErrors.age
+                              ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                              : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                              }`}
                             value={ageMonths}
                             onChange={(e) => {
                               setAgeMonths(e.target.value);
@@ -3168,11 +3333,10 @@ function RegisterPatientPage() {
                             min="0"
                             max="30"
                             placeholder="Days"
-                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs ${
-                              fieldErrors.age
-                                ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
-                                : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
-                            }`}
+                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs ${fieldErrors.age
+                              ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                              : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                              }`}
                             value={ageDays}
                             onChange={(e) => {
                               setAgeDays(e.target.value);
@@ -3206,11 +3370,10 @@ function RegisterPatientPage() {
                       >
                         <SelectTrigger
                           id="input-gender-trigger"
-                          className={`h-11 bg-background rounded-xl font-medium text-foreground shadow-2xs ${
-                            fieldErrors.gender
-                              ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
-                              : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
-                          }`}
+                          className={`h-11 bg-background rounded-xl font-medium text-foreground shadow-2xs ${fieldErrors.gender
+                            ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                            : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                            }`}
                         >
                           <SelectValue placeholder="Select Gender" />
                         </SelectTrigger>
@@ -3246,11 +3409,10 @@ function RegisterPatientPage() {
                             id="input-phone"
                             type="tel"
                             maxLength={10}
-                            className={`w-full pl-[74px] pr-4 h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-semibold tracking-wider transition-all shadow-2xs font-mono ${
-                              fieldErrors.phone
-                                ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
-                                : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
-                            }`}
+                            className={`w-full pl-[74px] pr-4 h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-semibold tracking-wider transition-all shadow-2xs font-mono ${fieldErrors.phone
+                              ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                              : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                              }`}
                             placeholder="98765 43210"
                             value={phone}
                             onChange={(e) => {
@@ -3538,11 +3700,10 @@ function RegisterPatientPage() {
                         >
                           <SelectTrigger
                             id="input-ref-doctor"
-                            className={`h-11 bg-background rounded-xl font-medium text-foreground shadow-2xs ${
-                              fieldErrors.refDoctor
-                                ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
-                                : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
-                            }`}
+                            className={`h-11 bg-background rounded-xl font-medium text-foreground shadow-2xs ${fieldErrors.refDoctor
+                              ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
+                              : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
+                              }`}
                           >
                             <SelectValue />
                           </SelectTrigger>
@@ -4013,8 +4174,8 @@ function RegisterPatientPage() {
               <div
                 onClick={() => newPatient && setIsModalOpen(true)}
                 className={`p-6 rounded-2xl border-2 transition-all flex flex-col sm:flex-row items-center justify-between gap-4 ${newPatient
-                    ? "bg-accent/60 border-primary cursor-pointer shadow-md hover:bg-accent/80"
-                    : "bg-muted/30 border-dashed border-border/80 opacity-70 cursor-not-allowed"
+                  ? "bg-accent/60 border-primary cursor-pointer shadow-md hover:bg-accent/80"
+                  : "bg-muted/30 border-dashed border-border/80 opacity-70 cursor-not-allowed"
                   }`}
               >
                 <div className="flex items-center gap-4 text-center sm:text-left">
@@ -4068,8 +4229,8 @@ function RegisterPatientPage() {
                         {specimenTubes.length} Tubes Required
                       </span>
                       <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 border ${specimenTubes.every(t => vialBarcodes[t.tubeType]?.trim())
-                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
-                          : "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                        ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                        : "bg-amber-500/10 text-amber-600 border-amber-500/30"
                         }`}>
                         {specimenTubes.every(t => vialBarcodes[t.tubeType]?.trim()) ? (
                           <>
@@ -4117,8 +4278,8 @@ function RegisterPatientPage() {
                             </div>
 
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 flex items-center gap-1 ${isScanned
-                                ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
-                                : "bg-amber-500/15 text-amber-600 border border-amber-500/30"
+                              ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
+                              : "bg-amber-500/15 text-amber-600 border border-amber-500/30"
                               }`}>
                               {isScanned ? (
                                 <>
@@ -4349,15 +4510,98 @@ function RegisterPatientPage() {
                         <span className="font-mono">-₹{parsedDiscount.toFixed(2)}</span>
                       </div>
                     )}
+
+                    {/* Total Bill / Net after Concession */}
+                    <div className="flex justify-between items-center pt-1 border-t border-border/60 text-muted-foreground">
+                      <span className="font-medium">Total Bill Amount</span>
+                      <span className="font-mono font-bold text-foreground">₹{grandTotal.toFixed(2)}</span>
+                    </div>
+
+                    {/* Advance Payment Input */}
+                    <div className="space-y-1.5 pt-1.5 border-t border-border/60">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-muted-foreground font-medium">Advance Payment</span>
+                          {parsedPaid > 0 && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              {parsedPaid >= grandTotal ? "Full" : "Partial"}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono text-muted-foreground">₹</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max={grandTotal}
+                            placeholder="0"
+                            value={paidAmount === "0" ? "" : paidAmount}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setPaidAmount(val);
+                              if (parseFloat(val) > 0 && selectedPaymentMode === "UNPAID") {
+                                setSelectedPaymentMode("CASH");
+                              }
+                            }}
+                            disabled={isEditLoading}
+                            className="w-24 px-2 py-1 bg-background border border-border/80 rounded-md font-mono text-xs font-bold text-right outline-none focus:border-primary text-foreground disabled:opacity-50"
+                          />
+                        </div>
+                      </div>
+
+
+                      {/* Advance Applied Line */}
+                      {parsedPaid > 0 && (
+                        <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold pt-1 border-t border-border/40">
+                          <span>Advance Received</span>
+                          <span className="font-mono font-bold">-₹{parsedPaid.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex justify-between items-center pt-2.5 border-t border-border/80">
-                    <span className="font-bold text-sm text-foreground">Net Payable</span>
-                    {isEditLoading ? (
-                      <Skeleton className="h-7 w-24 rounded" />
-                    ) : (
-                      <span className="font-display text-2xl font-bold text-primary font-mono">₹{grandTotal.toFixed(2)}</span>
-                    )}
+                  {/* Net Payable / Remaining Balance Due */}
+                  <div className="pt-2.5 border-t border-border/80 space-y-1">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="font-bold text-sm text-foreground block">
+                          {parsedPaid > 0 ? "Remaining Balance" : "Net Payable"}
+                        </span>
+                        {parsedPaid > 0 && (
+                          <span className="text-[10px] text-muted-foreground block">
+                            {balanceDue <= 0 ? "Bill settled completely" : `₹${parsedPaid.toFixed(2)} advance deducted`}
+                          </span>
+                        )}
+                      </div>
+                      {isEditLoading ? (
+                        <Skeleton className="h-7 w-24 rounded" />
+                      ) : (
+                        <div className="text-right">
+                          <span className={`font-display text-2xl font-bold font-mono ${balanceDue <= 0 && grandTotal > 0
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : balanceDue > 0 && parsedPaid > 0
+                                ? "text-amber-600 dark:text-amber-400"
+                                : "text-primary"
+                            }`}>
+                            ₹{balanceDue.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border/40">
+                      <span className="text-muted-foreground">
+                        Bill Status:
+                      </span>
+                      <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${balanceDue <= 0 && grandTotal > 0
+                          ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
+                          : parsedPaid > 0
+                            ? "bg-amber-500/15 text-amber-600 border border-amber-500/30"
+                            : "bg-rose-500/15 text-rose-600 border border-rose-500/30"
+                        }`}>
+                        {balanceDue <= 0 && grandTotal > 0 ? "PAID FULL" : parsedPaid > 0 ? "PARTIAL DUE" : "UNPAID DUE"}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Settlement is handled on the next step after invoice generation */}
@@ -4382,17 +4626,6 @@ function RegisterPatientPage() {
                   </button>
                 </div>
               </div>
-
-              <div className="p-4 rounded-xl border border-border/80 bg-card/60 text-xs text-muted-foreground space-y-1.5">
-                <p className="font-bold text-foreground flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  Clinical Protocol
-                </p>
-                <p className="leading-relaxed">
-                  Upon invoice generation, a unique Barcode and Lab ID will be printed on the patient intake receipt.
-                </p>
-              </div>
-
             </div>
 
           </div>
@@ -4537,21 +4770,33 @@ function RegisterPatientPage() {
                   </div>
                 )}
                 <div className="flex justify-between text-sm font-bold text-foreground pt-1 border-t border-border/60">
-                  <span>Net Payable</span>
+                  <span>Net Bill Amount</span>
                   <span className="font-mono text-primary font-extrabold">₹{(successDetails?.total || 0).toFixed(2)}</span>
                 </div>
+
+                {(successDetails?.paidAmount || 0) > 0 && (
+                  <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
+                    <span>Advance Received ({successDetails?.paymentMode || "CASH"})</span>
+                    <span className="font-mono font-bold">-₹{(successDetails?.paidAmount || 0).toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between font-extrabold text-foreground pt-1 border-t border-border/60">
+                  <span>Remaining Balance Due</span>
+                  <span className={`font-mono text-sm ${(successDetails?.balanceDue || 0) > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-emerald-600 dark:text-emerald-400"}`}>
+                    ₹{(successDetails?.balanceDue || 0).toFixed(2)}
+                  </span>
+                </div>
+
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-[11px] font-semibold text-muted-foreground">
-                    Paid: <strong className="text-foreground font-mono">₹{(successDetails?.paidAmount || 0).toFixed(2)}</strong>
-                    {(successDetails?.balanceDue || 0) > 0 && (
-                      <span className="text-rose-500 font-bold ml-1.5">(Due: ₹{(successDetails?.balanceDue || 0).toFixed(2)})</span>
-                    )}
+                    Status: <strong className="text-foreground">{successDetails?.paymentStatus || "UNPAID"}</strong>
                   </span>
                   <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${(successDetails?.balanceDue || 0) <= 0
-                      ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
-                      : (successDetails?.paidAmount || 0) > 0
-                        ? "bg-amber-500/15 text-amber-600 border border-amber-500/30"
-                        : "bg-rose-500/15 text-rose-600 border border-rose-500/30"
+                    ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
+                    : (successDetails?.paidAmount || 0) > 0
+                      ? "bg-amber-500/15 text-amber-600 border border-amber-500/30"
+                      : "bg-rose-500/15 text-rose-600 border border-rose-500/30"
                     }`}>
                     {(successDetails?.balanceDue || 0) <= 0 ? "PAID FULL" : (successDetails?.paidAmount || 0) > 0 ? "PARTIAL" : "UNPAID"}
                   </span>
@@ -4760,8 +5005,8 @@ function RegisterPatientPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground font-semibold">Payment Status:</span>
                   <span className={`text-xs font-extrabold px-3 py-1 rounded-full ${(successDetails?.balanceDue || 0) <= 0
-                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
-                      : "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                    : "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
                     }`}>
                     {(successDetails?.balanceDue || 0) <= 0 ? "PAID FULL (Cleared)" : `₹${(successDetails?.balanceDue || 0).toFixed(2)} UNPAID (Due)`}
                   </span>
@@ -4784,8 +5029,8 @@ function RegisterPatientPage() {
                   onClick={() => handleApplyPaymentMode("CASH")}
                   disabled={isUpdatingPaymentMode}
                   className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
                     }`}
                 >
                   <div className="flex items-center justify-between">
@@ -4810,8 +5055,8 @@ function RegisterPatientPage() {
                   onClick={() => handleApplyPaymentMode("ONLINE")}
                   disabled={isUpdatingPaymentMode}
                   className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
                     }`}
                 >
                   <div className="flex items-center justify-between">
@@ -4836,8 +5081,8 @@ function RegisterPatientPage() {
                   onClick={() => handleApplyPaymentMode("UPI")}
                   disabled={isUpdatingPaymentMode}
                   className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
                     }`}
                 >
                   <div className="flex items-center justify-between">
@@ -4862,8 +5107,8 @@ function RegisterPatientPage() {
                   onClick={() => handleApplyPaymentMode("CARD")}
                   disabled={isUpdatingPaymentMode}
                   className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
                     }`}
                 >
                   <div className="flex items-center justify-between">
@@ -4888,8 +5133,8 @@ function RegisterPatientPage() {
                   onClick={() => handleApplyPaymentMode("UNPAID")}
                   disabled={isUpdatingPaymentMode}
                   className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${(successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID"
-                      ? "border-rose-500/50 bg-rose-500/5 ring-2 ring-rose-500/20"
-                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
+                    ? "border-rose-500/50 bg-rose-500/5 ring-2 ring-rose-500/20"
+                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
                     }`}
                 >
                   <div className="flex items-center justify-between">
@@ -4950,11 +5195,10 @@ function RegisterPatientPage() {
               <button
                 type="button"
                 onClick={() => setCatalogMode("TESTS")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
-                  catalogMode === "TESTS"
-                    ? "bg-background text-foreground shadow-xs ring-1 ring-border"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${catalogMode === "TESTS"
+                  ? "bg-background text-foreground shadow-xs ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 <FlaskConical className="h-3.5 w-3.5 text-primary" />
                 <span>Diagnostic Tests</span>
@@ -4968,11 +5212,10 @@ function RegisterPatientPage() {
               <button
                 type="button"
                 onClick={() => setCatalogMode("PACKAGES")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
-                  catalogMode === "PACKAGES"
-                    ? "bg-background text-foreground shadow-xs ring-1 ring-border"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${catalogMode === "PACKAGES"
+                  ? "bg-background text-foreground shadow-xs ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 <Boxes className="h-3.5 w-3.5 text-primary" />
                 <span>Packages</span>
@@ -4981,11 +5224,10 @@ function RegisterPatientPage() {
               <button
                 type="button"
                 onClick={() => setCatalogMode("OUTSOURCE")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${
-                  catalogMode === "OUTSOURCE"
-                    ? "bg-purple-600 text-white shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${catalogMode === "OUTSOURCE"
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 <ExternalLink className="h-3.5 w-3.5 text-purple-300" />
                 <span>Outsource</span>
@@ -5028,13 +5270,12 @@ function RegisterPatientPage() {
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs custom-scrollbar">
                 <button
                   onClick={() => setActiveCategory("ALL")}
-                  className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${
-                    activeCategory === "ALL"
-                      ? catalogMode === "OUTSOURCE"
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "bg-primary text-primary-foreground shadow-sm"
-                      : "bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${activeCategory === "ALL"
+                    ? catalogMode === "OUTSOURCE"
+                      ? "bg-purple-600 text-white shadow-sm"
+                      : "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   All Categories
                 </button>
@@ -5042,13 +5283,12 @@ function RegisterPatientPage() {
                   <button
                     key={cat}
                     onClick={() => setActiveCategory(cat)}
-                    className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${
-                      activeCategory === cat
-                        ? catalogMode === "OUTSOURCE"
-                          ? "bg-purple-600 text-white shadow-sm"
-                          : "bg-primary text-primary-foreground shadow-sm"
-                        : "bg-muted text-muted-foreground hover:text-foreground"
-                    }`}
+                    className={`px-3 py-1 rounded-full font-bold text-[11px] transition-all shrink-0 cursor-pointer ${activeCategory === cat
+                      ? catalogMode === "OUTSOURCE"
+                        ? "bg-purple-600 text-white shadow-sm"
+                        : "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-muted text-muted-foreground hover:text-foreground"
+                      }`}
                   >
                     {cat}
                   </button>
@@ -5101,8 +5341,8 @@ function RegisterPatientPage() {
                         key={pkg.id}
                         onClick={() => handleTogglePackage(pkg)}
                         className={`p-4 rounded-xl border text-xs cursor-pointer select-none transition-all flex flex-col justify-between gap-3 shadow-2xs ${isSelected
-                            ? "bg-primary/10 border-primary ring-2 ring-primary/30 shadow-md"
-                            : "bg-card border-border/90 hover:border-primary/50 hover:shadow-xs"
+                          ? "bg-primary/10 border-primary ring-2 ring-primary/30 shadow-md"
+                          : "bg-card border-border/90 hover:border-primary/50 hover:shadow-xs"
                           }`}
                       >
                         <div>
@@ -5137,8 +5377,8 @@ function RegisterPatientPage() {
                           <div className="flex items-center justify-between text-[11px]">
                             <span className="text-muted-foreground font-semibold">Includes {testCount} Investigations</span>
                             <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${isSelected
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted text-muted-foreground"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
                               }`}>
                               {isSelected ? "Selected" : "Select Package"}
                             </span>
@@ -5162,10 +5402,10 @@ function RegisterPatientPage() {
             ) : catalogMode === "OUTSOURCE" ? (
               <div className="space-y-6">
                 {/* Outsource Routing & Partner Lab Controls */}
-                <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/25 space-y-3.5">
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 space-y-3.5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="h-8 w-8 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                      <div className="h-8 w-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
                         <ExternalLink className="h-4 w-4" />
                       </div>
                       <div>
@@ -5174,21 +5414,43 @@ function RegisterPatientPage() {
                       </div>
                     </div>
 
-                    {/* Partner Lab Selector */}
-                    <div className="flex items-center gap-2">
+                    {/* Partner Lab Selector & Horizontal Manage Labs Button */}
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0">
                       <label className="text-[11px] font-bold text-foreground/80 shrink-0">Partner Lab:</label>
-                      <Select value={outsourcePartnerLab} onValueChange={setOutsourcePartnerLab}>
-                        <SelectTrigger className="h-9 min-w-[200px] bg-background border-border text-xs font-semibold rounded-xl">
+                      <Select value={outsourcePartnerLab} onValueChange={handlePartnerLabChange}>
+                        <SelectTrigger className="h-9 min-w-[200px] sm:min-w-[220px] bg-background border-border text-xs font-semibold rounded-xl">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
-                          {OUTSOURCE_PARTNER_LABS.map((lab) => (
-                            <SelectItem key={lab} value={lab} className="text-xs">
-                              {lab}
-                            </SelectItem>
-                          ))}
+                        <SelectContent className="max-h-[300px]">
+                          {outsourcePartnerLabsList.map((lab) => {
+                            const testCount = lab.tests?.length || 0;
+                            return (
+                              <SelectItem key={lab.id || lab.name} value={lab.name} className="text-xs">
+                                <div className="flex items-center justify-between gap-3 w-full">
+                                  <span className="font-semibold">{lab.name}</span>
+                                  {testCount > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                      {testCount} rates
+                                    </span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                          <SelectItem value="Other Partner Lab" className="text-xs text-muted-foreground italic">
+                            + Other Partner Lab...
+                          </SelectItem>
                         </SelectContent>
                       </Select>
+                      <Link
+                        href="/dashboard/cases/outsource"
+                        target="_blank"
+                        className="inline-flex flex-row items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer shadow-2xs"
+                        title="Manage partner labs and test contract prices in Outsource Cases"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                        <span className="whitespace-nowrap">Manage Labs</span>
+                      </Link>
                     </div>
                   </div>
 
@@ -5196,7 +5458,7 @@ function RegisterPatientPage() {
                     <div className="flex items-center gap-2 pt-1">
                       <input
                         type="text"
-                        className="flex-1 px-3 py-1.5 bg-background border border-border rounded-xl text-xs placeholder:text-muted-foreground outline-none focus:border-purple-500 text-foreground"
+                        className="flex-1 px-3 py-1.5 bg-background border border-border rounded-xl text-xs placeholder:text-muted-foreground outline-none focus:border-emerald-500 text-foreground"
                         placeholder="Enter custom partner lab name..."
                         value={outsourcePartnerLabCustom}
                         onChange={(e) => setOutsourcePartnerLabCustom(e.target.value)}
@@ -5204,75 +5466,12 @@ function RegisterPatientPage() {
                     </div>
                   )}
 
-                  {/* Outsource Clinical Notes & Add Custom Test Trigger */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1 border-t border-purple-500/15">
-                    <input
-                      type="text"
-                      className="flex-1 px-3 py-1.5 bg-background border border-border rounded-xl text-xs placeholder:text-muted-foreground outline-none focus:border-purple-500 text-foreground"
-                      placeholder="Outsource instructions / dispatch notes (e.g. Frozen sample, Urgent TAT, Fasting required)..."
-                      value={outsourceNotes}
-                      onChange={(e) => setOutsourceNotes(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingCustomOutsource(!isAddingCustomOutsource)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer ${
-                        isAddingCustomOutsource
-                          ? "bg-purple-600 text-white border-purple-600"
-                          : "bg-background border-border hover:border-purple-500 text-foreground"
-                      }`}
-                    >
-                      <PlusCircle className="h-3.5 w-3.5" />
-                      <span>{isAddingCustomOutsource ? "Cancel Custom" : "Add Custom Test"}</span>
-                    </button>
-                  </div>
-
-                  {/* Inline Form to Add Custom Outsource Investigation */}
-                  {isAddingCustomOutsource && (
-                    <div className="p-3.5 rounded-xl bg-background border border-purple-500/40 space-y-2.5 animate-fade-in">
-                      <p className="text-[11px] font-bold text-purple-700 dark:text-purple-300">
-                        Add Unlisted / Specialized Outsource Investigation
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
-                        <div className="sm:col-span-7">
-                          <input
-                            type="text"
-                            className="w-full px-3 py-1.5 bg-card border border-border rounded-lg text-xs placeholder:text-muted-foreground outline-none focus:border-purple-500 text-foreground font-medium"
-                            placeholder="Investigation Name (e.g. Histopathology Large Biopsy, HLA B27 PCR)..."
-                            value={customOutsourceName}
-                            onChange={(e) => setCustomOutsourceName(e.target.value)}
-                          />
-                        </div>
-                        <div className="sm:col-span-3">
-                          <div className="relative">
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-mono">₹</span>
-                            <input
-                              type="number"
-                              className="w-full pl-6 pr-2 py-1.5 bg-card border border-border rounded-lg text-xs placeholder:text-muted-foreground outline-none focus:border-purple-500 text-foreground font-mono font-medium"
-                              placeholder="Price"
-                              value={customOutsourcePrice}
-                              onChange={(e) => setCustomOutsourcePrice(e.target.value)}
-                            />
-                          </div>
-                        </div>
-                        <div className="sm:col-span-2">
-                          <button
-                            type="button"
-                            onClick={handleAddCustomOutsourceTest}
-                            className="w-full py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-colors cursor-pointer shadow-xs"
-                          >
-                            Add Test
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
 
                   {/* Selected Outsource Tests Quick Pills */}
                   {selectedOutsourceTests.length > 0 && (
-                    <div className="pt-2 border-t border-purple-500/20 space-y-1.5">
+                    <div className="pt-2 border-t border-emerald-500/20 space-y-1.5">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300">
+                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
                           Selected Outsource Investigations ({selectedOutsourceTests.length}):
                         </span>
                         <span className="font-mono text-xs font-bold text-foreground">
@@ -5283,10 +5482,10 @@ function RegisterPatientPage() {
                         {selectedOutsourceTests.map((t, idx) => (
                           <span
                             key={t.id || `custom-${idx}`}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-card border border-purple-500/40 text-foreground font-medium shadow-2xs"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-card border border-emerald-500/40 text-foreground font-medium shadow-2xs"
                           >
                             <span>{t.name}</span>
-                            <span className="font-mono text-[11px] text-purple-600 dark:text-purple-400 font-bold">₹{t.price}</span>
+                            <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">₹{t.price}</span>
                             <button
                               type="button"
                               onClick={() => handleRemoveOutsourceTest(idx)}
@@ -5305,7 +5504,7 @@ function RegisterPatientPage() {
                 {/* Outsource Catalog List (from availableTests) */}
                 {Object.keys(filteredGroups).length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground space-y-2">
-                    <FlaskConical className="h-9 w-9 mx-auto opacity-30 text-purple-500" />
+                    <FlaskConical className="h-9 w-9 mx-auto opacity-30 text-emerald-500" />
                     <p className="text-xs font-bold text-foreground">No matching investigations found.</p>
                     <p className="text-[11px]">Use &quot;Add Custom Test&quot; above to create any specialized outsource test.</p>
                   </div>
@@ -5313,7 +5512,7 @@ function RegisterPatientPage() {
                   Object.entries(filteredGroups).map(([category, tests]) => (
                     <div key={category} className="space-y-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">{category}</span>
+                        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{category}</span>
                         <div className="h-px flex-1 bg-border/80" />
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -5325,24 +5524,23 @@ function RegisterPatientPage() {
                             <div
                               key={`outsource-card-${test.id}`}
                               onClick={() => handleToggleOutsourceTest(test)}
-                              className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer select-none transition-all ${
-                                isOutsourced
-                                  ? "bg-purple-500/15 border-purple-500 shadow-sm ring-1 ring-purple-500/40"
-                                  : "bg-card border-border/90 hover:border-purple-500/50"
-                              }`}
+                              className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer select-none transition-all ${isOutsourced
+                                ? "bg-emerald-500/15 border-emerald-500 shadow-sm ring-1 ring-emerald-500/40"
+                                : "bg-card border-border/90 hover:border-emerald-500/50"
+                                }`}
                             >
                               <div className="flex items-center gap-3 min-w-0">
                                 <Checkbox
                                   checked={isOutsourced}
                                   onCheckedChange={() => handleToggleOutsourceTest(test)}
                                   onClick={(e) => e.stopPropagation()}
-                                  className={isOutsourced ? "border-purple-500 data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600" : ""}
+                                  className={isOutsourced ? "border-emerald-500 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600" : ""}
                                 />
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5">
                                     <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
                                     {isOutsourced && (
-                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30 shrink-0">
+                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 shrink-0">
                                         Outsource
                                       </span>
                                     )}
@@ -5353,12 +5551,27 @@ function RegisterPatientPage() {
                                 </div>
                               </div>
                               {(() => {
+                                const pricing = getOutsourceTestPricing(test);
+                                if (pricing.hasCustomRate) {
+                                  return (
+                                    <div className="flex flex-col items-end shrink-0 leading-tight">
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-600 text-white shadow-xs">
+                                        Partner ₹{pricing.effectivePrice.toFixed(0)}
+                                      </span>
+                                      {pricing.basePrice !== pricing.effectivePrice && (
+                                        <span className="text-[10px] font-medium text-muted-foreground line-through mt-0.5">
+                                          MRP ₹{pricing.basePrice.toFixed(0)}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                }
                                 const b2bRate = (test as any).b2bPrice ?? (test as any).b2b_price;
-                                const showB2B = isB2B && (b2bRate !== undefined && b2bRate !== null);
+                                const showB2B = (isB2B || !!selectedB2bCenter) && (b2bRate !== undefined && b2bRate !== null);
                                 if (showB2B) {
                                   return (
                                     <div className="flex flex-col items-end shrink-0 leading-tight">
-                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
                                         B2B ₹{Number(b2bRate ?? test.price).toFixed(0)}
                                       </span>
                                       <span className="text-[10px] font-medium text-muted-foreground mt-0.5">
@@ -5400,11 +5613,10 @@ function RegisterPatientPage() {
                         <div key={test.id} className="flex flex-col gap-1">
                           <div
                             onClick={() => handleToggleTest(test.id)}
-                            className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer select-none transition-all ${
-                              selected
-                                ? "bg-accent/80 border-primary shadow-sm ring-1 ring-primary/30"
-                                : "bg-card border-border/90 hover:border-primary/50"
-                            }`}
+                            className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer select-none transition-all ${selected
+                              ? "bg-accent/80 border-primary shadow-sm ring-1 ring-primary/30"
+                              : "bg-card border-border/90 hover:border-primary/50"
+                              }`}
                           >
                             <div className="flex items-center gap-3 min-w-0">
                               <Checkbox
@@ -5426,36 +5638,36 @@ function RegisterPatientPage() {
                                 </p>
                               </div>
                             </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                {(() => {
-                                  const b2bRate = (test as any).b2bPrice ?? (test as any).b2b_price;
-                                  const showB2B = isB2B && (b2bRate !== undefined && b2bRate !== null);
-                                  if (showB2B) {
-                                    return (
-                                      <div className="flex flex-col items-end shrink-0 leading-tight">
-                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                                          B2B ₹{Number(b2bRate ?? test.price).toFixed(0)}
-                                        </span>
-                                        <span className="text-[10px] font-medium text-muted-foreground mt-0.5">
-                                          MRP ₹{Number(test.price).toFixed(0)}
-                                        </span>
-                                      </div>
-                                    );
-                                  }
+                            <div className="flex items-center gap-2 shrink-0">
+                              {(() => {
+                                const b2bRate = (test as any).b2bPrice ?? (test as any).b2b_price;
+                                const showB2B = isB2B && (b2bRate !== undefined && b2bRate !== null);
+                                if (showB2B) {
                                   return (
-                                    <span className="font-mono text-xs font-bold text-foreground shrink-0">₹{Number(test.price).toFixed(0)}</span>
+                                    <div className="flex flex-col items-end shrink-0 leading-tight">
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
+                                        B2B ₹{Number(b2bRate ?? test.price).toFixed(0)}
+                                      </span>
+                                      <span className="text-[10px] font-medium text-muted-foreground mt-0.5">
+                                        MRP ₹{Number(test.price).toFixed(0)}
+                                      </span>
+                                    </div>
                                   );
-                                })()}
-                                {test.subTests && test.subTests.length > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); setExpandedTests(prev => ({ ...prev, [test.id]: !prev[test.id] })) }}
-                                    className="p-1 rounded hover:bg-muted text-muted-foreground"
-                                  >
-                                    {expandedTests[test.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                  </button>
-                                )}
-                              </div>
+                                }
+                                return (
+                                  <span className="font-mono text-xs font-bold text-foreground shrink-0">₹{Number(test.price).toFixed(0)}</span>
+                                );
+                              })()}
+                              {test.subTests && test.subTests.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setExpandedTests(prev => ({ ...prev, [test.id]: !prev[test.id] })) }}
+                                  className="p-1 rounded hover:bg-muted text-muted-foreground"
+                                >
+                                  {expandedTests[test.id] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                </button>
+                              )}
+                            </div>
                           </div>
                           {expandedTests[test.id] && test.subTests && test.subTests.length > 0 && (
                             <div className="pl-6 pr-2 py-1 space-y-1">
@@ -5597,6 +5809,7 @@ function RegisterPatientPage() {
                       ? (successDetails?.total ?? grandTotal)
                       : (successDetails?.paidAmount ?? parsedPaid ?? 0)
                   ),
+                  advanceAmount: Number(successDetails?.paidAmount ?? parsedPaid ?? 0),
                   status: (
                     successDetails?.paymentStatus === "PAID" ||
                     (Number(successDetails?.balanceDue ?? balanceDue) <= 0 && Number(successDetails?.paidAmount ?? parsedPaid) > 0)
@@ -5992,8 +6205,8 @@ function RegisterPatientPage() {
                   type="button"
                   onClick={() => setIntakeCategoryTab(cat.id)}
                   className={`px-3 py-1 rounded-lg text-xs font-bold transition-all border inline-flex items-center gap-1.5 cursor-pointer select-none ${isActive
-                      ? "bg-primary text-primary-foreground border-primary shadow-xs font-extrabold ring-1 ring-primary/20"
-                      : "bg-background border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                    ? "bg-primary text-primary-foreground border-primary shadow-xs font-extrabold ring-1 ring-primary/20"
+                    : "bg-background border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
                     }`}
                 >
                   <span>{cat.label}</span>
@@ -6016,8 +6229,8 @@ function RegisterPatientPage() {
                     <div
                       key={field.key}
                       className={`p-3.5 rounded-xl border transition-all space-y-2.5 shadow-2xs ${field.enabled
-                          ? "bg-card border-primary/40 ring-1 ring-primary/10"
-                          : "bg-muted/20 border-border/70 opacity-75"
+                        ? "bg-card border-primary/40 ring-1 ring-primary/10"
+                        : "bg-muted/20 border-border/70 opacity-75"
                         }`}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -6033,8 +6246,8 @@ function RegisterPatientPage() {
                           </span>
                         </div>
                         <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full ${field.enabled
-                            ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
-                            : "bg-muted text-muted-foreground border border-border"
+                          ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
+                          : "bg-muted text-muted-foreground border border-border"
                           }`}>
                           {field.enabled ? "Active" : "Disabled"}
                         </span>

@@ -32,6 +32,10 @@ interface Patient {
   gender: string;
   ref_doctor: string;
   address?: string;
+  created_by_id?: string;
+  createdById?: string;
+  collected_at?: string;
+  meta?: any;
 }
 interface Test {
   id: string;
@@ -251,6 +255,13 @@ export default function BillingPage() {
   });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [sourceFilter, setSourceFilter] = useState("ALL");
+  const [staffUsers, setStaffUsers] = useState<any[]>([]);
+
+  const ccUsers = useMemo(() => staffUsers.filter(u => String(u.role).toUpperCase().includes("COLLECTION")), [staffUsers]);
+  const b2bUsers = useMemo(() => staffUsers.filter(u => String(u.role).toUpperCase() === "B2B"), [staffUsers]);
+  const receptionistUsers = useMemo(() => staffUsers.filter(u => String(u.role).toUpperCase() === "RECEPTIONIST"), [staffUsers]);
+
   const [filterDate, setFilterDate] = useState(() => getTodayStr());
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(true);
@@ -344,6 +355,7 @@ export default function BillingPage() {
 
     fetchBills(true);
     fetchAvailableTests();
+    fetchStaffUsers();
 
     try {
       setAvailablePackages(getStoredPackages());
@@ -404,6 +416,16 @@ export default function BillingPage() {
     } finally {
       setLoading(false);
       setIsFetching(false);
+    }
+  };
+
+  const fetchStaffUsers = async () => {
+    try {
+      const res = await fetchFromLaravel("/collection-centers");
+      const list = Array.isArray(res) ? res : (res?.data || []);
+      setStaffUsers(list);
+    } catch (e) {
+      console.error("Error fetching staff users for billing filter:", e);
     }
   };
 
@@ -721,7 +743,86 @@ export default function BillingPage() {
     const matchesStatus = statusFilter === "ALL" || b.status === statusFilter;
     const matchesDate = filterDate ? billDate === filterDate : true;
 
-    return matchesSearch && matchesStatus && matchesDate;
+    const matchesSource = (() => {
+      if (sourceFilter === "ALL") return true;
+
+      const p: any = b.patient || {};
+      const pMeta = (p.meta && typeof p.meta === "object") ? p.meta : {};
+      const r: any = (Array.isArray(b.reports) && b.reports[0]) ? b.reports[0] : {};
+      const rMeta = (r.meta && typeof r.meta === "object") ? r.meta : {};
+
+      const creatorId = String(
+        r.created_by_id ||
+        r.createdById ||
+        rMeta.created_by_id ||
+        rMeta.createdById ||
+        p.created_by_id ||
+        p.createdById ||
+        pMeta.created_by_id ||
+        pMeta.createdById ||
+        ""
+      );
+
+      const ccId = String(
+        rMeta.collection_center_id ||
+        rMeta.collectionCenterId ||
+        pMeta.collection_center_id ||
+        pMeta.collectionCenterId ||
+        ""
+      );
+
+      const b2bId = String(
+        rMeta.b2b_user_id ||
+        rMeta.b2bUserId ||
+        pMeta.b2b_user_id ||
+        pMeta.b2bUserId ||
+        ""
+      );
+
+      const role = String(
+        rMeta.created_by_role ||
+        rMeta.createdByRole ||
+        pMeta.created_by_role ||
+        pMeta.createdByRole ||
+        ""
+      ).toUpperCase();
+
+      const isCC = role === "COLLECTION_CENTER" || role === "COLLECTION_CENTRE" || Boolean(ccId);
+      const isB2B = role === "B2B" || Boolean(b2bId);
+      const isReceptionist = role === "RECEPTIONIST";
+      const isMainLab = !isCC && !isB2B && !isReceptionist;
+
+      if (sourceFilter === "MAIN_LAB") {
+        return isMainLab;
+      }
+      if (sourceFilter === "ROLE_CC") {
+        return isCC;
+      }
+      if (sourceFilter === "ROLE_B2B") {
+        return isB2B;
+      }
+      if (sourceFilter === "ROLE_RECEPTIONIST") {
+        return isReceptionist;
+      }
+      if (sourceFilter.startsWith("USER_")) {
+        const targetUserId = sourceFilter.replace("USER_", "");
+        const targetUser = staffUsers.find(u => String(u.id) === targetUserId);
+        const targetName = (targetUser?.name || "").toLowerCase();
+        const targetLabName = (targetUser?.labName || targetUser?.lab_name || "").toLowerCase();
+        const collectedAt = String(p.collected_at || "").toLowerCase();
+
+        return (
+          creatorId === targetUserId ||
+          ccId === targetUserId ||
+          b2bId === targetUserId ||
+          (Boolean(targetName) && collectedAt.includes(targetName)) ||
+          (Boolean(targetLabName) && collectedAt.includes(targetLabName))
+        );
+      }
+      return true;
+    })();
+
+    return matchesSearch && matchesStatus && matchesDate && matchesSource;
   });
 
   const isBillFullyPaid = (b: any) => isB2B || b.status === "PAID" || Boolean((b as any).meta?.is_b2b_paid);
@@ -975,8 +1076,8 @@ export default function BillingPage() {
           </div>
 
           {/* Status Filter */}
-          <div className="min-w-[140px] flex-1 sm:flex-none sm:w-36">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <div className="min-w-[130px] flex-1 sm:flex-none sm:w-36">
+            <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setCurrentPage(1); }}>
               <SelectTrigger className="h-9 text-xs">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
@@ -985,6 +1086,66 @@ export default function BillingPage() {
                 <SelectItem value="PAID">Paid</SelectItem>
                 <SelectItem value="PARTIAL">Partial</SelectItem>
                 <SelectItem value="UNPAID">Unpaid</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Booking Source / User Filter (Collection Centre, B2B, Receptionist, Main Lab) */}
+          <div className="min-w-[170px] flex-1 sm:flex-none sm:w-56">
+            <Select value={sourceFilter} onValueChange={(val) => { setSourceFilter(val); setCurrentPage(1); }}>
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="All Sources & Users" />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                <SelectItem value="ALL">All Sources & Users</SelectItem>
+                <SelectItem value="MAIN_LAB">Main Lab (Direct In-house)</SelectItem>
+
+                {/* Role Groups */}
+                <SelectItem value="ROLE_CC">All Collection Centres</SelectItem>
+                <SelectItem value="ROLE_B2B">All B2B Clients</SelectItem>
+                <SelectItem value="ROLE_RECEPTIONIST">All Receptionists</SelectItem>
+
+                {/* Individual Admin-Added Collection Centres */}
+                {ccUsers.length > 0 && (
+                  <>
+                    <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
+                      Collection Centres
+                    </div>
+                    {ccUsers.map((u: any) => (
+                      <SelectItem key={u.id} value={`USER_${u.id}`}>
+                        CC: {u.labName || u.name}
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
+
+                {/* Individual Admin-Added B2B Partners */}
+                {b2bUsers.length > 0 && (
+                  <>
+                    <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
+                      B2B Clients
+                    </div>
+                    {b2bUsers.map((u: any) => (
+                      <SelectItem key={u.id} value={`USER_${u.id}`}>
+                        B2B: {u.labName || u.name}
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
+
+                {/* Individual Admin-Added Receptionists */}
+                {receptionistUsers.length > 0 && (
+                  <>
+                    <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
+                      Receptionists / Staff
+                    </div>
+                    {receptionistUsers.map((u: any) => (
+                      <SelectItem key={u.id} value={`USER_${u.id}`}>
+                        Staff: {u.name}
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -1003,6 +1164,7 @@ export default function BillingPage() {
                 <th className="py-3 px-4 text-right">Total (₹)</th>
                 <th className="py-3 px-4 text-right">Paid (₹)</th>
                 <th className="py-3 px-4 text-right">Due (₹)</th>
+                <th className="py-3 px-4 text-right">Discount (₹)</th>
                 <th className="py-3 px-4 text-center">Status</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
@@ -1031,6 +1193,9 @@ export default function BillingPage() {
                     <td className="py-3.5 px-4 text-right">
                       <div className="h-4 w-16 rounded shimmer-gradient ml-auto" />
                     </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="h-4 w-14 rounded shimmer-gradient ml-auto" />
+                    </td>
                     <td className="py-3.5 px-4 text-center">
                       <div className="h-5 w-16 rounded-full shimmer-gradient mx-auto" />
                     </td>
@@ -1041,7 +1206,7 @@ export default function BillingPage() {
                 ))
               ) : currentRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-16 text-center text-muted-foreground px-4">
+                  <td colSpan={9} className="py-16 text-center text-muted-foreground px-4">
                     <Receipt className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
                     <p className="font-bold text-foreground">
                       {filterDate ? `No invoices found for ${filterDate === getTodayStr() ? "Today" : filterDate}` : "No invoices found"}
@@ -1071,6 +1236,7 @@ export default function BillingPage() {
                   const effectiveStatus = isBillPaid ? "PAID" : bill.status;
                   const due = isBillPaid ? 0 : Math.max(0, (Number(bill.total) || 0) - (Number(bill.paid_amount) || 0));
                   const displayPaid = isBillPaid ? (Number(bill.total) || 0) : (Number(bill.paid_amount) || 0);
+                  const discountVal = Number(bill.discount || 0);
                   const mainItems = getMainBillItems(bill, allTestsMap);
 
                   return (
@@ -1108,6 +1274,14 @@ export default function BillingPage() {
                         ₹{due.toFixed(2)}
                       </td>
 
+                      <td className="py-3.5 px-4 text-right font-mono font-semibold">
+                        {discountVal > 0 ? (
+                          <span className="text-rose-600 dark:text-rose-400 font-bold">₹{discountVal.toFixed(2)}</span>
+                        ) : (
+                          <span className="text-muted-foreground/60">₹0.00</span>
+                        )}
+                      </td>
+
                       <td className="py-3.5 px-4 text-center">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           effectiveStatus === "PAID"
@@ -1122,23 +1296,6 @@ export default function BillingPage() {
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {!isB2B && effectiveStatus !== "PAID" && (
-                            <button
-                              type="button"
-                              disabled={updatingBillId === bill.id}
-                              onClick={() => handleQuickMarkPaid(bill)}
-                              className="px-2 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] cursor-pointer transition-colors flex items-center gap-1 border border-emerald-500/20 disabled:opacity-50"
-                              title="1-Click Mark as Paid (Cash Collected)"
-                            >
-                              {updatingBillId === bill.id ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Check className="h-3 w-3" />
-                              )}
-                              <span>Pay Cash</span>
-                            </button>
-                          )}
-
                           <button
                             type="button"
                             onClick={() => handleOpenInvoiceModal(bill)}
@@ -1272,6 +1429,7 @@ export default function BillingPage() {
                     paidAmount: (selectedBillForInvoice.status === "PAID" || isB2B || Boolean((selectedBillForInvoice as any).meta?.is_b2b_paid))
                       ? Number(selectedBillForInvoice.total || 0)
                       : Number(selectedBillForInvoice.paid_amount ?? (selectedBillForInvoice as any).paidAmount ?? 0),
+                    advanceAmount: Number(selectedBillForInvoice.paid_amount ?? (selectedBillForInvoice as any).paidAmount ?? 0),
                     status: (isB2B || Boolean((selectedBillForInvoice as any).meta?.is_b2b_paid) || selectedBillForInvoice.status === "PAID") ? "PAID" : (selectedBillForInvoice.status || "UNPAID"),
                     paymentMode: (selectedBillForInvoice as any).payment_mode || (selectedBillForInvoice as any).paymentMode || "CASH / UPI",
                     billedBy: "Accounts / Billing Desk",

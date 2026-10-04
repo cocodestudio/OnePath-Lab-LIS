@@ -12,6 +12,7 @@ export interface InvoiceData {
   total: number;
   discount: number;
   paidAmount: number;
+  advanceAmount?: number;
   status: string;
   paymentMode?: string;
   dayWiseId?: string;
@@ -212,9 +213,22 @@ export const InvoiceSheet = React.forwardRef<
   const patientPhone = patient.phone || "—";
   const patientAddress = patient.address || "—";
 
-  const isPaid = invoice.status === "PAID";
-  const effectivePaidAmount = isPaid ? (invoice.total || 0) : (invoice.paidAmount || 0);
-  const balance = isPaid ? 0 : Math.max(0, (invoice.total || 0) - (invoice.paidAmount || 0));
+  const rawPaidAmount = Number(
+    invoice.advanceAmount ??
+    invoice.paidAmount ??
+    (invoice as any).paid_amount ??
+    (invoice as any).advance_amount ??
+    0
+  );
+  const netTotal = Number(invoice.total || 0);
+  const discountAmount = Number(invoice.discount || 0);
+  const grossSubtotal = netTotal + discountAmount;
+  const isPaid = invoice.status === "PAID" || (netTotal > 0 && rawPaidAmount >= netTotal);
+  const effectivePaidAmount = isPaid && rawPaidAmount === 0 ? netTotal : rawPaidAmount;
+  const balance = Math.max(0, netTotal - effectivePaidAmount);
+  const effectiveStatus = (balance <= 0 && (effectivePaidAmount > 0 || isPaid))
+    ? "PAID"
+    : (effectivePaidAmount > 0 ? "PARTIAL" : (invoice.status || "UNPAID"));
   const isA5 = billSettings.size === "A5";
 
   const groupedTests = React.useMemo(() => {
@@ -292,7 +306,15 @@ export const InvoiceSheet = React.forwardRef<
     "Second Referral": { label: "2nd Referral:", value: <span>{patient.secondReferral || "—"}</span> },
     "Corporate / Panel": { label: "Corporate:", value: <span>{patient.corporateName || patient.corporate_name || patient.govPanel || "—"}</span> },
     "GSTIN": { label: "Lab GSTIN:", value: <span className="font-mono font-semibold">{labGstin || "—"}</span> },
-    "Payment Mode": { label: "Payment Mode:", value: <span className="font-semibold uppercase">{invoice.paymentMode || "CASH / UPI"}</span> },
+    "Payment Mode": {
+      label: "Payment Mode:",
+      value: (
+        <span className="font-semibold uppercase">
+          {invoice.paymentMode || "CASH / UPI"}
+          {effectivePaidAmount > 0 && balance > 0 ? ` (Adv: ₹${effectivePaidAmount.toFixed(2)})` : ""}
+        </span>
+      ),
+    },
     "Collection Center": { label: "Center:", value: <span>{invoice.collectionCenter || "Main Lab"}</span> },
     "Owner Name": { label: "Owner Name:", value: <span>{patient.ownerName || "—"}</span> },
   };
@@ -439,7 +461,13 @@ export const InvoiceSheet = React.forwardRef<
                   </h2>
                   <div className="text-[10px] text-zinc-700 mt-1 space-y-0.5">
                     <p><span className="font-bold text-zinc-900">Bill No:</span> <span className="font-mono font-bold text-black">{invoiceCustomId}</span></p>
-                    <p><span className="font-semibold text-zinc-600">Status:</span> <span className={`font-bold ${invoice.status === "PAID" ? "text-emerald-700" : invoice.status === "PARTIAL" ? "text-amber-700" : "text-rose-700"}`}>{invoice.status}</span></p>
+                    <p><span className="font-semibold text-zinc-600">Status:</span> <span className={`font-bold ${effectiveStatus === "PAID" ? "text-emerald-700" : effectiveStatus === "PARTIAL" ? "text-amber-700" : "text-rose-700"}`}>{effectiveStatus}</span></p>
+                    {effectivePaidAmount > 0 && balance > 0 && (
+                      <>
+                        <p><span className="font-semibold text-zinc-600">Advance:</span> <span className="font-mono font-bold text-emerald-700">₹{effectivePaidAmount.toFixed(2)}</span></p>
+                        <p><span className="font-semibold text-zinc-600">Balance Due:</span> <span className="font-mono font-bold text-rose-700">₹{balance.toFixed(2)}</span></p>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -453,7 +481,13 @@ export const InvoiceSheet = React.forwardRef<
                 </span>
                 <div className="flex items-center gap-3 text-[11px]">
                   <span><strong className="text-zinc-900">Bill No:</strong> <span className="font-mono font-bold">{invoiceCustomId}</span></span>
-                  <span><strong className="text-zinc-600">Status:</strong> <span className={`font-bold ${invoice.status === "PAID" ? "text-emerald-700" : invoice.status === "PARTIAL" ? "text-amber-700" : "text-rose-700"}`}>{invoice.status}</span></span>
+                  <span><strong className="text-zinc-600">Status:</strong> <span className={`font-bold ${effectiveStatus === "PAID" ? "text-emerald-700" : effectiveStatus === "PARTIAL" ? "text-amber-700" : "text-rose-700"}`}>{effectiveStatus}</span></span>
+                  {effectivePaidAmount > 0 && balance > 0 && (
+                    <>
+                      <span><strong className="text-zinc-600">Advance:</strong> <span className="font-mono font-bold text-emerald-700">₹{effectivePaidAmount.toFixed(2)}</span></span>
+                      <span><strong className="text-zinc-600">Due:</strong> <span className="font-mono font-bold text-rose-700">₹{balance.toFixed(2)}</span></span>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -639,35 +673,43 @@ export const InvoiceSheet = React.forwardRef<
               </div>
 
               {/* Right Side: Financial Calculation Table */}
-              <div className="sm:col-span-5 space-y-1 text-xs">
+              <div className="sm:col-span-5 space-y-1.5 text-xs">
                 {billSettings.showPaymentBreakdown && (
                   <>
                     <div className="flex justify-between text-zinc-600 py-0.5">
                       <span>Gross Total:</span>
-                      <span className="font-mono font-semibold text-zinc-900">₹{((invoice.total || 0) + (invoice.discount || 0)).toFixed(2)}</span>
+                      <span className="font-mono font-semibold text-zinc-900">₹{grossSubtotal.toFixed(2)}</span>
                     </div>
-                    {invoice.discount > 0 && (
+                    {discountAmount > 0 && (
                       <div className="flex justify-between text-rose-600 py-0.5">
                         <span>Discount Concession:</span>
-                        <span className="font-mono font-semibold">- ₹{invoice.discount.toFixed(2)}</span>
+                        <span className="font-mono font-semibold">- ₹{discountAmount.toFixed(2)}</span>
                       </div>
                     )}
                   </>
                 )}
 
-                <div className="flex justify-between font-extrabold text-zinc-950 text-sm border-t border-zinc-300 pt-1">
-                  <span>Net Payable:</span>
-                  <span className="font-mono">₹{(invoice.total || 0).toFixed(2)}</span>
+                <div className="flex justify-between font-bold text-zinc-800 text-xs border-t border-zinc-200 pt-1">
+                  <span>Total Bill Amount:</span>
+                  <span className="font-mono font-bold text-zinc-950">₹{netTotal.toFixed(2)}</span>
                 </div>
 
-                <div className="flex justify-between text-emerald-700 font-bold py-0.5">
-                  <span>Paid Amount:</span>
-                  <span className="font-mono">₹{effectivePaidAmount.toFixed(2)}</span>
-                </div>
+                {effectivePaidAmount > 0 && (
+                  <div className="flex justify-between text-emerald-700 font-bold py-0.5">
+                    <span>{balance > 0 ? "Advance Received / Paid:" : "Amount Paid (Full):"}</span>
+                    <span className="font-mono font-bold">- ₹{effectivePaidAmount.toFixed(2)}</span>
+                  </div>
+                )}
 
-                <div className="flex justify-between font-extrabold text-zinc-900 border-t border-zinc-300 pt-1">
-                  <span>Balance Due:</span>
-                  <span className={`font-mono ${balance > 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                <div className="flex justify-between font-extrabold text-zinc-950 text-sm border-t-2 border-zinc-300 pt-1">
+                  <span>
+                    {balance <= 0
+                      ? "Balance Due (Paid Full):"
+                      : effectivePaidAmount > 0
+                        ? "Remaining Balance Due:"
+                        : "Net Amount Due / Payable:"}
+                  </span>
+                  <span className={`font-mono ${balance > 0 ? "text-rose-700 font-black" : "text-emerald-700 font-black"}`}>
                     ₹{balance.toFixed(2)}
                   </span>
                 </div>

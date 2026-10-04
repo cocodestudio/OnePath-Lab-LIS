@@ -12,7 +12,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel } from "@/lib/api-client";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  type OutsourcePartnerLab,
+  type OutsourceLabTest,
+  getCachedPartnerLabs,
+  setCachedPartnerLabs,
+} from "@/lib/outsource-partner-labs";
 import { InvoiceSheet, type InvoiceData } from "@/components/invoice-sheet";
 import { type BillLayoutSettings, defaultBillLayoutSettings, normalizeBillSettings } from "@/lib/bill-settings";
 import { printInvoiceElement } from "@/lib/print-invoice";
@@ -71,6 +77,7 @@ const PARTNER_LABS = [
   "Redcliffe Labs",
   "Pathkind Labs",
   "Max Healthcare Labs",
+  "General Diagnostics",
   "Apollo Diagnostics",
   "Other Partner Lab",
 ];
@@ -78,7 +85,7 @@ const PARTNER_LABS = [
 function getStorageFileUrl(path?: string | null): string {
   if (!path) return "#";
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  
+
   let baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   try {
     const urlObj = new URL(baseUrl);
@@ -86,7 +93,7 @@ function getStorageFileUrl(path?: string | null): string {
   } catch {
     baseUrl = baseUrl.replace(/\/api(\/lis)?\/?$/, "");
   }
-  
+
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   return `${baseUrl}${cleanPath}`;
 }
@@ -125,7 +132,42 @@ export default function OutsourceCasesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [targetUploadCaseId, setTargetUploadCaseId] = useState<string | null>(null);
 
-  // Load lab settings for official bill & invoice preview
+  // ═════════════════════════════════════════════════════════════════════
+  // PARTNER LABS & CUSTOM OUTSOURCE PRICING STATE
+  // ═════════════════════════════════════════════════════════════════════
+  const [partnerLabs, setPartnerLabs] = useState<OutsourcePartnerLab[]>(() => getCachedPartnerLabs());
+  const [isPartnerLabModalOpen, setIsPartnerLabModalOpen] = useState(false);
+  const [partnerModalTab, setPartnerModalTab] = useState<"ADD_LAB" | "BATCH_MAP" | "MANAGE_LABS">("ADD_LAB");
+  const [availableMasterTests, setAvailableMasterTests] = useState<any[]>([]);
+  const [isSavingPartnerLab, setIsSavingPartnerLab] = useState(false);
+  const [isBatchSaving, setIsBatchSaving] = useState(false);
+  const [deletingLabId, setDeletingLabId] = useState<string | null>(null);
+
+  // Form: Add / Edit Lab
+  const [labFormId, setLabFormId] = useState<string | null>(null);
+  const [labFormName, setLabFormName] = useState("");
+  const [labFormTests, setLabFormTests] = useState<OutsourceLabTest[]>([]);
+
+  // Form: Batch Assign Single Test across Labs
+  const [batchTestSearchTerm, setBatchTestSearchTerm] = useState("");
+  const [selectedBatchTest, setSelectedBatchTest] = useState<any | null>(null);
+  const [batchLabPrices, setBatchLabPrices] = useState<Record<string, string>>({});
+
+  // Filtered master tests for Batch Map tab
+  const batchMatchingTests = useMemo(() => {
+    if (!batchTestSearchTerm.trim()) return [];
+    const q = batchTestSearchTerm.toLowerCase().trim();
+    return availableMasterTests
+      .filter((t) => {
+        const name = (t.name || "").toLowerCase();
+        const code = (t.code || t.test_code || t.testCode || "").toLowerCase();
+        const cat = (t.category || "").toLowerCase();
+        return name.includes(q) || code.includes(q) || cat.includes(q);
+      })
+      .slice(0, 8);
+  }, [availableMasterTests, batchTestSearchTerm]);
+
+  // Load lab settings, partner labs, and test catalog
   useEffect(() => {
     (async () => {
       try {
@@ -141,7 +183,247 @@ export default function OutsourceCasesPage() {
         console.error("Error fetching lab details:", err);
       }
     })();
+    fetchPartnerLabs();
+    fetchMasterTests();
   }, []);
+
+  const fetchPartnerLabs = async () => {
+    try {
+      const res = await fetchFromLaravel("/outsource/partner-labs");
+      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      if (list.length > 0) {
+        setPartnerLabs(list);
+        setCachedPartnerLabs(list);
+      }
+    } catch (e) {
+      console.error("Error fetching partner labs:", e);
+    }
+  };
+
+  const fetchMasterTests = async () => {
+    try {
+      const cached = localStorage.getItem("lis_cached_tests");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setAvailableMasterTests(parsed);
+        }
+      }
+      const res = await fetchFromLaravel("/tests");
+      const list = Array.isArray(res) ? res : (res?.data || []);
+      if (list.length > 0) {
+        setAvailableMasterTests(list);
+        try {
+          localStorage.setItem("lis_cached_tests", JSON.stringify(list));
+        } catch {}
+      }
+    } catch (e) {
+      console.error("Error fetching master tests for outsource:", e);
+    }
+  };
+
+  const handleOpenAddLabModal = (labToEdit?: OutsourcePartnerLab) => {
+    if (labToEdit) {
+      setLabFormId(labToEdit.id);
+      setLabFormName(labToEdit.name);
+      setLabFormTests(labToEdit.tests || []);
+      setPartnerModalTab("ADD_LAB");
+    } else {
+      setLabFormId(null);
+      setLabFormName("");
+      setLabFormTests([]);
+      setPartnerModalTab("ADD_LAB");
+    }
+    setIsPartnerLabModalOpen(true);
+  };
+
+  const handleSavePartnerLab = async () => {
+    if (!labFormName.trim()) {
+      toast({
+        title: "Lab Name Required",
+        description: "Please enter a Partner Lab Name.",
+        type: "error",
+      });
+      return;
+    }
+    setIsSavingPartnerLab(true);
+    try {
+      const payload = {
+        id: labFormId,
+        name: labFormName.trim(),
+        tests: labFormTests,
+      };
+
+      const res = await fetchFromLaravel("/outsource/partner-labs", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      if (res && res.status === "success") {
+        toast({
+          title: "Partner Lab Saved",
+          description: labFormId ? "Partner lab updated successfully!" : "Partner lab created successfully!",
+          type: "success",
+        });
+        const updatedList = Array.isArray(res.data) ? res.data : [];
+        if (updatedList.length > 0) {
+          setPartnerLabs(updatedList);
+          setCachedPartnerLabs(updatedList);
+        } else {
+          fetchPartnerLabs();
+        }
+        setPartnerModalTab("MANAGE_LABS");
+      } else {
+        toast({
+          title: "Save Failed",
+          description: res?.message || "Failed to save partner lab.",
+          type: "error",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Save Error",
+        description: err.message || "Could not save partner lab.",
+        type: "error",
+      });
+    } finally {
+      setIsSavingPartnerLab(false);
+    }
+  };
+
+  const handleSelectBatchTest = (test: any) => {
+    setSelectedBatchTest(test);
+    setBatchTestSearchTerm(test.name);
+    const testId = String(test.id || "").toLowerCase().trim();
+    const testName = String(test.name || "").toLowerCase().trim();
+    const prices: Record<string, string> = {};
+    partnerLabs.forEach((lab) => {
+      const existing: any = (lab.tests || []).find((t: any) => {
+        const tId = String(t.test_id || t.testId || "").toLowerCase().trim();
+        const tName = String(t.test_name || t.testName || "").toLowerCase().trim();
+        return (tId && testId && tId === testId) || (tName && testName && tName === testName);
+      });
+      if (existing) {
+        const rate = existing.outsource_price ?? existing.outsourcePrice;
+        prices[lab.id] = rate !== undefined && rate !== null ? String(rate) : "";
+      } else {
+        prices[lab.id] = "";
+      }
+    });
+    setBatchLabPrices(prices);
+  };
+
+  const handleSaveBatchMapping = async () => {
+    if (!selectedBatchTest) {
+      toast({
+        title: "Test Required",
+        description: "Please select a test first.",
+        type: "error",
+      });
+      return;
+    }
+
+    const assignments = Object.entries(batchLabPrices)
+      .filter(([_, pStr]) => pStr.trim() !== "" && !isNaN(parseFloat(pStr)))
+      .map(([labId, pStr]) => ({
+        lab_id: labId,
+        outsource_price: parseFloat(pStr),
+      }));
+
+    if (assignments.length === 0) {
+      toast({
+        title: "No Prices Entered",
+        description: "Please enter a price for at least one partner lab.",
+        type: "error",
+      });
+      return;
+    }
+
+    setIsBatchSaving(true);
+    try {
+      const payload = {
+        test_id: selectedBatchTest.id,
+        test_name: selectedBatchTest.name,
+        test_code: selectedBatchTest.code || selectedBatchTest.test_code || selectedBatchTest.testCode || "",
+        category: selectedBatchTest.category || "Pathology",
+        default_price: Number(selectedBatchTest.price || 0),
+        assignments,
+      };
+
+      const res = await fetchFromLaravel("/outsource/partner-labs/batch-map-test", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      if (res && res.status === "success") {
+        toast({
+          title: "Pricing Assigned",
+          description: `Assigned "${selectedBatchTest.name}" across ${assignments.length} partner labs!`,
+          type: "success",
+        });
+        const updatedList = Array.isArray(res.data) ? res.data : [];
+        if (updatedList.length > 0) {
+          setPartnerLabs(updatedList);
+          setCachedPartnerLabs(updatedList);
+        } else {
+          fetchPartnerLabs();
+        }
+        setSelectedBatchTest(null);
+        setBatchTestSearchTerm("");
+        setBatchLabPrices({});
+      } else {
+        toast({
+          title: "Batch Mapping Failed",
+          description: res?.message || "Failed to batch assign test.",
+          type: "error",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Batch Error",
+        description: err.message || "Could not batch assign test.",
+        type: "error",
+      });
+    } finally {
+      setIsBatchSaving(false);
+    }
+  };
+
+  const handleDeletePartnerLab = async (labId: string, labName: string) => {
+    if (!confirm(`Are you sure you want to delete "${labName}" and its test rate configuration?`)) {
+      return;
+    }
+    setDeletingLabId(labId);
+    try {
+      const res = await fetchFromLaravel(`/outsource/partner-labs/${labId}`, {
+        method: "DELETE",
+      });
+      if (res && res.status === "success") {
+        toast({
+          title: "Partner Lab Deleted",
+          description: `Deleted partner lab "${labName}"`,
+          type: "success",
+        });
+        const updatedList = Array.isArray(res.data) ? res.data : [];
+        setPartnerLabs(updatedList);
+        setCachedPartnerLabs(updatedList);
+      } else {
+        toast({
+          title: "Delete Failed",
+          description: res?.message || "Failed to delete partner lab.",
+          type: "error",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Delete Error",
+        description: err.message || "Could not delete partner lab.",
+        type: "error",
+      });
+    } finally {
+      setDeletingLabId(null);
+    }
+  };
 
   // Fetch Outsource Cases
   const fetchCases = async (skipCache = false) => {
@@ -261,13 +543,13 @@ export default function OutsourceCasesPage() {
           prevCases.map((c) =>
             c.id === targetUploadCaseId
               ? {
-                  ...c,
-                  has_attached_report: true,
-                  attached_report_url: uploadedUrl,
-                  attached_report_filename: uploadedFilename,
-                  attached_report_filesize: file.size,
-                  attached_report_at: new Date().toISOString(),
-                }
+                ...c,
+                has_attached_report: true,
+                attached_report_url: uploadedUrl,
+                attached_report_filename: uploadedFilename,
+                attached_report_filesize: file.size,
+                attached_report_at: new Date().toISOString(),
+              }
               : c
           )
         );
@@ -307,13 +589,13 @@ export default function OutsourceCasesPage() {
           prevCases.map((c) =>
             c.id === caseId
               ? {
-                  ...c,
-                  has_attached_report: false,
-                  attached_report_url: null,
-                  attached_report_filename: null,
-                  attached_report_filesize: null,
-                  attached_report_at: null,
-                }
+                ...c,
+                has_attached_report: false,
+                attached_report_url: null,
+                attached_report_filename: null,
+                attached_report_filesize: null,
+                attached_report_at: null,
+              }
               : c
           )
         );
@@ -342,19 +624,19 @@ export default function OutsourceCasesPage() {
   const buildInvoiceData = (c: OutsourceCase): InvoiceData => {
     const testsList = (c.tests && c.tests.length > 0)
       ? c.tests.map((t, idx) => ({
-          id: t.id || `out-t-${idx}`,
-          name: t.name,
-          price: Number(t.price || 0),
-          code: t.code || "OUT",
-          category: t.category || "Outsource",
-        }))
+        id: t.id || `out-t-${idx}`,
+        name: t.name,
+        price: Number(t.price || 0),
+        code: t.code || "OUT",
+        category: t.category || "Outsource",
+      }))
       : (c.investigations || "Outsource Investigation").split(",").map((s, idx) => ({
-          id: `out-t-${idx}`,
-          name: s.trim(),
-          price: Number(c.bill?.total || 0) / Math.max(1, (c.investigations || "1").split(",").length),
-          code: "OUT",
-          category: "Outsource",
-        }));
+        id: `out-t-${idx}`,
+        name: s.trim(),
+        price: Number(c.bill?.total || 0) / Math.max(1, (c.investigations || "1").split(",").length),
+        code: "OUT",
+        category: "Outsource",
+      }));
 
     return {
       id: c.id,
@@ -365,6 +647,7 @@ export default function OutsourceCasesPage() {
       paidAmount: c.bill?.status === "PAID"
         ? Number(c.bill?.total || 0)
         : Number(c.bill?.paid_amount ?? 0),
+      advanceAmount: Number(c.bill?.paid_amount ?? 0),
       status: c.bill?.status || (c.is_due ? "UNPAID" : "PAID"),
       paymentMode: c.bill?.payment_mode || "CASH / UPI",
       billedBy: "Accounts / Outsource Desk",
@@ -433,7 +716,17 @@ export default function OutsourceCasesPage() {
           </p>
         </div>
 
-
+        {/* Action Button: Add Partner Lab / Manage Rates */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleOpenAddLabModal()}
+            className="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all flex items-center gap-2 cursor-pointer select-none"
+          >
+            <Building2 className="h-4 w-4" />
+            <span>+ Add Partner Lab</span>
+          </button>
+        </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════
@@ -471,36 +764,32 @@ export default function OutsourceCasesPage() {
                     <button
                       type="button"
                       onClick={() => handleDatePreset("TODAY")}
-                      className={`p-2 rounded-lg text-left font-semibold transition-colors cursor-pointer ${
-                        dateFilterMode === "TODAY" ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted"
-                      }`}
+                      className={`p-2 rounded-lg text-left font-semibold transition-colors cursor-pointer ${dateFilterMode === "TODAY" ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted"
+                        }`}
                     >
                       Today
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDatePreset("7DAYS")}
-                      className={`p-2 rounded-lg text-left font-semibold transition-colors cursor-pointer ${
-                        dateFilterMode === "7DAYS" ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted"
-                      }`}
+                      className={`p-2 rounded-lg text-left font-semibold transition-colors cursor-pointer ${dateFilterMode === "7DAYS" ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted"
+                        }`}
                     >
                       Last 7 Days
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDatePreset("30DAYS")}
-                      className={`p-2 rounded-lg text-left font-semibold transition-colors cursor-pointer ${
-                        dateFilterMode === "30DAYS" ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted"
-                      }`}
+                      className={`p-2 rounded-lg text-left font-semibold transition-colors cursor-pointer ${dateFilterMode === "30DAYS" ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted"
+                        }`}
                     >
                       Last 30 Days
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDatePreset("ALL")}
-                      className={`p-2 rounded-lg text-left font-semibold transition-colors cursor-pointer ${
-                        dateFilterMode === "ALL" ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted"
-                      }`}
+                      className={`p-2 rounded-lg text-left font-semibold transition-colors cursor-pointer ${dateFilterMode === "ALL" ? "bg-primary text-primary-foreground" : "bg-muted/40 hover:bg-muted"
+                        }`}
                     >
                       All Time
                     </button>
@@ -554,44 +843,40 @@ export default function OutsourceCasesPage() {
               <button
                 type="button"
                 onClick={() => handleDatePreset("TODAY")}
-                className={`h-9 px-3 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                  dateFilterMode === "TODAY"
+                className={`h-9 px-3 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${dateFilterMode === "TODAY"
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 Today
               </button>
               <button
                 type="button"
                 onClick={() => handleDatePreset("7DAYS")}
-                className={`h-9 px-3 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                  dateFilterMode === "7DAYS"
+                className={`h-9 px-3 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${dateFilterMode === "7DAYS"
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 7 Days
               </button>
               <button
                 type="button"
                 onClick={() => handleDatePreset("30DAYS")}
-                className={`h-9 px-3 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                  dateFilterMode === "30DAYS"
+                className={`h-9 px-3 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${dateFilterMode === "30DAYS"
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 30 Days
               </button>
               <button
                 type="button"
                 onClick={() => handleDatePreset("ALL")}
-                className={`h-9 px-3 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                  dateFilterMode === "ALL"
+                className={`h-9 px-3 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${dateFilterMode === "ALL"
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
-                }`}
+                  }`}
               >
                 All
               </button>
@@ -730,7 +1015,7 @@ export default function OutsourceCasesPage() {
                             {investigationsList.slice(0, 3).map((testName, i) => (
                               <span
                                 key={i}
-                                className="inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20"
+                                className="inline-flex px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20"
                               >
                                 {testName}
                               </span>
@@ -743,7 +1028,7 @@ export default function OutsourceCasesPage() {
                           </div>
                           {c.partner_lab && (
                             <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
-                              <Building2 className="h-3 w-3 text-purple-500 shrink-0" />
+                              <Building2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
                               <span>{c.partner_lab}</span>
                             </p>
                           )}
@@ -934,6 +1219,419 @@ export default function OutsourceCasesPage() {
                   invoice={buildInvoiceData(selectedBillCase)}
                 />
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          PARTNER LABS & OUTSOURCE RATES MANAGEMENT MODAL (WIDE HORIZONTAL)
+      ═══════════════════════════════════════════════════════════════ */}
+      {isPartnerLabModalOpen && (
+        <Dialog open={isPartnerLabModalOpen} onOpenChange={setIsPartnerLabModalOpen}>
+          <DialogContent hideClose className="max-w-4xl w-[95vw] h-[85vh] max-h-[720px] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl">
+            {/* Modal Header (Fixed, Outside Scroll) */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/80 bg-muted/20 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <DialogTitle className="font-display text-base font-bold text-foreground">
+                    Outsource Partner Labs &amp; Rates
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground">
+                    Configure reference partner laboratories, set contracted outsource prices, and batch-map pricing.
+                  </DialogDescription>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPartnerLabModalOpen(false)}
+                className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Tab Navigation (Fixed, Outside Scroll) */}
+            <div className="flex items-center gap-2 px-6 pt-3 pb-2.5 border-b border-border/60 bg-muted/10 shrink-0 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setPartnerModalTab("ADD_LAB")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  partnerModalTab === "ADD_LAB"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>{labFormId ? "Edit Partner Lab" : "1. Add Partner Lab"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPartnerModalTab("BATCH_MAP")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  partnerModalTab === "BATCH_MAP"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                <FlaskConical className="h-3.5 w-3.5" />
+                <span>2. Assign Test Across Labs</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPartnerModalTab("MANAGE_LABS")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  partnerModalTab === "MANAGE_LABS"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                }`}
+              >
+                <Boxes className="h-3.5 w-3.5" />
+                <span>3. Partner Labs Directory ({partnerLabs.length})</span>
+              </button>
+            </div>
+
+            {/* Modal Body (Scrollable Only Within Content Area) */}
+            <div className="flex-1 overflow-y-auto min-h-0 p-5 sm:p-6 space-y-5 custom-scrollbar">
+              {/* ═══════════════════════════════════════════════════
+                  TAB 1: ADD / EDIT PARTNER LAB ONLY
+              ═══════════════════════════════════════════════════ */}
+              {partnerModalTab === "ADD_LAB" && (
+                <div className="space-y-5 py-2">
+                  {/* Lab Identity Field */}
+                  <div className="bg-muted/30 border border-border/70 rounded-2xl p-6 space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-border/40">
+                      <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                        Partner Lab Details
+                      </span>
+                      {labFormId && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
+                          Editing Existing Lab
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-foreground/80 block">
+                        Partner Lab Name <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full px-4 py-3 bg-background border border-border rounded-xl text-sm placeholder:text-muted-foreground outline-none focus:border-emerald-500 text-foreground font-semibold"
+                        placeholder="e.g. Dr. Lal PathLabs, SRL Diagnostics, Metropolis, Thyrocare, Redcliffe..."
+                        value={labFormName}
+                        onChange={(e) => setLabFormName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSavePartnerLab();
+                        }}
+                        autoFocus
+                      />
+                      <p className="text-[11px] text-muted-foreground pt-1">
+                        Enter the partner laboratory name. You can assign investigations and custom contracted outsource pricing in the <span className="font-semibold text-foreground">"2. Assign Test Across Labs"</span> tab.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ═══════════════════════════════════════════════════
+                  TAB 2: BATCH ASSIGN TEST ACROSS ALL LABS
+              ═══════════════════════════════════════════════════ */}
+              {partnerModalTab === "BATCH_MAP" && (
+                <div className="space-y-4">
+                  <div className="bg-muted/30 border border-border/70 rounded-2xl p-5 space-y-3">
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground flex items-center gap-2">
+                        <FlaskConical className="h-4 w-4 text-emerald-600" />
+                        <span>Select Test to Assign Across Labs</span>
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Pick an investigation from your catalog and set individual contracted outsource prices for each partner lab simultaneously.
+                      </p>
+                    </div>
+
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <input
+                        type="text"
+                        className="w-full pl-9 pr-4 py-2.5 bg-background border border-border rounded-xl text-xs placeholder:text-muted-foreground outline-none focus:border-emerald-500 text-foreground"
+                        placeholder="Search test to assign across labs..."
+                        value={batchTestSearchTerm}
+                        onChange={(e) => {
+                          setBatchTestSearchTerm(e.target.value);
+                          if (!e.target.value) setSelectedBatchTest(null);
+                        }}
+                      />
+
+                      {batchTestSearchTerm.trim() && !selectedBatchTest && batchMatchingTests.length > 0 && (
+                        <div className="absolute left-0 right-0 top-12 z-30 bg-popover border border-border rounded-xl shadow-xl max-h-52 overflow-y-auto p-1.5 space-y-1 animate-scale-in">
+                          {batchMatchingTests.map((t) => (
+                            <button
+                              key={`batch-search-res-${t.id}`}
+                              type="button"
+                              onClick={() => handleSelectBatchTest(t)}
+                              className="w-full p-2.5 rounded-lg hover:bg-muted/70 transition-colors flex items-center justify-between text-left cursor-pointer"
+                            >
+                              <div>
+                                <p className="text-xs font-bold text-foreground">{t.name}</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                  {t.category || "General"} {t.code ? `· Code: ${t.code}` : ""}
+                                </p>
+                              </div>
+                              <span className="font-mono text-xs font-semibold text-foreground">
+                                MRP ₹{Number(t.price || 0).toFixed(0)}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {selectedBatchTest && (
+                      <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                            {selectedBatchTest.name}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            Category: {selectedBatchTest.category || "Pathology"} · Master MRP: ₹{Number(selectedBatchTest.price || 0).toFixed(0)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedBatchTest(null);
+                            setBatchTestSearchTerm("");
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-background border border-border text-xs text-muted-foreground hover:text-foreground font-semibold cursor-pointer transition-colors shadow-2xs"
+                        >
+                          Change Test
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Partner Labs Pricing Table */}
+                  {selectedBatchTest ? (
+                    <div className="bg-card border border-border/80 rounded-2xl p-5 space-y-3 shadow-2xs animate-fade-in">
+                      <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                        <span className="text-xs font-bold text-foreground">
+                          Enter Outsource Price for Each Lab
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          Leave blank to skip a lab
+                        </span>
+                      </div>
+
+                      <div className="border border-border/80 rounded-xl overflow-hidden max-h-[280px] overflow-y-auto custom-scrollbar">
+                        <table className="w-full text-xs">
+                          <thead className="bg-muted/90 backdrop-blur-xs border-b border-border text-[11px] font-bold text-muted-foreground sticky top-0 z-10">
+                            <tr>
+                              <th className="px-3.5 py-2.5 text-left">Partner Lab</th>
+                              <th className="px-3.5 py-2.5 text-right">Outsource Price (₹)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/60">
+                            {partnerLabs.map((lab) => (
+                              <tr key={`batch-row-${lab.id}`} className="hover:bg-muted/20">
+                                <td className="px-3.5 py-2.5 font-bold text-foreground">
+                                  {lab.name}
+                                </td>
+                                <td className="px-3.5 py-2.5 text-right">
+                                  <div className="inline-flex items-center gap-1.5 justify-end">
+                                    <span className="text-muted-foreground font-mono text-xs">₹</span>
+                                    <input
+                                      type="number"
+                                      className="w-32 px-2.5 py-1 bg-background border border-border rounded-lg font-mono font-bold text-right text-xs outline-none focus:border-emerald-500 text-foreground"
+                                      placeholder="Custom Rate"
+                                      value={batchLabPrices[lab.id] ?? ""}
+                                      onChange={(e) =>
+                                        setBatchLabPrices((prev) => ({
+                                          ...prev,
+                                          [lab.id]: e.target.value,
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center rounded-xl border border-dashed border-border/80 text-muted-foreground space-y-1">
+                      <Search className="h-7 w-7 mx-auto opacity-30 text-emerald-500" />
+                      <p className="text-xs font-semibold text-foreground">No test selected yet.</p>
+                      <p className="text-[11px]">Type in the search bar above to select an investigation to assign across your labs.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ═══════════════════════════════════════════════════
+                  TAB 3: MANAGE PARTNER LABS DIRECTORY
+              ═══════════════════════════════════════════════════ */}
+              {partnerModalTab === "MANAGE_LABS" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground">
+                        All Configured Partner Labs ({partnerLabs.length})
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        Manage your reference laboratories and custom test price sheets.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAddLabModal()}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Add New Lab</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {partnerLabs.map((lab) => {
+                      const testCount = Array.isArray(lab.tests) ? lab.tests.length : 0;
+                      return (
+                        <div
+                          key={`lab-card-${lab.id}`}
+                          className="p-4 rounded-xl border border-border/80 bg-card hover:border-emerald-500/40 transition-all space-y-3 shadow-2xs"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h5 className="font-bold text-sm text-foreground">{lab.name}</h5>
+                            </div>
+
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                              {testCount} {testCount === 1 ? "Rate Set" : "Rates Set"}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/50">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAddLabModal(lab)}
+                              className="px-2.5 py-1 rounded-lg bg-muted hover:bg-muted/80 text-foreground font-bold text-xs transition-colors cursor-pointer"
+                            >
+                              Edit Lab &amp; Rates
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeletePartnerLab(lab.id, lab.name)}
+                              disabled={deletingLabId === lab.id}
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer disabled:opacity-50"
+                              title="Delete partner lab"
+                            >
+                              {deletingLabId === lab.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer (Pinned at Bottom, Outside Scroll Area) */}
+            <div className="px-6 py-3.5 border-t border-border/80 bg-muted/20 shrink-0 flex items-center justify-between gap-3">
+              {partnerModalTab === "ADD_LAB" && (
+                <>
+                  <div className="text-[11px] text-muted-foreground hidden sm:block">
+                    {labFormId ? "Update lab name or switch to tab 2 to assign tests" : "Enter partner lab name and click Create Partner Lab"}
+                  </div>
+                  <div className="flex items-center gap-2.5 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => setIsPartnerLabModalOpen(false)}
+                      className="px-4 py-2 rounded-xl border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground cursor-pointer transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSavePartnerLab}
+                      disabled={isSavingPartnerLab}
+                      className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {isSavingPartnerLab && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      <span>{labFormId ? "Update Partner Lab" : "Create Partner Lab"}</span>
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {partnerModalTab === "BATCH_MAP" && (
+                <>
+                  <div className="text-[11px] text-muted-foreground hidden sm:block">
+                    {selectedBatchTest
+                      ? `Assigning rates for "${selectedBatchTest.name}" across partner labs`
+                      : "Select an investigation above to assign rates across partner labs"}
+                  </div>
+                  <div className="flex items-center gap-2.5 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedBatchTest(null);
+                        setBatchTestSearchTerm("");
+                        setBatchLabPrices({});
+                      }}
+                      className="px-4 py-2 rounded-xl border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground cursor-pointer transition-colors"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveBatchMapping}
+                      disabled={isBatchSaving || !selectedBatchTest}
+                      className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {isBatchSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      <span>Save Pricing Across Labs</span>
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {partnerModalTab === "MANAGE_LABS" && (
+                <>
+                  <div className="text-[11px] text-muted-foreground hidden sm:block">
+                    {partnerLabs.length} partner labs configured in system
+                  </div>
+                  <div className="flex items-center gap-2.5 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => setIsPartnerLabModalOpen(false)}
+                      className="px-4 py-2 rounded-xl border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground cursor-pointer transition-colors"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenAddLabModal()}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Add New Partner Lab</span>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </DialogContent>
         </Dialog>
