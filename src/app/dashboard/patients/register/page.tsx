@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, useDeferredValue } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -597,6 +597,7 @@ function RegisterPatientPage() {
   const [payULoading, setPayULoading] = useState(false);
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<"CASH" | "UPI" | "ONLINE" | "CARD" | "UNPAID">("UNPAID");
   const [isUpdatingPaymentMode, setIsUpdatingPaymentMode] = useState(false);
+  const [updatingPaymentModeTarget, setUpdatingPaymentModeTarget] = useState<"CASH" | "UPI" | "ONLINE" | "CARD" | "UNPAID" | null>(null);
   const [paymentUpdateMessage, setPaymentUpdateMessage] = useState<string | null>(null);
 
   // Packages & Catalog Mode
@@ -1164,59 +1165,66 @@ function RegisterPatientPage() {
     } catch { }
 
     (async () => {
-      try {
-        const data = await fetchFromLaravel("/tests", { skipCache: true });
+      // Parallelize all catalog and setup fetches for instantaneous page readiness
+      const [testsResult, docsResult, labResult, ccResult, outsourceResult] = await Promise.allSettled([
+        fetchFromLaravel("/tests?compact=1"),
+        fetchFromLaravel("/doctors?filter=all&include_inactive=1"),
+        fetchFromLaravel("/lab"),
+        fetchFromLaravel("/collection-centers"),
+        fetchFromLaravel("/outsource/partner-labs"),
+      ]);
+
+      if (testsResult.status === "fulfilled" && testsResult.value) {
+        const data = testsResult.value;
         const list = Array.isArray(data) ? data : (data?.data || []);
         if (list.length > 0) {
           setAvailableTests(list);
           try { localStorage.setItem("lis_cached_tests", JSON.stringify(list)); } catch { }
         }
-      } catch (err) { console.error("Error fetching tests:", err); }
+      }
 
-      try {
-        const docRes = await fetchFromLaravel("/doctors?filter=all&include_inactive=1", { skipCache: true });
+      if (docsResult.status === "fulfilled" && docsResult.value) {
+        const docRes = docsResult.value;
         if (docRes && docRes.doctors && Array.isArray(docRes.doctors)) {
           const apiDocs = docRes.doctors.map((d: any) => d.name).filter(Boolean);
           const combined = Array.from(new Set(["Self", ...apiDocs]));
           setDoctorsList(combined);
           localStorage.setItem("lis_referral_doctors", JSON.stringify(combined));
         }
-      } catch (err) { console.error("Error syncing doctors from API:", err); }
+      }
 
       let activeLabName = "";
-      try {
-        const lab = await fetchFromLaravel("/lab");
-        if (lab) {
-          setLabInfo(lab);
-          activeLabName = (lab.name || "").trim();
-          const rawSettings = lab?.report_settings || lab?.reportSettings;
-          if (rawSettings) {
-            const normalized = normalizeReportSettings(rawSettings);
-            if (normalized.intakeFields && normalized.intakeFields.length > 0) {
-              setIntakeFields(normalized.intakeFields);
-              setTempIntakeFields(normalized.intakeFields);
-              try {
-                localStorage.setItem("lis_intake_fields", JSON.stringify(normalized.intakeFields));
-              } catch { }
-            }
-            if (normalized.defaultDesignation) {
-              setDesignation(normalizeDesignation(normalized.defaultDesignation));
-            }
-          }
-          const rawBillSettings = lab?.bill_settings || lab?.billSettings;
-          if (rawBillSettings) {
-            const normalizedBill = normalizeBillSettings(rawBillSettings);
-            setBillSettings(normalizedBill);
+      if (labResult.status === "fulfilled" && labResult.value) {
+        const lab = labResult.value;
+        setLabInfo(lab);
+        activeLabName = (lab.name || "").trim();
+        const rawSettings = lab?.report_settings || lab?.reportSettings;
+        if (rawSettings) {
+          const normalized = normalizeReportSettings(rawSettings);
+          if (normalized.intakeFields && normalized.intakeFields.length > 0) {
+            setIntakeFields(normalized.intakeFields);
+            setTempIntakeFields(normalized.intakeFields);
             try {
-              localStorage.setItem("lis_cached_bill_settings", JSON.stringify(normalizedBill));
+              localStorage.setItem("lis_intake_fields", JSON.stringify(normalized.intakeFields));
             } catch { }
           }
+          if (normalized.defaultDesignation) {
+            setDesignation(normalizeDesignation(normalized.defaultDesignation));
+          }
         }
-      } catch (err) { console.error("Error fetching lab defaults:", err); }
+        const rawBillSettings = lab?.bill_settings || lab?.billSettings;
+        if (rawBillSettings) {
+          const normalizedBill = normalizeBillSettings(rawBillSettings);
+          setBillSettings(normalizedBill);
+          try {
+            localStorage.setItem("lis_cached_bill_settings", JSON.stringify(normalizedBill));
+          } catch { }
+        }
+      }
 
       // Fetch Collection Centers & B2B Partner Labs added by user
-      try {
-        const ccRes = await fetchFromLaravel("/collection-centers");
+      if (ccResult.status === "fulfilled" && ccResult.value) {
+        const ccRes = ccResult.value;
         const ccList = Array.isArray(ccRes) ? ccRes : (ccRes?.data || []);
         setCollectionCentersList(ccList);
         const fetchedCenters: string[] = ccList
@@ -1232,7 +1240,7 @@ function RegisterPatientPage() {
         let localPoints: string[] = [];
         const savedPointsRaw = localStorage.getItem("lis_collection_points");
         if (savedPointsRaw) {
-          try { localPoints = JSON.parse(savedPointsRaw); } catch (e) { }
+          try { localPoints = JSON.parse(savedPointsRaw); } catch { }
         }
 
         const mergedPoints = Array.from(
@@ -1246,24 +1254,20 @@ function RegisterPatientPage() {
         );
 
         setCollectionPoints(mergedPoints);
-      } catch (err) {
-        console.error("Error fetching collection centers:", err);
       }
 
       try {
         setAvailablePackages(getStoredPackages());
       } catch (e) { }
 
-      // Fetch dynamic Outsource Partner Labs configured by user
-      try {
-        const opRes = await fetchFromLaravel("/outsource/partner-labs");
+      // Outsource Partner Labs configured by user
+      if (outsourceResult.status === "fulfilled" && outsourceResult.value) {
+        const opRes = outsourceResult.value;
         const labsData = Array.isArray(opRes) ? opRes : (opRes?.data || []);
         if (Array.isArray(labsData) && labsData.length > 0) {
           setOutsourcePartnerLabsList(labsData);
           setCachedPartnerLabs(labsData);
         }
-      } catch (e) {
-        console.error("Error fetching outsource partner labs:", e);
       }
     })();
   }, []);
@@ -2886,10 +2890,13 @@ function RegisterPatientPage() {
 
   const handleApplyPaymentMode = async (mode: "CASH" | "UPI" | "ONLINE" | "CARD" | "UNPAID") => {
     if (isB2B) return;
-    setSelectedPaymentMode(mode);
-    if (!successDetails?.billId) return;
+    if (!successDetails?.billId) {
+      setSelectedPaymentMode(mode);
+      return;
+    }
 
     try {
+      setUpdatingPaymentModeTarget(mode);
       setIsUpdatingPaymentMode(true);
       setPaymentUpdateMessage(null);
       const isPaid = mode !== "UNPAID";
@@ -2906,6 +2913,7 @@ function RegisterPatientPage() {
         }),
       });
 
+      setSelectedPaymentMode(mode);
       setSuccessDetails((prev: any) => ({
         ...prev,
         paidAmount,
@@ -2924,6 +2932,7 @@ function RegisterPatientPage() {
       console.error("Error updating payment mode:", err);
     } finally {
       setIsUpdatingPaymentMode(false);
+      setUpdatingPaymentModeTarget(null);
     }
   };
 
@@ -2978,8 +2987,10 @@ function RegisterPatientPage() {
     return grouped;
   }, [availableTests]);
 
+  const deferredTestSearch = useDeferredValue(testSearch);
+
   const filteredGroups = useMemo(() => {
-    const term = testSearch.toLowerCase().trim();
+    const term = deferredTestSearch.toLowerCase().trim();
     const filtered: Record<string, Test[]> = {};
     Object.entries(groupedTests).forEach(([category, tests]) => {
       if (activeCategory !== "ALL" && normalizeCat(category) !== normalizeCat(activeCategory)) return;
@@ -2993,15 +3004,15 @@ function RegisterPatientPage() {
       if (matches.length > 0) filtered[category] = matches;
     });
     return filtered;
-  }, [groupedTests, testSearch, activeCategory]);
+  }, [groupedTests, deferredTestSearch, activeCategory]);
 
   const filteredPackagesForCatalog = useMemo(() => {
-    const term = testSearch.toLowerCase().trim();
+    const term = deferredTestSearch.toLowerCase().trim();
     if (!term) return availablePackages;
     return availablePackages.filter(
       (p) => p.name.toLowerCase().includes(term) || p.code.toLowerCase().includes(term)
     );
-  }, [availablePackages, testSearch]);
+  }, [availablePackages, deferredTestSearch]);
 
   const handleTogglePackage = (pkg: LabPackage) => {
     if (selectedPackage?.id === pkg.id) {
@@ -5028,20 +5039,35 @@ function RegisterPatientPage() {
                   type="button"
                   onClick={() => handleApplyPaymentMode("CASH")}
                   disabled={isUpdatingPaymentMode}
-                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                    }`}
+                  className={`relative overflow-hidden p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between shadow-2xs ${
+                    updatingPaymentModeTarget === "CASH"
+                      ? "border-primary ring-2 ring-primary/40 bg-primary/10 shadow-md cursor-wait"
+                      : selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20 cursor-pointer group hover:-translate-y-0.5"
+                      : isUpdatingPaymentMode
+                      ? "border-border/60 bg-muted/10 opacity-50 cursor-not-allowed"
+                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40 cursor-pointer group hover:-translate-y-0.5"
+                  }`}
                 >
+                  {updatingPaymentModeTarget === "CASH" && (
+                    <>
+                      <div className="absolute inset-0 bg-primary/10 dark:bg-primary/20 pointer-events-none animate-pulse" />
+                      <div className="payment-card-shimmer" />
+                    </>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="h-9 w-9 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                       <Banknote className="h-5 w-5" />
                     </div>
-                    {selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0 && (
+                    {updatingPaymentModeTarget === "CASH" ? (
+                      <span className="h-5 w-5 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      </span>
+                    ) : selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0 ? (
                       <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
                         <Check className="h-3 w-3" />
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <div className="mt-3">
                     <p className="font-bold text-xs text-foreground">Cash</p>
@@ -5054,20 +5080,35 @@ function RegisterPatientPage() {
                   type="button"
                   onClick={() => handleApplyPaymentMode("ONLINE")}
                   disabled={isUpdatingPaymentMode}
-                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                    }`}
+                  className={`relative overflow-hidden p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between shadow-2xs ${
+                    updatingPaymentModeTarget === "ONLINE"
+                      ? "border-primary ring-2 ring-primary/40 bg-primary/10 shadow-md cursor-wait"
+                      : selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20 cursor-pointer group hover:-translate-y-0.5"
+                      : isUpdatingPaymentMode
+                      ? "border-border/60 bg-muted/10 opacity-50 cursor-not-allowed"
+                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40 cursor-pointer group hover:-translate-y-0.5"
+                  }`}
                 >
+                  {updatingPaymentModeTarget === "ONLINE" && (
+                    <>
+                      <div className="absolute inset-0 bg-primary/10 dark:bg-primary/20 pointer-events-none animate-pulse" />
+                      <div className="payment-card-shimmer" />
+                    </>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="h-9 w-9 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
                       <Globe className="h-5 w-5" />
                     </div>
-                    {selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0 && (
+                    {updatingPaymentModeTarget === "ONLINE" ? (
+                      <span className="h-5 w-5 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      </span>
+                    ) : selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0 ? (
                       <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
                         <Check className="h-3 w-3" />
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <div className="mt-3">
                     <p className="font-bold text-xs text-foreground">Online (PayU)</p>
@@ -5080,20 +5121,35 @@ function RegisterPatientPage() {
                   type="button"
                   onClick={() => handleApplyPaymentMode("UPI")}
                   disabled={isUpdatingPaymentMode}
-                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                    }`}
+                  className={`relative overflow-hidden p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between shadow-2xs ${
+                    updatingPaymentModeTarget === "UPI"
+                      ? "border-primary ring-2 ring-primary/40 bg-primary/10 shadow-md cursor-wait"
+                      : selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20 cursor-pointer group hover:-translate-y-0.5"
+                      : isUpdatingPaymentMode
+                      ? "border-border/60 bg-muted/10 opacity-50 cursor-not-allowed"
+                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40 cursor-pointer group hover:-translate-y-0.5"
+                  }`}
                 >
+                  {updatingPaymentModeTarget === "UPI" && (
+                    <>
+                      <div className="absolute inset-0 bg-primary/10 dark:bg-primary/20 pointer-events-none animate-pulse" />
+                      <div className="payment-card-shimmer" />
+                    </>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="h-9 w-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                       <QrCode className="h-5 w-5" />
                     </div>
-                    {selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0 && (
+                    {updatingPaymentModeTarget === "UPI" ? (
+                      <span className="h-5 w-5 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      </span>
+                    ) : selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0 ? (
                       <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
                         <Check className="h-3 w-3" />
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <div className="mt-3">
                     <p className="font-bold text-xs text-foreground">UPI</p>
@@ -5106,20 +5162,35 @@ function RegisterPatientPage() {
                   type="button"
                   onClick={() => handleApplyPaymentMode("CARD")}
                   disabled={isUpdatingPaymentMode}
-                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                    }`}
+                  className={`relative overflow-hidden p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between shadow-2xs ${
+                    updatingPaymentModeTarget === "CARD"
+                      ? "border-primary ring-2 ring-primary/40 bg-primary/10 shadow-md cursor-wait"
+                      : selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0
+                      ? "border-primary bg-primary/5 ring-2 ring-primary/20 cursor-pointer group hover:-translate-y-0.5"
+                      : isUpdatingPaymentMode
+                      ? "border-border/60 bg-muted/10 opacity-50 cursor-not-allowed"
+                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40 cursor-pointer group hover:-translate-y-0.5"
+                  }`}
                 >
+                  {updatingPaymentModeTarget === "CARD" && (
+                    <>
+                      <div className="absolute inset-0 bg-primary/10 dark:bg-primary/20 pointer-events-none animate-pulse" />
+                      <div className="payment-card-shimmer" />
+                    </>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="h-9 w-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
                       <CreditCard className="h-5 w-5" />
                     </div>
-                    {selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0 && (
+                    {updatingPaymentModeTarget === "CARD" ? (
+                      <span className="h-5 w-5 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      </span>
+                    ) : selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0 ? (
                       <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
                         <Check className="h-3 w-3" />
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <div className="mt-3">
                     <p className="font-bold text-xs text-foreground">Debit / Credit Card</p>
@@ -5132,20 +5203,35 @@ function RegisterPatientPage() {
                   type="button"
                   onClick={() => handleApplyPaymentMode("UNPAID")}
                   disabled={isUpdatingPaymentMode}
-                  className={`p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between cursor-pointer group hover:-translate-y-0.5 shadow-2xs ${(successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID"
-                    ? "border-rose-500/50 bg-rose-500/5 ring-2 ring-rose-500/20"
-                    : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40"
-                    }`}
+                  className={`relative overflow-hidden p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between shadow-2xs ${
+                    updatingPaymentModeTarget === "UNPAID"
+                      ? "border-rose-500 ring-2 ring-rose-500/40 bg-rose-500/10 shadow-md cursor-wait"
+                      : (successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID"
+                      ? "border-rose-500/50 bg-rose-500/5 ring-2 ring-rose-500/20 cursor-pointer group hover:-translate-y-0.5"
+                      : isUpdatingPaymentMode
+                      ? "border-border/60 bg-muted/10 opacity-50 cursor-not-allowed"
+                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40 cursor-pointer group hover:-translate-y-0.5"
+                  }`}
                 >
+                  {updatingPaymentModeTarget === "UNPAID" && (
+                    <>
+                      <div className="absolute inset-0 bg-rose-500/10 pointer-events-none animate-pulse" />
+                      <div className="payment-card-shimmer" />
+                    </>
+                  )}
                   <div className="flex items-center justify-between">
                     <div className="h-9 w-9 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
                       <Clock className="h-5 w-5" />
                     </div>
-                    {((successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID") && (
+                    {updatingPaymentModeTarget === "UNPAID" ? (
+                      <span className="h-5 w-5 rounded-full bg-rose-500/15 text-rose-600 flex items-center justify-center">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      </span>
+                    ) : ((successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID") ? (
                       <span className="h-5 w-5 rounded-full bg-rose-500 text-white flex items-center justify-center text-[10px] font-bold">
                         !
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <div className="mt-3">
                     <p className="font-bold text-xs text-foreground">Pay Later (Unpaid)</p>
