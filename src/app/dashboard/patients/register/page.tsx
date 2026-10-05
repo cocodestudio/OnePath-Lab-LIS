@@ -5177,33 +5177,36 @@ function RegisterPatientPage() {
           <DialogTitle className="sr-only">Diagnostic Test Directory</DialogTitle>
 
           {/* Header */}
-          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-border/80 shrink-0 bg-card">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground shadow-sm">
-                <FlaskConical className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="font-display text-base font-bold text-foreground">Diagnostic Investigation Catalog</h2>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Patient: <strong className="text-foreground">{newPatient?.name}</strong> · <span className="font-mono">{newPatient?.customId}</span>
-                </p>
+          <div className="flex flex-col gap-3 px-4 sm:px-6 py-4 border-b border-border/80 shrink-0 bg-card">
+            {/* Title Row */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground shadow-sm shrink-0">
+                  <FlaskConical className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+                <div>
+                  <h2 className="font-display text-sm sm:text-base font-bold text-foreground">Diagnostic Investigation Catalog</h2>
+                  <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5">
+                    Patient: <strong className="text-foreground">{newPatient?.name}</strong> · <span className="font-mono">{newPatient?.customId}</span>
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Top Navigation Tabs: Diagnostic Tests vs Packages vs Outsource */}
-            <div className="flex items-center gap-1.5 p-1 bg-muted/70 rounded-xl border border-border/80">
+            {/* Top Navigation Tabs: Diagnostic Tests vs Packages vs Outsource — Full-width grid on mobile */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-muted/70 rounded-xl border border-border/80">
               <button
                 type="button"
                 onClick={() => setCatalogMode("TESTS")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${catalogMode === "TESTS"
+                className={`py-2 px-2 sm:px-3.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer select-none ${catalogMode === "TESTS"
                   ? "bg-background text-foreground shadow-xs ring-1 ring-border"
                   : "text-muted-foreground hover:text-foreground"
                   }`}
               >
-                <FlaskConical className="h-3.5 w-3.5 text-primary" />
-                <span>Diagnostic Tests</span>
+                <FlaskConical className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="truncate">Tests</span>
                 {selectedTestObjects.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-primary text-primary-foreground font-mono">
+                  <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-primary text-primary-foreground font-mono shrink-0">
                     {selectedTestObjects.length}
                   </span>
                 )}
@@ -5212,27 +5215,27 @@ function RegisterPatientPage() {
               <button
                 type="button"
                 onClick={() => setCatalogMode("PACKAGES")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${catalogMode === "PACKAGES"
+                className={`py-2 px-2 sm:px-3.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer select-none ${catalogMode === "PACKAGES"
                   ? "bg-background text-foreground shadow-xs ring-1 ring-border"
                   : "text-muted-foreground hover:text-foreground"
                   }`}
               >
-                <Boxes className="h-3.5 w-3.5 text-primary" />
-                <span>Packages</span>
+                <Boxes className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="truncate">Packages</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setCatalogMode("OUTSOURCE")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none ${catalogMode === "OUTSOURCE"
+                className={`py-2 px-2 sm:px-3.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer select-none ${catalogMode === "OUTSOURCE"
                   ? "bg-purple-600 text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
                   }`}
               >
-                <ExternalLink className="h-3.5 w-3.5 text-purple-300" />
-                <span>Outsource</span>
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Outsource</span>
                 {selectedOutsourceTests.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] bg-white text-purple-700 font-bold font-mono">
+                  <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-white text-purple-700 font-bold font-mono shrink-0">
                     {selectedOutsourceTests.length}
                   </span>
                 )}
@@ -5403,7 +5406,8 @@ function RegisterPatientPage() {
               <div className="space-y-6">
                 {/* Outsource Routing & Partner Lab Controls */}
                 <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 space-y-3.5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex flex-col gap-3">
+                    {/* Title row */}
                     <div className="flex items-center gap-2.5">
                       <div className="h-8 w-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
                         <ExternalLink className="h-4 w-4" />
@@ -5414,43 +5418,46 @@ function RegisterPatientPage() {
                       </div>
                     </div>
 
-                    {/* Partner Lab Selector & Horizontal Manage Labs Button */}
-                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 shrink-0">
+                    {/* Partner Lab Selector — full-width on mobile */}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                       <label className="text-[11px] font-bold text-foreground/80 shrink-0">Partner Lab:</label>
-                      <Select value={outsourcePartnerLab} onValueChange={handlePartnerLabChange}>
-                        <SelectTrigger className="h-9 min-w-[200px] sm:min-w-[220px] bg-background border-border text-xs font-semibold rounded-xl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-[300px]">
-                          {outsourcePartnerLabsList.map((lab) => {
-                            const testCount = lab.tests?.length || 0;
-                            return (
-                              <SelectItem key={lab.id || lab.name} value={lab.name} className="text-xs">
-                                <div className="flex items-center justify-between gap-3 w-full">
-                                  <span className="font-semibold">{lab.name}</span>
-                                  {testCount > 0 && (
-                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                                      {testCount} rates
-                                    </span>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                          <SelectItem value="Other Partner Lab" className="text-xs text-muted-foreground italic">
-                            + Other Partner Lab...
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Link
-                        href="/dashboard/cases/outsource"
-                        target="_blank"
-                        className="inline-flex flex-row items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer shadow-2xs"
-                        title="Manage partner labs and test contract prices in Outsource Cases"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                        <span className="whitespace-nowrap">Manage Labs</span>
-                      </Link>
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Select value={outsourcePartnerLab} onValueChange={handlePartnerLabChange}>
+                          <SelectTrigger className="h-9 flex-1 min-w-0 bg-background border-border text-xs font-semibold rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[300px]">
+                            {outsourcePartnerLabsList.map((lab) => {
+                              const testCount = lab.tests?.length || 0;
+                              return (
+                                <SelectItem key={lab.id || lab.name} value={lab.name} className="text-xs">
+                                  <div className="flex items-center justify-between gap-3 w-full">
+                                    <span className="font-semibold">{lab.name}</span>
+                                    {testCount > 0 && (
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                                        {testCount} rates
+                                      </span>
+                                    )}
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
+                            <SelectItem value="Other Partner Lab" className="text-xs text-muted-foreground italic">
+                              + Other Partner Lab...
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Link
+                          href="/dashboard/cases/outsource"
+                          target="_blank"
+                          className="inline-flex flex-row items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-background hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer shadow-2xs"
+                          title="Manage partner labs and test contract prices in Outsource Cases"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                          <span className="hidden sm:inline">Manage Labs</span>
+                          <span className="sm:hidden">Manage</span>
+                        </Link>
+                      </div>
                     </div>
                   </div>
 

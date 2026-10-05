@@ -1481,23 +1481,13 @@ export default function OutsourceCasesPage() {
               ═══════════════════════════════════════════════════ */}
               {partnerModalTab === "MANAGE_LABS" && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between pb-2 border-b border-border/60">
-                    <div>
-                      <h4 className="text-xs font-bold text-foreground">
-                        All Configured Partner Labs ({partnerLabs.length})
-                      </h4>
-                      <p className="text-[11px] text-muted-foreground">
-                        Manage your reference laboratories and custom test price sheets.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenAddLabModal()}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>Add New Lab</span>
-                    </button>
+                  <div className="pb-2 border-b border-border/60">
+                    <h4 className="text-xs font-bold text-foreground">
+                      All Configured Partner Labs ({partnerLabs.length})
+                    </h4>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Manage your reference laboratories and custom test price sheets. Use the &quot;1. Add Partner Lab&quot; tab to add new labs.
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">

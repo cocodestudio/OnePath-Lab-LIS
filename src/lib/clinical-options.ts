@@ -652,16 +652,74 @@ export const CLINICAL_PARAM_DICTIONARY: ClinicalOptionDef[] = [
     ],
   },
   {
-    key: "mantoux",
-    namePatterns: ["mantoux", "tuberculin", "mantoux test"],
+    key: "tuberculin_dose",
+    namePatterns: [
+      "tuberculin ppd dose",
+      "tuberculin dose",
+      "ppd dose",
+      "dose of tuberculin",
+      "tuberculin units",
+      "ppd tuberculin dose"
+    ],
     options: [
-      "Negative (< 5 mm)",
-      "Negative (5 - 9 mm)",
-      "Positive (>= 10 mm)",
+      "5 TU (0.1 mL PPD RT-23)",
+      "10 TU (0.1 mL PPD)",
+      "5 TU",
+      "10 TU",
+      "2 TU (0.1 mL PPD RT-23)",
+      "1 TU (0.1 mL PPD RT-23)",
+      "2 TU",
+      "1 TU",
+    ],
+  },
+  {
+    key: "mantoux_site",
+    namePatterns: [
+      "site of injection",
+      "injection site",
+      "mantoux site",
+      "site of tuberculin injection"
+    ],
+    options: [
+      "Left Volar Forearm",
+      "Right Volar Forearm",
+      "Left Forearm",
+      "Right Forearm",
+    ],
+  },
+  {
+    key: "mantoux_duration",
+    namePatterns: [
+      "reading duration",
+      "reading time",
+      "mantoux duration",
+      "duration after injection",
+      "reading after"
+    ],
+    options: [
+      "After 48 Hours",
+      "After 72 Hours",
+      "48 - 72 Hours",
+    ],
+  },
+  {
+    key: "mantoux",
+    namePatterns: [
+      "mantoux test result",
+      "mantoux result",
+      "tuberculin test result",
+      "tuberculin skin test result",
+      "mantoux reaction",
+      "mantoux interpretation"
+    ],
+    options: [
+      "Negative (< 5 mm Induration)",
+      "Positive (>= 10 mm Induration)",
+      "Positive High Risk (>= 5 mm Induration)",
+      "Strongly Positive (>= 15 mm Induration)",
       "0 mm (No Induration)",
-      "6 mm (Negative)",
-      "12 mm (Positive)",
-      "15 mm (Positive)",
+      "Negative",
+      "Positive",
     ],
   },
 

@@ -1520,6 +1520,8 @@ function ResultEntryContent() {
   const [showParamRemark, setShowParamRemark] = useState<Record<string, boolean>>({});
   const [testNotes, setTestNotes] = useState<Record<string, { notes?: string; remarks?: string; advices?: string }>>({});
   const [generatingAiField, setGeneratingAiField] = useState<Record<string, boolean>>({});
+  const [savingMasterTemplate, setSavingMasterTemplate] = useState<Record<string, boolean>>({});
+  const [syncMasterOnSave, setSyncMasterOnSave] = useState<Record<string, boolean>>({});
 
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -2427,6 +2429,62 @@ function ResultEntryContent() {
     }
   };
 
+  // Save customized report layout / antibiotic table permanently to Test Master as default template
+  const handleSaveAsDefaultTemplate = async (item: any) => {
+    const currentVal = values[item.id] || "";
+    if (!currentVal || currentVal === "<p></p>" || currentVal === "<p><br></p>") {
+      toast.error("Template is empty", "Please add some content or arrange your table before saving as default template.");
+      return;
+    }
+
+    const testId = item.test?.id;
+    if (!testId) {
+      toast.error("Error", "Could not identify test ID to update default template.");
+      return;
+    }
+
+    setSavingMasterTemplate((prev) => ({ ...prev, [item.id]: true }));
+
+    try {
+      await fetchFromLaravel(`/tests/${testId}/report-layout`, {
+        method: "POST",
+        body: JSON.stringify({
+          interpretation: currentVal,
+        }),
+      });
+
+      // Also update in-memory report test definition so UI reflects it immediately
+      setReport((prev) => {
+        if (!prev) return prev;
+        const newResults = prev.results.map((r) => {
+          if (r.id === item.id) {
+            return {
+              ...r,
+              test: {
+                ...r.test,
+                interpretation: currentVal,
+              },
+            };
+          }
+          return r;
+        });
+        const updated = { ...prev, results: newResults };
+        reportRef.current = updated;
+        return updated;
+      });
+
+      toast.success(
+        "Default Template Saved Permanently!",
+        `This customized layout, table format, and antibiotic list have been saved as the default template for "${item.test.name}". All future reports will now open with this exact layout!`
+      );
+    } catch (err: any) {
+      console.error("Failed to save default template:", err);
+      toast.error("Save Failed", err.message || "Failed to update default template.");
+    } finally {
+      setSavingMasterTemplate((prev) => ({ ...prev, [item.id]: false }));
+    }
+  };
+
   const [printingAndApproving, setPrintingAndApproving] = useState(false);
 
   // Auto-save & approve report in background, then open Print Report modal
@@ -2508,6 +2566,29 @@ function ResultEntryContent() {
           testNotes: testNotes
         }),
       });
+
+      // If user opted to also update the master template for future reports, sync it to Test Master
+      const customEditorSyncPromises = Object.entries(syncMasterOnSave)
+        .filter(([itemId, shouldSync]) => shouldSync && values[itemId])
+        .map(async ([itemId]) => {
+          const rItem = report?.results.find((r) => r.id === itemId);
+          if (rItem?.test?.id) {
+            try {
+              await fetchFromLaravel(`/tests/${rItem.test.id}/report-layout`, {
+                method: "POST",
+                body: JSON.stringify({
+                  interpretation: values[itemId],
+                }),
+              });
+            } catch (syncErr) {
+              console.warn("Failed to auto-sync default template to test master:", syncErr);
+            }
+          }
+        });
+
+      if (customEditorSyncPromises.length > 0) {
+        await Promise.all(customEditorSyncPromises);
+      }
 
       let successMsg = "Diagnostic results saved successfully.";
       if (resolvedStatus === "IN_PROGRESS") {
@@ -3148,39 +3229,79 @@ function ResultEntryContent() {
                                   const hasActiveRemark = showParamRemark[item.id] || !!paramRemarks[item.id];
 
                                   if (isCustomEditor) {
+                                    const isSavingThisTemplate = !!savingMasterTemplate[item.id];
+                                    const isSyncingOnReportSave = !!syncMasterOnSave[item.id];
+
                                     return (
                                       <tr key={item.id} className="border-b border-border/30 last:border-0 hover:bg-muted/15 transition-colors">
                                         <td colSpan={hasAnyNumeric ? 5 : 2} className="px-6 py-4">
-                                          <div className="mb-2 flex items-center justify-between">
-                                            <span className="text-sm font-semibold text-foreground">
-                                              {item.test.name !== "Report Template" ? item.test.name : ""}
-                                            </span>
+                                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 bg-muted/30 p-2.5 rounded-lg border border-border/50">
                                             <div className="flex items-center gap-2">
+                                              <span className="text-sm font-bold text-foreground">
+                                                {item.test.name !== "Report Template" ? item.test.name : "Report Template"}
+                                              </span>
+                                              <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded uppercase tracking-wider border border-primary/20">
+                                                Culture &amp; Custom Layout
+                                              </span>
+                                            </div>
+
+                                            <div className="flex items-center gap-2 flex-wrap">
                                               {item.test.interpretation && (
                                                 <button
                                                   type="button"
                                                   onClick={() => {
-                                                    if (window.confirm("Reload master template from Test Master? This will update the table layout to the latest test definition.")) {
+                                                    if (window.confirm("Reload master template from Test Master? This will reset the editor table back to the original master definition.")) {
                                                       handleValueChange(item.id, item.test.interpretation || "");
                                                     }
                                                   }}
-                                                  className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded border border-primary/20 transition-colors"
-                                                  title="Click to reload the template saved in Test Master"
+                                                  className="text-xs font-medium text-muted-foreground hover:text-foreground flex items-center gap-1.5 cursor-pointer bg-background hover:bg-muted px-2.5 py-1 rounded-md border border-border/60 transition-colors shadow-2xs"
+                                                  title="Click to reload the template originally saved in Test Master"
                                                 >
-                                                  <RefreshCw className="h-3 w-3" />
-                                                  <span>Reload Test Master Layout</span>
+                                                  <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+                                                  <span>Reload Template</span>
                                                 </button>
                                               )}
-                                              <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded uppercase tracking-wider">Custom Layout</span>
+
+                                              <button
+                                                type="button"
+                                                disabled={isSavingThisTemplate}
+                                                onClick={() => handleSaveAsDefaultTemplate(item)}
+                                                className="text-xs font-semibold text-primary hover:text-primary-foreground hover:bg-primary flex items-center gap-1.5 cursor-pointer bg-primary/10 px-3 py-1 rounded-md border border-primary/30 transition-all shadow-2xs disabled:opacity-50"
+                                                title="Save this exact table format and antibiotics permanently to Test Master so future reports use it automatically"
+                                              >
+                                                {isSavingThisTemplate ? (
+                                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                ) : (
+                                                  <Save className="h-3.5 w-3.5" />
+                                                )}
+                                                <span>{isSavingThisTemplate ? "Saving to Master..." : "Save as Default Template"}</span>
+                                              </button>
                                             </div>
                                           </div>
-                                          <div className="mt-3 border border-border/60 rounded-xl overflow-visible shadow-sm">
+
+                                          <div className="border border-border/60 rounded-xl overflow-visible shadow-sm bg-card">
                                             <TipTapEditor
                                               value={val}
                                               onChange={(html) => handleValueChange(item.id, html)}
                                               hideHeader
                                               hideFooter
                                             />
+                                          </div>
+
+                                          <div className="mt-2.5 flex items-center justify-between flex-wrap gap-2 px-1">
+                                            <label className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer select-none">
+                                              <input
+                                                type="checkbox"
+                                                checked={isSyncingOnReportSave}
+                                                onChange={(e) => setSyncMasterOnSave((prev) => ({ ...prev, [item.id]: e.target.checked }))}
+                                                className="h-3.5 w-3.5 rounded border-border text-primary focus:ring-primary/20 accent-primary"
+                                              />
+                                              <span>Also update master template for future reports when saving this patient report</span>
+                                            </label>
+
+                                            <span className="text-[11px] text-muted-foreground/80 italic">
+                                              Tip: Changes here affect this report. Click &apos;Save as Default Template&apos; to apply for all future patients.
+                                            </span>
                                           </div>
                                         </td>
                                       </tr>
