@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
   Search, Receipt, Edit2, Calendar, User, CheckCircle2, AlertTriangle,
@@ -407,21 +407,40 @@ export default function BillingPage() {
     };
   }, []);
 
-  const fetchBills = async (forceRefresh?: boolean | any) => {
+  const activeBillDateRef = useRef(filterDate);
+  activeBillDateRef.current = filterDate;
+
+  const fetchBills = useCallback(async (forceRefresh?: boolean | any, targetDate?: string) => {
     const isForce = forceRefresh === true;
+    const effectiveDate = targetDate !== undefined ? targetDate : activeBillDateRef.current;
     setIsFetching(true);
     try {
       if (isForce && bills.length === 0) {
         setLoading(true);
       }
-      const data = await fetchFromLaravel("/bills?limit=300", { skipCache: isForce });
+      const params = new URLSearchParams();
+      if (effectiveDate) {
+        params.append("date", effectiveDate);
+        params.append("limit", "200");
+      } else {
+        params.append("limit", "150");
+      }
+
+      const data = await fetchFromLaravel(`/bills?${params.toString()}`, { skipCache: isForce });
+
+      if (effectiveDate !== activeBillDateRef.current) {
+        return;
+      }
+
       const rawList = Array.isArray(data) ? data : (data?.data || []);
       const billsList = rawList.map((b: any) => normalizeBillObj(b));
       setBills(billsList);
 
-      try {
-        localStorage.setItem("lis_cached_bills", JSON.stringify(billsList));
-      } catch {}
+      if (effectiveDate === getTodayStr()) {
+        try {
+          localStorage.setItem("lis_cached_bills", JSON.stringify(billsList));
+        } catch {}
+      }
 
       // Background fetch lab info if not cached yet
       if (!labData) {
@@ -449,7 +468,11 @@ export default function BillingPage() {
       setLoading(false);
       setIsFetching(false);
     }
-  };
+  }, [bills.length, labData]);
+
+  useEffect(() => {
+    fetchBills(false, filterDate);
+  }, [filterDate, fetchBills]);
 
   const fetchStaffUsers = async () => {
     try {
@@ -586,19 +609,47 @@ export default function BillingPage() {
 
   const [updatingBillId, setUpdatingBillId] = useState<string | null>(null);
 
-  // Quick mark paid directly from table row
-  const handleQuickMarkPaid = async (bill: Bill) => {
-    if (isB2B) return;
-    const fullTotal = Number(bill.total) || 0;
+  // Toggle paid <-> unpaid directly from table row status button
+  const handleToggleBillStatus = async (bill: Bill, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (isB2B) {
+      toast.info("B2B Invoice", "B2B partner accounts are settled automatically via the wallet.");
+      return;
+    }
+    if (updatingBillId === bill.id) return;
+
+    const isCurrentlyPaid = bill.status === "PAID" || (Number(bill.paid_amount || 0) >= (Number(bill.total || 0) - Number(bill.discount || 0)) && Number(bill.total || 0) > 0);
+    const newStatus = isCurrentlyPaid ? "UNPAID" : "PAID";
+    const netTotal = Math.max(0, (Number(bill.total) || 0) - (Number(bill.discount) || 0));
+    const newPaidAmount = isCurrentlyPaid ? 0 : netTotal;
+    const newPaymentMode = isCurrentlyPaid ? "UNPAID" : (bill.payment_mode || bill.paymentMode || "CASH");
+
+    // Instant optimistic update in local state for sub-millisecond response
+    const previousBills = [...bills];
+    setBills(prev => prev.map(b => {
+      if (b.id === bill.id) {
+        return {
+          ...b,
+          status: newStatus,
+          paid_amount: newPaidAmount,
+          payment_mode: newPaymentMode,
+          paymentMode: newPaymentMode,
+        };
+      }
+      return b;
+    }));
+
     try {
       setUpdatingBillId(bill.id);
       const res = await fetchFromLaravel(`/bills/${bill.id}`, {
         method: "PUT",
         body: JSON.stringify({
-          paid_amount: fullTotal,
-          status: "PAID",
+          status: newStatus,
+          paid_amount: newPaidAmount,
+          payment_mode: newPaymentMode,
         }),
       });
+
       if (res && (res.id || res.custom_id)) {
         const normalized = normalizeBillObj(res);
         setBills(prev => prev.map(b => (b.id === normalized.id ? normalized : b)));
@@ -610,10 +661,20 @@ export default function BillingPage() {
             localStorage.setItem("lis_cached_bills", JSON.stringify(updatedList));
           }
         } catch {}
+
+        toast.success(
+          newStatus === "PAID" ? "Marked as Paid" : "Marked as Unpaid",
+          newStatus === "PAID"
+            ? `Invoice #${getBillInvoiceNo(bill)} marked as PAID (₹${netTotal.toFixed(2)})`
+            : `Invoice #${getBillInvoiceNo(bill)} marked as UNPAID`
+        );
+      } else {
+        fetchBills(false, filterDate);
       }
-      fetchBills();
     } catch (err: any) {
-      console.error("Failed to mark bill as paid:", err);
+      console.error("Failed to toggle bill status:", err);
+      setBills(previousBills);
+      toast.error("Status Update Failed", err?.message || "Could not update invoice status.");
     } finally {
       setUpdatingBillId(null);
     }
@@ -1409,15 +1470,51 @@ export default function BillingPage() {
                       </td>
 
                       <td className="py-3.5 px-4 text-center">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          effectiveStatus === "PAID"
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                            : effectiveStatus === "PARTIAL"
-                            ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
-                            : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                        }`}>
-                          {effectiveStatus}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleBillStatus(bill, e)}
+                          disabled={updatingBillId === bill.id || isB2B}
+                          title={
+                            isB2B
+                              ? "B2B auto-settled"
+                              : effectiveStatus === "PAID"
+                              ? "Click to switch to UNPAID"
+                              : "Click to switch to PAID"
+                          }
+                          className={`group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold transition-all shadow-xs select-none ${
+                            updatingBillId === bill.id
+                              ? "opacity-70 cursor-wait"
+                              : isB2B
+                              ? "cursor-default"
+                              : "cursor-pointer hover:scale-105 active:scale-95"
+                          } ${
+                            effectiveStatus === "PAID"
+                              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
+                              : effectiveStatus === "PARTIAL"
+                              ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-500/30 hover:bg-blue-500/25"
+                              : "bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 hover:bg-rose-500/25 animate-pulse"
+                          }`}
+                        >
+                          {updatingBillId === bill.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin text-current" />
+                          ) : effectiveStatus === "PAID" ? (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                              <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                            </>
+                          ) : (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
+                              <AlertCircle className="h-3 w-3 text-rose-600 dark:text-rose-400" />
+                            </>
+                          )}
+                          <span>{effectiveStatus}</span>
+                          {!isB2B && (
+                            <span className="text-[9px] opacity-60 group-hover:opacity-100 transition-opacity ml-0.5">
+                              ⇄
+                            </span>
+                          )}
+                        </button>
                       </td>
 
                       <td className="py-3.5 px-4 text-center">

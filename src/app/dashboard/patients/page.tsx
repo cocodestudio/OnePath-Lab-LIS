@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -459,15 +459,61 @@ export default function PatientsPage() {
   const [customRejectReason, setCustomRejectReason] = useState<string>("");
   const [rejecting, setRejecting] = useState(false);
 
-  useEffect(() => {
-    fetchPatients(false);
+  const activePatientDateRef = useRef(filterDate);
+  activePatientDateRef.current = filterDate;
 
+  const fetchPatients = useCallback(async (forceRefresh?: boolean | any, targetDate?: string) => {
+    const isForce = forceRefresh === true;
+    const effectiveDate = targetDate !== undefined ? targetDate : activePatientDateRef.current;
+    setIsFetching(true);
+    try {
+      if (patients.length === 0) {
+        setLoading(true);
+      }
+      const params = new URLSearchParams();
+      if (effectiveDate) {
+        params.append("date", effectiveDate);
+        params.append("per_page", "200");
+      } else {
+        params.append("per_page", "150");
+      }
+      params.append("sort", "created_at");
+      params.append("direction", "desc");
+      params.append("order", "desc");
+
+      const data = await fetchFromLaravel(`/patients?${params.toString()}`, { skipCache: isForce });
+
+      if (effectiveDate !== activePatientDateRef.current) {
+        return;
+      }
+
+      const list = Array.isArray(data) ? data : (data?.data || []);
+      setPatients(list);
+      if (effectiveDate === getTodayStr()) {
+        try {
+          localStorage.setItem("lis_cached_patients", JSON.stringify(list));
+        } catch {}
+      }
+    } catch (err) {
+      console.error("Failed to fetch patients:", err);
+      if (patients.length === 0) setPatients([]);
+    } finally {
+      setIsFetching(false);
+      setLoading(false);
+    }
+  }, [patients.length]);
+
+  useEffect(() => {
+    fetchPatients(false, filterDate);
+  }, [filterDate, fetchPatients]);
+
+  useEffect(() => {
     const handleSync = () => {
-      fetchPatients(false);
+      fetchPatients(false, activePatientDateRef.current);
     };
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        fetchPatients(false);
+        fetchPatients(false, activePatientDateRef.current);
       }
     };
     window.addEventListener("lis_online_sync", handleSync);
@@ -480,33 +526,11 @@ export default function PatientsPage() {
       window.removeEventListener("lis_cache_invalidated", handleSync);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, []);
-
-  const fetchPatients = async (forceRefresh?: boolean | any) => {
-    const isForce = forceRefresh === true;
-    setIsFetching(true);
-    try {
-      if (patients.length === 0) {
-        setLoading(true);
-      }
-      const data = await fetchFromLaravel("/patients?per_page=50&sort=created_at&direction=desc&order=desc", { skipCache: isForce });
-      const list = Array.isArray(data) ? data : (data?.data || []);
-      setPatients(list);
-      try {
-        localStorage.setItem("lis_cached_patients", JSON.stringify(list));
-      } catch {}
-    } catch (err) {
-      console.error("Failed to fetch patients:", err);
-      if (patients.length === 0) setPatients([]);
-    } finally {
-      setIsFetching(false);
-      setLoading(false);
-    }
-  };
+  }, [fetchPatients]);
 
   const handleManualRefresh = async () => {
     try {
-      await fetchPatients(true);
+      await fetchPatients(true, filterDate);
       toast.success("Refreshed", "Patient list refreshed with latest data.");
     } catch (err: any) {
       toast.error("Refresh Failed", err?.message || "Could not refresh patient list.");
@@ -792,7 +816,7 @@ export default function PatientsPage() {
                   ? `You have ${safePatients.length} patient records in your laboratory archive.`
                   : "No patient records exist yet."}
               </p>
-              {safePatients.length > 0 && (filterDate || search) && (
+              {(filterDate || search) && (
                 <button
                   type="button"
                   onClick={() => {
@@ -802,7 +826,7 @@ export default function PatientsPage() {
                   className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 text-xs font-semibold transition-all cursor-pointer"
                 >
                   <RefreshCw className="h-3 w-3" />
-                  <span>Show All {safePatients.length} Patients</span>
+                  <span>Show All Patients</span>
                 </button>
               )}
             </div>

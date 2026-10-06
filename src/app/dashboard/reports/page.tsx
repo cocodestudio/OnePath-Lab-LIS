@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useReactToPrint } from "react-to-print";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Search, Printer, ChevronLeft, ChevronRight, Edit3, AlertTriangle,
+  Search, Printer, ChevronLeft, ChevronRight, Edit3, AlertTriangle, AlertCircle,
   Filter, X, Eye, Plus, Loader2, Clock, Wallet, CheckCircle2, Sparkles, IndianRupee, RefreshCw, Ban, Shield
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,7 +31,8 @@ interface ReportTest { id: string; resultValue: string | null; isAbnormal: boole
 interface Report {
   id: string; customId: string; status: string; createdAt: string;
   patient: { name: string; customId: string; phone: string; age: number; gender: string; abha_number?: string; abha_address?: string };
-  bill: { customId: string; total: number; status: string };
+  bill?: { id?: string; customId?: string; custom_id?: string; total?: number; paid_amount?: number; paidAmount?: number; status?: string } | null;
+  bill_id?: string;
   results: ReportTest[];
   is_b2b_paid?: boolean;
   isB2bPaid?: boolean;
@@ -99,6 +100,7 @@ export default function ReportsListPage() {
     deficit?: number;
     repCode?: string;
   } | null>(null);
+  const [updatingReportBillId, setUpdatingReportBillId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -116,16 +118,77 @@ export default function ReportsListPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
+  const activeDateRef = useRef(filterDate);
+  activeDateRef.current = filterDate;
+
+  const fetchReports = useCallback(async (forceRefresh?: boolean | any, targetDate?: string) => {
+    const isForce = forceRefresh === true;
+    const effectiveDate = targetDate !== undefined ? targetDate : activeDateRef.current;
+    setIsFetching(true);
+    try {
+      if (reports.length === 0) {
+        setLoading(true);
+      }
+      const params = new URLSearchParams();
+      if (effectiveDate) {
+        params.append("date", effectiveDate);
+        params.append("limit", "200");
+      } else {
+        params.append("limit", "150");
+      }
+      params.append("sort", sortOrder);
+
+      const data = await fetchFromLaravel(`/reports?${params.toString()}`, { skipCache: isForce });
+
+      // Discard stale responses if user switched dates while request was pending
+      if (effectiveDate !== activeDateRef.current) {
+        return;
+      }
+
+      if (data?.is_outstanding_locked) {
+        setOutstandingLock({
+          isLocked: true,
+          outstandingBalance: Number(data.outstanding_balance || 0),
+          message: data.message,
+        });
+        const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+        setReports(list);
+        if (effectiveDate === getTodayStr()) {
+          try { localStorage.setItem("lis_cached_reports", JSON.stringify(list)); } catch {}
+        }
+      } else {
+        setOutstandingLock(null);
+        const list = Array.isArray(data) ? data : (data?.data || []);
+        setReports(list);
+        if (effectiveDate === getTodayStr()) {
+          try {
+            localStorage.setItem("lis_cached_reports", JSON.stringify(list));
+          } catch {}
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching reports:", err);
+      if (reports.length === 0) setReports([]);
+    } finally {
+      setIsFetching(false);
+      setLoading(false);
+    }
+  }, [sortOrder, reports.length]);
+
+  // Reactive date & sort order fetching: ensures reports for any past date are loaded immediately
+  useEffect(() => {
+    fetchReports(false, filterDate);
+  }, [filterDate, sortOrder, fetchReports]);
+
   useEffect(() => {
     setCurrentUser(getStoredUser());
-    fetchReports(false);
 
     const handleSync = () => {
-      fetchReports(false);
+      fetchReports(false, activeDateRef.current);
     };
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        fetchReports(false);
+        fetchReports(false, activeDateRef.current);
       }
     };
     window.addEventListener("lis_online_sync", handleSync);
@@ -136,52 +199,15 @@ export default function ReportsListPage() {
       window.removeEventListener("lis_cache_invalidated", handleSync);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, []);
+  }, [fetchReports]);
 
   useEffect(() => {
     const handleWalletUpdated = () => {
-      fetchReports(false);
+      fetchReports(false, activeDateRef.current);
     };
     window.addEventListener("b2b_wallet_updated", handleWalletUpdated);
     return () => window.removeEventListener("b2b_wallet_updated", handleWalletUpdated);
-  }, []);
-
-  const fetchReports = async (forceRefresh?: boolean | any) => {
-    const isForce = forceRefresh === true;
-    setIsFetching(true);
-    try {
-      if (reports.length === 0) {
-        setLoading(true);
-      }
-      const data = await fetchFromLaravel(`/reports?limit=50&sort=${sortOrder}`, { skipCache: isForce });
-      if (data?.is_outstanding_locked) {
-        setOutstandingLock({
-          isLocked: true,
-          outstandingBalance: Number(data.outstanding_balance || 0),
-          message: data.message,
-        });
-        // Still show reports even when outstanding — don't clear the list
-        const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
-        if (list.length > 0) {
-          setReports(list);
-          try { localStorage.setItem("lis_cached_reports", JSON.stringify(list)); } catch {}
-        }
-      } else {
-        setOutstandingLock(null);
-        const list = Array.isArray(data) ? data : (data?.data || []);
-        setReports(list);
-        try {
-          localStorage.setItem("lis_cached_reports", JSON.stringify(list));
-        } catch {}
-      }
-    } catch (err) {
-      console.error("Error fetching reports:", err);
-      if (reports.length === 0) setReports([]);
-    } finally {
-      setIsFetching(false);
-      setLoading(false);
-    }
-  };
+  }, [fetchReports]);
 
   const triggerPrint = async (rep: any) => {
     const isFinal = rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED";
@@ -307,6 +333,119 @@ export default function ReportsListPage() {
     if (isCCEntry) return "COLLECTION_CENTER";
 
     return "MAIN_LAB";
+  };
+
+  const handleToggleReportPayment = async (rep: any, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (isB2B) {
+      toast({
+        title: "B2B Partner Report",
+        description: "B2B reports are billed and unlocked via the partner wallet balance.",
+        variant: "info",
+      });
+      return;
+    }
+
+    const billId = rep.bill?.id || rep.bill_id;
+    if (!billId) {
+      toast({
+        title: "No Invoice Found",
+        description: "No linked billing invoice found for this diagnostic report.",
+        variant: "warning",
+      });
+      return;
+    }
+    if (updatingReportBillId === rep.id) return;
+
+    const bill = rep.bill || {};
+    const currentStatus = String(bill.status || "").toUpperCase();
+    const billTotal = Number(bill.total || 0);
+    const billPaid = Number(bill.paid_amount ?? bill.paidAmount ?? 0);
+    const isCurrentlyPaid = currentStatus === "PAID" || (billTotal > 0 && billPaid >= billTotal);
+
+    const targetStatus = isCurrentlyPaid ? "UNPAID" : "PAID";
+    const targetPaidAmount = isCurrentlyPaid ? 0 : billTotal;
+    const targetPaymentMode = isCurrentlyPaid ? "UNPAID" : "CASH";
+
+    // Instant optimistic UI update
+    const prevReports = [...reports];
+    setReports((prev: any[]) =>
+      prev.map((r) => {
+        if (r.id === rep.id) {
+          return {
+            ...r,
+            bill: r.bill
+              ? {
+                  ...r.bill,
+                  status: targetStatus,
+                  paid_amount: targetPaidAmount,
+                  paidAmount: targetPaidAmount,
+                }
+              : {
+                  id: billId,
+                  status: targetStatus,
+                  total: billTotal,
+                  paid_amount: targetPaidAmount,
+                  paidAmount: targetPaidAmount,
+                },
+          };
+        }
+        return r;
+      })
+    );
+
+    try {
+      setUpdatingReportBillId(rep.id);
+      const res = await fetchFromLaravel(`/bills/${billId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          status: targetStatus,
+          paid_amount: targetPaidAmount,
+          payment_mode: targetPaymentMode,
+        }),
+      });
+
+      if (res && (res.id || res.custom_id)) {
+        toast({
+          title: targetStatus === "PAID" ? "Payment Marked as PAID" : "Payment Marked as UNPAID",
+          description:
+            targetStatus === "PAID"
+              ? `Report #${rep.custom_id || rep.customId} payment received (₹${billTotal.toFixed(2)}).`
+              : `Report #${rep.custom_id || rep.customId} payment marked as pending due.`,
+          variant: targetStatus === "PAID" ? "success" : "info",
+        });
+
+        try {
+          const cached = localStorage.getItem("lis_cached_reports");
+          if (cached) {
+            const list = JSON.parse(cached);
+            const updated = list.map((item: any) =>
+              item.id === rep.id
+                ? {
+                    ...item,
+                    bill: item.bill
+                      ? { ...item.bill, status: targetStatus, paid_amount: targetPaidAmount, paidAmount: targetPaidAmount }
+                      : item.bill,
+                  }
+                : item
+            );
+            localStorage.setItem("lis_cached_reports", JSON.stringify(updated));
+          }
+        } catch {}
+      } else {
+        fetchReports(false, activeDateRef.current);
+      }
+    } catch (err: any) {
+      console.error("Failed to update report payment status:", err);
+      setReports(prevReports);
+      toast({
+        title: "Update Failed",
+        description: err?.message || "Could not update payment status. Please try again.",
+        variant: "error",
+      });
+    } finally {
+      setUpdatingReportBillId(null);
+    }
   };
 
   const filteredReports = safeReports.filter((r: any) => {
@@ -748,8 +887,8 @@ export default function ReportsListPage() {
                   <th className="w-12 px-4 py-3.5 text-center">
                     <div className="h-4 w-4 rounded bg-muted/60 mx-auto" />
                   </th>
-                  {["Report ID", "Patient", "Received", "Tests", "Status", ""].map((h, i) => (
-                    <th key={h + i} className={`px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${i === 2 || i === 3 ? "hidden lg:table-cell" : ""} ${i === 5 ? "text-right" : ""}`}>{h}</th>
+                  {["Report ID", "Patient", "Received", "Tests", "Status", "Payment", ""].map((h, i) => (
+                    <th key={h + i} className={`px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${i === 2 || i === 3 ? "hidden lg:table-cell" : ""} ${i === 6 ? "text-right" : ""}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -765,6 +904,7 @@ export default function ReportsListPage() {
                     <td className="px-6 py-4 hidden lg:table-cell"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
                     <td className="px-6 py-4 hidden lg:table-cell"><div className="h-4 w-36 rounded shimmer-gradient" /></td>
                     <td className="px-6 py-4"><div className="h-6 w-20 rounded-full shimmer-gradient" /></td>
+                    <td className="px-6 py-4"><div className="h-6 w-20 rounded-full shimmer-gradient" /></td>
                     <td className="px-6 py-4 text-right"><div className="h-7 w-24 rounded-lg shimmer-gradient ml-auto" /></td>
                   </tr>
                 ))}
@@ -773,13 +913,13 @@ export default function ReportsListPage() {
           ) : sortedReports.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2 px-4 text-center">
               <Filter className="h-10 w-10 opacity-25 mb-1" />
-              {filterDate && safeReports.length > 0 ? (
+              {filterDate ? (
                 <>
                   <p className="text-sm font-semibold text-foreground">
                     No reports found for {filterDate === getTodayStr() ? "Today" : filterDate}.
                   </p>
                   <p className="text-xs text-muted-foreground max-w-sm">
-                    You have {safeReports.length} total diagnostic reports in your archive. Click below to view all past reports.
+                    No diagnostic investigations were booked on this date. Click below to view all reports across all dates.
                   </p>
                   <Button
                     variant="outline"
@@ -787,7 +927,7 @@ export default function ReportsListPage() {
                     onClick={() => setFilterDate("")}
                     className="mt-2 text-xs font-semibold"
                   >
-                    Show All {safeReports.length} Reports
+                    View All Reports
                   </Button>
                 </>
               ) : (
@@ -813,8 +953,8 @@ export default function ReportsListPage() {
                       aria-label="Select all reports on this page"
                     />
                   </th>
-                  {["Report ID", "Patient", "Received", "Tests", "Status", ""].map((h, i) => (
-                    <th key={h + i} className={`px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${i === 2 || i === 3 ? "hidden lg:table-cell" : ""} ${i === 5 ? "text-right" : ""}`}>{h}</th>
+                  {["Report ID", "Patient", "Received", "Tests", "Status", "Payment", ""].map((h, i) => (
+                    <th key={h + i} className={`px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${i === 2 || i === 3 ? "hidden lg:table-cell" : ""} ${i === 6 ? "text-right" : ""}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -973,6 +1113,134 @@ export default function ReportsListPage() {
                           )}
                         </div>
                       </td>
+
+                      {/* Payment Status Column */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {(() => {
+                          const isB2BReport = rep.is_b2b_paid || rep.isB2bPaid;
+                          const bill = rep.bill;
+                          const isUpdating = updatingReportBillId === rep.id;
+
+                          let isPaid = false;
+                          let isPartial = false;
+                          let billTotal = 0;
+                          let billPaid = 0;
+
+                          if (isB2BReport) {
+                            isPaid = true;
+                          } else if (bill) {
+                            billTotal = Number(bill.total || 0);
+                            billPaid = Number(bill.paid_amount ?? bill.paidAmount ?? 0);
+                            const bStatus = String(bill.status || "").toUpperCase();
+                            if (bStatus === "PAID") {
+                              isPaid = true;
+                            } else if (bStatus === "PARTIAL") {
+                              isPartial = true;
+                            } else if (billTotal > 0 && billPaid >= billTotal) {
+                              isPaid = true;
+                            } else if (billPaid > 0) {
+                              isPartial = true;
+                            }
+                          } else if (rep.patient?.meta?.payment_status === "PAID" || rep.meta?.payment_status === "PAID") {
+                            isPaid = true;
+                          }
+
+                          const canToggle = Boolean(bill?.id || rep.bill_id) && !isB2B;
+
+                          if (isPaid) {
+                            return (
+                              <div className="flex flex-col items-start gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => canToggle && handleToggleReportPayment(rep, e)}
+                                  disabled={isUpdating || !canToggle}
+                                  title={canToggle ? "Click to toggle to UNPAID" : "Payment received"}
+                                  className={`group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shadow-xs transition-all ${
+                                    canToggle ? "cursor-pointer hover:bg-emerald-500/25 hover:scale-105 active:scale-95" : "cursor-default"
+                                  } ${isUpdating ? "opacity-70 cursor-wait" : ""}`}
+                                >
+                                  {isUpdating ? (
+                                    <Loader2 className="h-3 w-3 animate-spin text-current" />
+                                  ) : (
+                                    <>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                                      <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                                    </>
+                                  )}
+                                  <span>PAID</span>
+                                  {canToggle && <span className="text-[9px] opacity-60 group-hover:opacity-100 transition-opacity ml-0.5">⇄</span>}
+                                </button>
+                                {billTotal > 0 && (
+                                  <span className="text-[10px] font-mono text-muted-foreground pl-1 font-semibold">
+                                    ₹{billTotal.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          if (isPartial) {
+                            return (
+                              <div className="flex flex-col items-start gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => canToggle && handleToggleReportPayment(rep, e)}
+                                  disabled={isUpdating || !canToggle}
+                                  title={canToggle ? "Click to mark as PAID" : "Partial payment received"}
+                                  className={`group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shadow-xs transition-all ${
+                                    canToggle ? "cursor-pointer hover:bg-amber-500/25 hover:scale-105 active:scale-95" : "cursor-default"
+                                  } ${isUpdating ? "opacity-70 cursor-wait" : ""}`}
+                                >
+                                  {isUpdating ? (
+                                    <Loader2 className="h-3 w-3 animate-spin text-current" />
+                                  ) : (
+                                    <>
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                      <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                                    </>
+                                  )}
+                                  <span>PARTIAL</span>
+                                  {canToggle && <span className="text-[9px] opacity-60 group-hover:opacity-100 transition-opacity ml-0.5">⇄</span>}
+                                </button>
+                                <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 pl-1 font-semibold">
+                                  Due: ₹{(billTotal - billPaid).toFixed(2)}
+                                </span>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div className="flex flex-col items-start gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => canToggle && handleToggleReportPayment(rep, e)}
+                                disabled={isUpdating || !canToggle}
+                                title={canToggle ? "Click to mark as PAID" : "Unpaid report"}
+                                className={`group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 shadow-xs transition-all animate-pulse ${
+                                  canToggle ? "cursor-pointer hover:bg-rose-500/25 hover:scale-105 active:scale-95" : "cursor-default"
+                                } ${isUpdating ? "opacity-70 cursor-wait" : ""}`}
+                              >
+                                {isUpdating ? (
+                                  <Loader2 className="h-3 w-3 animate-spin text-current" />
+                                ) : (
+                                  <>
+                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
+                                    <AlertCircle className="h-3 w-3 text-rose-600 dark:text-rose-400" />
+                                  </>
+                                )}
+                                <span>UNPAID</span>
+                                {canToggle && <span className="text-[9px] opacity-60 group-hover:opacity-100 transition-opacity ml-0.5">⇄</span>}
+                              </button>
+                              {billTotal > 0 && (
+                                <span className="text-[10px] font-mono text-rose-600 dark:text-rose-400 pl-1 font-semibold">
+                                  Due: ₹{billTotal.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
+
                       <td className="px-6 py-3.5 text-right">
                         {(() => {
                           const isRejected = rep.status === "REJECTED" || rep.meta?.sample_status === "REJECTED" || rep.patient?.meta?.sample_status === "REJECTED";
