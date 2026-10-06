@@ -595,7 +595,7 @@ function RegisterPatientPage() {
   const [isApprovingPayment, setIsApprovingPayment] = useState(false);
   const [isPayUModalOpen, setIsPayUModalOpen] = useState(false);
   const [payULoading, setPayULoading] = useState(false);
-  const [selectedPaymentMode, setSelectedPaymentMode] = useState<"CASH" | "UPI" | "ONLINE" | "CARD" | "UNPAID">("UNPAID");
+  const [selectedPaymentMode, setSelectedPaymentMode] = useState<"CASH" | "UPI" | "ONLINE" | "CARD" | "UNPAID">("CASH");
   const [isUpdatingPaymentMode, setIsUpdatingPaymentMode] = useState(false);
   const [updatingPaymentModeTarget, setUpdatingPaymentModeTarget] = useState<"CASH" | "UPI" | "ONLINE" | "CARD" | "UNPAID" | null>(null);
   const [paymentUpdateMessage, setPaymentUpdateMessage] = useState<string | null>(null);
@@ -2417,7 +2417,19 @@ function RegisterPatientPage() {
   const parsedDiscount = Math.min(subtotal, Math.max(0, parseFloat(discount) || 0));
   const grandTotal = Math.max(0, subtotal - parsedDiscount);
   const parsedPaid = Math.min(grandTotal, Math.max(0, parseFloat(paidAmount) || 0));
-  const balanceDue = Math.max(0, grandTotal - parsedPaid);
+  const userEnteredPartial = parseFloat(paidAmount) > 0 && parseFloat(paidAmount) < grandTotal;
+  const isAutoPaidMode = (selectedPaymentMode === "CASH" || selectedPaymentMode === "UPI") && !isEffectiveB2B;
+  const effectivePaid = isEffectiveB2B
+    ? 0
+    : (userEnteredPartial
+        ? parsedPaid
+        : (isAutoPaidMode && grandTotal > 0 ? grandTotal : parsedPaid));
+  const balanceDue = Math.max(0, grandTotal - effectivePaid);
+  const effectiveStatus = isEffectiveB2B
+    ? "UNPAID"
+    : (effectivePaid >= grandTotal && grandTotal > 0
+        ? "PAID"
+        : (effectivePaid > 0 ? "PARTIAL" : "UNPAID"));
 
   const handleConfirmBooking = async () => {
     if (!newPatient) return;
@@ -2437,8 +2449,8 @@ function RegisterPatientPage() {
             ? (storedUser?.lab_name || storedUser?.labName || storedUser?.name || collectedAtSelect)
             : `${collectedAtSelect} (${collectedBySelect})`));
 
-      const computedPaid = isEffectiveB2B ? 0 : parsedPaid;
-      const computedStatus = isEffectiveB2B ? "UNPAID" : (computedPaid >= grandTotal ? "PAID" : (computedPaid > 0 ? "PARTIAL" : "UNPAID"));
+      const computedPaid = effectivePaid;
+      const computedStatus = effectiveStatus;
       const computedBalance = isEffectiveB2B ? grandTotal : balanceDue;
       const computedDiscount = isEffectiveB2B ? 0 : parsedDiscount;
       const effectivePaymentMode = (computedPaid > 0 && selectedPaymentMode === "UNPAID") ? "CASH" : (selectedPaymentMode || "CASH");
@@ -2859,7 +2871,7 @@ function RegisterPatientPage() {
     setIsPrintModalOpen(false);
     setSampleBarcode("");
     setVialBarcodes({});
-    setSelectedPaymentMode("UNPAID");
+    setSelectedPaymentMode("CASH");
     setPaymentUpdateMessage(null);
   };
 
