@@ -48,7 +48,7 @@ export default function SubscriptionGate() {
           return;
         }
 
-        const data = await fetchFromLaravel("/lab", { skipCache: true });
+        const data = await fetchFromLaravel("/lab", { cacheTtlMs: 30000 });
         if (data) {
           setLabData(data);
           const status = (data.planStatus || data.plan_status || "").toLowerCase();

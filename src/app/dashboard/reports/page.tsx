@@ -153,7 +153,7 @@ export default function ReportsListPage() {
       if (reports.length === 0) {
         setLoading(true);
       }
-      const data = await fetchFromLaravel(`/reports?limit=300&sort=${sortOrder}`, { skipCache: isForce });
+      const data = await fetchFromLaravel(`/reports?limit=200&sort=${sortOrder}`, { skipCache: isForce });
       if (data?.is_outstanding_locked) {
         setOutstandingLock({
           isLocked: true,
@@ -700,7 +700,7 @@ export default function ReportsListPage() {
       {/* Table */}
       <div className="bg-card border border-border/70 rounded-xl shadow-card overflow-hidden">
         <div className="table-responsive-container">
-          {loading || isFetching ? (
+          {(loading && safeReports.length === 0) || (isFetching && safeReports.length === 0) ? (
             <table className="w-full min-w-[640px] text-left">
               <thead>
                 <tr className="bg-muted/30 border-b border-border/60">

@@ -1884,16 +1884,22 @@ function ResultEntryContent() {
       const resultsList = Array.isArray(data?.results) ? data.results : [];
       resultsList.forEach((r: any) => {
         const fieldType = r.test?.fieldType || r.test?.field_type;
-        const rawVal = (r.resultValue ?? r.result_value ?? "").trim();
+        let rawVal = (r.resultValue ?? r.result_value ?? "").trim();
+        const isCustom = fieldType === "Custom Editor" || (r.test?.name || "").toLowerCase().includes("culture");
+
+        // Clean any accidental HTML tags leaking into non-custom standard parameters
+        if (!isCustom && (rawVal.startsWith("<") || rawVal.includes("<div") || rawVal.includes("<table") || rawVal.includes("clinical-interpretation"))) {
+          rawVal = "";
+        }
+
         const isBlank = !rawVal || rawVal === "<p></p>" || rawVal === "<p><br></p>" || rawVal === "<p><br/></p>";
-        const template = r.test?.interpretation || (r.test as any)?.custom_template || "";
-        const isCustom = fieldType === "Custom Editor" || (r.test?.name || "").toLowerCase().includes("culture") || (template && template.includes("<table"));
+        const template = isCustom ? (r.test?.interpretation || (r.test as any)?.custom_template || "") : "";
         const isFreshReport = !data?.status || data.status === "NEW";
         const isUnfilledTable = rawVal.includes("<table") && !rawVal.includes("Sensitive") && !rawVal.includes("Resistant") && !rawVal.includes("Moderate") && !rawVal.includes("Intermediate");
         if (isCustom && template && (isBlank || (isFreshReport && isUnfilledTable))) {
           initialVals[r.id] = template;
         } else {
-          initialVals[r.id] = r.resultValue || r.result_value || "";
+          initialVals[r.id] = rawVal;
         }
         initialAbnormal[r.id] = !!(r.isAbnormal || r.is_abnormal);
         if (r.remarks) {
@@ -3210,10 +3216,11 @@ function ResultEntryContent() {
 
                                 {section.items.map((item) => {
                                   if (!item || !item.test) return null;
-                                  const val = values[item.id] || "";
+                                  const rawVal = values[item.id] || "";
+                                  const isCustomEditor = (item.test.fieldType || item.test.field_type) === "Custom Editor" || (item.test?.name || "").toLowerCase().includes("culture");
+                                  const val = (!isCustomEditor && typeof rawVal === "string" && (rawVal.startsWith("<") || rawVal.includes("<div") || rawVal.includes("<table") || rawVal.includes("clinical-interpretation"))) ? "" : rawVal;
                                   const { abnormal, flag } = isValueAbnormal(item.test, val);
                                   const isForcedAbnormal = !!abnormalOverrides[item.id];
-                                  const isCustomEditor = (item.test.fieldType || item.test.field_type) === "Custom Editor" || (item.test?.name || "").toLowerCase().includes("culture");
                                   const canAutoCalc = canParamBeCalculatedInReport(item.test, report, item.id);
                                   const isCalculated = calculatedParamIds.has(item.id) || (canAutoCalc && isParamFormulaCalculated(item.test));
                                   const isTextType = (item.test.valueType || item.test.value_type) === "Text";

@@ -130,8 +130,7 @@ export default function LoginPage() {
       document.cookie = `lis_token=${token}; path=/; max-age=86400; SameSite=Lax${isSecure ? "; Secure" : ""}`;
       document.cookie = `lis_role=${encodeURIComponent(user?.role || "")}; path=/; max-age=86400; SameSite=Lax${isSecure ? "; Secure" : ""}`;
 
-      router.push("/dashboard");
-      router.refresh();
+      window.location.href = "/dashboard";
     } catch (err: any) {
       console.error("Login request failed:", err);
       setError(err?.message || "An unexpected network error occurred. Please try again.");

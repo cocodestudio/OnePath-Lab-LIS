@@ -74,6 +74,15 @@ export function ClinicalResultDropdown({
   const [customVersion, setCustomVersion] = useState(0);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
+  // Sanitize raw HTML tags if leaked into standard parameter inputs
+  const safeValue = useMemo(() => {
+    if (typeof value !== "string") return value || "";
+    if (value.startsWith("<") || value.includes("<div") || value.includes("<table") || value.includes("clinical-interpretation")) {
+      return "";
+    }
+    return value;
+  }, [value]);
+
   // Floating coordinates for Portal positioning
   const [coords, setCoords] = useState<{
     top: number;
@@ -266,7 +275,7 @@ export function ClinicalResultDropdown({
         ref={textInputRef}
         type="text"
         placeholder={isCalculated ? "Auto" : "—"}
-        value={value || ""}
+        value={safeValue || ""}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
         data-result-input="true"
@@ -285,7 +294,7 @@ export function ClinicalResultDropdown({
   }
 
   // Determine color dot swatch if it's a color field
-  const activeColorSwatch = isColorParam && value ? COLOR_SWATCHES[value.toLowerCase().trim()] : null;
+  const activeColorSwatch = isColorParam && safeValue ? COLOR_SWATCHES[safeValue.toLowerCase().trim()] : null;
 
   return (
     <div ref={containerRef} className={`relative inline-block ${isTextOnlyTable ? "w-full max-w-sm" : "w-44"}`}>
@@ -296,14 +305,14 @@ export function ClinicalResultDropdown({
           <span
             className="absolute left-2.5 w-3.5 h-3.5 rounded-full border border-black/15 shadow-2xs shrink-0 z-10 pointer-events-none"
             style={{ backgroundColor: activeColorSwatch }}
-            title={`Color preview: ${value}`}
+            title={`Color preview: ${safeValue}`}
           />
         )}
 
         <input
           ref={textInputRef}
           type="text"
-          value={value || ""}
+          value={safeValue || ""}
           placeholder={isCalculated ? "Auto" : `Select or type...`}
           onChange={(e) => onChange(e.target.value)}
           onBlur={(e) => handleAutoSaveManualInput(e.target.value)}
