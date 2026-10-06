@@ -595,7 +595,7 @@ function RegisterPatientPage() {
   const [isApprovingPayment, setIsApprovingPayment] = useState(false);
   const [isPayUModalOpen, setIsPayUModalOpen] = useState(false);
   const [payULoading, setPayULoading] = useState(false);
-  const [selectedPaymentMode, setSelectedPaymentMode] = useState<"CASH" | "UPI" | "ONLINE" | "CARD" | "UNPAID">("CASH");
+  const [selectedPaymentMode, setSelectedPaymentMode] = useState<"CASH" | "UPI" | "ONLINE" | "CARD" | "UNPAID">("UNPAID");
   const [isUpdatingPaymentMode, setIsUpdatingPaymentMode] = useState(false);
   const [updatingPaymentModeTarget, setUpdatingPaymentModeTarget] = useState<"CASH" | "UPI" | "ONLINE" | "CARD" | "UNPAID" | null>(null);
   const [paymentUpdateMessage, setPaymentUpdateMessage] = useState<string | null>(null);
@@ -2423,7 +2423,7 @@ function RegisterPatientPage() {
     ? 0
     : (userEnteredPartial
         ? parsedPaid
-        : (isAutoPaidMode && grandTotal > 0 ? grandTotal : parsedPaid));
+        : (isAutoPaidMode && grandTotal > 0 ? (parsedPaid > 0 ? parsedPaid : grandTotal) : parsedPaid));
   const balanceDue = Math.max(0, grandTotal - effectivePaid);
   const effectiveStatus = isEffectiveB2B
     ? "UNPAID"
@@ -2449,11 +2449,11 @@ function RegisterPatientPage() {
             ? (storedUser?.lab_name || storedUser?.labName || storedUser?.name || collectedAtSelect)
             : `${collectedAtSelect} (${collectedBySelect})`));
 
-      const computedPaid = effectivePaid;
-      const computedStatus = effectiveStatus;
+      const computedPaid = isEffectiveB2B ? 0 : (selectedPaymentMode === "UNPAID" ? (parsedPaid > 0 ? parsedPaid : 0) : effectivePaid);
+      const computedStatus = isEffectiveB2B ? "UNPAID" : (selectedPaymentMode === "UNPAID" ? (parsedPaid > 0 ? "PARTIAL" : "UNPAID") : effectiveStatus);
       const computedBalance = isEffectiveB2B ? grandTotal : balanceDue;
       const computedDiscount = isEffectiveB2B ? 0 : parsedDiscount;
-      const effectivePaymentMode = (computedPaid > 0 && selectedPaymentMode === "UNPAID") ? "CASH" : (selectedPaymentMode || "CASH");
+      const effectivePaymentMode = isEffectiveB2B ? "B2B" : (selectedPaymentMode === "UNPAID" ? (computedPaid > 0 ? "CASH" : "UNPAID") : selectedPaymentMode);
 
       // Sanitize testIds: Only send valid unique UUIDs to PostgreSQL backend
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
