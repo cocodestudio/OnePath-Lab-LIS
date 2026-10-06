@@ -89,6 +89,7 @@ export function logout(reason?: string) {
   localStorage.removeItem("lis_cached_patients");
   localStorage.removeItem("lis_cached_bills");
   localStorage.removeItem("lis_cached_today_samples");
+  localStorage.removeItem("lis_cached_tests");
   if (typeof window !== "undefined") {
     try {
       sessionStorage.clear();
@@ -237,6 +238,7 @@ function autoInvalidateCache(endpoint: string) {
   }
   if (ep.includes("test")) {
     clearApiCache("/tests");
+    try { localStorage.removeItem("lis_cached_tests"); } catch {}
   }
   if (ep.includes("instrument")) {
     clearApiCache("/instruments");

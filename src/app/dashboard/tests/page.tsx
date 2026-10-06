@@ -18,6 +18,7 @@ import { TipTapEditor } from "@/components/tiptap-editor";
 import { PrintPreviewDialog } from "@/components/print-preview-dialog";
 import type { ReportSheetData, ReportTest } from "@/components/report-sheet";
 import { normalizeReportSettings } from "@/lib/report-settings";
+import { TestsNavTabs } from "@/components/tests-nav-tabs";
 
 // Clinical Categorized Predefined Units
 const CATEGORIZED_UNITS: Record<string, string[]> = {
@@ -51,6 +52,8 @@ const INBUILT_METHODS = [
   "Capillary Zone Electrophoresis",
   "Fluorescence Polarization Immunoassay (FPIA)"
 ];
+
+const DEFAULT_CULTURE_TEMPLATE = `<p>Sterile after 48 Hours. Incubation at 37°C.</p><p><strong>Date of Sample Collection:</strong><br><strong>Date of Reporting:</strong></p><p><strong>Sample Type:</strong><br><strong>Organism Isolated:</strong><br><strong>Colony Count:</strong> &lt;count&gt; Cfu/ml.</p><table style="width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 8px;"><thead><tr><th style="width: 60px; text-align: left; border: 1px solid #cbd5e1; padding: 6px 10px; background-color: #f1f5f9;"><strong>S. No.</strong></th><th style="text-align: left; border: 1px solid #cbd5e1; padding: 6px 10px; background-color: #f1f5f9;"><strong>Antibiotic Name</strong></th><th style="width: 160px; text-align: center; border: 1px solid #cbd5e1; padding: 6px 10px; background-color: #f1f5f9;"><strong>Sensitivity (S / I / R)</strong></th></tr></thead><tbody><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">1</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">AMOXYCLAV (AMC)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">2</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">AMIKACIN (AK)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">3</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">CEFTRIAXONE (CTR)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">4</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">CIPROFLOXACIN (CIP)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">5</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">MEROPENEM (MRP)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr></tbody></table>`;
 
 // Qualitative Custom Options Templates
 const QUICK_OPTION_PRESETS: { title: string; desc: string; options: string[] }[] = [
@@ -200,9 +203,12 @@ export default function TestMasterPage() {
   const [customCategory, setCustomCategory] = useState("");
   const [type, setType] = useState("Pathology");
   const [price, setPrice] = useState("");
+  const [reportFormat, setReportFormat] = useState<"standard" | "custom_editor">("standard");
   const [interpretation, setInterpretation] = useState("");
   const [comment, setComment] = useState("");
   const [notes, setNotes] = useState("");
+  const tiptapEditorRef = useRef<any>(null);
+  const latestInterpretationRef = useRef<string>("");
 
   const [subTests, setSubTests] = useState<SubTestState[]>([]);
 
@@ -364,7 +370,7 @@ export default function TestMasterPage() {
         return { value: "Negative / Normal", isAbnormal: false };
       }
 
-      if (item.fieldType === "Custom Editor" || (item as any).field_type === "Custom Editor") {
+      if (item.fieldType === "Custom Editor" || (item as any).field_type === "Custom Editor" || (item.name || "").toLowerCase().includes("culture")) {
         return { 
           value: item.interpretation || "<p>Clinical and microscopic evaluation within normal reference limits.</p>", 
           isAbnormal: false 
@@ -461,7 +467,7 @@ export default function TestMasterPage() {
       const { value, isAbnormal } = generateSampleValue(test);
       results.push({
         id: `res-${test.id || test.testCode || (test as any).test_code || Math.random()}`,
-        resultValue: (test.fieldType === "Custom Editor" || (test as any).field_type === "Custom Editor")
+        resultValue: (test.fieldType === "Custom Editor" || (test as any).field_type === "Custom Editor" || (test.name || "").toLowerCase().includes("culture"))
           ? (test.interpretation || value)
           : value,
         isAbnormal,
@@ -558,7 +564,9 @@ export default function TestMasterPage() {
     setCustomCategory("");
     setType("Pathology");
     setPrice("");
+    setReportFormat("standard");
     setInterpretation("");
+    latestInterpretationRef.current = "";
     setComment("");
     setNotes("");
     setSubTests([{
@@ -596,14 +604,25 @@ export default function TestMasterPage() {
     setCustomCategory(standardCategories.includes(test.category) ? "" : test.category);
     setType(test.type || "Pathology");
     setPrice(test.price ? test.price.toString() : "");
-    setInterpretation(test.interpretation || "");
+    const testInterp = test.interpretation || "";
+    setInterpretation(testInterp);
+    latestInterpretationRef.current = testInterp;
     setComment(test.comment || "");
     setNotes(test.notes || "");
 
-    const isCustom = test.fieldType === "Custom Editor" || (test as any).field_type === "Custom Editor" || (test.name || "").toLowerCase().includes("culture and sensitivity");
+    const isCustom = test.fieldType === "Custom Editor" || 
+      (test as any).field_type === "Custom Editor" || 
+      (test.name || "").toLowerCase().includes("culture") ||
+      (testInterp.includes("<table") || testInterp.includes("<td"));
+
+    setReportFormat(isCustom ? "custom_editor" : "standard");
 
     if (isCustom) {
       setSubTests([]);
+      if (!testInterp.trim() && (test.name || "").toLowerCase().includes("culture")) {
+        setInterpretation(DEFAULT_CULTURE_TEMPLATE);
+        latestInterpretationRef.current = DEFAULT_CULTURE_TEMPLATE;
+      }
     } else if (test.subTests && test.subTests.length > 0) {
       setSubTests(test.subTests.map(sub => ({
         id: sub.id,
@@ -1031,7 +1050,13 @@ export default function TestMasterPage() {
       setError("Please provide a valid Test Name.");
       return;
     }
-    const isCustomEditor = editingTest?.fieldType === "Custom Editor" || (editingTest as any)?.field_type === "Custom Editor" || (name || "").toLowerCase().includes("culture and sensitivity");
+    const currentInterpretation = (tiptapEditorRef.current ? tiptapEditorRef.current.getHTML() : null) || latestInterpretationRef.current || interpretation || "";
+
+    const isCustomEditor = reportFormat === "custom_editor" ||
+      editingTest?.fieldType === "Custom Editor" ||
+      (editingTest as any)?.field_type === "Custom Editor" ||
+      (name || "").toLowerCase().includes("culture") ||
+      (currentInterpretation && (currentInterpretation.includes("<table") || currentInterpretation.includes("<td")));
 
     if (!isCustomEditor && subTests.some(s => !s.name.trim())) {
       setError("Every parameter must have a name.");
@@ -1053,10 +1078,11 @@ export default function TestMasterPage() {
       category: finalCategory,
       type,
       price: parseFloat(price) || 0,
-      interpretation: interpretation || undefined,
+      interpretation: currentInterpretation !== undefined ? currentInterpretation : "",
       comment: comment.trim() || undefined,
       notes: notes.trim() || undefined,
       field_type: isCustomEditor ? "Custom Editor" : (isSingleField ? "Single Field" : "Multiple Field"),
+      is_json_override: true,
     };
 
     if (isCustomEditor) {
@@ -1154,6 +1180,15 @@ export default function TestMasterPage() {
           method: "PUT",
           body: JSON.stringify(payload),
         });
+        setTests(prev => prev.map(t => (t.id === testIdentifier || t.testCode === testIdentifier) ? {
+          ...t,
+          ...payload,
+          id: t.id,
+          fieldType: payload.field_type,
+          field_type: payload.field_type,
+          interpretation: currentInterpretation,
+          subTests: isCustomEditor ? [] : (payload.sub_tests || []),
+        } : t));
         toast.success("Test updated successfully in database!");
       } else {
         await fetchFromLaravel("/tests", {
@@ -1215,6 +1250,9 @@ export default function TestMasterPage() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-fade-in">
+      {/* Tests Section Navigation Tabs */}
+      <TestsNavTabs />
+
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
         <div>
@@ -1741,7 +1779,7 @@ export default function TestMasterPage() {
                 <span className="text-xs text-muted-foreground">General test panel metadata</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* 1. Test Name */}
                 <div className="space-y-2">
                   <label className="font-bold text-xs text-foreground block">Test / Panel Name *</label>
@@ -1797,9 +1835,47 @@ export default function TestMasterPage() {
                   </div>
                 </div>
 
+                {/* 5. Report Format / Layout */}
+                <div className="space-y-2">
+                  <label className="font-bold text-xs text-foreground block">Result Layout Format</label>
+                  <div className="grid grid-cols-2 gap-1.5 h-11 p-1 bg-muted/40 rounded-lg border border-border">
+                    <button
+                      type="button"
+                      onClick={() => setReportFormat("standard")}
+                      className={`h-full rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                        reportFormat === "standard"
+                          ? "bg-primary text-primary-foreground shadow-xs"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                      }`}
+                    >
+                      <Sliders className="h-3 w-3" />
+                      <span>Parameters</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReportFormat("custom_editor");
+                        if (!interpretation.trim()) {
+                          const initialTmpl = (name || "").toLowerCase().includes("culture") ? DEFAULT_CULTURE_TEMPLATE : "<p>Clinical and microscopic evaluation within normal reference limits.</p>";
+                          setInterpretation(initialTmpl);
+                          latestInterpretationRef.current = initialTmpl;
+                        }
+                      }}
+                      className={`h-full rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                        reportFormat === "custom_editor"
+                          ? "bg-primary text-primary-foreground shadow-xs"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                      }`}
+                    >
+                      <FileText className="h-3 w-3" />
+                      <span>Custom Table</span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Custom Category if other */}
                 {category === "Other" && (
-                  <div className="lg:col-span-2 space-y-2">
+                  <div className="lg:col-span-5 space-y-2">
                     <label className="font-bold text-xs text-foreground block">Specify Department</label>
                     <input
                       type="text"
@@ -1813,14 +1889,64 @@ export default function TestMasterPage() {
               </div>
             </div>
 
-            {/* Diagnostic Parameters Section */}
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-xs">
-                <div>
-                  <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
-                    <Sliders className="h-4 w-4 text-primary" />
-                    <span>2. Diagnostic Parameters & Reference Intervals ({subTests.length})</span>
-                  </h3>
+            {/* Diagnostic Parameters Section OR Custom Table Layout Section */}
+            {reportFormat === "custom_editor" ? (
+              <div className="p-6 bg-card border border-border/80 rounded-xl shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
+                  <div>
+                    <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-primary" />
+                      <span>2. Custom Table &amp; Report Layout</span>
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Antibiotic sensitivity table or custom report format. Changes made here or in fullscreen editor are saved permanently to Test Master on save.
+                    </p>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={() => setNotesModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-xs cursor-pointer self-start sm:self-auto"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                    <span>Open Fullscreen Editor</span>
+                  </Button>
+                </div>
+
+                <div className="rounded-xl border border-border overflow-hidden bg-background">
+                  <div className="p-2.5 px-4 bg-muted/30 border-b border-border/60 flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground flex items-center gap-2">
+                      <span>Report Table &amp; Content Template:</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setNotesModalOpen(true)}
+                      className="text-xs text-primary hover:underline font-semibold cursor-pointer"
+                    >
+                      Expand Fullscreen Editor ↗
+                    </button>
+                  </div>
+                  <div className="p-3 min-h-[320px] max-h-[520px] overflow-y-auto">
+                    <TipTapEditor
+                      value={interpretation}
+                      onChange={(html) => {
+                        setInterpretation(html);
+                        latestInterpretationRef.current = html;
+                      }}
+                      editorRef={tiptapEditorRef}
+                      hideHeader={true}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-xs">
+                  <div>
+                    <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
+                      <Sliders className="h-4 w-4 text-primary" />
+                      <span>2. Diagnostic Parameters & Reference Intervals ({subTests.length})</span>
+                    </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Drag <GripVertical className="inline h-3.5 w-3.5 text-muted-foreground" /> or use arrows to re-order. Click "+ Sub-param" to create nested group parameters.
                   </p>
@@ -2299,12 +2425,17 @@ export default function TestMasterPage() {
                 <div ref={subtestsEndRef} />
               </div>
             </div>
+            )}
           </div>
 
           {/* Bottom Action Footer Bar */}
           <div className="p-4 px-6 sm:px-8 border-t border-border bg-background/95 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="font-semibold">{subTests.length} Parameter{subTests.length !== 1 ? "s" : ""}</span>
+              {reportFormat === "custom_editor" ? (
+                <span className="font-semibold text-primary">Custom Table Mode</span>
+              ) : (
+                <span className="font-semibold">{subTests.length} Parameter{subTests.length !== 1 ? "s" : ""}</span>
+              )}
               <span>•</span>
               <span className="font-semibold text-foreground">Category: {category === "Other" && customCategory ? customCategory : category}</span>
             </div>
@@ -2327,7 +2458,7 @@ export default function TestMasterPage() {
                 className="inline-flex items-center gap-2 px-4 h-11 rounded-xl border border-border bg-card text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs disabled:opacity-50"
               >
                 <FileText className="h-4 w-4 text-blue-500" />
-                <span>Interpretation</span>
+                <span>{reportFormat === "custom_editor" ? "Customize Layout / Table" : "Interpretation"}</span>
               </button>
 
               <Button
@@ -2708,7 +2839,11 @@ export default function TestMasterPage() {
               <div className="bg-white dark:bg-zinc-950 rounded-xl border border-border overflow-hidden flex-1 shadow-sm">
                 <TipTapEditor
                   value={interpretation}
-                  onChange={(html) => setInterpretation(html)}
+                  onChange={(html) => {
+                    setInterpretation(html);
+                    latestInterpretationRef.current = html;
+                  }}
+                  editorRef={tiptapEditorRef}
                   hideHeader={true}
                 />
               </div>
@@ -2737,21 +2872,56 @@ export default function TestMasterPage() {
               <Button
                 type="button"
                 onClick={async () => {
+                  const currentHtml = (tiptapEditorRef.current ? tiptapEditorRef.current.getHTML() : null) || latestInterpretationRef.current || interpretation || "";
+                  setInterpretation(currentHtml);
+                  latestInterpretationRef.current = currentHtml;
                   setNotesModalOpen(false);
+
                   if (editingTest) {
                     try {
                       const testIdentifier = editingTest.id || editingTest.testCode;
+                      const isCustom = reportFormat === "custom_editor" ||
+                        editingTest.fieldType === "Custom Editor" ||
+                        (editingTest as any).field_type === "Custom Editor" ||
+                        (editingTest.name || "").toLowerCase().includes("culture") ||
+                        (currentHtml && (currentHtml.includes("<table") || currentHtml.includes("<td")));
+
+                      // Update local editingTest in memory immediately so parent dialog keeps the updated fields
+                      setEditingTest(prev => prev ? {
+                        ...prev,
+                        interpretation: currentHtml,
+                        fieldType: isCustom ? "Custom Editor" : prev.fieldType,
+                        field_type: isCustom ? "Custom Editor" : (prev as any).field_type,
+                      } : null);
+
+                      if (isCustom) {
+                        setReportFormat("custom_editor");
+                      }
+
                       await fetchFromLaravel(`/tests/${testIdentifier}`, {
                         method: "PUT",
                         body: JSON.stringify({
-                          interpretation: interpretation,
-                          field_type: (editingTest.fieldType === "Custom Editor" || (editingTest as any).field_type === "Custom Editor" || (editingTest.name || "").toLowerCase().includes("culture")) ? "Custom Editor" : undefined,
+                          interpretation: currentHtml,
+                          field_type: isCustom ? "Custom Editor" : undefined,
+                          sub_tests: isCustom ? [] : undefined,
+                          is_json_override: true,
                         }),
                       });
+
+                      // Update local tests array immediately
+                      setTests(prev => prev.map(t => (t.id === testIdentifier || t.testCode === testIdentifier) ? {
+                        ...t,
+                        interpretation: currentHtml,
+                        fieldType: isCustom ? "Custom Editor" : t.fieldType,
+                        field_type: isCustom ? "Custom Editor" : (t as any).field_type,
+                        subTests: isCustom ? [] : t.subTests,
+                      } : t));
+
                       toast.success("Interpretation & Layout saved to test master!");
                       await fetchTests(true);
                     } catch (e: any) {
                       console.error("Auto save interpretation error:", e);
+                      toast.error("Failed to auto-save layout: " + (e.message || "Unknown error"));
                     }
                   }
                 }}

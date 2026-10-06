@@ -2418,18 +2418,14 @@ function RegisterPatientPage() {
   const grandTotal = Math.max(0, subtotal - parsedDiscount);
   const parsedPaid = Math.min(grandTotal, Math.max(0, parseFloat(paidAmount) || 0));
   const userEnteredPartial = parseFloat(paidAmount) > 0 && parseFloat(paidAmount) < grandTotal;
-  const isAutoPaidMode = (selectedPaymentMode === "CASH" || selectedPaymentMode === "UPI") && !isEffectiveB2B;
-  const effectivePaid = isEffectiveB2B
-    ? 0
-    : (userEnteredPartial
-        ? parsedPaid
-        : (isAutoPaidMode && grandTotal > 0 ? (parsedPaid > 0 ? parsedPaid : grandTotal) : parsedPaid));
+  const isAutoPaidMode = selectedPaymentMode === "CASH" || selectedPaymentMode === "UPI";
+  const effectivePaid = isAutoPaidMode && grandTotal > 0
+    ? (userEnteredPartial ? parsedPaid : grandTotal)
+    : parsedPaid;
   const balanceDue = Math.max(0, grandTotal - effectivePaid);
-  const effectiveStatus = isEffectiveB2B
-    ? "UNPAID"
-    : (effectivePaid >= grandTotal && grandTotal > 0
-        ? "PAID"
-        : (effectivePaid > 0 ? "PARTIAL" : "UNPAID"));
+  const effectiveStatus = (isAutoPaidMode && grandTotal > 0 && !userEnteredPartial) || (effectivePaid >= grandTotal && grandTotal > 0)
+    ? "PAID"
+    : (effectivePaid > 0 ? "PARTIAL" : "UNPAID");
 
   const handleConfirmBooking = async () => {
     if (!newPatient) return;
@@ -2449,11 +2445,12 @@ function RegisterPatientPage() {
             ? (storedUser?.lab_name || storedUser?.labName || storedUser?.name || collectedAtSelect)
             : `${collectedAtSelect} (${collectedBySelect})`));
 
-      const computedPaid = isEffectiveB2B ? 0 : (selectedPaymentMode === "UNPAID" ? (parsedPaid > 0 ? parsedPaid : 0) : effectivePaid);
-      const computedStatus = isEffectiveB2B ? "UNPAID" : (selectedPaymentMode === "UNPAID" ? (parsedPaid > 0 ? "PARTIAL" : "UNPAID") : effectiveStatus);
-      const computedBalance = isEffectiveB2B ? grandTotal : balanceDue;
-      const computedDiscount = isEffectiveB2B ? 0 : parsedDiscount;
-      const effectivePaymentMode = isEffectiveB2B ? "B2B" : (selectedPaymentMode === "UNPAID" ? (computedPaid > 0 ? "CASH" : "UNPAID") : selectedPaymentMode);
+      const isAutoPaid = selectedPaymentMode === "CASH" || selectedPaymentMode === "UPI";
+      const computedPaid = isAutoPaid && grandTotal > 0 && !userEnteredPartial ? grandTotal : effectivePaid;
+      const computedStatus = isAutoPaid && grandTotal > 0 && !userEnteredPartial ? "PAID" : effectiveStatus;
+      const computedBalance = isAutoPaid && !userEnteredPartial ? 0 : balanceDue;
+      const computedDiscount = parsedDiscount;
+      const effectivePaymentMode = isAutoPaid ? selectedPaymentMode : (computedPaid > 0 ? "ADVANCE" : "UNPAID");
 
       // Sanitize testIds: Only send valid unique UUIDs to PostgreSQL backend
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -2781,7 +2778,7 @@ function RegisterPatientPage() {
 
       setBookingSuccess(true);
       scrollToTop(false);
-      const initialMode = computedPaid > 0 ? (effectivePaymentMode !== "UNPAID" ? effectivePaymentMode : "CASH") : "UNPAID";
+      const initialMode = computedStatus === "PAID" ? (selectedPaymentMode === "UPI" ? "UPI" : "CASH") : (computedPaid > 0 ? "ADVANCE" : "UNPAID");
       setSelectedPaymentMode(initialMode as any);
       setPaymentUpdateMessage(null);
       setSuccessDetails({
@@ -2871,7 +2868,7 @@ function RegisterPatientPage() {
     setIsPrintModalOpen(false);
     setSampleBarcode("");
     setVialBarcodes({});
-    setSelectedPaymentMode("CASH");
+    setSelectedPaymentMode("UNPAID");
     setPaymentUpdateMessage(null);
   };
 
@@ -4562,16 +4559,12 @@ function RegisterPatientPage() {
                             onChange={(e) => {
                               const val = e.target.value;
                               setPaidAmount(val);
-                              if (parseFloat(val) > 0 && selectedPaymentMode === "UNPAID") {
-                                setSelectedPaymentMode("CASH");
-                              }
                             }}
                             disabled={isEditLoading}
                             className="w-24 px-2 py-1 bg-background border border-border/80 rounded-md font-mono text-xs font-bold text-right outline-none focus:border-primary text-foreground disabled:opacity-50"
                           />
                         </div>
                       </div>
-
 
                       {/* Advance Applied Line */}
                       {parsedPaid > 0 && (
@@ -4581,6 +4574,75 @@ function RegisterPatientPage() {
                         </div>
                       )}
                     </div>
+
+                    {/* Payment Mode (Unpaid / Cash / UPI) */}
+                    <div className="space-y-1.5 pt-2 border-t border-border/60">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground font-medium text-xs">Payment Mode</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          selectedPaymentMode === "UNPAID"
+                            ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                            : selectedPaymentMode === "UPI"
+                              ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+                              : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                        }`}>
+                          {selectedPaymentMode === "UNPAID"
+                            ? "Unpaid · Payment Due"
+                            : selectedPaymentMode === "UPI"
+                              ? "UPI · Settles Paid"
+                              : "Cash · Settles Paid"}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedPaymentMode("UNPAID");
+                          }}
+                          disabled={isEditLoading}
+                          className={`py-2 px-2 sm:px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
+                            selectedPaymentMode === "UNPAID"
+                              ? "bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 shadow-xs ring-1 ring-amber-500/30"
+                              : "bg-background border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                          }`}
+                        >
+                          <Clock className="h-3.5 w-3.5 shrink-0" />
+                          <span>Unpaid</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedPaymentMode("CASH");
+                            setPaidAmount("0");
+                          }}
+                          disabled={isEditLoading}
+                          className={`py-2 px-2 sm:px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
+                            selectedPaymentMode === "CASH"
+                              ? "bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-xs ring-1 ring-emerald-500/30"
+                              : "bg-background border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                          }`}
+                        >
+                          <Banknote className="h-3.5 w-3.5 shrink-0" />
+                          <span>Cash</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedPaymentMode("UPI");
+                            setPaidAmount("0");
+                          }}
+                          disabled={isEditLoading}
+                          className={`py-2 px-2 sm:px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
+                            selectedPaymentMode === "UPI"
+                              ? "bg-blue-500/15 border-blue-500 text-blue-600 dark:text-blue-400 shadow-xs ring-1 ring-blue-500/30"
+                              : "bg-background border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                          }`}
+                        >
+                          <QrCode className="h-3.5 w-3.5 shrink-0" />
+                          <span>UPI</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Net Payable / Remaining Balance Due */}
@@ -4588,25 +4650,28 @@ function RegisterPatientPage() {
                     <div className="flex justify-between items-center">
                       <div>
                         <span className="font-bold text-sm text-foreground block">
-                          {parsedPaid > 0 ? "Remaining Balance" : "Net Payable"}
+                          {(isAutoPaidMode && grandTotal > 0 && !userEnteredPartial) || balanceDue <= 0 ? "Remaining Balance" : "Net Payable"}
                         </span>
-                        {parsedPaid > 0 && (
-                          <span className="text-[10px] text-muted-foreground block">
-                            {balanceDue <= 0 ? "Bill settled completely" : `₹${parsedPaid.toFixed(2)} advance deducted`}
-                          </span>
-                        )}
+                        <span className="text-[10px] text-muted-foreground block">
+                          {(isAutoPaidMode && grandTotal > 0 && !userEnteredPartial)
+                            ? `Bill settled completely via ${selectedPaymentMode}`
+                            : (parsedPaid > 0
+                              ? (balanceDue <= 0 ? "Bill settled completely" : `₹${parsedPaid.toFixed(2)} advance deducted`)
+                              : "Payment due upon invoicing")}
+                        </span>
                       </div>
                       {isEditLoading ? (
                         <Skeleton className="h-7 w-24 rounded" />
                       ) : (
                         <div className="text-right">
-                          <span className={`font-display text-2xl font-bold font-mono ${balanceDue <= 0 && grandTotal > 0
+                          <span className={`font-display text-2xl font-bold font-mono ${
+                            (isAutoPaidMode && grandTotal > 0 && !userEnteredPartial) || (balanceDue <= 0 && grandTotal > 0)
                               ? "text-emerald-600 dark:text-emerald-400"
                               : balanceDue > 0 && parsedPaid > 0
                                 ? "text-amber-600 dark:text-amber-400"
                                 : "text-primary"
                             }`}>
-                            ₹{balanceDue.toFixed(2)}
+                            ₹{((isAutoPaidMode && grandTotal > 0 && !userEnteredPartial) ? 0 : balanceDue).toFixed(2)}
                           </span>
                         </div>
                       )}
@@ -4616,13 +4681,14 @@ function RegisterPatientPage() {
                       <span className="text-muted-foreground">
                         Bill Status:
                       </span>
-                      <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${balanceDue <= 0 && grandTotal > 0
+                      <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
+                        (isAutoPaidMode && grandTotal > 0 && !userEnteredPartial) || (balanceDue <= 0 && grandTotal > 0)
                           ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
                           : parsedPaid > 0
                             ? "bg-amber-500/15 text-amber-600 border border-amber-500/30"
                             : "bg-rose-500/15 text-rose-600 border border-rose-500/30"
                         }`}>
-                        {balanceDue <= 0 && grandTotal > 0 ? "PAID FULL" : parsedPaid > 0 ? "PARTIAL DUE" : "UNPAID DUE"}
+                        {(isAutoPaidMode && grandTotal > 0 && !userEnteredPartial) || (balanceDue <= 0 && grandTotal > 0) ? "PAID FULL" : (parsedPaid > 0 ? "PARTIAL DUE" : "UNPAID DUE")}
                       </span>
                     </div>
                   </div>
@@ -5007,262 +5073,7 @@ function RegisterPatientPage() {
             </div>
           )}
 
-          {/* Payment Handling: Hidden for B2B Partners */}
-          {!isB2B && (
-            <div className="bg-card border border-border/90 rounded-2xl p-6 shadow-xs space-y-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl gradient-primary flex items-center justify-center text-primary-foreground shadow-sm">
-                    <CreditCard className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-display text-base font-bold text-foreground">
-                      Payment Gateway
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      Select payment method for this invoice. Click any mode to select or change status at any time.
-                    </p>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground font-semibold">Payment Status:</span>
-                  <span className={`text-xs font-extrabold px-3 py-1 rounded-full ${(successDetails?.balanceDue || 0) <= 0
-                    ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
-                    : "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
-                    }`}>
-                    {(successDetails?.balanceDue || 0) <= 0 ? "PAID FULL (Cleared)" : `₹${(successDetails?.balanceDue || 0).toFixed(2)} UNPAID (Due)`}
-                  </span>
-                </div>
-              </div>
-
-              {/* Dynamic Status / Notification Message */}
-              {paymentUpdateMessage && (
-                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2 animate-fade-in">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span>{paymentUpdateMessage}</span>
-                </div>
-              )}
-
-              {/* Grid of 5 Selectable Payment Options */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                {/* Option 1: Cash */}
-                <button
-                  type="button"
-                  onClick={() => handleApplyPaymentMode("CASH")}
-                  disabled={isUpdatingPaymentMode}
-                  className={`relative overflow-hidden p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between shadow-2xs ${
-                    updatingPaymentModeTarget === "CASH"
-                      ? "border-primary ring-2 ring-primary/40 bg-primary/10 shadow-md cursor-wait"
-                      : selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20 cursor-pointer group hover:-translate-y-0.5"
-                      : isUpdatingPaymentMode
-                      ? "border-border/60 bg-muted/10 opacity-50 cursor-not-allowed"
-                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40 cursor-pointer group hover:-translate-y-0.5"
-                  }`}
-                >
-                  {updatingPaymentModeTarget === "CASH" && (
-                    <>
-                      <div className="absolute inset-0 bg-primary/10 dark:bg-primary/20 pointer-events-none animate-pulse" />
-                      <div className="payment-card-shimmer" />
-                    </>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <div className="h-9 w-9 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                      <Banknote className="h-5 w-5" />
-                    </div>
-                    {updatingPaymentModeTarget === "CASH" ? (
-                      <span className="h-5 w-5 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      </span>
-                    ) : selectedPaymentMode === "CASH" && (successDetails?.balanceDue || 0) <= 0 ? (
-                      <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                        <Check className="h-3 w-3" />
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-3">
-                    <p className="font-bold text-xs text-foreground">Cash</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Physical cash at counter</p>
-                  </div>
-                </button>
-
-                {/* Option 2: Online (PayU) */}
-                <button
-                  type="button"
-                  onClick={() => handleApplyPaymentMode("ONLINE")}
-                  disabled={isUpdatingPaymentMode}
-                  className={`relative overflow-hidden p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between shadow-2xs ${
-                    updatingPaymentModeTarget === "ONLINE"
-                      ? "border-primary ring-2 ring-primary/40 bg-primary/10 shadow-md cursor-wait"
-                      : selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20 cursor-pointer group hover:-translate-y-0.5"
-                      : isUpdatingPaymentMode
-                      ? "border-border/60 bg-muted/10 opacity-50 cursor-not-allowed"
-                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40 cursor-pointer group hover:-translate-y-0.5"
-                  }`}
-                >
-                  {updatingPaymentModeTarget === "ONLINE" && (
-                    <>
-                      <div className="absolute inset-0 bg-primary/10 dark:bg-primary/20 pointer-events-none animate-pulse" />
-                      <div className="payment-card-shimmer" />
-                    </>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <div className="h-9 w-9 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                      <Globe className="h-5 w-5" />
-                    </div>
-                    {updatingPaymentModeTarget === "ONLINE" ? (
-                      <span className="h-5 w-5 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      </span>
-                    ) : selectedPaymentMode === "ONLINE" && (successDetails?.balanceDue || 0) <= 0 ? (
-                      <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                        <Check className="h-3 w-3" />
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-3">
-                    <p className="font-bold text-xs text-foreground">Online (PayU)</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">PayU gateway modal / link</p>
-                  </div>
-                </button>
-
-                {/* Option 3: UPI */}
-                <button
-                  type="button"
-                  onClick={() => handleApplyPaymentMode("UPI")}
-                  disabled={isUpdatingPaymentMode}
-                  className={`relative overflow-hidden p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between shadow-2xs ${
-                    updatingPaymentModeTarget === "UPI"
-                      ? "border-primary ring-2 ring-primary/40 bg-primary/10 shadow-md cursor-wait"
-                      : selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20 cursor-pointer group hover:-translate-y-0.5"
-                      : isUpdatingPaymentMode
-                      ? "border-border/60 bg-muted/10 opacity-50 cursor-not-allowed"
-                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40 cursor-pointer group hover:-translate-y-0.5"
-                  }`}
-                >
-                  {updatingPaymentModeTarget === "UPI" && (
-                    <>
-                      <div className="absolute inset-0 bg-primary/10 dark:bg-primary/20 pointer-events-none animate-pulse" />
-                      <div className="payment-card-shimmer" />
-                    </>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <div className="h-9 w-9 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                      <QrCode className="h-5 w-5" />
-                    </div>
-                    {updatingPaymentModeTarget === "UPI" ? (
-                      <span className="h-5 w-5 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      </span>
-                    ) : selectedPaymentMode === "UPI" && (successDetails?.balanceDue || 0) <= 0 ? (
-                      <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                        <Check className="h-3 w-3" />
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-3">
-                    <p className="font-bold text-xs text-foreground">UPI</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">GPay, PhonePe, Paytm QR</p>
-                  </div>
-                </button>
-
-                {/* Option 4: Debit / Credit Card */}
-                <button
-                  type="button"
-                  onClick={() => handleApplyPaymentMode("CARD")}
-                  disabled={isUpdatingPaymentMode}
-                  className={`relative overflow-hidden p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between shadow-2xs ${
-                    updatingPaymentModeTarget === "CARD"
-                      ? "border-primary ring-2 ring-primary/40 bg-primary/10 shadow-md cursor-wait"
-                      : selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20 cursor-pointer group hover:-translate-y-0.5"
-                      : isUpdatingPaymentMode
-                      ? "border-border/60 bg-muted/10 opacity-50 cursor-not-allowed"
-                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40 cursor-pointer group hover:-translate-y-0.5"
-                  }`}
-                >
-                  {updatingPaymentModeTarget === "CARD" && (
-                    <>
-                      <div className="absolute inset-0 bg-primary/10 dark:bg-primary/20 pointer-events-none animate-pulse" />
-                      <div className="payment-card-shimmer" />
-                    </>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <div className="h-9 w-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                      <CreditCard className="h-5 w-5" />
-                    </div>
-                    {updatingPaymentModeTarget === "CARD" ? (
-                      <span className="h-5 w-5 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      </span>
-                    ) : selectedPaymentMode === "CARD" && (successDetails?.balanceDue || 0) <= 0 ? (
-                      <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
-                        <Check className="h-3 w-3" />
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-3">
-                    <p className="font-bold text-xs text-foreground">Debit / Credit Card</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Card swipe / POS terminal</p>
-                  </div>
-                </button>
-
-                {/* Option 5: Unpaid / Pay Later */}
-                <button
-                  type="button"
-                  onClick={() => handleApplyPaymentMode("UNPAID")}
-                  disabled={isUpdatingPaymentMode}
-                  className={`relative overflow-hidden p-4 rounded-xl text-left border-2 transition-all flex flex-col justify-between shadow-2xs ${
-                    updatingPaymentModeTarget === "UNPAID"
-                      ? "border-rose-500 ring-2 ring-rose-500/40 bg-rose-500/10 shadow-md cursor-wait"
-                      : (successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID"
-                      ? "border-rose-500/50 bg-rose-500/5 ring-2 ring-rose-500/20 cursor-pointer group hover:-translate-y-0.5"
-                      : isUpdatingPaymentMode
-                      ? "border-border/60 bg-muted/10 opacity-50 cursor-not-allowed"
-                      : "border-border/80 bg-muted/20 hover:border-border hover:bg-muted/40 cursor-pointer group hover:-translate-y-0.5"
-                  }`}
-                >
-                  {updatingPaymentModeTarget === "UNPAID" && (
-                    <>
-                      <div className="absolute inset-0 bg-rose-500/10 pointer-events-none animate-pulse" />
-                      <div className="payment-card-shimmer" />
-                    </>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <div className="h-9 w-9 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
-                      <Clock className="h-5 w-5" />
-                    </div>
-                    {updatingPaymentModeTarget === "UNPAID" ? (
-                      <span className="h-5 w-5 rounded-full bg-rose-500/15 text-rose-600 flex items-center justify-center">
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      </span>
-                    ) : ((successDetails?.balanceDue || 0) > 0 || selectedPaymentMode === "UNPAID") ? (
-                      <span className="h-5 w-5 rounded-full bg-rose-500 text-white flex items-center justify-center text-[10px] font-bold">
-                        !
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-3">
-                    <p className="font-bold text-xs text-foreground">Pay Later (Unpaid)</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Report download locked</p>
-                  </div>
-                </button>
-              </div>
-
-              {/* Bottom Helper Bar */}
-              <div className="p-3.5 rounded-xl bg-muted/40 border border-border/70 flex items-center gap-2 text-xs">
-                <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
-                <span className="text-muted-foreground">
-                  {(successDetails?.balanceDue || 0) <= 0
-                    ? `Payment of ₹${(successDetails?.total || 0).toFixed(2)} is approved and cleared. Report download is unlocked.`
-                    : `₹${(successDetails?.balanceDue || 0).toFixed(2)} is currently marked as Unpaid. Click any payment mode above to clear payment.`}
-                </span>
-              </div>
-            </div>
-          )}
 
         </div>
       )}
@@ -5912,16 +5723,16 @@ function RegisterPatientPage() {
                   paidAmount: Number(
                     successDetails?.paymentStatus === "PAID"
                       ? (successDetails?.total ?? grandTotal)
-                      : (successDetails?.paidAmount ?? parsedPaid ?? 0)
+                      : (successDetails?.paidAmount ?? 0)
                   ),
-                  advanceAmount: Number(successDetails?.paidAmount ?? parsedPaid ?? 0),
+                  advanceAmount: Number(successDetails?.paidAmount ?? 0),
                   status: (
                     successDetails?.paymentStatus === "PAID" ||
-                    (Number(successDetails?.balanceDue ?? balanceDue) <= 0 && Number(successDetails?.paidAmount ?? parsedPaid) > 0)
+                    (Number(successDetails?.balanceDue ?? 0) <= 0 && Number(successDetails?.total ?? grandTotal) > 0 && successDetails?.paymentMode !== "UNPAID")
                   )
                     ? "PAID"
-                    : (Number(successDetails?.paidAmount ?? parsedPaid) > 0 ? "PARTIAL" : "UNPAID"),
-                  paymentMode: successDetails?.paymentMode || selectedPaymentMode || "CASH / UPI",
+                    : (Number(successDetails?.paidAmount ?? 0) > 0 ? "PARTIAL" : "UNPAID"),
+                  paymentMode: successDetails?.paymentMode || (selectedPaymentMode === "UNPAID" ? "UNPAID" : selectedPaymentMode) || "UNPAID",
                   billedBy: "Billing / Reception Desk",
                   reportId: successDetails?.reportId,
                   packageName: successDetails?.packageName || selectedPackage?.name || null,

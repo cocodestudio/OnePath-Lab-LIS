@@ -1679,14 +1679,18 @@ export const PaginatedReportPreview = React.forwardRef<
               }
               .report-preview-page-card {
                 width: 794px !important;
-                height: 1123px !important;
-                min-height: 1123px !important;
-                max-height: 1123px !important;
+                height: 1120px !important;
+                min-height: 1120px !important;
+                max-height: 1120px !important;
                 margin: 0 auto !important;
+                padding: 0 !important;
                 box-shadow: none !important;
                 border: none !important;
+                overflow: hidden !important;
                 page-break-after: always !important;
                 break-after: page !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
               }
               .report-preview-page-card:last-child {
                 page-break-after: avoid !important;
@@ -1694,7 +1698,10 @@ export const PaginatedReportPreview = React.forwardRef<
               }
               .report-print-page {
                 width: 794px !important;
-                height: 1123px !important;
+                height: 1120px !important;
+                max-height: 1120px !important;
+                margin: 0 !important;
+                padding: 0 !important;
                 transform: none !important;
                 position: relative !important;
                 overflow: hidden !important;

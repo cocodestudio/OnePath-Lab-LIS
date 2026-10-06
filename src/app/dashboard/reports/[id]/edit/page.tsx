@@ -1887,7 +1887,10 @@ function ResultEntryContent() {
         const rawVal = (r.resultValue ?? r.result_value ?? "").trim();
         const isBlank = !rawVal || rawVal === "<p></p>" || rawVal === "<p><br></p>" || rawVal === "<p><br/></p>";
         const template = r.test?.interpretation || (r.test as any)?.custom_template || "";
-        if (isBlank && fieldType === "Custom Editor" && template) {
+        const isCustom = fieldType === "Custom Editor" || (r.test?.name || "").toLowerCase().includes("culture") || (template && template.includes("<table"));
+        const isFreshReport = !data?.status || data.status === "NEW";
+        const isUnfilledTable = rawVal.includes("<table") && !rawVal.includes("Sensitive") && !rawVal.includes("Resistant") && !rawVal.includes("Moderate") && !rawVal.includes("Intermediate");
+        if (isCustom && template && (isBlank || (isFreshReport && isUnfilledTable))) {
           initialVals[r.id] = template;
         } else {
           initialVals[r.id] = r.resultValue || r.result_value || "";
@@ -2450,6 +2453,7 @@ function ResultEntryContent() {
         method: "POST",
         body: JSON.stringify({
           interpretation: currentVal,
+          field_type: "Custom Editor",
         }),
       });
 
@@ -2463,6 +2467,8 @@ function ResultEntryContent() {
               test: {
                 ...r.test,
                 interpretation: currentVal,
+                fieldType: "Custom Editor",
+                field_type: "Custom Editor",
               },
             };
           }
@@ -2985,7 +2991,7 @@ function ResultEntryContent() {
             </div>
           </div>
 
-          {/* Action Buttons: Fetch from Machine + Save Results */}
+          {/* Action Buttons: Fetch from Machine */}
           <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
             <Button
               type="button"
@@ -2999,16 +3005,6 @@ function ResultEntryContent() {
             >
               <Cpu className="h-4 w-4 text-emerald-600 animate-pulse" />
               <span>Fetch from Machine</span>
-            </Button>
-
-            <Button
-              type="button"
-              onClick={() => handleSaveResults("IN_PROGRESS")}
-              disabled={saving}
-              className="h-10 px-5 gap-2 font-bold shadow-sm cursor-pointer gradient-primary text-primary-foreground hover:-translate-y-px transition-all rounded-xl w-full sm:w-auto"
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              <span>{saving ? "Saving…" : "Save"}</span>
             </Button>
           </div>
         </div>
@@ -3217,7 +3213,7 @@ function ResultEntryContent() {
                                   const val = values[item.id] || "";
                                   const { abnormal, flag } = isValueAbnormal(item.test, val);
                                   const isForcedAbnormal = !!abnormalOverrides[item.id];
-                                  const isCustomEditor = (item.test.fieldType || item.test.field_type) === "Custom Editor";
+                                  const isCustomEditor = (item.test.fieldType || item.test.field_type) === "Custom Editor" || (item.test?.name || "").toLowerCase().includes("culture");
                                   const canAutoCalc = canParamBeCalculatedInReport(item.test, report, item.id);
                                   const isCalculated = calculatedParamIds.has(item.id) || (canAutoCalc && isParamFormulaCalculated(item.test));
                                   const isTextType = (item.test.valueType || item.test.value_type) === "Text";
@@ -3743,7 +3739,7 @@ function ResultEntryContent() {
             </div>
           </div>
 
-          {/* Sticky Bottom Action Footer with Cancel, Previous, Print, Final, Approve, and Save & Next Buttons */}
+          {/* Sticky Bottom Action Footer with Cancel, Previous, Print, Final, In Progress, and Approve & Next Buttons */}
           <div className="sticky bottom-0 z-30 mt-auto bg-card/95 backdrop-blur-md border-t border-x border-border/90 rounded-t-2xl rounded-b-none p-3 sm:p-4 shadow-[0_-8px_20px_rgba(0,0,0,0.08)] dark:shadow-[0_-8px_20px_rgba(0,0,0,0.3)] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 safe-pb">
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <Link href="/dashboard/reports" className="w-full sm:w-auto">
@@ -3799,28 +3795,22 @@ function ResultEntryContent() {
 
               <Button
                 type="button"
-                onClick={() => handleSaveResults("APPROVED")}
+                onClick={() => handleSaveResults("IN_PROGRESS")}
                 disabled={saving}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs"
+                className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs"
               >
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
-                <span>
-                  {saving
-                    ? "Saving…"
-                    : ((report?.patient as any)?.abhaAddress || (report?.patient as any)?.abha_address || (report?.patient as any)?.abhaNumber || (report?.patient as any)?.abha_number)
-                      ? "Approve & Sync ABDM"
-                      : "Approve"}
-                </span>
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
+                <span>In Progress</span>
               </Button>
 
               <Button
                 type="button"
-                onClick={() => handleSaveResults(undefined, true)}
+                onClick={() => handleSaveResults("APPROVED", true)}
                 disabled={saving}
-                className="gradient-primary text-primary-foreground font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs hover:opacity-95 transition-opacity"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs hover:opacity-95 transition-opacity"
               >
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
-                <span>{saving ? "Saving…" : "Save & Next"}</span>
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
+                <span>{saving ? "Approving…" : "Approve & Next"}</span>
                 {!saving && <ChevronRight className="h-3.5 sm:h-4 w-3.5 sm:w-4 ml-0.5 opacity-80" />}
               </Button>
             </div>

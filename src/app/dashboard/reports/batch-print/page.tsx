@@ -17,10 +17,57 @@ import {
   type ReportSheetData,
 } from "@/components/report-sheet";
 import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
+import { getReportPackage } from "@/lib/packages";
 
 function normalizeReportSheet(rep: any, liveLab?: any): ReportSheetData {
   const lab = liveLab || rep.lab || {};
+  const currentLab = { ...lab };
+  const rawLabSettings = currentLab?.reportSettings ?? currentLab?.report_settings;
+  let labReportSettings: any = {};
+  if (typeof rawLabSettings === "string") {
+    try {
+      labReportSettings = JSON.parse(rawLabSettings || "{}");
+    } catch {
+      labReportSettings = {};
+    }
+  } else if (rawLabSettings && typeof rawLabSettings === "object") {
+    labReportSettings = { ...rawLabSettings };
+  }
+
+  // Fallback for doctor signatures if not in live settings
+  if (
+    !labReportSettings.doctorSignatures &&
+    !labReportSettings.doctor_signatures &&
+    !labReportSettings.doctorSignature &&
+    !labReportSettings.doctor_signature
+  ) {
+    try {
+      if (typeof window !== "undefined") {
+        const cached = localStorage.getItem("lis_cached_report_settings");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && typeof parsed === "object") {
+            labReportSettings = { ...parsed, ...labReportSettings };
+          }
+        }
+      }
+    } catch {}
+  }
+
+  currentLab.reportSettings = labReportSettings;
+  currentLab.report_settings = labReportSettings;
+
+  const resolvedPackageName =
+    rep.packageName ||
+    rep.package_name ||
+    rep.meta?.packageName ||
+    rep.meta?.package_name ||
+    getReportPackage(rep.id) ||
+    getReportPackage(rep.customId || rep.custom_id) ||
+    getReportPackage(rep.patient?.customId || rep.patient?.custom_id);
+
   return {
+    ...rep,
     id: rep.id,
     customId: rep.custom_id || rep.customId || "REP",
     status: rep.status,
@@ -39,41 +86,75 @@ function normalizeReportSheet(rep: any, liveLab?: any): ReportSheetData {
       insuranceNo: rep.patient?.insuranceNo || rep.patient?.insurance_no || null,
       ...(rep.patient || {}),
     },
-    results: (rep.results || []).map((r: any) => ({
-      id: r.id,
-      resultValue: r.resultValue ?? r.result_value ?? null,
-      isAbnormal: Boolean(r.isAbnormal || r.is_abnormal),
-      remarks: r.remarks || null,
-      test: {
-        id: r.test?.id,
-        name: r.test?.name || "Investigation",
-        category: r.test?.category || "General",
-        fieldType: r.test?.fieldType || r.test?.field_type || "Numeric",
-        unit: r.test?.unit || null,
-        refRangeMin: r.test?.refRangeMin ?? r.test?.ref_range_min ?? null,
-        refRangeMax: r.test?.refRangeMax ?? r.test?.ref_range_max ?? null,
-        interpretation: r.test?.interpretation || null,
-        parent: r.test?.parent || null,
-        ...(r.test || {}),
-      },
-    })),
+    results: (rep.results || []).map((r: any) => {
+      const t = r.test || {};
+      return {
+        ...r,
+        id: r.id,
+        resultValue: r.resultValue ?? r.result_value ?? null,
+        isAbnormal: Boolean(r.isAbnormal || r.is_abnormal),
+        remarks: r.remarks || null,
+        test: {
+          ...t,
+          id: t.id,
+          name: t.name || "Investigation",
+          category: t.category || "General",
+          fieldType: t.fieldType || t.field_type || "Numeric",
+          field_type: t.fieldType || t.field_type || "Numeric",
+          unit: t.unit ?? null,
+          refRangeMin: t.refRangeMin ?? t.ref_range_min ?? null,
+          ref_range_min: t.refRangeMin ?? t.ref_range_min ?? null,
+          refRangeMax: t.refRangeMax ?? t.ref_range_max ?? null,
+          ref_range_max: t.refRangeMax ?? t.ref_range_max ?? null,
+          genderRefType: t.genderRefType || t.gender_ref_type || null,
+          gender_ref_type: t.genderRefType || t.gender_ref_type || null,
+          refRangeMinMale: t.refRangeMinMale ?? t.ref_range_min_male ?? null,
+          ref_range_min_male: t.refRangeMinMale ?? t.ref_range_min_male ?? null,
+          refRangeMaxMale: t.refRangeMaxMale ?? t.ref_range_max_male ?? null,
+          ref_range_max_male: t.refRangeMaxMale ?? t.ref_range_max_male ?? null,
+          refRangeMinFemale: t.refRangeMinFemale ?? t.ref_range_min_female ?? null,
+          ref_range_min_female: t.refRangeMinFemale ?? t.ref_range_min_female ?? null,
+          refRangeMaxFemale: t.refRangeMaxFemale ?? t.ref_range_max_female ?? null,
+          ref_range_max_female: t.refRangeMaxFemale ?? t.ref_range_max_female ?? null,
+          refRangeMinChild: t.refRangeMinChild ?? t.ref_range_min_child ?? null,
+          ref_range_min_child: t.refRangeMinChild ?? t.ref_range_min_child ?? null,
+          refRangeMaxChild: t.refRangeMaxChild ?? t.ref_range_max_child ?? null,
+          ref_range_max_child: t.refRangeMaxChild ?? t.ref_range_max_child ?? null,
+          rangeType: t.rangeType || t.range_type || null,
+          range_type: t.rangeType || t.range_type || null,
+          textRefRange: t.textRefRange || t.text_ref_range || null,
+          text_ref_range: t.textRefRange || t.text_ref_range || null,
+          ageRanges: t.ageRanges || t.age_ranges || null,
+          age_ranges: t.ageRanges || t.age_ranges || null,
+          customOptions: t.customOptions || t.custom_options || null,
+          custom_options: t.customOptions || t.custom_options || null,
+          interpretation: t.interpretation || null,
+          method: t.method || null,
+          notes: t.notes || null,
+          parent: t.parent || null,
+        },
+      };
+    }),
     lab: {
-      name: lab.name || "OnePath Laboratory",
-      email: lab.email || "info@onepathlab.com",
-      address: lab.address || "Main Laboratory Center",
-      phone: lab.phone || "",
-      logoUrl: lab.logoUrl || lab.logo_url || "/onepath-logo.png",
-      printBgImage: lab.printBgImage || lab.print_bg_image || null,
-      printHeaderHeight: lab.printHeaderHeight ?? lab.print_header_height ?? 185,
-      printFooterHeight: lab.printFooterHeight ?? lab.print_footer_height ?? 95,
-      printMarginLeft: lab.printMarginLeft ?? lab.print_margin_left ?? 32,
-      printMarginRight: lab.printMarginRight ?? lab.print_margin_right ?? 32,
-      reportSettings: lab.reportSettings || lab.report_settings || {},
-      ...(lab || {}),
+      name: currentLab.name || "OnePath Laboratory",
+      email: currentLab.email || "info@onepathlab.com",
+      address: currentLab.address || "Main Laboratory Center",
+      phone: currentLab.phone || "",
+      logoUrl: currentLab.logoUrl || currentLab.logo_url || "/onepath-logo.png",
+      printBgImage: currentLab.printBgImage || currentLab.print_bg_image || null,
+      printHeaderHeight: currentLab.printHeaderHeight ?? currentLab.print_header_height ?? 185,
+      printFooterHeight: currentLab.printFooterHeight ?? currentLab.print_footer_height ?? 95,
+      printMarginLeft: currentLab.printMarginLeft ?? currentLab.print_margin_left ?? 32,
+      printMarginRight: currentLab.printMarginRight ?? currentLab.print_margin_right ?? 32,
+      reportSettings: labReportSettings,
+      report_settings: labReportSettings,
+      ...(currentLab || {}),
     },
     printedInterpretations: rep.printedInterpretations || rep.printed_interpretations || null,
     testNotes: rep.testNotes || rep.test_notes || null,
-    packageName: rep.packageName || rep.package_name || null,
+    test_notes: rep.testNotes || rep.test_notes || null,
+    packageName: resolvedPackageName,
+    package_name: resolvedPackageName,
   };
 }
 
@@ -138,40 +219,22 @@ function BatchPrintContent() {
         const labData = await fetchFromLaravel("/lab?include_letterhead=1", { skipCache: true }).catch(() => null);
         if (isMounted && labData) setLiveLab(labData);
 
-        // 2. Read any cached reports from localStorage
-        const cachedMap: Record<string, any> = {};
-        if (typeof window !== "undefined") {
-          try {
-            const rawCached = localStorage.getItem("lis_cached_reports");
-            if (rawCached) {
-              const list = JSON.parse(rawCached);
-              if (Array.isArray(list)) {
-                list.forEach((r) => {
-                  if (r.id) cachedMap[r.id] = r;
-                });
-              }
-            }
-          } catch {}
-        }
-
-        // 3. Fetch full report details for each selected ID
-        const loadedList: any[] = [];
-        for (const id of targetReportIds) {
-          const cached = cachedMap[id];
-          if (cached && Array.isArray(cached.results) && cached.results.length > 0 && cached.patient?.name) {
-            loadedList.push(cached);
-          } else {
+        // 2. Fetch fresh, complete report details for each selected ID in parallel
+        // (Bypassing incomplete localStorage cache so parameters, units & reference ranges match 100%)
+        const loadedList = await Promise.all(
+          targetReportIds.map(async (id) => {
             try {
-              const fullData = await fetchFromLaravel(`/reports/${id}`);
-              loadedList.push(fullData);
+              const fullData = await fetchFromLaravel(`/reports/${id}`, { skipCache: true });
+              return fullData;
             } catch (e) {
-              console.error(`Failed to load report ${id}:`, e);
+              console.error(`Failed to load full report ${id}:`, e);
+              return null;
             }
-          }
-        }
+          })
+        );
 
         if (isMounted) {
-          setReports(loadedList);
+          setReports(loadedList.filter(Boolean));
         }
       } catch (err: any) {
         toast({
@@ -230,6 +293,81 @@ function BatchPrintContent() {
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `OnePath_Batch_Reports_${new Date().toISOString().slice(0, 10)}`,
+    pageStyle: `
+      @page {
+        size: A4 portrait;
+        margin: 0mm !important;
+      }
+      @media print {
+        *, *:before, *:after {
+          box-sizing: border-box !important;
+        }
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          width: 100% !important;
+        }
+        .batch-print-viewport {
+          gap: 0 !important;
+          row-gap: 0 !important;
+          column-gap: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          display: block !important;
+          width: 100% !important;
+        }
+        .batch-report-page {
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: none !important;
+          display: block !important;
+          width: 100% !important;
+        }
+        .batch-report-page:last-child {
+          page-break-after: avoid !important;
+          break-after: avoid !important;
+        }
+        .report-preview-page-card {
+          width: 794px !important;
+          height: 1120px !important;
+          min-height: 1120px !important;
+          max-height: 1120px !important;
+          margin: 0 auto !important;
+          padding: 0 !important;
+          box-shadow: none !important;
+          border: none !important;
+          overflow: hidden !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
+        .report-preview-page-card:last-child {
+          page-break-after: avoid !important;
+          break-after: avoid !important;
+        }
+        .report-print-page {
+          width: 794px !important;
+          height: 1120px !important;
+          max-height: 1120px !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          transform: none !important;
+          position: relative !important;
+          overflow: hidden !important;
+          background-color: #ffffff !important;
+        }
+      }
+    `,
     onAfterPrint: async () => {
       toast({
         variant: "success",
@@ -528,25 +666,28 @@ function BatchPrintContent() {
             <div className="w-full flex flex-col items-center pb-12">
               {/* Continuous Print Viewport containing all A4 report pages */}
               <div ref={printRef} className="batch-print-viewport flex flex-col items-center gap-8">
-                {preparedReports.map((rep, idx) => (
-                  <div
-                    key={rep.id || idx}
-                    id={`batch-rep-${rep.id}`}
-                    className="batch-report-page shadow-2xl rounded-xl overflow-hidden transition-transform duration-150"
-                    style={{
-                      pageBreakAfter: "always",
-                      breakAfter: "page",
-                    }}
-                  >
-                    <PaginatedReportPreview
-                      report={rep}
-                      settings={printSettings}
-                      scale={zoomScale}
-                      hideInterpretation={false}
-                      autoFitToFooter={autoFitToFooter}
-                    />
-                  </div>
-                ))}
+                {preparedReports.map((rep, idx) => {
+                  const isLast = idx === preparedReports.length - 1;
+                  return (
+                    <div
+                      key={rep.id || idx}
+                      id={`batch-rep-${rep.id}`}
+                      className="batch-report-page shadow-2xl rounded-xl overflow-hidden transition-transform duration-150"
+                      style={{
+                        pageBreakAfter: isLast ? "avoid" : "always",
+                        breakAfter: isLast ? "avoid" : "page",
+                      }}
+                    >
+                      <PaginatedReportPreview
+                        report={rep}
+                        settings={printSettings}
+                        scale={zoomScale}
+                        hideInterpretation={false}
+                        autoFitToFooter={autoFitToFooter}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -560,33 +701,76 @@ function BatchPrintContent() {
         @media print {
           @page {
             size: A4 portrait;
-            margin: 0;
+            margin: 0mm !important;
+          }
+          *, *:before, *:after {
+            box-sizing: border-box !important;
           }
           body {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             background: #ffffff !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
           .no-print {
             display: none !important;
           }
           .batch-print-viewport {
             gap: 0 !important;
+            row-gap: 0 !important;
+            column-gap: 0 !important;
             display: block !important;
             width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
           .batch-report-page {
             box-shadow: none !important;
             border-radius: 0 !important;
-            page-break-after: always !important;
-            break-after: page !important;
+            border: none !important;
             margin: 0 !important;
             padding: 0 !important;
             display: block !important;
+            width: 100% !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           .batch-report-page:last-child {
-            page-break-after: auto !important;
-            break-after: auto !important;
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+          .report-preview-page-card {
+            width: 794px !important;
+            height: 1120px !important;
+            min-height: 1120px !important;
+            max-height: 1120px !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+            overflow: hidden !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .report-preview-page-card:last-child {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+          .report-print-page {
+            width: 794px !important;
+            height: 1120px !important;
+            max-height: 1120px !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            transform: none !important;
+            position: relative !important;
+            overflow: hidden !important;
+            background-color: #ffffff !important;
           }
         }
       `}</style>

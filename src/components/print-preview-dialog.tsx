@@ -282,18 +282,29 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
       const rawTestId = report?.testId || report?.mainTestId || firstRes?.test?.parent?.parent?.id || firstRes?.test?.parent?.id || firstRes?.test?.id || report?.id;
       const cleanTestId = String(rawTestId || "").replace(/^sample-/, '');
 
-      // Flatten blocks into parameter payload
-      const parametersPayload: any[] = [];
+      // Group parameters by their parent root test
+      const testParamMap = new Map<string, any[]>();
 
       blocksList.forEach((block, blockIdx) => {
         const isBlockHidden = hiddenBlockIds.includes(block.id);
         const blockOrder = (blockIdx + 1) * 100;
 
+        const firstItem = block.items[0];
+        const rootId = firstItem?.test?.parent?.parent?.id 
+          || firstItem?.test?.parent?.id 
+          || firstItem?.test?.id 
+          || cleanTestId;
+
+        if (!testParamMap.has(rootId)) {
+          testParamMap.set(rootId, []);
+        }
+        const targetList = testParamMap.get(rootId)!;
+
         if (block.isGroup) {
           // If group is hidden, mark all its items hidden
           const parentSubTestId = block.items[0]?.test?.parent?.id;
           if (parentSubTestId) {
-            parametersPayload.push({
+            targetList.push({
               id: parentSubTestId,
               sort_order: blockOrder,
               is_hidden: isBlockHidden,
@@ -301,7 +312,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
           }
 
           block.items.forEach((item, itemIdx) => {
-            parametersPayload.push({
+            targetList.push({
               id: item.test.id,
               sort_order: blockOrder + itemIdx + 1,
               is_hidden: isBlockHidden,
@@ -310,7 +321,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
         } else {
           const item = block.items[0];
           if (item?.test?.id) {
-            parametersPayload.push({
+            targetList.push({
               id: item.test.id,
               sort_order: blockOrder + 1,
               is_hidden: isBlockHidden,
@@ -319,14 +330,18 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
         }
       });
 
-      if (cleanTestId && cleanTestId !== "preview-temp-id" && cleanTestId !== "undefined") {
-        await fetchFromLaravel(`/tests/${cleanTestId}/report-layout`, {
-          method: "POST",
-          body: JSON.stringify({
-            parameters: parametersPayload,
-            show_interpretation: showInterpretation,
-          }),
-        });
+      // Send layout save requests for all affected tests
+      for (const [tId, pPayload] of Array.from(testParamMap.entries())) {
+        const cleanId = String(tId || "").replace(/^sample-/, '');
+        if (cleanId && cleanId !== "preview-temp-id" && cleanId !== "undefined") {
+          await fetchFromLaravel(`/tests/${cleanId}/report-layout`, {
+            method: "POST",
+            body: JSON.stringify({
+              parameters: pPayload,
+              show_interpretation: showInterpretation,
+            }),
+          });
+        }
       }
 
       setLayoutSavedSuccess(true);

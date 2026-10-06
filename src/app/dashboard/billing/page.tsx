@@ -7,7 +7,7 @@ import {
   Loader2, ArrowRight, ChevronLeft, ChevronRight, FileDown, TrendingUp,
   Wallet, X, FileText, Printer, CheckCircle, Clock, AlertCircle, RefreshCw,
   Phone, Eye, Download, Sparkles, Plus, Trash2, PlusCircle, Check, Stethoscope,
-  Building2, BadgeCheck, Boxes, MessageSquare
+  Building2, BadgeCheck, Boxes, MessageSquare, Banknote, QrCode
 } from "lucide-react";
 import { getStoredPackages, getReportPackage, type LabPackage } from "@/lib/packages";
 import {
@@ -72,11 +72,40 @@ interface Bill {
   discount: number;
   paid_amount: number;
   status: string;
+  payment_mode?: string;
+  paymentMode?: string;
   created_at: string;
   createdAt?: string;
   patient: Patient;
   reports?: Report[];
   lab?: Lab;
+  payments?: any[];
+}
+
+// Helper: Resolve accurate payment method (CASH, UPI, ONLINE, UNPAID)
+function resolvePaymentMode(b: any): "CASH" | "UPI" | "ONLINE" | "UNPAID" {
+  const isPaid = b.status === "PAID" || Number(b.paid_amount ?? b.paidAmount ?? 0) > 0 || Boolean(b.meta?.is_b2b_paid);
+  if (!isPaid) return "UNPAID";
+
+  const rawMode = String(b.payment_mode || b.paymentMode || "").toUpperCase().trim();
+  if (rawMode.includes("UPI") || rawMode.includes("GPAY") || rawMode.includes("PHONEPE") || rawMode.includes("PAYTM")) return "UPI";
+  if (rawMode.includes("CASH")) return "CASH";
+  if (rawMode.includes("PAYU") || rawMode.includes("ONLINE") || rawMode.includes("CARD")) return "ONLINE";
+
+  if (Array.isArray(b.payments) && b.payments.length > 0) {
+    const successPay = b.payments.find((p: any) => p.status === "SUCCESS") || b.payments[b.payments.length - 1];
+    const pType = String(successPay?.payment_type || successPay?.gateway || "").toUpperCase().trim();
+    if (pType.includes("UPI") || pType.includes("GPAY") || pType.includes("PHONEPE")) return "UPI";
+    if (pType.includes("CASH")) return "CASH";
+    if (pType.includes("PAYU") || pType.includes("ONLINE") || pType.includes("CARD")) return "ONLINE";
+  }
+
+  const pMeta = b.patient?.meta || b.meta || {};
+  const metaMode = String(pMeta.payment_mode || pMeta.paymentMode || "").toUpperCase().trim();
+  if (metaMode.includes("UPI")) return "UPI";
+  if (metaMode.includes("CASH")) return "CASH";
+
+  return "CASH";
 }
 
 // Helper: Extract only distinct Main Diagnostic Panels from a Bill (resolving sub-parameters to top parent)
@@ -181,12 +210,14 @@ function getBillInvoiceNo(bill: Bill | any | null | undefined): string {
   );
 }
 
-function normalizeBillObj(b: any, isB2BUser = false): Bill {
+function normalizeBillObj(b: any): Bill {
   const invNo = b.custom_id || b.customId || (b.id ? `OPL-INV-${String(b.id).slice(0, 6).toUpperCase()}` : "");
-  const isPaid = isB2BUser || b.status === "PAID" || Boolean(b.meta?.is_b2b_paid);
   const total = Number(b.total || 0);
-  const paid = isPaid ? total : Number(b.paid_amount ?? b.paidAmount ?? 0);
-  const status = isPaid ? "PAID" : (b.status || "UNPAID");
+  const rawPaid = Number(b.paid_amount ?? b.paidAmount ?? 0);
+  const isPaid = b.status === "PAID" || (total > 0 && rawPaid >= total) || Boolean(b.meta?.is_b2b_paid);
+  const paid = isPaid && rawPaid === 0 ? total : rawPaid;
+  const status = isPaid ? "PAID" : (rawPaid > 0 ? "PARTIAL" : (b.status || "UNPAID"));
+  const payMode = resolvePaymentMode(b);
 
   return {
     ...b,
@@ -196,6 +227,8 @@ function normalizeBillObj(b: any, isB2BUser = false): Bill {
     paid_amount: paid,
     paidAmount: paid,
     status,
+    payment_mode: b.payment_mode || b.paymentMode || payMode,
+    paymentMode: b.payment_mode || b.paymentMode || payMode,
     created_at: b.created_at || b.createdAt,
     createdAt: b.createdAt || b.created_at,
     patient: b.patient ? {
@@ -383,8 +416,7 @@ export default function BillingPage() {
       }
       const data = await fetchFromLaravel("/bills?limit=300", { skipCache: isForce });
       const rawList = Array.isArray(data) ? data : (data?.data || []);
-      const isB2BUser = currentUserRole === "B2B" || getStoredUser()?.role === "B2B";
-      const billsList = rawList.map((b: any) => normalizeBillObj(b, isB2BUser));
+      const billsList = rawList.map((b: any) => normalizeBillObj(b));
       setBills(billsList);
 
       try {
@@ -788,18 +820,20 @@ export default function BillingPage() {
       ).toUpperCase();
 
       const isCC = role === "COLLECTION_CENTER" || role === "COLLECTION_CENTRE" || Boolean(ccId);
-      const isB2B = role === "B2B" || Boolean(b2bId);
+      const isB2BRecord = role === "B2B" || Boolean(b2bId) || p.created_by_role === "B2B";
       const isReceptionist = role === "RECEPTIONIST";
-      const isMainLab = !isCC && !isB2B && !isReceptionist;
+      const isMainLab = !isCC && !isB2BRecord && !isReceptionist;
+
+      // Strictly isolate B2B bills away from the main Billing Desk
+      if (!isB2B && isB2BRecord) {
+        return false;
+      }
 
       if (sourceFilter === "MAIN_LAB") {
         return isMainLab;
       }
       if (sourceFilter === "ROLE_CC") {
         return isCC;
-      }
-      if (sourceFilter === "ROLE_B2B") {
-        return isB2B;
       }
       if (sourceFilter === "ROLE_RECEPTIONIST") {
         return isReceptionist;
@@ -825,12 +859,46 @@ export default function BillingPage() {
     return matchesSearch && matchesStatus && matchesDate && matchesSource;
   });
 
-  const isBillFullyPaid = (b: any) => isB2B || b.status === "PAID" || Boolean((b as any).meta?.is_b2b_paid);
+  const isBillFullyPaid = (b: any) => b.status === "PAID" || (Number(b.total || 0) > 0 && Number(b.paid_amount || 0) >= Number(b.total || 0));
   const totalInvoiced = filteredBills.reduce((acc, b) => acc + (Number(b.total) || 0), 0);
   const totalCollected = filteredBills.reduce((acc, b) => acc + (isBillFullyPaid(b) ? (Number(b.total) || 0) : (Number(b.paid_amount) || 0)), 0);
   const totalDue = filteredBills.reduce((acc, b) => acc + (isBillFullyPaid(b) ? 0 : Math.max(0, (Number(b.total) || 0) - (Number(b.paid_amount) || 0))), 0);
   const paidCount = filteredBills.filter((b) => isBillFullyPaid(b)).length;
   const unpaidCount = filteredBills.filter((b) => !isBillFullyPaid(b)).length;
+
+  // Daily Payment Split (Cash vs UPI collections)
+  const { cashTotal, upiTotal, cashCount, upiCount } = useMemo(() => {
+    let cashSum = 0;
+    let upiSum = 0;
+    let cashCnt = 0;
+    let upiCnt = 0;
+
+    filteredBills.forEach((b) => {
+      const isPaid = isBillFullyPaid(b);
+      const paid = isPaid ? Number(b.total || 0) : Number(b.paid_amount || 0);
+      if (paid <= 0) return;
+
+      const mode = resolvePaymentMode(b);
+      if (mode === "UPI") {
+        upiSum += paid;
+        upiCnt++;
+      } else {
+        cashSum += paid;
+        cashCnt++;
+      }
+    });
+
+    return {
+      cashTotal: cashSum,
+      upiTotal: upiSum,
+      cashCount: cashCnt,
+      upiCount: upiCnt,
+    };
+  }, [filteredBills, isB2B]);
+
+  const totalSplitSum = cashTotal + upiTotal;
+  const cashPct = totalSplitSum > 0 ? Math.round((cashTotal / totalSplitSum) * 100) : 50;
+  const upiPct = totalSplitSum > 0 ? (100 - cashPct) : 50;
 
   const totalRows = filteredBills.length;
   const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
@@ -993,6 +1061,73 @@ export default function BillingPage() {
         </div>
       </div>
 
+      {/* Daily Payment Split Card (Cash vs UPI Breakdown) */}
+      <div className="p-5 rounded-2xl border border-border/90 bg-card/80 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/70 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Wallet className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-display text-sm font-bold text-foreground">
+                Daily Payment Split (Cash vs UPI)
+              </h3>
+              <p className="text-[11px] text-muted-foreground">
+                {filterDate ? `Real-time collection distribution for ${filterDate === getTodayStr() ? "Today" : filterDate}` : "Overall collection split across all recorded invoices"}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 bg-muted/30 px-3 py-1.5 rounded-xl border border-border/60">
+            <span className="text-[11px] font-semibold text-muted-foreground">Total Settled:</span>
+            <span className="font-mono text-sm font-black text-emerald-600 dark:text-emerald-400">
+              ₹{totalSplitSum.toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Cash Card */}
+          <div className="p-4 rounded-xl border border-emerald-500/25 bg-emerald-500/5 flex items-center justify-between">
+            <div className="flex items-center gap-3.5">
+              <div className="h-11 w-11 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-2xs">
+                <Banknote className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Cash Received</span>
+                <p className="font-mono text-2xl font-black text-foreground">₹{cashTotal.toFixed(2)}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {cashCount} cash payments · {totalSplitSum > 0 ? cashPct : 0}% of settled total
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+              CASH
+            </span>
+          </div>
+
+          {/* UPI Card */}
+          <div className="p-4 rounded-xl border border-blue-500/25 bg-blue-500/5 flex items-center justify-between">
+            <div className="flex items-center gap-3.5">
+              <div className="h-11 w-11 rounded-xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 shadow-2xs">
+                <QrCode className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">UPI Received</span>
+                <p className="font-mono text-2xl font-black text-foreground">₹{upiTotal.toFixed(2)}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {upiCount} UPI / QR payments · {totalSplitSum > 0 ? upiPct : 0}% of settled total
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30">
+              UPI
+            </span>
+          </div>
+        </div>
+
+      </div>
+
       {/* Filter & Search Bar */}
       <div className="flex flex-col gap-3 bg-card/70 p-4 rounded-xl border border-border/80 shadow-sm">
         {/* Row 1: Search */}
@@ -1102,7 +1237,6 @@ export default function BillingPage() {
 
                 {/* Role Groups */}
                 <SelectItem value="ROLE_CC">All Collection Centres</SelectItem>
-                <SelectItem value="ROLE_B2B">All B2B Clients</SelectItem>
                 <SelectItem value="ROLE_RECEPTIONIST">All Receptionists</SelectItem>
 
                 {/* Individual Admin-Added Collection Centres */}
@@ -1119,19 +1253,7 @@ export default function BillingPage() {
                   </>
                 )}
 
-                {/* Individual Admin-Added B2B Partners */}
-                {b2bUsers.length > 0 && (
-                  <>
-                    <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
-                      B2B Clients
-                    </div>
-                    {b2bUsers.map((u: any) => (
-                      <SelectItem key={u.id} value={`USER_${u.id}`}>
-                        B2B: {u.labName || u.name}
-                      </SelectItem>
-                    ))}
-                  </>
-                )}
+
 
                 {/* Individual Admin-Added Receptionists */}
                 {receptionistUsers.length > 0 && (
@@ -1155,7 +1277,7 @@ export default function BillingPage() {
       {/* Invoices List Table */}
       <div className="bg-card border border-border/80 rounded-xl overflow-hidden shadow-sm">
         <div className="table-responsive-container">
-          <table className="w-full min-w-[820px] text-xs text-left border-collapse">
+          <table className="w-full min-w-[890px] text-xs text-left border-collapse">
             <thead>
               <tr className="border-b border-border/80 bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
                 <th className="py-3 px-4">Invoice / Date</th>
@@ -1166,6 +1288,7 @@ export default function BillingPage() {
                 <th className="py-3 px-4 text-right">Due (₹)</th>
                 <th className="py-3 px-4 text-right">Discount (₹)</th>
                 <th className="py-3 px-4 text-center">Status</th>
+                <th className="py-3 px-4 text-center">Method</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -1199,6 +1322,9 @@ export default function BillingPage() {
                     <td className="py-3.5 px-4 text-center">
                       <div className="h-5 w-16 rounded-full shimmer-gradient mx-auto" />
                     </td>
+                    <td className="py-3.5 px-4 text-center">
+                      <div className="h-5 w-14 rounded-full shimmer-gradient mx-auto" />
+                    </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="h-7 w-20 rounded-lg shimmer-gradient ml-auto" />
                     </td>
@@ -1206,7 +1332,7 @@ export default function BillingPage() {
                 ))
               ) : currentRows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-16 text-center text-muted-foreground px-4">
+                  <td colSpan={10} className="py-16 text-center text-muted-foreground px-4">
                     <Receipt className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
                     <p className="font-bold text-foreground">
                       {filterDate ? `No invoices found for ${filterDate === getTodayStr() ? "Today" : filterDate}` : "No invoices found"}
@@ -1292,6 +1418,36 @@ export default function BillingPage() {
                         }`}>
                           {effectiveStatus}
                         </span>
+                      </td>
+
+                      <td className="py-3.5 px-4 text-center">
+                        {(() => {
+                          const payMethod = resolvePaymentMode(bill);
+                          if (!isBillPaid && Number(bill.paid_amount || 0) <= 0) {
+                            return <span className="text-[11px] text-muted-foreground/60 font-mono">—</span>;
+                          }
+                          if (payMethod === "UPI") {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                <QrCode className="h-3 w-3 shrink-0" />
+                                <span>UPI</span>
+                              </span>
+                            );
+                          }
+                          if (payMethod === "ONLINE") {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                                <span>Online</span>
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              <Banknote className="h-3 w-3 shrink-0" />
+                              <span>Cash</span>
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       <td className="py-3.5 px-4 text-right">
@@ -1426,11 +1582,11 @@ export default function BillingPage() {
                     createdAt: (selectedBillForInvoice.createdAt || selectedBillForInvoice.created_at) as string || new Date().toISOString(),
                     total: Number(selectedBillForInvoice.total || 0),
                     discount: Number(selectedBillForInvoice.discount || 0),
-                    paidAmount: (selectedBillForInvoice.status === "PAID" || isB2B || Boolean((selectedBillForInvoice as any).meta?.is_b2b_paid))
+                    paidAmount: (selectedBillForInvoice.status === "PAID" || Boolean((selectedBillForInvoice as any).meta?.is_b2b_paid))
                       ? Number(selectedBillForInvoice.total || 0)
                       : Number(selectedBillForInvoice.paid_amount ?? (selectedBillForInvoice as any).paidAmount ?? 0),
                     advanceAmount: Number(selectedBillForInvoice.paid_amount ?? (selectedBillForInvoice as any).paidAmount ?? 0),
-                    status: (isB2B || Boolean((selectedBillForInvoice as any).meta?.is_b2b_paid) || selectedBillForInvoice.status === "PAID") ? "PAID" : (selectedBillForInvoice.status || "UNPAID"),
+                    status: (Boolean((selectedBillForInvoice as any).meta?.is_b2b_paid) || selectedBillForInvoice.status === "PAID") ? "PAID" : (selectedBillForInvoice.status || "UNPAID"),
                     paymentMode: (selectedBillForInvoice as any).payment_mode || (selectedBillForInvoice as any).paymentMode || "CASH / UPI",
                     billedBy: "Accounts / Billing Desk",
                     packageName: (selectedBillForInvoice.reports && (

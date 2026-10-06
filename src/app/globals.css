@@ -367,6 +367,34 @@
     padding: 0 !important;
     margin: 0 !important;
   }
+
+  /* Batch print queue styling to ensure zero blank pages between reports */
+  .batch-print-viewport {
+    gap: 0 !important;
+    row-gap: 0 !important;
+    column-gap: 0 !important;
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .batch-report-page {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    width: 100% !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .batch-report-page:last-child {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
 }
 
 /* Lenis Smooth Scrolling */

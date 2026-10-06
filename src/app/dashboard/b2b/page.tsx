@@ -1,16 +1,23 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import {
   Briefcase, Users, TrendingUp, FlaskConical, Search, RefreshCw,
   Calendar, Clock, Check, Copy, ChevronLeft, ChevronRight,
   AlertCircle, CheckCircle2, Building, Phone, Mail, Wallet,
-  ShieldCheck, ArrowRight, X, Filter, Sparkles, PlusCircle, IndianRupee
+  ShieldCheck, ArrowRight, X, Filter, Sparkles, PlusCircle, IndianRupee,
+  Receipt, Download, Printer, Loader2, MessageSquare, ChevronDown, Store, Building2
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { InvoiceSheet, type InvoiceData } from "@/components/invoice-sheet";
+import { normalizeBillSettings, defaultBillLayoutSettings, type BillLayoutSettings } from "@/lib/bill-settings";
+import { printInvoiceElement } from "@/lib/print-invoice";
+import { getNativePdfBase64, downloadNativePdf } from "@/lib/pdf-report-downloader";
+import { useToast } from "@/components/ui/toast";
 
 interface B2bClient {
   id: number | string;
@@ -58,9 +65,21 @@ interface PatientRecord {
   sample_status: string;
   rejection_reason?: string;
   created_at: string;
+  ref_doctor?: string;
+  address?: string;
+  bill_id?: string | null;
+  bill_custom_id?: string | null;
+  bill?: any;
+  mrp_amount?: number;
+  rate_type?: "B2B" | "MRP";
+  is_collection_center?: boolean;
 }
 
 export default function B2bSalesPage() {
+  const [partnerType, setPartnerType] = useState<"B2B" | "COLLECTION_CENTER">("B2B");
+  const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
+  const typeDropdownRef = useRef<HTMLDivElement>(null);
+
   const [clients, setClients] = useState<B2bClient[]>([]);
   const [selectedB2bId, setSelectedB2bId] = useState<string>("");
   const [period, setPeriod] = useState<"all" | "today" | "this_month" | "custom">("all");
@@ -89,28 +108,83 @@ export default function B2bSalesPage() {
 
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  // Fetch B2B clients belonging to this LIS Diagnostic Lab
+  // Lab profile & bill styling
+  const toast = useToast();
+  const [labProfile, setLabProfile] = useState<any>(null);
+  const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
+  const [selectedPatientForInvoice, setSelectedPatientForInvoice] = useState<PatientRecord | null>(null);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const invoicePrintRef = useRef<HTMLDivElement>(null);
+
+  // Outside click handler for type dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (typeDropdownRef.current && !typeDropdownRef.current.contains(event.target as Node)) {
+        setIsTypeDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handlePartnerTypeChange = (newType: "B2B" | "COLLECTION_CENTER") => {
+    setPartnerType(newType);
+    setSelectedB2bId("");
+    setPage(1);
+    setIsTypeDropdownOpen(false);
+  };
+
+  // Fetch lab profile for invoice header
+  useEffect(() => {
+    const fetchLab = async () => {
+      try {
+        const res = await fetchFromLaravel("/lab");
+        if (res && res.data) {
+          setLabProfile(res.data);
+          if (res.data.bill_settings) {
+            setBillSettings(normalizeBillSettings(res.data.bill_settings));
+          }
+        } else if (res && res.name) {
+          setLabProfile(res);
+          if (res.bill_settings) {
+            setBillSettings(normalizeBillSettings(res.bill_settings));
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load lab profile:", e);
+      }
+    };
+    fetchLab();
+  }, []);
+
+  // Fetch clients belonging to this LIS Diagnostic Lab (B2B or Collection Centers)
   const fetchClients = useCallback(async () => {
     setIsLoadingClients(true);
     try {
-      const res = await fetchFromLaravel("/b2b/clients", { skipCache: true });
+      const res = await fetchFromLaravel(`/b2b/clients?type=${partnerType}`, { skipCache: true });
       if (res && res.status === "success" && Array.isArray(res.data)) {
         setClients(res.data);
       } else if (Array.isArray(res)) {
         setClients(res);
+      } else {
+        setClients([]);
       }
     } catch (err) {
-      console.error("Failed to load B2B clients:", err);
+      console.error("Failed to load clients:", err);
+      setClients([]);
     } finally {
       setIsLoadingClients(false);
     }
-  }, []);
+  }, [partnerType]);
 
   // Fetch sales records & summary metrics
   const fetchSales = useCallback(async () => {
     setIsLoadingSales(true);
     try {
       const params = new URLSearchParams({
+        type: partnerType,
         period,
         page: String(page),
         per_page: String(perPage),
@@ -137,11 +211,11 @@ export default function B2bSalesPage() {
         }
       }
     } catch (err) {
-      console.error("Failed to fetch B2B sales:", err);
+      console.error("Failed to fetch sales:", err);
     } finally {
       setIsLoadingSales(false);
     }
-  }, [selectedB2bId, period, fromDate, toDate, search, page, perPage]);
+  }, [partnerType, selectedB2bId, period, fromDate, toDate, search, page, perPage]);
 
   useEffect(() => {
     fetchClients();
@@ -198,6 +272,169 @@ export default function B2bSalesPage() {
     }
   };
 
+  const handleOpenBillInvoice = (patient: PatientRecord) => {
+    setSelectedPatientForInvoice(patient);
+    setIsInvoiceModalOpen(true);
+  };
+
+  const handlePrintWindow = () => {
+    if (invoicePrintRef.current) {
+      const invNo = selectedPatientForInvoice?.bill?.custom_id || selectedPatientForInvoice?.bill_custom_id || selectedPatientForInvoice?.custom_id || "Invoice";
+      printInvoiceElement(invoicePrintRef.current, `Invoice_${invNo}`);
+    } else {
+      window.print();
+    }
+  };
+
+  const handleDownloadInvoicePdf = async () => {
+    if (!selectedPatientForInvoice || !invoicePrintRef.current) return;
+    setIsDownloadingPdf(true);
+    try {
+      const pName = (selectedPatientForInvoice.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const invNo = (selectedPatientForInvoice.bill?.custom_id || selectedPatientForInvoice.bill_custom_id || selectedPatientForInvoice.custom_id).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `Invoice_${invNo}_${pName}.pdf`;
+
+      await downloadNativePdf({
+        printContainer: invoicePrintRef.current,
+        filename,
+      });
+      toast.success("Downloaded!", "Invoice PDF downloaded successfully.");
+    } catch (err: any) {
+      console.error("PDF download error:", err);
+      toast.error("Download Failed", "Failed to generate invoice PDF.");
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
+  const handleSendWhatsAppInvoice = async () => {
+    if (!selectedPatientForInvoice) return;
+    const phone = selectedPatientForInvoice.phone;
+    const digitsOnly = phone ? phone.replace(/[^0-9]/g, "") : "";
+    if (!digitsOnly || digitsOnly.length < 10) {
+      toast.error("Invalid Phone", "Patient does not have a valid mobile number for WhatsApp.");
+      return;
+    }
+    if (!invoicePrintRef.current) {
+      toast.error("Not Ready", "Invoice preview is still rendering. Please wait a moment.");
+      return;
+    }
+
+    setIsSendingWhatsApp(true);
+    try {
+      const pName = (selectedPatientForInvoice.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const invNo = (selectedPatientForInvoice.bill?.custom_id || selectedPatientForInvoice.bill_custom_id || selectedPatientForInvoice.custom_id).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `Invoice_${invNo}_${pName}.pdf`;
+
+      const pdfBase64 = await getNativePdfBase64({
+        printContainer: invoicePrintRef.current,
+        filename,
+      });
+
+      const billId = selectedPatientForInvoice.bill?.id || selectedPatientForInvoice.bill_id;
+      if (billId) {
+        const res = await fetchFromLaravel(`/bills/${billId}/send-whatsapp`, {
+          method: "POST",
+          body: JSON.stringify({
+            pdf_base64: pdfBase64,
+            phone: digitsOnly,
+          }),
+        });
+
+        if (res?.status === "success" || res?.success) {
+          toast.success("Sent on WhatsApp!", "Invoice PDF sent to patient's WhatsApp successfully.");
+        } else {
+          toast.error("WhatsApp Dispatch Failed", res?.message || "Could not deliver WhatsApp message.");
+        }
+      } else {
+        toast.error("Bill ID Missing", "This patient does not have an attached bill record.");
+      }
+    } catch (err: any) {
+      console.error("WhatsApp invoice dispatch error:", err);
+      toast.error("WhatsApp Error", err?.message || "An unexpected error occurred while sending WhatsApp.");
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  };
+
+  const invoiceData: InvoiceData | null = useMemo(() => {
+    if (!selectedPatientForInvoice) return null;
+
+    const b = selectedPatientForInvoice.bill;
+    const isPaid = selectedPatientForInvoice.payment_status === "PAID" || b?.status === "PAID";
+    const billTotal = Number(
+      b?.total ??
+      (partnerType === "COLLECTION_CENTER"
+        ? (selectedPatientForInvoice as any).mrp_amount || selectedPatientForInvoice.bill_amount
+        : selectedPatientForInvoice.bill_amount) ??
+      0
+    );
+    const paidAmt = isPaid ? billTotal : Number(b?.paid_amount ?? selectedPatientForInvoice.paid_amount ?? 0);
+
+    const testItems = (b?.tests && Array.isArray(b.tests) && b.tests.length > 0)
+      ? b.tests.map((t: any) => ({
+          id: String(t.id || t.name),
+          name: t.name,
+          price: Number(t.price || 0),
+          code: t.code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
+          category: t.category || "Pathology",
+        }))
+      : (selectedPatientForInvoice.tests && selectedPatientForInvoice.tests.length > 0)
+      ? selectedPatientForInvoice.tests.map((testName: string, idx: number) => ({
+          id: `t-${idx}`,
+          name: testName,
+          price: Number(billTotal / (selectedPatientForInvoice.tests.length || 1)),
+          code: `T-${testName.substring(0, 3).toUpperCase()}`,
+          category: "Pathology",
+        }))
+      : [{
+          id: "std-1",
+          name: "Standard Diagnostic Profile",
+          price: billTotal,
+          code: "PKG-01",
+          category: "Pathology",
+        }];
+
+    return {
+      id: b?.id || selectedPatientForInvoice.bill_id || selectedPatientForInvoice.id,
+      customId: b?.custom_id || selectedPatientForInvoice.bill_custom_id || `INV-${selectedPatientForInvoice.custom_id}`,
+      createdAt: b?.created_at || selectedPatientForInvoice.created_at || new Date().toISOString(),
+      total: billTotal,
+      discount: Number(b?.discount ?? 0),
+      paidAmount: paidAmt,
+      advanceAmount: paidAmt,
+      status: isPaid ? "PAID" : (selectedPatientForInvoice.payment_status || b?.status || "UNPAID"),
+      paymentMode: b?.payment_mode || (partnerType === "COLLECTION_CENTER" ? "COLLECTION CENTER" : "B2B ACCOUNT"),
+      billedBy: selectedPatientForInvoice.b2b_user?.lab_name || selectedPatientForInvoice.b2b_user?.name || (partnerType === "COLLECTION_CENTER" ? "Collection Centre Portal" : "B2B Partner Portal"),
+      collectionCenter: selectedPatientForInvoice.b2b_user?.lab_name || selectedPatientForInvoice.b2b_user?.name || undefined,
+      patient: {
+        id: selectedPatientForInvoice.id,
+        customId: selectedPatientForInvoice.custom_id,
+        name: selectedPatientForInvoice.name,
+        phone: selectedPatientForInvoice.phone || "",
+        age: selectedPatientForInvoice.age || 0,
+        gender: selectedPatientForInvoice.gender || "",
+        refDoctor: selectedPatientForInvoice.ref_doctor || "Self",
+        address: selectedPatientForInvoice.address || "",
+        vialBarcode: selectedPatientForInvoice.vial_barcode || "",
+      },
+      lab: {
+        name: labProfile?.name || labProfile?.centre_name || "OnePath Pathology Laboratory",
+        email: labProfile?.email || "support@onepathlab.com",
+        address: labProfile?.address || "Medical Diagnostic Center",
+        phone: labProfile?.phone || "",
+        logoUrl: billSettings.logoImage || labProfile?.logo_url || labProfile?.logoUrl || "/onepath-logo.png",
+        pincode: labProfile?.pincode || "",
+        city: labProfile?.city || "",
+        district: labProfile?.district || labProfile?.city || "",
+        state: labProfile?.state || "",
+        gstin: billSettings.gst?.number || labProfile?.gstin || "",
+        bill_settings: billSettings,
+      },
+      tests: testItems,
+    };
+  }, [selectedPatientForInvoice, labProfile, billSettings, partnerType]);
+
   const selectedClient = clients.find((c) => String(c.id) === String(selectedB2bId));
 
   const totalAllSales = clients.reduce((acc, c) => acc + (Number(c.total_sales) || 0), 0);
@@ -211,27 +448,88 @@ export default function B2bSalesPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <div className="h-9 w-9 rounded-xl gradient-primary text-primary-foreground flex items-center justify-center shadow-xs">
-              <Briefcase className="h-5 w-5" />
+              {partnerType === "COLLECTION_CENTER" ? <Store className="h-5 w-5" /> : <Briefcase className="h-5 w-5" />}
             </div>
             <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
-              B2B Clients &amp; Sales
+              {partnerType === "COLLECTION_CENTER" ? "Collection Centres & Sales" : "B2B Clients & Sales"}
             </h1>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Overview of all your registered B2B clients, assigned rate tiers, today's and monthly sales volumes, and patient investigations.
+            {partnerType === "COLLECTION_CENTER"
+              ? "Overview of all your registered collection centres, patient investigations, daily/monthly volumes, and MRP billing records."
+              : "Overview of all your registered B2B clients, assigned rate tiers, today's and monthly sales volumes, and patient investigations."}
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <Link href="/dashboard/b2b/wallets">
-            <Button
-              size="sm"
-              className="gap-2 text-xs font-bold gradient-primary text-primary-foreground shadow-xs cursor-pointer"
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Partner Type Dropdown (B2B Partners vs Collection Centers) */}
+          <div className="relative" ref={typeDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setIsTypeDropdownOpen(!isTypeDropdownOpen)}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 text-foreground text-xs font-bold transition-all shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40"
+              aria-expanded={isTypeDropdownOpen}
             >
-              <Wallet className="h-3.5 w-3.5" />
-              <span>B2B Wallets &amp; Top-up</span>
-            </Button>
-          </Link>
+              {partnerType === "B2B" ? (
+                <>
+                  <Building2 className="h-4 w-4 text-primary" />
+                  <span>B2B Partners</span>
+                </>
+              ) : (
+                <>
+                  <Store className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Collection Centres</span>
+                </>
+              )}
+              <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${isTypeDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {isTypeDropdownOpen && (
+              <div className="absolute right-0 mt-1.5 w-56 rounded-2xl border border-border/80 bg-popover/95 backdrop-blur-md shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                <button
+                  type="button"
+                  onClick={() => handlePartnerTypeChange("B2B")}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs transition-colors cursor-pointer ${
+                    partnerType === "B2B"
+                      ? "bg-primary/10 text-primary font-bold"
+                      : "text-foreground hover:bg-muted font-medium"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                      <Building2 className="h-3.5 w-3.5" />
+                    </div>
+                    <div>
+                      <div className="font-bold">B2B Partners</div>
+                      <div className="text-[10px] text-muted-foreground">Wholesale rate tiers & labs</div>
+                    </div>
+                  </div>
+                  {partnerType === "B2B" && <Check className="h-4 w-4 text-primary" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handlePartnerTypeChange("COLLECTION_CENTER")}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs transition-colors cursor-pointer mt-1 ${
+                    partnerType === "COLLECTION_CENTER"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold"
+                      : "text-foreground hover:bg-muted font-medium"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-7 w-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                      <Store className="h-3.5 w-3.5" />
+                    </div>
+                    <div>
+                      <div className="font-bold">Collection Centres</div>
+                      <div className="text-[10px] text-muted-foreground">Direct collection branches & MRP</div>
+                    </div>
+                  </div>
+                  {partnerType === "COLLECTION_CENTER" && <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />}
+                </button>
+              </div>
+            )}
+          </div>
 
           <Button
             variant="outline"
@@ -241,7 +539,7 @@ export default function B2bSalesPage() {
               fetchSales();
             }}
             disabled={isLoadingSales || isLoadingClients}
-            className="gap-2 text-xs font-semibold"
+            className="gap-2 text-xs font-semibold rounded-xl"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isLoadingSales || isLoadingClients ? "animate-spin text-primary" : ""}`} />
             <span>Refresh</span>
@@ -251,11 +549,16 @@ export default function B2bSalesPage() {
 
       {/* ── KPI Metric Cards (4 Cards) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total B2B Sales */}
+        {/* Total Sales */}
         <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-xs flex items-center justify-between">
           <div className="space-y-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              {selectedClient ? `${selectedClient.lab_name || selectedClient.name} Sales` : "Total All B2B Sales"} ({period === "all" ? "All Time" : period === "today" ? "Today" : period === "this_month" ? "This Month" : "Custom"})
+              {selectedClient
+                ? `${selectedClient.lab_name || selectedClient.name} Sales`
+                : partnerType === "COLLECTION_CENTER"
+                ? "Total Collection Centre Sales"
+                : "Total All B2B Sales"}{" "}
+              ({period === "all" ? "All Time" : period === "today" ? "Today" : period === "this_month" ? "This Month" : "Custom"})
             </span>
             {isLoadingSales ? (
               <div className="h-8 w-32 rounded-lg shimmer-gradient mt-1 mb-0.5" />
@@ -266,7 +569,11 @@ export default function B2bSalesPage() {
             )}
             <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
               <Sparkles className="h-3 w-3" />
-              <span>{selectedClient ? `Tier: ${selectedClient.rate_tier || "HIGH"} Rate Applied` : "Assigned B2B rates realized"}</span>
+              <span>
+                {selectedClient
+                  ? partnerType === "COLLECTION_CENTER" ? "Centre MRP rates realized" : `Tier: ${selectedClient.rate_tier || "HIGH"} Rate Applied`
+                  : partnerType === "COLLECTION_CENTER" ? "Collection centre volume realized" : "Assigned B2B rates realized"}
+              </span>
             </p>
           </div>
           <div className="h-11 w-11 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
@@ -288,7 +595,9 @@ export default function B2bSalesPage() {
               </div>
             )}
             <p className="text-[11px] text-muted-foreground">
-              {selectedClient ? `Registered by ${selectedClient.lab_name || selectedClient.name}` : "Registered by B2B clients"}
+              {selectedClient
+                ? `Registered by ${selectedClient.lab_name || selectedClient.name}`
+                : partnerType === "COLLECTION_CENTER" ? "Registered by collection centres" : "Registered by B2B clients"}
             </p>
           </div>
           <div className="h-11 w-11 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
@@ -318,11 +627,11 @@ export default function B2bSalesPage() {
           </div>
         </div>
 
-        {/* Active B2B Partners */}
+        {/* Active Partners / Centres */}
         <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-xs flex items-center justify-between">
           <div className="space-y-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              Active B2B Partners
+              {partnerType === "COLLECTION_CENTER" ? "Active Collection Centres" : "Active B2B Partners"}
             </span>
             {isLoadingClients ? (
               <div className="h-8 w-14 rounded-lg shimmer-gradient mt-1 mb-0.5" />
@@ -336,17 +645,26 @@ export default function B2bSalesPage() {
             </p>
           </div>
           <div className="h-11 w-11 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-            <Building className="h-5 w-5" />
+            {partnerType === "COLLECTION_CENTER" ? <Store className="h-5 w-5" /> : <Building className="h-5 w-5" />}
           </div>
         </div>
       </div>
 
-      {/* ── B2B Client Selector Carousel / Strip ── */}
+      {/* ── Client / Center Selector Carousel / Strip ── */}
       <div className="space-y-2.5">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <Building className="h-3.5 w-3.5 text-primary" />
-            <span>Select B2B Partner to Inspect Sales:</span>
+            {partnerType === "COLLECTION_CENTER" ? (
+              <>
+                <Store className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Select Collection Centre to Inspect Sales:</span>
+              </>
+            ) : (
+              <>
+                <Building className="h-3.5 w-3.5 text-primary" />
+                <span>Select B2B Partner to Inspect Sales:</span>
+              </>
+            )}
           </h3>
         </div>
 
@@ -383,7 +701,7 @@ export default function B2bSalesPage() {
             ))
           ) : (
             <>
-              {/* All Partners Card */}
+              {/* All Partners / Centers Card */}
               <button
                 onClick={() => {
                   setSelectedB2bId("");
@@ -398,17 +716,17 @@ export default function B2bSalesPage() {
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/20 text-primary">
-                      All Partners
+                      {partnerType === "COLLECTION_CENTER" ? "All Centres" : "All Partners"}
                     </span>
                     <span className="text-xs font-bold text-foreground font-mono">
-                      {clients.length} Clients
+                      {clients.length} {partnerType === "COLLECTION_CENTER" ? "Centres" : "Clients"}
                     </span>
                   </div>
                   <h4 className="font-bold text-sm text-foreground mt-2">
-                    All B2B Combined
+                    {partnerType === "COLLECTION_CENTER" ? "All Centres Combined" : "All B2B Combined"}
                   </h4>
                   <p className="text-[11px] text-muted-foreground">
-                    Consolidated sales &amp; patients
+                    {partnerType === "COLLECTION_CENTER" ? "Consolidated MRP & patients" : "Consolidated sales & patients"}
                   </p>
                 </div>
                 <div className="mt-3 pt-2.5 border-t border-border/60 space-y-1 text-xs">
@@ -625,7 +943,7 @@ export default function B2bSalesPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <Users className="h-4 w-4 text-primary" />
             <h3 className="font-bold text-sm text-foreground">
-              B2B Patient Bills &amp; Investigations
+              {partnerType === "COLLECTION_CENTER" ? "Collection Centre Patient Bills & Investigations" : "B2B Patient Bills & Investigations"}
             </h3>
             {selectedClient && (
               <span className="text-xs bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-semibold">
@@ -638,60 +956,56 @@ export default function B2bSalesPage() {
           </div>
 
           <div className="text-xs text-muted-foreground">
-            Showing rates calculated per partner rate tier
+            {partnerType === "COLLECTION_CENTER"
+              ? "Showing standard MRP rates per collection centre investigation"
+              : "Showing rates calculated per partner rate tier"}
           </div>
         </div>
 
-        <div className="table-responsive-container">
-          <table className="w-full min-w-[780px] text-left text-xs">
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-left text-xs table-auto">
             <thead>
               <tr className="border-b border-border/80 bg-muted/40 font-bold uppercase tracking-wider text-muted-foreground text-[10px]">
-                <th className="py-3 px-4">Patient Demographics</th>
-                <th className="py-3 px-4">Patient ID &amp; Barcode</th>
-                <th className="py-3 px-4">B2B Partner &amp; Tier</th>
-                <th className="py-3 px-4">Test Parameters Ordered</th>
-                <th className="py-3 px-4">Registration Date</th>
-                <th className="py-3 px-4 text-right">B2B Bill Rate</th>
-                <th className="py-3 px-4 text-center">Payment &amp; Sample Status</th>
+                <th className="py-2.5 px-3">Patient Name</th>
+                <th className="py-2.5 px-3">Patient ID &amp; Barcode</th>
+                <th className="py-2.5 px-3">{partnerType === "COLLECTION_CENTER" ? "Collection Centre" : "B2B Partner & Tier"}</th>
+                <th className="py-2.5 px-3">Test Parameters Ordered</th>
+                <th className="py-2.5 px-3">Registration Date</th>
+                <th className="py-2.5 px-3 text-right">{partnerType === "COLLECTION_CENTER" ? "MRP Amount" : "B2B Bill Rate"}</th>
+                <th className="py-2.5 px-3 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
               {isLoadingSales ? (
                 Array.from({ length: 6 }).map((_, idx) => (
                   <tr key={idx} className="animate-fade-in">
-                    {/* Patient Info */}
-                    <td className="py-3.5 px-4">
-                      <div className="h-4 w-28 rounded shimmer-gradient mb-1.5" />
-                      <div className="h-3 w-20 rounded shimmer-gradient" />
+                    {/* Patient Name */}
+                    <td className="py-3 px-3">
+                      <div className="h-4 w-28 rounded shimmer-gradient" />
                     </td>
                     {/* Custom ID & Barcode */}
-                    <td className="py-3.5 px-4">
-                      <div className="h-6 w-24 rounded shimmer-gradient" />
+                    <td className="py-3 px-3">
+                      <div className="h-4 w-20 rounded shimmer-gradient" />
                     </td>
                     {/* Partner & Tier */}
-                    <td className="py-3.5 px-4">
-                      <div className="h-3.5 w-24 rounded shimmer-gradient mb-1.5" />
-                      <div className="h-4 w-14 rounded-full shimmer-gradient" />
+                    <td className="py-3 px-3">
+                      <div className="h-4 w-24 rounded shimmer-gradient" />
                     </td>
                     {/* Test Ordered */}
-                    <td className="py-3.5 px-4">
-                      <div className="h-3.5 w-36 rounded shimmer-gradient mb-1" />
-                      <div className="h-2.5 w-16 rounded shimmer-gradient" />
+                    <td className="py-3 px-3">
+                      <div className="h-4 w-28 rounded shimmer-gradient" />
                     </td>
                     {/* Registration Date */}
-                    <td className="py-3.5 px-4">
-                      <div className="h-3.5 w-24 rounded shimmer-gradient" />
+                    <td className="py-3 px-3">
+                      <div className="h-3.5 w-16 rounded shimmer-gradient" />
                     </td>
-                    {/* B2B Bill Rate */}
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="h-4 w-16 rounded shimmer-gradient ml-auto" />
+                    {/* Rate / MRP */}
+                    <td className="py-3 px-3 text-right">
+                      <div className="h-4 w-14 rounded shimmer-gradient ml-auto" />
                     </td>
-                    {/* Payment & Sample Status */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <div className="h-5 w-14 rounded-full shimmer-gradient" />
-                        <div className="h-5 w-16 rounded-full shimmer-gradient" />
-                      </div>
+                    {/* Action */}
+                    <td className="py-3 px-3 text-center">
+                      <div className="h-7 w-16 rounded-lg shimmer-gradient mx-auto" />
                     </td>
                   </tr>
                 ))
@@ -699,43 +1013,48 @@ export default function B2bSalesPage() {
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-muted-foreground">
                     <AlertCircle className="h-6 w-6 text-muted-foreground/60 mx-auto mb-2" />
-                    <p className="font-semibold text-foreground">No B2B patient investigations found</p>
+                    <p className="font-semibold text-foreground">
+                      {partnerType === "COLLECTION_CENTER"
+                        ? "No collection centre patient investigations found"
+                        : "No B2B patient investigations found"}
+                    </p>
                     <p className="text-[11px] mt-0.5">
-                      {search ? "Try adjusting your search criteria" : "When B2B clients register patients, they will appear here."}
+                      {search
+                        ? "Try adjusting your search criteria"
+                        : partnerType === "COLLECTION_CENTER"
+                        ? "When collection centres register patients, they will appear here."
+                        : "When B2B clients register patients, they will appear here."}
                     </p>
                   </td>
                 </tr>
               ) : (
                 patients.map((p) => {
-                  const isRejected = p.sample_status === "REJECTED";
-
                   return (
                     <tr key={p.id} className="hover:bg-muted/30 transition-colors">
-                      {/* Patient Info */}
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-foreground text-xs">{p.name}</div>
-                        <div className="text-[11px] text-muted-foreground">
-                          {p.gender} · {p.age}y {p.phone ? `· ${p.phone}` : ""}
-                        </div>
+                      {/* Patient Name Only */}
+                      <td className="py-2.5 px-3">
+                        <span className="font-bold text-foreground text-xs block truncate max-w-[160px]" title={p.name}>
+                          {p.name}
+                        </span>
                       </td>
 
                       {/* ID & Barcode */}
-                      <td className="py-3 px-4">
+                      <td className="py-2.5 px-3">
                         <div className="flex items-center gap-1.5 font-mono">
-                          <span className="font-bold text-foreground bg-muted/60 px-2 py-0.5 rounded border border-border/80">
+                          <span className="font-bold text-foreground bg-muted/60 px-1.5 py-0.5 rounded border border-border/80 text-[11px]">
                             {p.custom_id}
                           </span>
                           {p.vial_barcode && p.vial_barcode !== p.custom_id && (
                             <button
                               type="button"
                               onClick={() => handleCopy(p.vial_barcode!)}
-                              className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 bg-muted px-1.5 py-0.5 rounded cursor-pointer"
+                              className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 bg-muted px-1.5 py-0.5 rounded cursor-pointer"
                               title="Copy barcode"
                             >
                               {copiedCode === p.vial_barcode ? (
-                                <Check className="h-3 w-3 text-emerald-600" />
+                                <Check className="h-2.5 w-2.5 text-emerald-600" />
                               ) : (
-                                <Copy className="h-3 w-3" />
+                                <Copy className="h-2.5 w-2.5" />
                               )}
                               <span>{p.vial_barcode}</span>
                             </button>
@@ -743,87 +1062,89 @@ export default function B2bSalesPage() {
                         </div>
                       </td>
 
-                      {/* B2B Partner */}
-                      <td className="py-3 px-4">
+                      {/* B2B Partner / Collection Centre */}
+                      <td className="py-2.5 px-3">
                         {p.b2b_user ? (
-                          <div>
-                            <div className="font-semibold text-foreground flex items-center gap-1.5">
-                              <span className="truncate max-w-[160px]" title={p.b2b_user.lab_name || p.b2b_user.name}>
-                                {p.b2b_user.lab_name || p.b2b_user.name}
-                              </span>
-                            </div>
-                            <span className="inline-block text-[9.5px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-muted/80 text-muted-foreground mt-0.5">
-                              {p.b2b_user.rate_tier || "HIGH"} Tier
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-foreground truncate max-w-[130px]" title={p.b2b_user.lab_name || p.b2b_user.name}>
+                              {p.b2b_user.lab_name || p.b2b_user.name}
                             </span>
+                            {partnerType === "B2B" && (
+                              <span className="inline-block text-[9px] font-extrabold uppercase px-1 py-0.2 rounded bg-muted/80 text-muted-foreground shrink-0">
+                                {p.b2b_user.rate_tier || "HIGH"}
+                              </span>
+                            )}
                           </div>
                         ) : (
-                          <span className="text-muted-foreground italic">Direct Registration</span>
+                          <span className="text-muted-foreground italic text-xs">
+                            {partnerType === "COLLECTION_CENTER" ? "Lab Branch" : "Direct"}
+                          </span>
                         )}
                       </td>
 
                       {/* Tests */}
-                      <td className="py-3 px-4 max-w-xs">
-                        <div className="flex flex-wrap gap-1">
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center gap-1">
                           {p.tests && p.tests.length > 0 ? (
-                            p.tests.slice(0, 3).map((testName, i) => (
+                            p.tests.slice(0, 2).map((testName, i) => (
                               <span
                                 key={i}
-                                className="inline-block px-2 py-0.5 rounded-md bg-muted text-[10.5px] font-medium text-foreground truncate max-w-[140px]"
+                                className="inline-block px-1.5 py-0.5 rounded bg-muted text-[10px] font-medium text-foreground truncate max-w-[100px] shrink-0"
                                 title={testName}
                               >
                                 {testName}
                               </span>
                             ))
                           ) : (
-                            <span className="text-muted-foreground italic">Standard Profile</span>
+                            <span className="text-muted-foreground italic text-xs">Standard</span>
                           )}
-                          {p.tests && p.tests.length > 3 && (
-                            <span className="inline-block px-1.5 py-0.5 rounded-md bg-muted/70 text-[10px] font-bold text-muted-foreground">
-                              +{p.tests.length - 3} more
+                          {p.tests && p.tests.length > 2 && (
+                            <span className="inline-block px-1 py-0.5 rounded bg-muted/70 text-[9.5px] font-bold text-muted-foreground shrink-0">
+                              +{p.tests.length - 2}
                             </span>
                           )}
                         </div>
                       </td>
 
                       {/* Date */}
-                      <td className="py-3 px-4 text-muted-foreground text-[11px]">
+                      <td className="py-2.5 px-3 text-muted-foreground text-[11px] whitespace-nowrap">
                         {formatDate(p.created_at)}
                       </td>
 
-                      {/* B2B Price */}
-                      <td className="py-3 px-4 text-right">
-                        <span className="font-bold text-foreground font-mono text-sm">
-                          ₹{Number(p.bill_amount || 0).toFixed(0)}
-                        </span>
-                        <div className="text-[10px] text-muted-foreground">
-                          B2B Rate
-                        </div>
+                      {/* Rate / MRP */}
+                      <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                        {partnerType === "COLLECTION_CENTER" ? (
+                          <div>
+                            <span className="font-bold text-foreground font-mono text-xs">
+                              ₹{Number((p as any).mrp_amount || (p as any).mrp || p.bill_amount || 0).toFixed(0)}
+                            </span>
+                            <div className="text-[9.5px] text-muted-foreground">
+                              MRP
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <span className="font-bold text-foreground font-mono text-xs">
+                              ₹{Number(p.bill_amount || 0).toFixed(0)}
+                            </span>
+                            <div className="text-[9.5px] text-muted-foreground">
+                              B2B
+                            </div>
+                          </div>
+                        )}
                       </td>
 
-                      {/* Status */}
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex flex-col items-center gap-1">
-                          {isRejected ? (
-                            <span
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
-                              title={p.rejection_reason || "Sample Rejected"}
-                            >
-                              <AlertCircle className="h-3 w-3" /> Rejected
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                              <CheckCircle2 className="h-3 w-3" /> Sample OK
-                            </span>
-                          )}
-
-                          <span className={`text-[9.5px] font-bold uppercase ${
-                            p.payment_status === "PAID"
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : "text-amber-600 dark:text-amber-400"
-                          }`}>
-                            {p.payment_status || "PENDING"}
-                          </span>
-                        </div>
+                      {/* Action - View Bill */}
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenBillInvoice(p)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border/80 bg-background hover:bg-muted text-foreground text-xs font-semibold shadow-xs hover:border-primary/50 hover:text-primary transition-all cursor-pointer"
+                          title="View & Download Invoice"
+                        >
+                          <Receipt className="h-3 w-3 text-primary" />
+                          <span>View Bill</span>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -878,6 +1199,88 @@ export default function B2bSalesPage() {
           </div>
         )}
       </div>
+      {/* ── High-End Printable Medical Invoice Modal ── */}
+      <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
+        <DialogContent className="max-w-4xl w-[96vw] sm:w-full max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl print:max-h-none print:max-w-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0">
+          <DialogTitle className="sr-only">B2B Tax Invoice Preview</DialogTitle>
+
+          {/* Modal Header */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-4 sm:px-7 py-3 sm:py-4 border-b border-border/80 bg-card shrink-0 gap-3 print:hidden">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <Receipt className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-display text-sm sm:text-base font-bold text-foreground truncate">
+                    B2B Tax Invoice Preview
+                  </h3>
+                  <span className="font-mono bg-primary/15 text-primary text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                    {selectedPatientForInvoice?.bill?.custom_id || selectedPatientForInvoice?.bill_custom_id || `INV-${selectedPatientForInvoice?.custom_id}`}
+                  </span>
+                </div>
+                <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
+                  Patient: <strong className="text-foreground">{selectedPatientForInvoice?.name}</strong> · PID: <span className="font-mono">{selectedPatientForInvoice?.custom_id}</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 mr-0 sm:mr-6 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={handleSendWhatsAppInvoice}
+                disabled={isSendingWhatsApp}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Send Invoice PDF directly to Patient on WhatsApp"
+              >
+                {isSendingWhatsApp ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <MessageSquare className="h-3.5 w-3.5" />
+                )}
+                <span>{isSendingWhatsApp ? "Sending..." : "Send on WhatsApp"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadInvoicePdf}
+                disabled={isDownloadingPdf}
+                className="gradient-primary text-primary-foreground font-bold text-xs px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-sm hover:-translate-y-px transition-all cursor-pointer disabled:opacity-50"
+                title="Download pristine high-resolution vector PDF"
+              >
+                {isDownloadingPdf ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                <span>{isDownloadingPdf ? "Downloading..." : "Download PDF"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrintWindow}
+                className="bg-card hover:bg-muted text-foreground border border-border/80 font-bold text-xs px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-xs hover:-translate-y-px transition-all cursor-pointer"
+                title="Open browser print dialog"
+              >
+                <Printer className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Print</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Printable Invoice Sheet Body */}
+          <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 bg-zinc-100 dark:bg-zinc-900/60 flex justify-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">
+            {invoiceData && (
+              <div ref={invoicePrintRef} className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 bg-white max-w-full print:shadow-none print:ring-0 print:border-none print:p-0 print:m-0 print:w-full">
+                <InvoiceSheet
+                  settings={billSettings}
+                  invoice={invoiceData}
+                />
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

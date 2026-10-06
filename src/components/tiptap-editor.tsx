@@ -126,6 +126,7 @@ interface TipTapEditorProps {
   title?: string;
   hideHeader?: boolean;
   hideFooter?: boolean;
+  editorRef?: React.MutableRefObject<Editor | null>;
 }
 
 export function TipTapEditor({ 
@@ -135,7 +136,8 @@ export function TipTapEditor({
   onClose, 
   title = "Interpretation",
   hideHeader = false,
-  hideFooter = false
+  hideFooter = false,
+  editorRef
 }: TipTapEditorProps) {
   const [currentFontSize, setCurrentFontSize] = useState(16); // default 16px
   const [isTableActive, setIsTableActive] = useState(false);
@@ -167,12 +169,33 @@ export function TipTapEditor({
     },
     onTransaction: ({ editor }) => {
       setIsTableActive(editor.isActive("table"));
+      onChange(editor.getHTML());
     },
     onUpdate: ({ editor }) => {
       setIsTableActive(editor.isActive("table"));
       onChange(editor.getHTML());
     },
+    onBlur: ({ editor }) => {
+      onChange(editor.getHTML());
+    },
   });
+
+  useEffect(() => {
+    if (editorRef) {
+      editorRef.current = editor;
+    }
+  }, [editor, editorRef]);
+
+  // Keep content synchronized if value updates from outside
+  useEffect(() => {
+    if (editor && value !== undefined) {
+      const cur = editor.getHTML();
+      const target = value || "<p></p>";
+      if (cur !== target && value !== cur) {
+        editor.commands.setContent(target);
+      }
+    }
+  }, [value, editor]);
 
   useEffect(() => {
     if (editor) {
@@ -283,6 +306,7 @@ export function TipTapEditor({
 
     // Apply to TipTap Model
     editor.chain().focus().updateAttributes("table", { style: styleStr.trim() }).run();
+    onChange(editor.getHTML());
 
     // Force DOM update immediately for TableView cache bypass
     setTimeout(() => {

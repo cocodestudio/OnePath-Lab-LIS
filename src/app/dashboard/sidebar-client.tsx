@@ -41,7 +41,7 @@ const navigation: NavItem[] = [
     ],
   },
   {
-    name: "B2B",
+    name: "B2B & Centers",
     icon: Briefcase,
     children: [
       { name: "Sales", href: "/dashboard/b2b" },
@@ -52,7 +52,9 @@ const navigation: NavItem[] = [
     name: "Tests",
     icon: FlaskConical,
     children: [
-      { name: "Tests", href: "/dashboard/tests" },
+      { name: "Tests Catalog", href: "/dashboard/tests" },
+      { name: "Tests Count", href: "/dashboard/tests/count" },
+      { name: "Worksheet", href: "/dashboard/tests/worksheet" },
       { name: "Packages", href: "/dashboard/tests/packages" },
       { name: "Rate List", href: "/dashboard/ratelist" },
     ],
@@ -183,17 +185,32 @@ export default function Sidebar() {
 
   const isActive = (href?: string) => {
     if (!href) return false;
-    if (href === "/dashboard") return pathname === "/dashboard";
-    if (href === "/dashboard/patients") return pathname === "/dashboard/patients";
-    if (href === "/dashboard/today-samples") return pathname === "/dashboard/today-samples";
-    if (href === "/dashboard/track-samples") return pathname === "/dashboard/track-samples";
-    if (href === "/dashboard/reports") return pathname === "/dashboard/reports";
-    if (href === "/dashboard/b2b") return pathname === "/dashboard/b2b";
-    if (href === "/dashboard/wallet") return pathname === "/dashboard/wallet";
-    if (href === "/dashboard/revenue") return pathname === "/dashboard/revenue";
-    if (href === "/dashboard/inventory") return pathname === "/dashboard/inventory";
-    if (href === "/dashboard/inventory/manage") return pathname === "/dashboard/inventory/manage";
-    return pathname === href || (href !== "/dashboard" && pathname.startsWith(href + "/"));
+    if (pathname === href) return true;
+
+    // Strict exact matching for base routes that have sibling sub-tabs
+    if (
+      href === "/dashboard" ||
+      href === "/dashboard/tests" ||
+      href === "/dashboard/doctors" ||
+      href === "/dashboard/inventory" ||
+      href === "/dashboard/b2b" ||
+      href === "/dashboard/today-samples" ||
+      href === "/dashboard/track-samples" ||
+      href === "/dashboard/wallet" ||
+      href === "/dashboard/revenue"
+    ) {
+      return pathname === href;
+    }
+
+    // Dynamic child routes for top-level pages
+    if (href === "/dashboard/patients") {
+      return pathname === "/dashboard/patients" || pathname.startsWith("/dashboard/patients/");
+    }
+    if (href === "/dashboard/reports") {
+      return pathname === "/dashboard/reports" || (pathname.startsWith("/dashboard/reports/") && !pathname.includes("batch-print"));
+    }
+
+    return pathname.startsWith(href + "/");
   };
 
   const role = (user?.role || "").toUpperCase().trim();
@@ -382,7 +399,7 @@ export default function Sidebar() {
                     isLocked
                       ? "opacity-50 hover:opacity-80 text-muted-foreground hover:bg-muted/40 cursor-not-allowed"
                       : isChildActive
-                      ? "bg-accent/70 text-foreground font-semibold"
+                      ? "text-foreground font-semibold hover:bg-muted/40"
                       : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                   }`}
                 >

@@ -187,6 +187,81 @@ export function BatchPrintReportModal({
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `Batch_Reports_${new Date().toISOString().slice(0, 10)}`,
+    pageStyle: `
+      @page {
+        size: A4 portrait;
+        margin: 0mm !important;
+      }
+      @media print {
+        *, *:before, *:after {
+          box-sizing: border-box !important;
+        }
+        html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          width: 100% !important;
+        }
+        .batch-print-viewport {
+          gap: 0 !important;
+          row-gap: 0 !important;
+          column-gap: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          display: block !important;
+          width: 100% !important;
+        }
+        .batch-report-page {
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: none !important;
+          display: block !important;
+          width: 100% !important;
+        }
+        .batch-report-page:last-child {
+          page-break-after: avoid !important;
+          break-after: avoid !important;
+        }
+        .report-preview-page-card {
+          width: 794px !important;
+          height: 1120px !important;
+          min-height: 1120px !important;
+          max-height: 1120px !important;
+          margin: 0 auto !important;
+          padding: 0 !important;
+          box-shadow: none !important;
+          border: none !important;
+          overflow: hidden !important;
+          page-break-after: always !important;
+          break-after: page !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
+        .report-preview-page-card:last-child {
+          page-break-after: avoid !important;
+          break-after: avoid !important;
+        }
+        .report-print-page {
+          width: 794px !important;
+          height: 1120px !important;
+          max-height: 1120px !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          transform: none !important;
+          position: relative !important;
+          overflow: hidden !important;
+          background-color: #ffffff !important;
+        }
+      }
+    `,
     onAfterPrint: async () => {
       toast({
         variant: "success",
@@ -381,25 +456,28 @@ export function BatchPrintReportModal({
               <div className="w-full flex flex-col items-center">
                 {/* Print Container holding all queued reports */}
                 <div ref={printRef} className="batch-print-viewport flex flex-col items-center gap-8">
-                  {preparedReports.map((rep, idx) => (
-                    <div
-                      key={rep.id || idx}
-                      id={`batch-rep-${rep.id}`}
-                      className="batch-report-page shadow-2xl rounded-xl overflow-hidden transition-transform duration-150"
-                      style={{
-                        pageBreakAfter: "always",
-                        breakAfter: "page",
-                      }}
-                    >
-                      <PaginatedReportPreview
-                        report={rep}
-                        settings={printSettings}
-                        scale={zoomScale}
-                        hideInterpretation={false}
-                        autoFitToFooter={true}
-                      />
-                    </div>
-                  ))}
+                  {preparedReports.map((rep, idx) => {
+                    const isLast = idx === preparedReports.length - 1;
+                    return (
+                      <div
+                        key={rep.id || idx}
+                        id={`batch-rep-${rep.id}`}
+                        className="batch-report-page shadow-2xl rounded-xl overflow-hidden transition-transform duration-150"
+                        style={{
+                          pageBreakAfter: isLast ? "avoid" : "always",
+                          breakAfter: isLast ? "avoid" : "page",
+                        }}
+                      >
+                        <PaginatedReportPreview
+                          report={rep}
+                          settings={printSettings}
+                          scale={zoomScale}
+                          hideInterpretation={false}
+                          autoFitToFooter={true}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -409,24 +487,75 @@ export function BatchPrintReportModal({
         {/* CSS for Enforcing Clean Sequential Page Breaks Across All Printers */}
         <style jsx global>{`
           @media print {
+            @page {
+              size: A4 portrait;
+              margin: 0mm !important;
+            }
+            *, *:before, *:after {
+              box-sizing: border-box !important;
+            }
             body {
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
+              background: #ffffff !important;
+              margin: 0 !important;
+              padding: 0 !important;
             }
             .batch-print-viewport {
               gap: 0 !important;
+              row-gap: 0 !important;
+              column-gap: 0 !important;
+              display: block !important;
+              width: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
             }
             .batch-report-page {
               box-shadow: none !important;
               border-radius: 0 !important;
-              page-break-after: always !important;
-              break-after: page !important;
+              border: none !important;
               margin: 0 !important;
               padding: 0 !important;
+              display: block !important;
+              width: 100% !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
             }
             .batch-report-page:last-child {
-              page-break-after: auto !important;
-              break-after: auto !important;
+              page-break-after: avoid !important;
+              break-after: avoid !important;
+            }
+            .report-preview-page-card {
+              width: 794px !important;
+              height: 1120px !important;
+              min-height: 1120px !important;
+              max-height: 1120px !important;
+              margin: 0 auto !important;
+              padding: 0 !important;
+              box-shadow: none !important;
+              border: none !important;
+              overflow: hidden !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+            .report-preview-page-card:last-child {
+              page-break-after: avoid !important;
+              break-after: avoid !important;
+            }
+            .report-print-page {
+              width: 794px !important;
+              height: 1120px !important;
+              max-height: 1120px !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              transform: none !important;
+              position: relative !important;
+              overflow: hidden !important;
+              background-color: #ffffff !important;
             }
           }
         `}</style>
