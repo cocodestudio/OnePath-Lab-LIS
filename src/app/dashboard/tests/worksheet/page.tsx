@@ -317,34 +317,34 @@ export default function WorksheetPage() {
             <FileSpreadsheet className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2 flex-wrap">
               <span>Manual Laboratory Worksheet</span>
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                 1-Click Download
               </span>
             </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
               Select registered patients by date, choose departments, and directly download clean vector bench sheets.
             </p>
           </div>
         </div>
 
         {/* Top Action Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={handleDirectPrint}
             disabled={isDirectPrinting || isDownloadingPdf || selectedReportIds.size === 0}
-            className="h-10 px-4 text-xs font-bold gap-1.5 cursor-pointer rounded-xl bg-card border-border/80 hover:bg-muted"
+            className="h-10 px-3 sm:px-4 text-xs font-bold gap-1.5 cursor-pointer rounded-xl bg-card border-border/80 hover:bg-muted justify-center flex-1 sm:flex-none"
           >
             {isDirectPrinting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
             ) : (
-              <Printer className="h-3.5 w-3.5 text-muted-foreground" />
+              <Printer className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             )}
-            <span>Direct Print ({selectedReportIds.size})</span>
+            <span className="truncate">Print ({selectedReportIds.size})</span>
           </Button>
 
           <Button
@@ -352,65 +352,65 @@ export default function WorksheetPage() {
             size="sm"
             onClick={handleDownloadWorksheet}
             disabled={isDownloadingPdf || isDirectPrinting || selectedReportIds.size === 0}
-            className="h-10 px-5 text-xs font-bold gap-2 gradient-primary text-primary-foreground cursor-pointer rounded-xl shadow-md hover:opacity-95"
+            className="h-10 px-3 sm:px-5 text-xs font-bold gap-1.5 sm:gap-2 gradient-primary text-primary-foreground cursor-pointer rounded-xl shadow-md hover:opacity-95 justify-center flex-1 sm:flex-none"
           >
             {isDownloadingPdf ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
             ) : (
-              <Download className="h-4 w-4" />
+              <Download className="h-3.5 w-3.5 shrink-0" />
             )}
-            <span>{isDownloadingPdf ? "Downloading PDF..." : `Download Worksheet (${selectedReportIds.size})`}</span>
+            <span className="truncate">{isDownloadingPdf ? "Downloading..." : `Download (${selectedReportIds.size})`}</span>
           </Button>
         </div>
       </div>
 
       {/* ── Filter Controls Card ───────────────────────────────── */}
-      <div className="rounded-2xl border border-border/80 bg-card p-5 sm:p-6 shadow-xs space-y-5">
+      <div className="rounded-2xl border border-border/80 bg-card p-4 sm:p-6 shadow-xs space-y-4 sm:space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border/60 pb-4">
           {/* Date Selector Tabs */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 w-full lg:w-auto">
             <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5 text-primary" />
               <span>Select Registration Date:</span>
             </label>
-            <div className="inline-flex p-1 bg-muted/70 rounded-xl border border-border/70 shadow-xs flex-wrap gap-1">
+            <div className="grid grid-cols-3 sm:inline-flex p-1 bg-muted/70 rounded-xl border border-border/70 shadow-xs gap-1 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setDateMode("today")}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   dateMode === "today"
                     ? "bg-card text-foreground shadow-xs border border-border/60"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Zap className="h-3.5 w-3.5 text-amber-500" />
+                <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                 <span>Today</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setDateMode("yesterday")}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   dateMode === "yesterday"
                     ? "bg-card text-foreground shadow-xs border border-border/60"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Clock className="h-3.5 w-3.5 text-blue-500" />
+                <Clock className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                 <span>Yesterday</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setDateMode("date")}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center justify-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   dateMode === "date"
                     ? "bg-card text-foreground shadow-xs border border-border/60"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Calendar className="h-3.5 w-3.5 text-emerald-500" />
-                <span>Specific Date</span>
+                <Calendar className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <span className="truncate">Specific</span>
               </button>
             </div>
           </div>
@@ -539,35 +539,37 @@ export default function WorksheetPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 flex-wrap">
             <div className="text-xs text-muted-foreground flex items-center gap-1.5 font-medium">
-              <Users className="h-3.5 w-3.5 text-primary" />
+              <Users className="h-3.5 w-3.5 text-primary shrink-0" />
               <span>
-                Selected: <strong className="text-foreground">{selectedReportIds.size}</strong> of {filteredPatients.length} Patients
+                Selected: <strong className="text-foreground">{selectedReportIds.size}</strong> of {filteredPatients.length}
               </span>
             </div>
 
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleToggleSelectAll}
-              className="h-9 text-xs font-bold text-primary hover:text-primary cursor-pointer"
-            >
-              {isAllSelected ? "Deselect All" : "Select All"}
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleToggleSelectAll}
+                className="h-8 sm:h-9 text-xs font-bold text-primary hover:text-primary cursor-pointer px-2 sm:px-3"
+              >
+                {isAllSelected ? "Deselect All" : "Select All"}
+              </Button>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => loadPatientsForDate(dateMode, specificDate)}
-              disabled={isLoadingPatients}
-              className="h-9 text-xs font-semibold gap-1.5 cursor-pointer rounded-xl"
-            >
-              <RefreshCw className={`h-3 w-3 ${isLoadingPatients ? "animate-spin text-primary" : ""}`} />
-              <span>Refresh</span>
-            </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => loadPatientsForDate(dateMode, specificDate)}
+                disabled={isLoadingPatients}
+                className="h-8 sm:h-9 text-xs font-semibold gap-1.5 cursor-pointer rounded-xl px-2 sm:px-3"
+              >
+                <RefreshCw className={`h-3 w-3 ${isLoadingPatients ? "animate-spin text-primary" : ""}`} />
+                <span className="hidden sm:inline">Refresh</span>
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -594,7 +596,7 @@ export default function WorksheetPage() {
             <table className="w-full text-left text-xs whitespace-nowrap">
               <thead>
                 <tr className="bg-muted/40 border-b border-border/70 text-muted-foreground whitespace-nowrap">
-                  <th className="w-10 px-3 py-3 text-center whitespace-nowrap">
+                  <th className="w-10 px-2 sm:px-3 py-3 text-center whitespace-nowrap">
                     <button
                       type="button"
                       onClick={handleToggleSelectAll}
@@ -612,13 +614,13 @@ export default function WorksheetPage() {
                       )}
                     </button>
                   </th>
-                  <th className="px-3.5 py-3 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">Patient</th>
-                  <th className="px-3 py-3 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">PID</th>
-                  <th className="px-3 py-3 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">Report ID</th>
-                  <th className="px-3 py-3 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">Age/Gen</th>
-                  <th className="px-3 py-3 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">Tests</th>
-                  <th className="px-3 py-3 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">Time</th>
-                  <th className="px-3.5 py-3 font-bold uppercase tracking-wider text-[10px] text-right whitespace-nowrap">Status</th>
+                  <th className="px-2.5 sm:px-3.5 py-3 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">Patient</th>
+                  <th className="px-3 py-3 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap hidden sm:table-cell">PID</th>
+                  <th className="px-3 py-3 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap hidden md:table-cell">Report ID</th>
+                  <th className="px-3 py-3 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap hidden sm:table-cell">Age/Gen</th>
+                  <th className="px-2.5 sm:px-3 py-3 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap">Tests</th>
+                  <th className="px-3 py-3 font-bold uppercase tracking-wider text-[10px] whitespace-nowrap hidden lg:table-cell">Time</th>
+                  <th className="px-2.5 sm:px-3.5 py-3 font-bold uppercase tracking-wider text-[10px] text-right whitespace-nowrap">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
@@ -668,7 +670,7 @@ export default function WorksheetPage() {
                           : "hover:bg-muted/30"
                       }`}
                     >
-                      <td className="w-10 px-3 py-2.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <td className="w-10 px-2 sm:px-3 py-2.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           checked={isChecked}
                           onCheckedChange={() => toggleSelectPatient(rep.id)}
@@ -676,37 +678,44 @@ export default function WorksheetPage() {
                         />
                       </td>
 
-                      <td className="px-3.5 py-2.5 whitespace-nowrap">
-                        <div className="flex items-center gap-2 max-w-[200px]">
+                      <td className="px-2.5 sm:px-3.5 py-2.5 whitespace-nowrap">
+                        <div className="flex items-center gap-2 max-w-[170px] sm:max-w-[200px]">
                           <div className="h-6 w-6 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
                             <User className="h-3 w-3" />
                           </div>
-                          <span className="font-bold text-foreground text-xs truncate" title={patName}>
-                            {patName}
-                          </span>
+                          <div className="min-w-0">
+                            <span className="font-bold text-foreground text-xs truncate block" title={patName}>
+                              {patName}
+                            </span>
+                            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground sm:hidden">
+                              <span className="font-mono">{patId}</span>
+                              <span>·</span>
+                              <span>{patAge}/{patGender}</span>
+                            </div>
+                          </div>
                         </div>
                       </td>
 
-                      <td className="px-3 py-2.5 font-mono text-muted-foreground font-semibold text-[11px] whitespace-nowrap">
+                      <td className="px-3 py-2.5 font-mono text-muted-foreground font-semibold text-[11px] whitespace-nowrap hidden sm:table-cell">
                         {patId}
                       </td>
 
-                      <td className="px-3 py-2.5 whitespace-nowrap">
+                      <td className="px-3 py-2.5 whitespace-nowrap hidden md:table-cell">
                         <span className="font-mono text-primary font-bold bg-primary/10 px-1.5 py-0.5 rounded text-[11px]">
                           {repId}
                         </span>
                       </td>
 
-                      <td className="px-3 py-2.5 text-muted-foreground text-[11px] whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-muted-foreground text-[11px] whitespace-nowrap hidden sm:table-cell">
                         {patAge} / {patGender}
                       </td>
 
-                      <td className="px-3 py-2.5 whitespace-nowrap">
+                      <td className="px-2.5 sm:px-3 py-2.5 whitespace-nowrap">
                         <div className="flex items-center gap-1 whitespace-nowrap">
                           {displayedTests.map((tn, tIdx) => (
                             <span
                               key={tIdx}
-                              className="text-[10.5px] font-semibold bg-muted/90 text-foreground px-2 py-0.5 rounded border border-border/70 whitespace-nowrap"
+                              className="text-[10px] sm:text-[10.5px] font-semibold bg-muted/90 text-foreground px-1.5 sm:px-2 py-0.5 rounded border border-border/70 whitespace-nowrap max-w-[90px] sm:max-w-none truncate"
                               title={tn}
                             >
                               {getShortTestName(tn)}
@@ -714,23 +723,23 @@ export default function WorksheetPage() {
                           ))}
                           {remainingCount > 0 && (
                             <span
-                              className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20 whitespace-nowrap"
+                              className="text-[9.5px] sm:text-[10px] font-bold text-primary bg-primary/10 px-1 sm:px-1.5 py-0.5 rounded border border-primary/20 whitespace-nowrap"
                               title={`${remainingCount} more tests`}
                             >
-                              ..+{remainingCount}
+                              +{remainingCount}
                             </span>
                           )}
                           {testNames.length === 0 && (
-                            <span className="text-muted-foreground text-[10.5px]">No tests</span>
+                            <span className="text-muted-foreground text-[10px]">No tests</span>
                           )}
                         </div>
                       </td>
 
-                      <td className="px-3 py-2.5 text-muted-foreground font-mono text-[11px] whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-muted-foreground font-mono text-[11px] whitespace-nowrap hidden lg:table-cell">
                         {regTime}
                       </td>
 
-                      <td className="px-3.5 py-2.5 text-right whitespace-nowrap">
+                      <td className="px-2.5 sm:px-3.5 py-2.5 text-right whitespace-nowrap">
                         <span
                           className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap ${
                             rep.status === "APPROVED" || rep.status === "COMPLETED"

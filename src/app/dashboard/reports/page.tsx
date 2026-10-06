@@ -67,7 +67,7 @@ export default function ReportsListPage() {
   } | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [sourceFilter, setSourceFilter] = useState<"ALL" | "MAIN_LAB" | "B2B" | "COLLECTION_CENTER">("ALL");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filterDate, setFilterDate] = useState(() => getTodayStr());
   const [sortOrder, setSortOrder] = useState<"oldest" | "recent">("recent");
@@ -266,15 +266,48 @@ export default function ReportsListPage() {
 
   const safeReports = Array.isArray(reports) ? reports : [];
 
-  const categories = Array.from(
-    new Set(
-      safeReports.flatMap((r: any) =>
-        Array.isArray(r.results)
-          ? r.results.map((res: any) => res.test?.category).filter(Boolean)
-          : []
-      )
-    )
-  );
+  const getReportSource = (rep: any): "MAIN_LAB" | "B2B" | "COLLECTION_CENTER" => {
+    if (!rep) return "MAIN_LAB";
+    const role = (
+      rep.meta?.created_by_role ||
+      rep.meta?.createdByRole ||
+      rep.patient?.meta?.created_by_role ||
+      rep.patient?.meta?.createdByRole ||
+      rep.patient?.creator?.role ||
+      rep.created_by_role ||
+      rep.creator?.role ||
+      ""
+    ).toUpperCase();
+
+    const isB2BEntry = Boolean(
+      role === "B2B" ||
+      rep.is_b2b ||
+      rep.isB2b ||
+      rep.patient?.is_b2b ||
+      rep.patient?.isB2b ||
+      rep.meta?.b2b_user_id ||
+      rep.meta?.b2bUserId ||
+      rep.patient?.meta?.b2b_user_id ||
+      rep.patient?.meta?.b2bUserId ||
+      rep.b2b_price ||
+      rep.is_b2b_paid
+    );
+    if (isB2BEntry) return "B2B";
+
+    const isCCEntry = Boolean(
+      role === "COLLECTION_CENTER" ||
+      role === "COLLECTION_CENTRE" ||
+      rep.is_cc ||
+      rep.patient?.is_cc ||
+      rep.meta?.collection_center_id ||
+      rep.meta?.collectionCenterId ||
+      rep.patient?.meta?.collection_center_id ||
+      rep.patient?.meta?.collectionCenterId
+    );
+    if (isCCEntry) return "COLLECTION_CENTER";
+
+    return "MAIN_LAB";
+  };
 
   const filteredReports = safeReports.filter((r: any) => {
     if (!r) return false;
@@ -304,13 +337,11 @@ export default function ReportsListPage() {
           ? r.status === "COMPLETED" || r.status === "APPROVED"
           : r.status === statusFilter
       ));
-    const resultsList = Array.isArray(r.results) ? r.results : [];
-    const matchesCategory =
-      categoryFilter === "ALL" ||
-      resultsList.some((res: any) => res.test?.category === categoryFilter);
+    const repSource = getReportSource(r);
+    const matchesSource = sourceFilter === "ALL" || repSource === sourceFilter;
     const matchesDate = filterDate ? repDate === filterDate : true;
 
-    return matchesSearch && matchesStatus && matchesCategory && matchesDate;
+    return matchesSearch && matchesStatus && matchesSource && matchesDate;
   });
 
   const sortedReports = useMemo(() => {
@@ -372,10 +403,10 @@ export default function ReportsListPage() {
     window.open(url, "_blank");
   };
 
-  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, categoryFilter, filterDate, sortOrder]);
+  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, sourceFilter, filterDate, sortOrder]);
 
-  const clearFilters = () => { setSearch(""); setStatusFilter("ALL"); setCategoryFilter("ALL"); setFilterDate(""); setSortOrder("oldest"); };
-  const hasFilters = search || statusFilter !== "ALL" || categoryFilter !== "ALL" || filterDate || sortOrder !== "oldest";
+  const clearFilters = () => { setSearch(""); setStatusFilter("ALL"); setSourceFilter("ALL"); setFilterDate(""); setSortOrder("oldest"); };
+  const hasFilters = search || statusFilter !== "ALL" || sourceFilter !== "ALL" || filterDate || sortOrder !== "oldest";
 
   const selectClass = "w-full h-10 bg-background border border-border rounded-lg px-3 text-sm focus:border-primary/60 focus:ring-2 focus:ring-primary/20 outline-none transition-all";
 
@@ -576,31 +607,41 @@ export default function ReportsListPage() {
             </Select>
           </div>
 
-          {/* Department Dropdown */}
-          <div className="space-y-1.5 w-full sm:w-[190px]">
+          {/* Lab / Source Dropdown */}
+          <div className="space-y-1.5 w-full sm:w-[210px]">
             <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
-              Department
+              Lab / Source
             </label>
-            <Select value={categoryFilter} onValueChange={(val) => setCategoryFilter(val)}>
+            <Select value={sourceFilter} onValueChange={(val: any) => setSourceFilter(val)}>
               <SelectTrigger className="h-10 w-full rounded-xl bg-background border border-border/80 font-medium text-xs hover:border-primary/50 transition-all shadow-xs focus:ring-2 focus:ring-primary/20 cursor-pointer">
-                <SelectValue placeholder="All Departments" />
+                <SelectValue placeholder="All Labs / Sources" />
               </SelectTrigger>
-              <SelectContent className="rounded-xl border border-border/70 shadow-lg bg-popover/95 backdrop-blur-md p-1 max-h-72">
+              <SelectContent className="rounded-xl border border-border/70 shadow-lg bg-popover/95 backdrop-blur-md p-1">
                 <SelectItem value="ALL" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
                   <span className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary/60" />
-                    All Departments
+                    <span className="w-2 h-2 rounded-full bg-slate-400" />
+                    All Labs (All Reports)
                   </span>
                 </SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c} value={c} className="rounded-lg text-xs font-medium py-2 cursor-pointer">
-                    <span className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40" />
-                      {c}
-                    </span>
-                  </SelectItem>
-                ))}
+                <SelectItem value="MAIN_LAB" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                  <span className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    Main Lab (In-House)
+                  </span>
+                </SelectItem>
+                <SelectItem value="B2B" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                  <span className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                    <span className="w-2 h-2 rounded-full bg-purple-500" />
+                    All B2B (Partners)
+                  </span>
+                </SelectItem>
+                <SelectItem value="COLLECTION_CENTER" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                  <span className="flex items-center gap-2 text-teal-600 dark:text-teal-400">
+                    <span className="w-2 h-2 rounded-full bg-teal-500" />
+                    All CC (Collection Centres)
+                  </span>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -805,7 +846,33 @@ export default function ReportsListPage() {
                       </td>
                       <td className="px-6 py-4 font-mono text-xs font-semibold text-primary">{repId}</td>
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-foreground text-sm">{patName}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-semibold text-foreground text-sm">{patName}</p>
+                          {!isB2B && !isCollectionCenter && (
+                            (() => {
+                              const src = getReportSource(rep);
+                              if (src === "B2B") {
+                                return (
+                                  <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                                    B2B
+                                  </span>
+                                );
+                              }
+                              if (src === "COLLECTION_CENTER") {
+                                return (
+                                  <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                                    CC
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                  Main Lab
+                                </span>
+                              );
+                            })()
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-0.5">{patId} · {patAge}y/{patGender}</p>
                       </td>
                       <td className="px-6 py-4 text-muted-foreground text-xs hidden lg:table-cell whitespace-nowrap">
