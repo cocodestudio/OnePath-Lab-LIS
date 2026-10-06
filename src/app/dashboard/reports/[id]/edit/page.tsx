@@ -1846,7 +1846,7 @@ function ResultEntryContent() {
     if ((availableTests.length > 0 && !force) || loadingAvailableTests) return;
     try {
       setLoadingAvailableTests(true);
-      const data = await fetchFromLaravel("/tests");
+      const data = await fetchFromLaravel("/tests?compact=1");
       const list = Array.isArray(data) ? data : (data?.data || []);
       const filtered = list.filter((t: any) => t.fieldType === "Group" || (!t.parent && !t.parentId && !t.parent_id));
       globalAvailableTestsCache = filtered;

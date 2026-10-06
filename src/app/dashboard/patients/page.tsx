@@ -489,7 +489,7 @@ export default function PatientsPage() {
       if (patients.length === 0) {
         setLoading(true);
       }
-      const data = await fetchFromLaravel("/patients?per_page=300&sort=created_at&direction=desc&order=desc", { skipCache: isForce });
+      const data = await fetchFromLaravel("/patients?per_page=50&sort=created_at&direction=desc&order=desc", { skipCache: isForce });
       const list = Array.isArray(data) ? data : (data?.data || []);
       setPatients(list);
       try {

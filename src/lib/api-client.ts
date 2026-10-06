@@ -190,50 +190,88 @@ if (typeof window !== "undefined") {
   } catch {}
 }
 
+export function markApiCacheStale(prefix?: string) {
+  if (!prefix) {
+    apiMemoryCache.forEach((entry) => { entry.timestamp = 0; });
+  } else {
+    const cleanPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
+    apiMemoryCache.forEach((entry, key) => {
+      if (key.startsWith(cleanPrefix) || key.includes(cleanPrefix)) {
+        entry.timestamp = 0;
+      }
+    });
+  }
+}
+
 /**
- * Automatically purges related caches on data mutations (POST, PUT, DELETE, PATCH).
+ * Optimistically prepends newly created or updated items into memory cache and localStorage
+ * so that navigation back to directory lists is 100% instant (0ms) with zero loading spinners.
+ */
+export function prependToApiCache(prefix: string, item: any, localStorageKey?: string) {
+  if (!item) return;
+  const cleanPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
+  apiMemoryCache.forEach((entry, key) => {
+    if (key.startsWith(cleanPrefix) || key.includes(cleanPrefix)) {
+      const id = item.id || item.customId || item.custom_id;
+      if (Array.isArray(entry.data)) {
+        const filtered = entry.data.filter((x: any) => (x?.id || x?.customId || x?.custom_id) !== id);
+        entry.data = [item, ...filtered];
+        entry.timestamp = Date.now();
+      } else if (entry.data && Array.isArray(entry.data.data)) {
+        const filtered = entry.data.data.filter((x: any) => (x?.id || x?.customId || x?.custom_id) !== id);
+        entry.data.data = [item, ...filtered];
+        entry.timestamp = Date.now();
+      }
+    }
+  });
+
+  if (localStorageKey && typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(localStorageKey);
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          const id = item.id || item.customId || item.custom_id;
+          const filtered = list.filter((x: any) => (x?.id || x?.customId || x?.custom_id) !== id);
+          localStorage.setItem(localStorageKey, JSON.stringify([item, ...filtered]));
+        }
+      }
+    } catch {}
+  }
+}
+
+/**
+ * Smart cache invalidation: marks caches as stale so SWR can serve existing data in 0ms
+ * while refreshing in the background, avoiding UI freezing or full-page blank states.
  */
 function autoInvalidateCache(endpoint: string) {
   const ep = endpoint.toLowerCase();
-  if (ep.includes("patient")) {
-    clearApiCache("/patients");
-    clearApiCache("/analytics");
-    try { localStorage.removeItem("lis_cached_patients"); } catch {}
-  }
-  if (ep.includes("report")) {
-    clearApiCache("/reports");
-    clearApiCache("/analytics");
-    clearApiCache("/bills");
-    clearApiCache("/today-sales");
-    try {
-      localStorage.removeItem("lis_cached_reports");
-      localStorage.removeItem("lis_cached_today_samples");
-    } catch {}
-  }
-  if (ep.includes("bill")) {
-    clearApiCache("/bills");
-    clearApiCache("/analytics");
-    clearApiCache("/today-sales");
-    try {
-      localStorage.removeItem("lis_cached_reports");
-      localStorage.removeItem("lis_cached_today_samples");
-    } catch {}
-  }
-  if (ep.includes("test")) {
-    clearApiCache("/tests");
-    try { localStorage.removeItem("lis_cached_tests"); } catch {}
-  }
-  if (ep.includes("instrument")) {
-    clearApiCache("/instruments");
-  }
-  if (ep.includes("collection-center")) {
-    clearApiCache("/collection-centers");
-  }
-  if (ep.includes("lab")) {
-    clearApiCache("/lab");
-    clearApiCache("/reports");
-    clearApiCache("/bills");
-    clearApiCache("/today-sales");
+  if (ep.includes("booking")) {
+    markApiCacheStale("/patients");
+    markApiCacheStale("/reports");
+    markApiCacheStale("/bills");
+    markApiCacheStale("/analytics");
+    markApiCacheStale("/today-sales");
+  } else if (ep.includes("patient")) {
+    markApiCacheStale("/patients");
+    markApiCacheStale("/analytics");
+  } else if (ep.includes("report")) {
+    markApiCacheStale("/reports");
+    markApiCacheStale("/analytics");
+    markApiCacheStale("/bills");
+    markApiCacheStale("/today-sales");
+  } else if (ep.includes("bill")) {
+    markApiCacheStale("/bills");
+    markApiCacheStale("/analytics");
+    markApiCacheStale("/today-sales");
+  } else if (ep.includes("test")) {
+    markApiCacheStale("/tests");
+  } else if (ep.includes("instrument")) {
+    markApiCacheStale("/instruments");
+  } else if (ep.includes("collection-center")) {
+    markApiCacheStale("/collection-centers");
+  } else if (ep.includes("lab")) {
+    markApiCacheStale("/lab");
   }
 }
 

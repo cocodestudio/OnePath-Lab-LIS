@@ -153,7 +153,7 @@ export default function ReportsListPage() {
       if (reports.length === 0) {
         setLoading(true);
       }
-      const data = await fetchFromLaravel(`/reports?limit=200&sort=${sortOrder}`, { skipCache: isForce });
+      const data = await fetchFromLaravel(`/reports?limit=50&sort=${sortOrder}`, { skipCache: isForce });
       if (data?.is_outstanding_locked) {
         setOutstandingLock({
           isLocked: true,

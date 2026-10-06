@@ -211,7 +211,7 @@ export default function DashboardOverviewPage() {
       }
       const [analytics, reports] = await Promise.all([
         fetchFromLaravel(forceRefresh ? "/analytics?refresh=1" : "/analytics", { skipCache: forceRefresh }),
-        fetchFromLaravel(forceRefresh ? "/reports?refresh=1" : "/reports", { skipCache: forceRefresh }),
+        fetchFromLaravel(forceRefresh ? "/reports?limit=6&refresh=1" : "/reports?limit=6", { skipCache: forceRefresh }),
       ]);
 
       const totReports = analytics?.totalReports ?? 0;
