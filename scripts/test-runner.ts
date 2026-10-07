@@ -128,8 +128,8 @@ assert(normSnake.termsAndConditions === "Samples stored for 48 hours only.", "[B
 
 // Test 9: Default Fallbacks
 const emptyNorm = normalizeBillSettings({});
-assert(emptyNorm.headerHeight === 100, "normalizeBillSettings defaults headerHeight to 100");
-assert(emptyNorm.footerHeight === 60, "normalizeBillSettings defaults footerHeight to 60");
+assert(emptyNorm.headerHeight === 110, "normalizeBillSettings defaults headerHeight to 110");
+assert(emptyNorm.footerHeight === 70, "normalizeBillSettings defaults footerHeight to 70");
 assert(emptyNorm.showBarcode === true, "normalizeBillSettings defaults showBarcode to true");
 
 // ==============================================================================

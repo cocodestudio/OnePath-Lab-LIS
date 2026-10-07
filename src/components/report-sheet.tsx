@@ -7,6 +7,7 @@ import { normalizeReportSettings, type ReportLayoutSettings, defaultReportLayout
 import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 import { getReportPackage } from "@/lib/packages";
 import { compareClinicalTests, compareClinicalParameters, getClinicalTestPriority } from "@/lib/clinical-order";
+import { isGenuineCustomEditorTest, getDefaultUnitForTest, getDefaultRangeForTest } from "@/lib/clinical-test-helper";
 import { sanitizeHtml } from "@/lib/sanitize";
 
 interface Test { 
@@ -580,7 +581,7 @@ export function buildReportBlocks(
       return (t.textRefRange || t.text_ref_range || "—").trim();
     }
 
-    return "—";
+    return getDefaultRangeForTest(t.name) || "—";
   };
 
   const getFlag = (valStr: string | null, item: ReportTest): { flag: "H" | "L" | null; label: string; color: string } => {
@@ -767,7 +768,7 @@ export function buildReportBlocks(
 
       const firstTestObj = itemsList[0].test;
       const mainTestObj = firstTestObj.parent?.parent ? firstTestObj.parent.parent : (firstTestObj.parent ? firstTestObj.parent : firstTestObj);
-      const allCustomEditor = itemsList.every(item => item.test.fieldType === "Custom Editor");
+      const allCustomEditor = itemsList.every(item => isGenuineCustomEditorTest(item.test));
 
       const testAlignVal = String(typo.testNameAlignment || "").toLowerCase();
       const isTestNameCenter = testAlignVal === "middle" || testAlignVal === "center";
@@ -1061,8 +1062,9 @@ export function buildReportBlocks(
             ? item.test.name.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.substring(1).toLowerCase())
             : item.test.name;
 
-          const col4Content = sp.interchangeColumns ? (item.test.unit || "") : refRange;
-          const col5Content = sp.interchangeColumns ? refRange : (item.test.unit || "");
+          const itemUnit = item.test.unit || getDefaultUnitForTest(item.test.name) || "";
+          const col4Content = sp.interchangeColumns ? itemUnit : refRange;
+          const col5Content = sp.interchangeColumns ? refRange : itemUnit;
 
           return (
             <table

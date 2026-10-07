@@ -1,3 +1,4 @@
+import { isGenuineCustomEditorTest } from "@/lib/clinical-test-helper";
 export interface OrganHealthScore {
   id: string;
   name: string;
@@ -431,7 +432,7 @@ export function analyzeReportForSmartInsights(
 
   results.forEach((r: any) => {
     const testName = r.test?.name || r.name || "Test";
-    if (testName === "Report Template" || r.test?.fieldType === "Custom Editor") return;
+    if (testName === "Report Template" || isGenuineCustomEditorTest(r.test)) return;
 
     totalTested++;
     const valRaw = r.resultValue ?? r.result_value ?? r.result ?? r.value;

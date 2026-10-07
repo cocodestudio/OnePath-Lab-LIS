@@ -19,6 +19,7 @@ import { PrintPreviewDialog } from "@/components/print-preview-dialog";
 import type { ReportSheetData, ReportTest } from "@/components/report-sheet";
 import { normalizeReportSettings } from "@/lib/report-settings";
 import { TestsNavTabs } from "@/components/tests-nav-tabs";
+import { isGenuineCustomEditorTest, isStandardAnalyteTest } from "@/lib/clinical-test-helper";
 
 // Clinical Categorized Predefined Units
 const CATEGORIZED_UNITS: Record<string, string[]> = {
@@ -370,7 +371,7 @@ export default function TestMasterPage() {
         return { value: "Negative / Normal", isAbnormal: false };
       }
 
-      if (item.fieldType === "Custom Editor" || (item as any).field_type === "Custom Editor" || (item.name || "").toLowerCase().includes("culture")) {
+      if (!isStandardAnalyteTest(item.name || "") && isGenuineCustomEditorTest(item)) {
         return { 
           value: item.interpretation || "<p>Clinical and microscopic evaluation within normal reference limits.</p>", 
           isAbnormal: false 
@@ -467,7 +468,7 @@ export default function TestMasterPage() {
       const { value, isAbnormal } = generateSampleValue(test);
       results.push({
         id: `res-${test.id || test.testCode || (test as any).test_code || Math.random()}`,
-        resultValue: (test.fieldType === "Custom Editor" || (test as any).field_type === "Custom Editor" || (test.name || "").toLowerCase().includes("culture"))
+        resultValue: (!isStandardAnalyteTest(test.name || "") && isGenuineCustomEditorTest(test))
           ? (test.interpretation || value)
           : value,
         isAbnormal,
@@ -610,10 +611,7 @@ export default function TestMasterPage() {
     setComment(test.comment || "");
     setNotes(test.notes || "");
 
-    const isCustom = test.fieldType === "Custom Editor" || 
-      (test as any).field_type === "Custom Editor" || 
-      (test.name || "").toLowerCase().includes("culture") ||
-      (testInterp.includes("<table") || testInterp.includes("<td"));
+    const isCustom = !isStandardAnalyteTest(test.name) && isGenuineCustomEditorTest(test);
 
     setReportFormat(isCustom ? "custom_editor" : "standard");
 
@@ -1052,11 +1050,12 @@ export default function TestMasterPage() {
     }
     const currentInterpretation = (tiptapEditorRef.current ? tiptapEditorRef.current.getHTML() : null) || latestInterpretationRef.current || interpretation || "";
 
-    const isCustomEditor = reportFormat === "custom_editor" ||
-      editingTest?.fieldType === "Custom Editor" ||
-      (editingTest as any)?.field_type === "Custom Editor" ||
-      (name || "").toLowerCase().includes("culture") ||
-      (currentInterpretation && (currentInterpretation.includes("<table") || currentInterpretation.includes("<td")));
+    const isAnalyte = isStandardAnalyteTest(name);
+    const isCustomEditor = !isAnalyte && (
+      reportFormat === "custom_editor" ||
+      isGenuineCustomEditorTest(editingTest) ||
+      (name || "").toLowerCase().includes("culture")
+    );
 
     if (!isCustomEditor && subTests.some(s => !s.name.trim())) {
       setError("Every parameter must have a name.");
@@ -2880,11 +2879,11 @@ export default function TestMasterPage() {
                   if (editingTest) {
                     try {
                       const testIdentifier = editingTest.id || editingTest.testCode;
-                      const isCustom = reportFormat === "custom_editor" ||
-                        editingTest.fieldType === "Custom Editor" ||
-                        (editingTest as any).field_type === "Custom Editor" ||
-                        (editingTest.name || "").toLowerCase().includes("culture") ||
-                        (currentHtml && (currentHtml.includes("<table") || currentHtml.includes("<td")));
+                      const isCustom = !isStandardAnalyteTest(editingTest.name) && (
+                        reportFormat === "custom_editor" ||
+                        isGenuineCustomEditorTest(editingTest) ||
+                        (editingTest.name || "").toLowerCase().includes("culture")
+                      );
 
                       // Update local editingTest in memory immediately so parent dialog keeps the updated fields
                       setEditingTest(prev => prev ? {

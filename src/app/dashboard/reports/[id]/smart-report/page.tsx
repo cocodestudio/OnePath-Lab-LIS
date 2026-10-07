@@ -50,6 +50,7 @@ import {
 } from "@/lib/smart-report-engine";
 import { useReactToPrint } from "react-to-print";
 import { downloadNativePdf, getNativePdfBase64 } from "@/lib/pdf-report-downloader";
+import { isGenuineCustomEditorTest } from "@/lib/clinical-test-helper";
 
 export default function SmartReportGeneratedPage() {
   const router = useRouter();
@@ -431,7 +432,7 @@ export default function SmartReportGeneratedPage() {
     .filter((r: any) => {
       const t = r.test || {};
       const name = t.name || r.name || "";
-      return name !== "Report Template" && t.fieldType !== "Custom Editor";
+      return name !== "Report Template" && !isGenuineCustomEditorTest(t);
     })
     .map((r: any) => {
       const t = r.test || {};

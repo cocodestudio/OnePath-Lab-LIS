@@ -26,6 +26,7 @@ import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report
 import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 import { getReportPackage } from "@/lib/packages";
 import { compareClinicalTests, compareClinicalParameters, getClinicalTestPriority } from "@/lib/clinical-order";
+import { isGenuineCustomEditorTest, isStandardAnalyteTest, getDefaultUnitForTest, getDefaultRangeForTest } from "@/lib/clinical-test-helper";
 
 // Clinical Categorized Predefined Units
 const CATEGORIZED_UNITS: Record<string, string[]> = {
@@ -1885,7 +1886,7 @@ function ResultEntryContent() {
       resultsList.forEach((r: any) => {
         const fieldType = r.test?.fieldType || r.test?.field_type;
         let rawVal = (r.resultValue ?? r.result_value ?? "").trim();
-        const isCustom = fieldType === "Custom Editor" || (r.test?.name || "").toLowerCase().includes("culture");
+        const isCustom = isGenuineCustomEditorTest(r.test);
 
         // Clean any accidental HTML tags leaking into non-custom standard parameters
         if (!isCustom && (rawVal.startsWith("<") || rawVal.includes("<div") || rawVal.includes("<table") || rawVal.includes("clinical-interpretation"))) {
@@ -2440,6 +2441,10 @@ function ResultEntryContent() {
 
   // Save customized report layout / antibiotic table permanently to Test Master as default template
   const handleSaveAsDefaultTemplate = async (item: any) => {
+    if (!isGenuineCustomEditorTest(item.test)) {
+      toast.error("Not a Template Test", "Default templates are only applicable for Culture and Custom narrative layout tests.");
+      return;
+    }
     const currentVal = values[item.id] || "";
     if (!currentVal || currentVal === "<p></p>" || currentVal === "<p><br></p>") {
       toast.error("Template is empty", "Please add some content or arrange your table before saving as default template.");
@@ -3113,12 +3118,8 @@ function ResultEntryContent() {
             {/* Main Tests Groups with Subgroup Headers, Parameter Remarks and Test Meta (Notes/Remarks/Advices) */}
             <div className="space-y-6">
               {mainGroups.map((group) => {
-                const allCustomEditor = group.sections.every(sec =>
-                  sec.items.every(item => (item.test?.fieldType || item.test?.field_type) === "Custom Editor")
-                );
-                const hasAnyNumeric = group.sections.some(sec =>
-                  sec.items.some(item => (item.test?.fieldType || item.test?.field_type) !== "Custom Editor" && (item.test?.valueType || item.test?.value_type) !== "Custom")
-                );
+                const allCustomEditor = group.sections.every(sec => sec.items.every(item => isGenuineCustomEditorTest(item.test)));
+                const hasAnyNumeric = group.sections.some(sec => sec.items.some(item => !isGenuineCustomEditorTest(item.test) && (item.test?.valueType || item.test?.value_type) !== "Custom"));
                 const currentTestMeta = testNotes[group.mainTestId] || {};
 
                 return (
@@ -3217,7 +3218,7 @@ function ResultEntryContent() {
                                 {section.items.map((item) => {
                                   if (!item || !item.test) return null;
                                   const rawVal = values[item.id] || "";
-                                  const isCustomEditor = (item.test.fieldType || item.test.field_type) === "Custom Editor" || (item.test?.name || "").toLowerCase().includes("culture");
+                                  const isCustomEditor = isGenuineCustomEditorTest(item.test);
                                   const val = (!isCustomEditor && typeof rawVal === "string" && (rawVal.startsWith("<") || rawVal.includes("<div") || rawVal.includes("<table") || rawVal.includes("clinical-interpretation"))) ? "" : rawVal;
                                   const { abnormal, flag } = isValueAbnormal(item.test, val);
                                   const isForcedAbnormal = !!abnormalOverrides[item.id];
@@ -3228,7 +3229,9 @@ function ResultEntryContent() {
                                   const patGender = report?.patient?.gender || "both";
                                   const patAge = report?.patient?.age ?? 25;
                                   const range = getRefRange(item.test, patGender, patAge);
-                                  const refRangeText = isTextRange ? (item.test.textRefRange || item.test.text_ref_range || "—") : formatRefRangeText(range);
+                                  const fallbackRange = getDefaultRangeForTest(item.test.name);
+                                  const refRangeText = isTextRange ? (item.test.textRefRange || item.test.text_ref_range || fallbackRange) : (formatRefRangeText(range) !== "—" ? formatRefRangeText(range) : fallbackRange);
+                                  const paramUnit = item.test.unit || getDefaultUnitForTest(item.test.name) || "—";
                                   const hasActiveRemark = showParamRemark[item.id] || !!paramRemarks[item.id];
 
                                   if (isCustomEditor) {
@@ -3434,7 +3437,7 @@ function ResultEntryContent() {
                                             </td>
 
                                             {/* Unit */}
-                                            <td className="px-6 py-3.5 text-xs font-mono text-muted-foreground">{item.test.unit || "—"}</td>
+                                            <td className="px-6 py-3.5 text-xs font-mono text-muted-foreground">{paramUnit}</td>
 
                                             {/* Reference Range with Edit ✏️ Icon */}
                                             <td className="px-6 py-3.5 text-xs font-mono text-muted-foreground">

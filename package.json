@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node test_all_formulas_unit.js && node scripts/unit-test-invoice-and-specimens.mjs && npx tsx scripts/test-runner.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.12",
