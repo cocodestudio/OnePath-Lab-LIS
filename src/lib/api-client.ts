@@ -116,6 +116,9 @@ export interface FetchFromLaravelOptions extends RequestInit {
 export function clearApiCache(prefix?: string) {
   if (!prefix) {
     apiMemoryCache.clear();
+    if (typeof window !== "undefined") {
+      try { localStorage.removeItem("lis_cached_tests"); } catch {}
+    }
   } else {
     const cleanPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
     apiMemoryCache.forEach((_, key) => {
@@ -123,6 +126,9 @@ export function clearApiCache(prefix?: string) {
         apiMemoryCache.delete(key);
       }
     });
+    if (cleanPrefix.includes("test") && typeof window !== "undefined") {
+      try { localStorage.removeItem("lis_cached_tests"); } catch {}
+    }
   }
 
   if (typeof window !== "undefined") {
@@ -155,6 +161,7 @@ if (typeof window !== "undefined") {
           const pfx = event.data?.prefix;
           if (!pfx) {
             apiMemoryCache.clear();
+            try { localStorage.removeItem("lis_cached_tests"); } catch {}
           } else {
             const cleanPrefix = pfx.startsWith("/") ? pfx : `/${pfx}`;
             apiMemoryCache.forEach((_, key) => {
@@ -162,6 +169,9 @@ if (typeof window !== "undefined") {
                 apiMemoryCache.delete(key);
               }
             });
+            if (cleanPrefix.includes("test")) {
+              try { localStorage.removeItem("lis_cached_tests"); } catch {}
+            }
           }
           window.dispatchEvent(new CustomEvent("lis_cache_invalidated", { detail: { prefix: pfx } }));
         }
@@ -175,6 +185,7 @@ if (typeof window !== "undefined") {
           const pfx = data?.prefix;
           if (!pfx) {
             apiMemoryCache.clear();
+            try { localStorage.removeItem("lis_cached_tests"); } catch {}
           } else {
             const cleanPrefix = pfx.startsWith("/") ? pfx : `/${pfx}`;
             apiMemoryCache.forEach((_, key) => {
@@ -182,6 +193,9 @@ if (typeof window !== "undefined") {
                 apiMemoryCache.delete(key);
               }
             });
+            if (cleanPrefix.includes("test")) {
+              try { localStorage.removeItem("lis_cached_tests"); } catch {}
+            }
           }
           window.dispatchEvent(new CustomEvent("lis_cache_invalidated", { detail: { prefix: pfx } }));
         } catch {}
@@ -265,7 +279,10 @@ function autoInvalidateCache(endpoint: string) {
     markApiCacheStale("/analytics");
     markApiCacheStale("/today-sales");
   } else if (ep.includes("test")) {
-    markApiCacheStale("/tests");
+    clearApiCache("/tests");
+    if (typeof window !== "undefined") {
+      try { localStorage.removeItem("lis_cached_tests"); } catch {}
+    }
   } else if (ep.includes("instrument")) {
     markApiCacheStale("/instruments");
   } else if (ep.includes("collection-center")) {

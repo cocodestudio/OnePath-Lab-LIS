@@ -184,6 +184,11 @@ export function TipTapEditor({
     if (editorRef) {
       editorRef.current = editor;
     }
+    return () => {
+      if (editorRef && editorRef.current === editor) {
+        editorRef.current = null;
+      }
+    };
   }, [editor, editorRef]);
 
   // Keep content synchronized if value updates from outside

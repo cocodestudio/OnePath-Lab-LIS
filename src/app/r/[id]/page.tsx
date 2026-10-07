@@ -88,10 +88,10 @@ export default function PublicReportVerificationPage() {
   const reportDateStr = useMemo(() => {
     if (!report) return "";
     try {
-      const d = report.report_date ? new Date(report.report_date) : (report.created_at ? new Date(report.created_at) : new Date());
-      return isNaN(d.getTime()) ? (report.report_date || report.created_at || "") : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+      const d = report.report_date ? new Date(report.report_date) : (report.updated_at ? new Date(report.updated_at) : new Date());
+      return isNaN(d.getTime()) ? (report.report_date || "") : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
     } catch {
-      return report.report_date || report.created_at || "";
+      return report.report_date || "";
     }
   }, [report]);
 
@@ -151,7 +151,7 @@ export default function PublicReportVerificationPage() {
       id: report.id,
       customId: report.custom_id || report.customId,
       status: report.status,
-      reportDate: report.report_date || report.reportDate,
+      reportDate: report.report_date || report.reportDate || report.updated_at || new Date().toISOString(),
       createdAt: report.created_at || report.createdAt,
       patient: {
         id: patient.id,

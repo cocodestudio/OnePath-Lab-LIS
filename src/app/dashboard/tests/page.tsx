@@ -13,13 +13,21 @@ import {
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
-import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
+import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import { TipTapEditor } from "@/components/tiptap-editor";
 import { PrintPreviewDialog } from "@/components/print-preview-dialog";
 import type { ReportSheetData, ReportTest } from "@/components/report-sheet";
 import { normalizeReportSettings } from "@/lib/report-settings";
 import { TestsNavTabs } from "@/components/tests-nav-tabs";
-import { isGenuineCustomEditorTest, isStandardAnalyteTest } from "@/lib/clinical-test-helper";
+import {
+  isGenuineCustomEditorTest,
+  isStandardAnalyteTest,
+  getCustomEditorInitialTemplate,
+  DEFAULT_CULTURE_TEMPLATE,
+  DEFAULT_WIDAL_TEMPLATE,
+  DEFAULT_BIOPSY_TEMPLATE
+} from "@/lib/clinical-test-helper";
+import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 
 // Clinical Categorized Predefined Units
 const CATEGORIZED_UNITS: Record<string, string[]> = {
@@ -53,8 +61,6 @@ const INBUILT_METHODS = [
   "Capillary Zone Electrophoresis",
   "Fluorescence Polarization Immunoassay (FPIA)"
 ];
-
-const DEFAULT_CULTURE_TEMPLATE = `<p>Sterile after 48 Hours. Incubation at 37°C.</p><p><strong>Date of Sample Collection:</strong><br><strong>Date of Reporting:</strong></p><p><strong>Sample Type:</strong><br><strong>Organism Isolated:</strong><br><strong>Colony Count:</strong> &lt;count&gt; Cfu/ml.</p><table style="width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 8px;"><thead><tr><th style="width: 60px; text-align: left; border: 1px solid #cbd5e1; padding: 6px 10px; background-color: #f1f5f9;"><strong>S. No.</strong></th><th style="text-align: left; border: 1px solid #cbd5e1; padding: 6px 10px; background-color: #f1f5f9;"><strong>Antibiotic Name</strong></th><th style="width: 160px; text-align: center; border: 1px solid #cbd5e1; padding: 6px 10px; background-color: #f1f5f9;"><strong>Sensitivity (S / I / R)</strong></th></tr></thead><tbody><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">1</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">AMOXYCLAV (AMC)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">2</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">AMIKACIN (AK)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">3</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">CEFTRIAXONE (CTR)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">4</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">CIPROFLOXACIN (CIP)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">5</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">MEROPENEM (MRP)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr></tbody></table>`;
 
 // Qualitative Custom Options Templates
 const QUICK_OPTION_PRESETS: { title: string; desc: string; options: string[] }[] = [
@@ -132,6 +138,8 @@ export interface Test {
   testCode?: string;
   category: string;
   fieldType: string;
+  customLayout?: string;
+  custom_layout?: string;
   type: string;
   price: number;
   interpretation?: string;
@@ -205,11 +213,27 @@ export default function TestMasterPage() {
   const [type, setType] = useState("Pathology");
   const [price, setPrice] = useState("");
   const [reportFormat, setReportFormat] = useState<"standard" | "custom_editor">("standard");
+  const [customLayout, setCustomLayout] = useState("");
   const [interpretation, setInterpretation] = useState("");
   const [comment, setComment] = useState("");
   const [notes, setNotes] = useState("");
-  const tiptapEditorRef = useRef<any>(null);
+  const tiptapLayoutRef = useRef<any>(null);
+  const tiptapInterpRef = useRef<any>(null);
+  const latestLayoutRef = useRef<string>("");
   const latestInterpretationRef = useRef<string>("");
+
+  // Crash-proof helper to safely read TipTap HTML without ProseMirror "null (reading 'cached')" crashes
+  const getSafeEditorHtml = (ref: React.RefObject<any> | any): string | null => {
+    try {
+      if (ref?.current && !ref.current.isDestroyed && typeof ref.current.getHTML === "function") {
+        const html = ref.current.getHTML();
+        if (typeof html === "string") return html;
+      }
+    } catch (err) {
+      console.warn("getSafeEditorHtml caught error:", err);
+    }
+    return null;
+  };
 
   const [subTests, setSubTests] = useState<SubTestState[]>([]);
 
@@ -217,6 +241,7 @@ export default function TestMasterPage() {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   // Modals
+  const [layoutModalOpen, setLayoutModalOpen] = useState(false);
   const [notesModalOpen, setNotesModalOpen] = useState(false);
   const [generatingAiInterpretation, setGeneratingAiInterpretation] = useState(false);
   const [activeNotesTab, setActiveNotesTab] = useState<"INTERPRETATION" | "COMMENT" | "NOTES">("INTERPRETATION");
@@ -254,7 +279,10 @@ export default function TestMasterPage() {
     "Clinical Pathology",
     "Serology & Immunology",
     "Microbiology",
+    "Histopathology",
+    "Cytology",
     "Histopathology & Cytology",
+    "Endocrinology",
     "Endocrinology & Hormones",
     "Molecular Biology",
   ];
@@ -469,7 +497,7 @@ export default function TestMasterPage() {
       results.push({
         id: `res-${test.id || test.testCode || (test as any).test_code || Math.random()}`,
         resultValue: (!isStandardAnalyteTest(test.name || "") && isGenuineCustomEditorTest(test))
-          ? (test.interpretation || value)
+          ? (test.customLayout || test.custom_layout || getCustomEditorInitialTemplate(test) || test.interpretation || value)
           : value,
         isAbnormal,
         test: {
@@ -566,6 +594,8 @@ export default function TestMasterPage() {
     setType("Pathology");
     setPrice("");
     setReportFormat("standard");
+    setCustomLayout("");
+    latestLayoutRef.current = "";
     setInterpretation("");
     latestInterpretationRef.current = "";
     setComment("");
@@ -605,9 +635,17 @@ export default function TestMasterPage() {
     setCustomCategory(standardCategories.includes(test.category) ? "" : test.category);
     setType(test.type || "Pathology");
     setPrice(test.price ? test.price.toString() : "");
-    const testInterp = test.interpretation || "";
-    setInterpretation(testInterp);
-    latestInterpretationRef.current = testInterp;
+
+    // 1. Separate customLayout for the result table
+    const initialLayout = test.customLayout || test.custom_layout || getCustomEditorInitialTemplate(test) || "";
+    setCustomLayout(initialLayout);
+    latestLayoutRef.current = initialLayout;
+
+    // 2. Separate clean medical clinical interpretation (never the table!)
+    const cleanInterp = getClinicalInterpretation(test.name, test.interpretation) || "";
+    setInterpretation(cleanInterp);
+    latestInterpretationRef.current = cleanInterp;
+
     setComment(test.comment || "");
     setNotes(test.notes || "");
 
@@ -617,10 +655,6 @@ export default function TestMasterPage() {
 
     if (isCustom) {
       setSubTests([]);
-      if (!testInterp.trim() && (test.name || "").toLowerCase().includes("culture")) {
-        setInterpretation(DEFAULT_CULTURE_TEMPLATE);
-        latestInterpretationRef.current = DEFAULT_CULTURE_TEMPLATE;
-      }
     } else if (test.subTests && test.subTests.length > 0) {
       setSubTests(test.subTests.map(sub => ({
         id: sub.id,
@@ -1000,6 +1034,8 @@ export default function TestMasterPage() {
       type: type,
       price: parseFloat(price) || 0,
       interpretation: interpretation.trim() || undefined,
+      customLayout: customLayout.trim() || undefined,
+      custom_layout: customLayout.trim() || undefined,
       comment: comment.trim() || undefined,
       notes: notes.trim() || undefined,
       subTests: subTests.map((sub, sIdx) => ({
@@ -1048,7 +1084,8 @@ export default function TestMasterPage() {
       setError("Please provide a valid Test Name.");
       return;
     }
-    const currentInterpretation = (tiptapEditorRef.current ? tiptapEditorRef.current.getHTML() : null) || latestInterpretationRef.current || interpretation || "";
+    const safeCustomLayout = getSafeEditorHtml(tiptapLayoutRef) || latestLayoutRef.current || customLayout || "";
+    const safeInterpretation = getSafeEditorHtml(tiptapInterpRef) || latestInterpretationRef.current || interpretation || "";
 
     const isAnalyte = isStandardAnalyteTest(name);
     const isCustomEditor = !isAnalyte && (
@@ -1077,7 +1114,8 @@ export default function TestMasterPage() {
       category: finalCategory,
       type,
       price: parseFloat(price) || 0,
-      interpretation: currentInterpretation !== undefined ? currentInterpretation : "",
+      custom_layout: isCustomEditor ? (safeCustomLayout || undefined) : undefined,
+      interpretation: safeInterpretation !== undefined ? safeInterpretation : "",
       comment: comment.trim() || undefined,
       notes: notes.trim() || undefined,
       field_type: isCustomEditor ? "Custom Editor" : (isSingleField ? "Single Field" : "Multiple Field"),
@@ -1179,13 +1217,20 @@ export default function TestMasterPage() {
           method: "PUT",
           body: JSON.stringify(payload),
         });
+        clearApiCache("/tests");
+        if (typeof window !== "undefined") {
+          try { localStorage.removeItem("lis_cached_tests"); } catch {}
+        }
         setTests(prev => prev.map(t => (t.id === testIdentifier || t.testCode === testIdentifier) ? {
           ...t,
           ...payload,
           id: t.id,
+          testCode: payload.test_code || t.testCode,
           fieldType: payload.field_type,
           field_type: payload.field_type,
-          interpretation: currentInterpretation,
+          customLayout: isCustomEditor ? safeCustomLayout : t.customLayout,
+          custom_layout: isCustomEditor ? safeCustomLayout : t.custom_layout,
+          interpretation: safeInterpretation,
           subTests: isCustomEditor ? [] : (payload.sub_tests || []),
         } : t));
         toast.success("Test updated successfully in database!");
@@ -1194,6 +1239,10 @@ export default function TestMasterPage() {
           method: "POST",
           body: JSON.stringify(payload),
         });
+        clearApiCache("/tests");
+        if (typeof window !== "undefined") {
+          try { localStorage.removeItem("lis_cached_tests"); } catch {}
+        }
         toast.success("New test created successfully!");
       }
       setDialogOpen(false);
@@ -1213,9 +1262,13 @@ export default function TestMasterPage() {
     setDeleting(true);
     try {
       await fetchFromLaravel(`/tests/${deleteTarget.id}`, { method: "DELETE" });
+      clearApiCache("/tests");
+      if (typeof window !== "undefined") {
+        try { localStorage.removeItem("lis_cached_tests"); } catch {}
+      }
       toast.success(`Deleted ${deleteTarget.name}`);
       setDeleteTarget(null);
-      fetchTests(true);
+      await fetchTests(true);
     } catch (err: any) {
       toast.error(err.message || "Failed to delete test");
     } finally {
@@ -1233,10 +1286,17 @@ export default function TestMasterPage() {
       const nameMatch = !q || (t.name || "").toLowerCase().includes(q);
       const codeMatch = !q || Boolean(t.testCode && t.testCode.toLowerCase().includes(q));
       const subMatch = !q || Boolean(t.subTests && t.subTests.some(s => (s.name || "").toLowerCase().includes(q)));
-      const matchQuery = nameMatch || codeMatch || subMatch;
+      const catMatch = !q || Boolean(t.category && t.category.toLowerCase().includes(q));
+      const matchQuery = nameMatch || codeMatch || subMatch || catMatch;
 
       const testCat = (t.category || "").trim().toLowerCase();
-      const matchCat = selectedCategory === "ALL" || testCat === selectedCategory.toLowerCase();
+      const selCat = selectedCategory.toLowerCase();
+      const matchCat =
+        selectedCategory === "ALL" ||
+        testCat === selCat ||
+        (selCat.includes("histopath") && testCat.includes("histopath")) ||
+        (selCat.includes("cytopath") && testCat.includes("cytopath")) ||
+        (selCat.includes("endocrin") && testCat.includes("endocrin"));
       return matchQuery && matchCat;
     });
   }, [tests, search, selectedCategory]);
@@ -1854,10 +1914,15 @@ export default function TestMasterPage() {
                       type="button"
                       onClick={() => {
                         setReportFormat("custom_editor");
-                        if (!interpretation.trim()) {
-                          const initialTmpl = (name || "").toLowerCase().includes("culture") ? DEFAULT_CULTURE_TEMPLATE : "<p>Clinical and microscopic evaluation within normal reference limits.</p>";
-                          setInterpretation(initialTmpl);
-                          latestInterpretationRef.current = initialTmpl;
+                        if (!customLayout.trim() || customLayout === "<p></p>") {
+                          const tmpl = getCustomEditorInitialTemplate({ name, category, field_type: "Custom Editor" });
+                          setCustomLayout(tmpl);
+                          latestLayoutRef.current = tmpl;
+                        }
+                        if (!interpretation.trim() || interpretation === "<p></p>") {
+                          const cleanInterp = getClinicalInterpretation(name, "") || "";
+                          setInterpretation(cleanInterp);
+                          latestInterpretationRef.current = cleanInterp;
                         }
                       }}
                       className={`h-full rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
@@ -1904,7 +1969,7 @@ export default function TestMasterPage() {
 
                   <Button
                     type="button"
-                    onClick={() => setNotesModalOpen(true)}
+                    onClick={() => setLayoutModalOpen(true)}
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-xs cursor-pointer self-start sm:self-auto"
                   >
                     <Edit2 className="h-3.5 w-3.5" />
@@ -1919,7 +1984,7 @@ export default function TestMasterPage() {
                     </span>
                     <button
                       type="button"
-                      onClick={() => setNotesModalOpen(true)}
+                      onClick={() => setLayoutModalOpen(true)}
                       className="text-xs text-primary hover:underline font-semibold cursor-pointer"
                     >
                       Expand Fullscreen Editor ↗
@@ -1927,13 +1992,13 @@ export default function TestMasterPage() {
                   </div>
                   <div className="p-3 min-h-[320px] max-h-[520px] overflow-y-auto">
                     <TipTapEditor
-                      value={interpretation}
+                      value={customLayout}
                       onChange={(html) => {
-                        setInterpretation(html);
-                        latestInterpretationRef.current = html;
+                        setCustomLayout(html);
+                        latestLayoutRef.current = html;
                       }}
-                      editorRef={tiptapEditorRef}
-                      hideHeader={true}
+                      editorRef={tiptapLayoutRef}
+                      hideHeader={false}
                     />
                   </div>
                 </div>
@@ -2450,6 +2515,18 @@ export default function TestMasterPage() {
                 Cancel
               </Button>
 
+              {reportFormat === "custom_editor" && (
+                <button
+                  type="button"
+                  onClick={() => setLayoutModalOpen(true)}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 px-4 h-11 rounded-xl border border-primary/40 bg-primary/10 text-xs font-bold text-primary hover:bg-primary/20 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span>Customize Table Layout</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => setNotesModalOpen(true)}
@@ -2457,7 +2534,7 @@ export default function TestMasterPage() {
                 className="inline-flex items-center gap-2 px-4 h-11 rounded-xl border border-border bg-card text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs disabled:opacity-50"
               >
                 <FileText className="h-4 w-4 text-blue-500" />
-                <span>{reportFormat === "custom_editor" ? "Customize Layout / Table" : "Interpretation"}</span>
+                <span>Clinical Interpretation</span>
               </button>
 
               <Button
@@ -2809,6 +2886,124 @@ export default function TestMasterPage() {
       </Dialog>
 
       {/* =========================================================================
+          FULLSCREEN CUSTOM TABLE & REPORT LAYOUT MODAL
+      ========================================================================= */}
+      <Dialog open={layoutModalOpen} onOpenChange={setLayoutModalOpen}>
+        <DialogContent className="max-w-6xl w-[95vw] h-[88vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl border-border/80 shadow-2xl bg-card">
+          <div className="p-4 px-6 border-b border-border/80 bg-card flex items-center justify-between shrink-0">
+            <div>
+              <DialogTitle className="font-display text-base font-bold text-foreground flex items-center gap-2">
+                <FileText className="h-4 w-4 text-primary" />
+                <span>Custom Table &amp; Report Layout: {name || "Test"}</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Design or customize the result entry table, antibiotic sensitivity grid, or clinical format.
+              </DialogDescription>
+            </div>
+            <button
+              onClick={() => setLayoutModalOpen(false)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted transition-colors cursor-pointer border border-border/70 shadow-xs"
+              title="Close dialog"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="p-6 flex-1 overflow-y-auto bg-muted/10">
+            <div className="space-y-2 h-full flex flex-col">
+              <div className="flex items-center justify-between shrink-0">
+                <label className="font-bold text-xs text-foreground block">
+                  Report Table &amp; Content Template:
+                </label>
+                <span className="text-[11px] text-muted-foreground">
+                  This table format will be used for entering patient test results.
+                </span>
+              </div>
+              <div className="bg-white dark:bg-zinc-950 rounded-xl border border-border overflow-hidden flex-1 shadow-sm">
+                <TipTapEditor
+                  value={customLayout}
+                  onChange={(html) => {
+                    setCustomLayout(html);
+                    latestLayoutRef.current = html;
+                  }}
+                  editorRef={tiptapLayoutRef}
+                  hideHeader={false}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 px-6 border-t border-border bg-muted/30 flex items-center justify-between shrink-0">
+            <span className="text-[11px] text-muted-foreground">
+              Layout changes are saved permanently to this test template.
+            </span>
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setLayoutModalOpen(false)}
+                className="rounded-xl px-5 h-10 text-xs font-semibold cursor-pointer"
+              >
+                Close
+              </Button>
+              <Button
+                type="button"
+                onClick={async () => {
+                  const safeHtml = getSafeEditorHtml(tiptapLayoutRef) || latestLayoutRef.current || customLayout || "";
+                  setCustomLayout(safeHtml);
+                  latestLayoutRef.current = safeHtml;
+                  setLayoutModalOpen(false);
+
+                  if (editingTest) {
+                    try {
+                      const testIdentifier = editingTest.id || editingTest.testCode;
+                      setEditingTest(prev => prev ? {
+                        ...prev,
+                        customLayout: safeHtml,
+                        custom_layout: safeHtml,
+                        fieldType: "Custom Editor",
+                        field_type: "Custom Editor",
+                      } : null);
+
+                      setReportFormat("custom_editor");
+
+                      await fetchFromLaravel(`/tests/${testIdentifier}`, {
+                        method: "PUT",
+                        body: JSON.stringify({
+                          custom_layout: safeHtml,
+                          field_type: "Custom Editor",
+                          sub_tests: [],
+                          is_json_override: true,
+                        }),
+                      });
+
+                      setTests(prev => prev.map(t => (t.id === testIdentifier || t.testCode === testIdentifier) ? {
+                        ...t,
+                        customLayout: safeHtml,
+                        custom_layout: safeHtml,
+                        fieldType: "Custom Editor",
+                        field_type: "Custom Editor",
+                        subTests: [],
+                      } : t));
+
+                      toast.success("Custom table layout saved instantly!");
+                      await fetchTests(true);
+                    } catch (e: any) {
+                      console.error("Auto save layout error:", e);
+                      toast.error("Failed to auto-save layout: " + (e.message || "Unknown error"));
+                    }
+                  }
+                }}
+                className="rounded-xl px-7 h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-sm"
+              >
+                Done / Save Layout
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* =========================================================================
           RICH TIPTAP CLINICAL INTERPRETATION MODAL
       ========================================================================= */}
       <Dialog open={notesModalOpen} onOpenChange={setNotesModalOpen}>
@@ -2823,6 +3018,13 @@ export default function TestMasterPage() {
                 Diagnostic guidelines, biological reference intervals, and pathological interpretation printed on patient reports.
               </DialogDescription>
             </div>
+            <button
+              onClick={() => setNotesModalOpen(false)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted transition-colors cursor-pointer border border-border/70 shadow-xs"
+              title="Close dialog"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           <div className="p-6 flex-1 overflow-y-auto bg-muted/10">
@@ -2842,7 +3044,7 @@ export default function TestMasterPage() {
                     setInterpretation(html);
                     latestInterpretationRef.current = html;
                   }}
-                  editorRef={tiptapEditorRef}
+                  editorRef={tiptapInterpRef}
                   hideHeader={true}
                 />
               </div>
@@ -2870,63 +3072,52 @@ export default function TestMasterPage() {
               </button>
               <Button
                 type="button"
+                variant="outline"
+                onClick={() => setNotesModalOpen(false)}
+                className="rounded-xl px-5 h-10 text-xs font-semibold cursor-pointer"
+              >
+                Close
+              </Button>
+              <Button
+                type="button"
                 onClick={async () => {
-                  const currentHtml = (tiptapEditorRef.current ? tiptapEditorRef.current.getHTML() : null) || latestInterpretationRef.current || interpretation || "";
-                  setInterpretation(currentHtml);
-                  latestInterpretationRef.current = currentHtml;
+                  const safeHtml = getSafeEditorHtml(tiptapInterpRef) || latestInterpretationRef.current || interpretation || "";
+                  setInterpretation(safeHtml);
+                  latestInterpretationRef.current = safeHtml;
                   setNotesModalOpen(false);
 
                   if (editingTest) {
                     try {
                       const testIdentifier = editingTest.id || editingTest.testCode;
-                      const isCustom = !isStandardAnalyteTest(editingTest.name) && (
-                        reportFormat === "custom_editor" ||
-                        isGenuineCustomEditorTest(editingTest) ||
-                        (editingTest.name || "").toLowerCase().includes("culture")
-                      );
-
-                      // Update local editingTest in memory immediately so parent dialog keeps the updated fields
                       setEditingTest(prev => prev ? {
                         ...prev,
-                        interpretation: currentHtml,
-                        fieldType: isCustom ? "Custom Editor" : prev.fieldType,
-                        field_type: isCustom ? "Custom Editor" : (prev as any).field_type,
+                        interpretation: safeHtml,
                       } : null);
-
-                      if (isCustom) {
-                        setReportFormat("custom_editor");
-                      }
 
                       await fetchFromLaravel(`/tests/${testIdentifier}`, {
                         method: "PUT",
                         body: JSON.stringify({
-                          interpretation: currentHtml,
-                          field_type: isCustom ? "Custom Editor" : undefined,
-                          sub_tests: isCustom ? [] : undefined,
+                          interpretation: safeHtml,
                           is_json_override: true,
                         }),
                       });
 
-                      // Update local tests array immediately
                       setTests(prev => prev.map(t => (t.id === testIdentifier || t.testCode === testIdentifier) ? {
                         ...t,
-                        interpretation: currentHtml,
-                        fieldType: isCustom ? "Custom Editor" : t.fieldType,
-                        field_type: isCustom ? "Custom Editor" : (t as any).field_type,
-                        subTests: isCustom ? [] : t.subTests,
+                        interpretation: safeHtml,
                       } : t));
 
-                      toast.success("Interpretation & Layout saved to test master!");
+                      toast.success("Clinical interpretation saved to database!");
                       await fetchTests(true);
                     } catch (e: any) {
                       console.error("Auto save interpretation error:", e);
-                      toast.error("Failed to auto-save layout: " + (e.message || "Unknown error"));
+                      toast.error("Failed to auto-save interpretation: " + (e.message || "Unknown error"));
                     }
                   }
                 }}
                 className="rounded-xl px-7 h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-sm"
               >
-                Done / Save Layout
+                Done / Save Interpretation
               </Button>
             </div>
           </div>

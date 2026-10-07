@@ -7,7 +7,7 @@ import { normalizeReportSettings, type ReportLayoutSettings, defaultReportLayout
 import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 import { getReportPackage } from "@/lib/packages";
 import { compareClinicalTests, compareClinicalParameters, getClinicalTestPriority } from "@/lib/clinical-order";
-import { isGenuineCustomEditorTest, getDefaultUnitForTest, getDefaultRangeForTest } from "@/lib/clinical-test-helper";
+import { isGenuineCustomEditorTest, getDefaultUnitForTest, getDefaultRangeForTest, getCustomEditorInitialTemplate } from "@/lib/clinical-test-helper";
 import { sanitizeHtml } from "@/lib/sanitize";
 
 interface Test { 
@@ -115,21 +115,70 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
   const lab = (report.lab || {}) as any;
   const reportSettings = normalizeReportSettings(lab.report_settings || lab.reportSettings || (report as any).report_settings || (report as any).reportSettings);
 
-  const regDateStr = (() => {
+  const patMeta = patient.meta || {};
+
+  const formatDateTime = (val: any) => {
+    if (!val) return "";
     try {
-      const d = report.reportDate ? new Date(report.reportDate) : (report.createdAt ? new Date(report.createdAt) : new Date());
-      return isNaN(d.getTime()) ? (report.reportDate || report.createdAt || "") : d.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return String(val);
+      return d.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     } catch {
-      return report.reportDate || report.createdAt || "";
+      return String(val);
     }
+  };
+
+  // 1. Collection Date & Time:
+  // Strictly reflects the exact registration / sample collection date & time from Add Patient
+  const rawCollectionDate =
+    patient.collection_date_time ||
+    patient.collectionDateTime ||
+    patMeta.collection_date_time ||
+    patMeta.collectionDateTime ||
+    (report as any).collection_date_time ||
+    (report as any).collectionDateTime ||
+    (report as any).meta?.collection_date_time ||
+    (report as any).meta?.collectionDateTime ||
+    patient.created_at ||
+    patient.createdAt ||
+    report.createdAt ||
+    (report as any).created_at;
+
+  const collDateStr = formatDateTime(rawCollectionDate) || formatDateTime(new Date());
+
+  // 2. Registration Date
+  const rawRegDate =
+    patient.created_at ||
+    patient.createdAt ||
+    report.createdAt ||
+    (report as any).created_at ||
+    rawCollectionDate;
+
+  const regDateStr = formatDateTime(rawRegDate) || collDateStr;
+
+  // 3. Report Date & Time:
+  // Strictly reflects the real-time timestamp when report is printed, downloaded, or reported
+  const rawReportDate = (() => {
+    if (report.reportDate && String(report.reportDate).trim() !== "" && report.reportDate !== report.createdAt) {
+      return report.reportDate;
+    }
+    if ((report as any).reportedAt) return (report as any).reportedAt;
+    if ((report as any).reported_at) return (report as any).reported_at;
+    return new Date();
   })();
+
+  const reportDateStr = formatDateTime(rawReportDate);
 
   const hasRefDoctor = Boolean(patient.refDoctor && patient.refDoctor.trim() !== "" && patient.refDoctor.trim() !== "—" && patient.refDoctor.trim() !== "N/A" && patient.refDoctor.trim() !== "null");
   const doctorName = hasRefDoctor ? (patient.refDoctor?.startsWith("Dr") ? patient.refDoctor : `Dr. ${patient.refDoctor}`) : "Self";
 
   const packageName = (report as any).packageName || (report as any).package_name || (report as any).meta?.packageName || (report as any).meta?.package_name || getReportPackage(report.id) || getReportPackage(report.customId) || getReportPackage(patient.customId);
-
-  const patMeta = patient.meta || {};
 
   const allMap: Record<string, { label: string; value: React.ReactNode }> = {
     "Name": { label: "Patient Name:", value: <span className="font-extrabold text-[11.5px] text-black uppercase">{patient.name || "—"}</span> },
@@ -149,7 +198,9 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
     "Email ID": { label: "Email ID:", value: <span className="font-mono text-[10px]">{patient.email || (report as any).patient?.email || patMeta.email || "—"}</span> },
     "Insurance No.": { label: "Insurance No:", value: <span className="font-mono">{patient.insuranceNo || patient.insurance_no || patMeta.insuranceNo || patMeta.insurance_no || "—"}</span> },
     "Report ID": { label: "Report ID:", value: <span className="font-bold text-black font-mono">{report.customId || "—"}</span> },
-    "Report Date": { label: "Report Date:", value: <span>{regDateStr}</span> },
+    "Report Date": { label: "Report Date:", value: <span>{reportDateStr}</span> },
+    "Report Date & Time": { label: "Report Date:", value: <span>{reportDateStr}</span> },
+    "Reported Date": { label: "Report Date:", value: <span>{reportDateStr}</span> },
     "Registration Date": { label: "Reg. Date:", value: <span>{regDateStr}</span> },
     "Phone No.": { label: "Contact No:", value: <span className="font-mono">{reportSettings.fieldsToShow.phoneNumber ? (patient.phone || patMeta.phone || "—") : "—"}</span> },
     "Aadhaar No.": { label: "Aadhaar No:", value: <span className="font-mono">{patient.aadhaarNo || patient.aadhaar_no || patMeta.aadhaarNo || patMeta.aadhaar_no || "—"}</span> },
@@ -162,14 +213,16 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
     "Breed": { label: "Breed:", value: <span>{patient.breed || patMeta.breed || "—"}</span> },
     "Species": { label: "Species:", value: <span>{patient.species || patMeta.species || "—"}</span> },
     "Referring Lab": { label: "Referring Lab:", value: <span>{(report as any).referringLab || patMeta.referringLab || "—"}</span> },
-    "Received Date": { label: "Received Date:", value: <span>{regDateStr}</span> },
+    "Received Date": { label: "Received Date:", value: <span>{collDateStr || regDateStr}</span> },
     "Company": { label: "Company:", value: <span>{(report as any).company || lab.name || "—"}</span> },
     "Report Status": { label: "Status:", value: <span className="font-bold uppercase text-emerald-700 text-[10px]">{report.status || "COMPLETED"}</span> },
     "Barcode": { label: "Barcode:", value: <BarcodeSVG value={patient.vialBarcode || patient.vial_barcode || patMeta.vial_barcode || report.customId || report.id} width={0.9} height={18} fontSize={7} /> },
     "Referring Hospital": { label: "Referring Hosp:", value: <span>{(report as any).referringHospital || patMeta.referringHospital || "—"}</span> },
     "Second Referral": { label: "2nd Referral:", value: <span>{patient.secondReferral || patient.second_referral || patMeta.secondReferral || patMeta.second_referral || (report as any).secondReferral || "—"}</span> },
     "Government Panel": { label: "Govt Panel:", value: <span>{patient.govPanel || patient.gov_panel || patMeta.govPanel || patMeta.gov_panel || (report as any).govPanel || "—"}</span> },
-    "Collection Date": { label: "Collection Date:", value: <span>{regDateStr}</span> },
+    "Collection Date": { label: "Collection Date:", value: <span>{collDateStr}</span> },
+    "Collection Date & Time": { label: "Collection Date:", value: <span>{collDateStr}</span> },
+    "Collected Date": { label: "Collection Date:", value: <span>{collDateStr}</span> },
     "B2B Address": { label: "B2B Address:", value: <span>{lab.address || "—"}</span> },
     "Custom ID": { label: "Custom ID:", value: <span className="font-mono">{report.customId || "—"}</span> },
     "B2B Phone Number": { label: "Lab Phone:", value: <span className="font-mono">{lab.phone || "—"}</span> },
@@ -817,7 +870,11 @@ export function buildReportBlocks(
         itemsList.forEach((item) => {
           const rawVal = (item.resultValue || (item as any).result_value || "").trim();
           const isBlank = !rawVal || rawVal === "<p></p>" || rawVal === "<p><br></p>" || rawVal === "<p><br/></p>";
-          const content = !isBlank ? rawVal : (item.test?.interpretation || "<p class='text-zinc-400 italic text-xs'>No content recorded.</p>");
+          const isPlainStatusVal = !rawVal.includes("<") && /^(normal(\s*[\/\-]\s*negative)?|negative|positive)$/i.test(rawVal.trim());
+          const initialTemplate = getCustomEditorInitialTemplate(item.test);
+          const content = (!isBlank && !isPlainStatusVal)
+            ? rawVal
+            : (initialTemplate || "<p class='text-zinc-400 italic text-xs'>No content recorded.</p>");
 
           // Check if content has a multi-row table (e.g. Culture & Sensitivity with 39 rows) that needs multi-page pagination
           let isMultiPageTable = false;
@@ -1273,7 +1330,7 @@ export function buildReportBlocks(
       const interpContent = getClinicalInterpretation(mainTestName, directInterp, category);
       const hasInterpText = Boolean(interpContent && interpContent.trim() !== "" && interpContent !== "<p><br></p>");
 
-      const isInterpEnabled = !allCustomEditor && !opts?.hideInterpretation && hasInterpText && (
+      const isInterpEnabled = !opts?.hideInterpretation && hasInterpText && (
         reportSettings.fieldsToShow.interpretation !== false
       ) && (
         !hasExplicitInterpSetting ||

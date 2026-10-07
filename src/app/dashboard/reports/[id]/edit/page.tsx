@@ -26,7 +26,7 @@ import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report
 import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 import { getReportPackage } from "@/lib/packages";
 import { compareClinicalTests, compareClinicalParameters, getClinicalTestPriority } from "@/lib/clinical-order";
-import { isGenuineCustomEditorTest, isStandardAnalyteTest, getDefaultUnitForTest, getDefaultRangeForTest } from "@/lib/clinical-test-helper";
+import { isGenuineCustomEditorTest, isStandardAnalyteTest, getDefaultUnitForTest, getDefaultRangeForTest, getCustomEditorInitialTemplate } from "@/lib/clinical-test-helper";
 
 // Clinical Categorized Predefined Units
 const CATEGORIZED_UNITS: Record<string, string[]> = {
@@ -46,6 +46,8 @@ interface Test {
   price?: number;
   unit?: string | null;
   interpretation?: string | null;
+  customLayout?: string | null;
+  custom_layout?: string | null;
   fieldType?: string;
   field_type?: string;
   genderRefType?: string;
@@ -1847,7 +1849,7 @@ function ResultEntryContent() {
     if ((availableTests.length > 0 && !force) || loadingAvailableTests) return;
     try {
       setLoadingAvailableTests(true);
-      const data = await fetchFromLaravel("/tests?compact=1");
+      const data = await fetchFromLaravel("/tests?compact=1", { skipCache: force });
       const list = Array.isArray(data) ? data : (data?.data || []);
       const filtered = list.filter((t: any) => t.fieldType === "Group" || (!t.parent && !t.parentId && !t.parent_id));
       globalAvailableTestsCache = filtered;
@@ -1894,10 +1896,21 @@ function ResultEntryContent() {
         }
 
         const isBlank = !rawVal || rawVal === "<p></p>" || rawVal === "<p><br></p>" || rawVal === "<p><br/></p>";
-        const template = isCustom ? (r.test?.interpretation || (r.test as any)?.custom_template || "") : "";
+        const isPlainStatusVal = !rawVal.includes("<") && /^(normal(\s*[\/\-]\s*negative)?|negative|positive)$/i.test(rawVal.trim());
+        let template = isCustom ? (r.test?.customLayout || (r.test as any)?.custom_layout || (r.test as any)?.custom_template || getCustomEditorInitialTemplate(r.test) || "") : "";
+        if (isCustom && (!template || template === "<p></p>")) {
+          const tNameLower = (r.test?.name || "").toLowerCase();
+          const tCatLower = (r.test?.category || "").toLowerCase();
+          if (tNameLower.includes("widal")) {
+            template = `<table style="width:100%; border-collapse:collapse; margin-top:8px; margin-bottom:8px;"><thead><tr style="background-color:#f4f4f5; text-align:left;"><th style="border:1px solid #d4d4d8; padding:6px 10px; width:28%;">Antigen</th><th style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">1/20</th><th style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">1/40</th><th style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">1/80</th><th style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">1/160</th><th style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">1/320</th></tr></thead><tbody><tr><td style="border:1px solid #d4d4d8; padding:6px 10px; font-weight:bold;">S. TYPHI "O"</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td></tr><tr><td style="border:1px solid #d4d4d8; padding:6px 10px; font-weight:bold;">S. TYPHI "H"</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td></tr><tr><td style="border:1px solid #d4d4d8; padding:6px 10px; font-weight:bold;">S. PARATYPHI "AH"</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td></tr><tr><td style="border:1px solid #d4d4d8; padding:6px 10px; font-weight:bold;">S. PARATYPHI "BH"</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td></tr></tbody></table><p>Result: <strong>Negative</strong></p>`;
+          } else if (tNameLower.includes("biopsy") || tCatLower.includes("histopath")) {
+            template = `<p><strong>SPECIMEN:</strong> Tissue Biopsy in 10% Neutral Buffered Formalin</p><p><strong>CLINICAL HISTORY / DIAGNOSIS:</strong> &lt;Clinical indication &amp; anatomical biopsy site&gt;</p><p><strong>GROSS EXAMINATION:</strong><br>Received single formalin-fixed tissue specimen measuring &lt;dimensions&gt; cm. Greyish-white to tan in appearance, firm in consistency. Representative sections submitted in Block A.</p><p><strong>MICROSCOPIC EXAMINATION:</strong><br>Sections studied show tissue fragment lined by epithelium. The underlying fibrovascular stroma shows mild to moderate chronic inflammatory infiltrate predominantly composed of lymphocytes and plasma cells. There is no evidence of nuclear atypia, dysplasia, granulomatous inflammation, or malignancy in the sections examined.</p><p><strong>IMPRESSION / DIAGNOSIS:</strong><br><strong>BIOPSY EXAMINATION CONSISTENT WITH: &lt;BENIGN / CHRONIC NON-SPECIFIC INFLAMMATION / SPECIFY DIAGNOSIS&gt;</strong></p><p style="font-size:10px; color:#71717a; margin-top:8px;"><em>Note: Histopathological impression must be clinically correlated with patient's radiological, clinical, and operative findings.</em></p>`;
+          }
+        }
         const isFreshReport = !data?.status || data.status === "NEW";
-        const isUnfilledTable = rawVal.includes("<table") && !rawVal.includes("Sensitive") && !rawVal.includes("Resistant") && !rawVal.includes("Moderate") && !rawVal.includes("Intermediate");
-        if (isCustom && template && (isBlank || (isFreshReport && isUnfilledTable))) {
+        const isCultureTest = (r.test?.name || "").toLowerCase().includes("culture");
+        const isUnfilledCultureTable = isCultureTest && rawVal.includes("<table") && !rawVal.includes("Sensitive") && !rawVal.includes("Resistant") && !rawVal.includes("Moderate") && !rawVal.includes("Intermediate");
+        if (isCustom && template && (isBlank || isPlainStatusVal || (isFreshReport && isUnfilledCultureTable))) {
           initialVals[r.id] = template;
         } else {
           initialVals[r.id] = rawVal;
@@ -2463,7 +2476,7 @@ function ResultEntryContent() {
       await fetchFromLaravel(`/tests/${testId}/report-layout`, {
         method: "POST",
         body: JSON.stringify({
-          interpretation: currentVal,
+          custom_layout: currentVal,
           field_type: "Custom Editor",
         }),
       });
@@ -2477,7 +2490,8 @@ function ResultEntryContent() {
               ...r,
               test: {
                 ...r.test,
-                interpretation: currentVal,
+                customLayout: currentVal,
+                custom_layout: currentVal,
                 fieldType: "Custom Editor",
                 field_type: "Custom Editor",
               },

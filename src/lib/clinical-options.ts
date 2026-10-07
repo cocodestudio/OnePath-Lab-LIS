@@ -599,6 +599,27 @@ export const CLINICAL_PARAM_DICTIONARY: ClinicalOptionDef[] = [
     ],
   },
   {
+    key: "rapid_malaria_card",
+    namePatterns: [
+      "plasmodium falciparum",
+      "plasmodium vivax",
+      "malaria igg",
+      "malaria igm",
+      "pf antigen",
+      "pv antigen",
+      "malaria igg antibody",
+      "malaria igm antibody",
+      "hrp 2",
+      "hrp2",
+      "pldh",
+      "pan / pldh"
+    ],
+    options: [
+      "Non-Reactive",
+      "Reactive",
+    ],
+  },
+  {
     key: "malaria_antigen",
     namePatterns: ["malaria antigen", "malaria card", "malaria rapid", "malaria parasite (rapid)"],
     options: [
@@ -1237,22 +1258,17 @@ export function getCompleteParameterOptions(
       });
     }
 
-    // If specific clinical definition exists, add clinical options
-    if (clinicalDef && clinicalDef.key !== "generic_qualitative") {
+    // If DB explicitly specifies custom options (e.g. ["Non-Reactive", "Reactive"]), use them directly
+    if (dbOptionsList.length > 0) {
+      dbOptionsList.forEach(opt => {
+        if (typeof opt === "string" && opt.trim()) set.add(opt.trim());
+      });
+    } else if (clinicalDef && clinicalDef.key !== "generic_qualitative") {
       if (Array.isArray(clinicalDef.options)) {
         clinicalDef.options.forEach(opt => {
           if (typeof opt === "string" && opt.trim()) set.add(opt.trim());
         });
       }
-      // Also include DB options if any
-      dbOptionsList.forEach(opt => {
-        if (typeof opt === "string" && opt.trim()) set.add(opt.trim());
-      });
-    } else if (dbOptionsList.length > 0) {
-      // If DB provided options, use them directly without adding generic qualitative options
-      dbOptionsList.forEach(opt => {
-        if (typeof opt === "string" && opt.trim()) set.add(opt.trim());
-      });
     } else if (clinicalDef && Array.isArray(clinicalDef.options)) {
       // Generic qualitative fallback
       clinicalDef.options.forEach(opt => {

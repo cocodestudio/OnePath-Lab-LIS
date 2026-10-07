@@ -139,6 +139,17 @@ function classifyTestsIntoTubes(tests: Array<{ id: string; name: string; categor
       additive: "Clot Activator & Gel Separator",
       tests: [],
     },
+    OTHER: {
+      tubeType: "OTHER",
+      capColor: "#059669",
+      badgeBg: "bg-emerald-500/10",
+      badgeBorder: "border-emerald-500/30",
+      badgeText: "text-emerald-600 dark:text-emerald-400",
+      tubeTitle: "Formalin / Biopsy Container",
+      specimenType: "Tissue Biopsy / Fluid Specimen",
+      additive: "10% Neutral Buffered Formalin",
+      tests: [],
+    },
   };
 
   tests.forEach((t) => {
@@ -178,7 +189,18 @@ function classifyTestsIntoTubes(tests: Array<{ id: string; name: string; categor
     ) {
       groups.FLUORIDE.tests.push({ id: t.id, name: t.name });
     }
-    // 5. EDTA / Hematology checks
+    // 5. Histopathology / Tissue / Biopsy / Cytology checks
+    else if (
+      nameLower.includes("biopsy") ||
+      nameLower.includes("histopath") ||
+      catLower.includes("histopath") ||
+      catLower.includes("cytopath") ||
+      nameLower.includes("fnac") ||
+      nameLower.includes("pap smear")
+    ) {
+      groups.OTHER.tests.push({ id: t.id, name: t.name });
+    }
+    // 6. EDTA / Hematology checks
     else if (
       nameLower.includes("cbc") ||
       nameLower.includes("complete blood") ||
@@ -197,7 +219,7 @@ function classifyTestsIntoTubes(tests: Array<{ id: string; name: string; categor
     ) {
       groups.EDTA.tests.push({ id: t.id, name: t.name });
     }
-    // 6. Default: All Biochemistry, Serology, Immunoassay, Hormones belong in SST / Plain Serum
+    // 7. Default: All Biochemistry, Serology, Immunoassay, Hormones belong in SST / Plain Serum
     else {
       groups.SST.tests.push({ id: t.id, name: t.name });
     }
@@ -1169,7 +1191,7 @@ function RegisterPatientPage() {
     (async () => {
       // Parallelize all catalog and setup fetches for instantaneous page readiness
       const [testsResult, docsResult, labResult, ccResult, outsourceResult] = await Promise.allSettled([
-        fetchFromLaravel("/tests?compact=1"),
+        fetchFromLaravel("/tests?compact=1", { skipCache: true }),
         fetchFromLaravel("/doctors?filter=all&include_inactive=1"),
         fetchFromLaravel("/lab"),
         fetchFromLaravel("/collection-centers"),
@@ -1306,6 +1328,28 @@ function RegisterPatientPage() {
       window.removeEventListener("outsource_partner_labs_updated", handlePartnerLabsUpdated);
       window.removeEventListener("storage", refreshPartnerLabs);
       window.removeEventListener("focus", refreshPartnerLabs);
+    };
+  }, []);
+
+  // Real-time catalog sync: instantly reload tests whenever test catalog is edited or saved
+  useEffect(() => {
+    const handleCacheInvalidated = (e: any) => {
+      const prefix = e?.detail?.prefix;
+      if (!prefix || prefix.includes("test")) {
+        fetchFromLaravel("/tests?compact=1", { skipCache: true })
+          .then((data) => {
+            const list = Array.isArray(data) ? data : (data?.data || []);
+            if (list.length > 0) {
+              setAvailableTests(list);
+              try { localStorage.setItem("lis_cached_tests", JSON.stringify(list)); } catch {}
+            }
+          })
+          .catch(() => {});
+      }
+    };
+    window.addEventListener("lis_cache_invalidated", handleCacheInvalidated);
+    return () => {
+      window.removeEventListener("lis_cache_invalidated", handleCacheInvalidated);
     };
   }, []);
 
@@ -2021,6 +2065,8 @@ function RegisterPatientPage() {
             collected_at: effectiveCollectedAt,
             collectedBy: collectedBySelect || null,
             collected_by: collectedBySelect || null,
+            collectionDateTime: collectionDateTime || new Date().toISOString(),
+            collection_date_time: collectionDateTime || new Date().toISOString(),
             b2b_user_id: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             b2bUserId: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             collection_center_id: isCollectionCenterUser && storedUser ? storedUser.id : null,
@@ -2029,6 +2075,8 @@ function RegisterPatientPage() {
             vial_barcode: joinedBarcodes,
             vial_barcodes: effectiveVialBarcodes,
             meta: {
+              collection_date_time: collectionDateTime || new Date().toISOString(),
+              collectionDateTime: collectionDateTime || new Date().toISOString(),
               vial_barcode: joinedBarcodes,
               vial_barcodes: effectiveVialBarcodes,
               ...((!isCollectionCenterUser && !isReceptionistUser && !isB2BUser && selectedB2bCenter) ? {
@@ -2116,6 +2164,8 @@ function RegisterPatientPage() {
         pincode: pincode.trim() || undefined,
         collectedAt: effectiveCollectedAt,
         collectedBy: collectedBySelect || undefined,
+        collectionDateTime: collectionDateTime || new Date().toISOString(),
+        collection_date_time: collectionDateTime || new Date().toISOString(),
         aadhaarNo: aadhaarNo.trim() || undefined,
         insuranceNo: insuranceNo.trim() || undefined,
         hfrId: hfrId.trim() || undefined,
@@ -2581,11 +2631,15 @@ function RegisterPatientPage() {
           collectedAt: effectiveCollectedAt,
           collected_by: collectedBySelect || null,
           collectedBy: collectedBySelect || null,
+          collection_date_time: collectionDateTime || new Date().toISOString(),
+          collectionDateTime: collectionDateTime || new Date().toISOString(),
           vial_barcode: joinedBarcodes,
           vialBarcode: joinedBarcodes,
           vial_barcodes: activeVialBarcodes,
           meta: {
             ...(newPatient.meta || {}),
+            collection_date_time: collectionDateTime || new Date().toISOString(),
+            collectionDateTime: collectionDateTime || new Date().toISOString(),
             vial_barcode: joinedBarcodes,
             vial_barcodes: activeVialBarcodes,
             ...outsourceMeta,
@@ -2632,6 +2686,8 @@ function RegisterPatientPage() {
             collectedAt: effectiveCollectedAt,
             collected_by: collectedBySelect || null,
             collectedBy: collectedBySelect || null,
+            collection_date_time: collectionDateTime || new Date().toISOString(),
+            collectionDateTime: collectionDateTime || new Date().toISOString(),
             aadhaar_no: aadhaarNo.trim() || null,
             aadhaarNo: aadhaarNo.trim() || null,
             insurance_no: insuranceNo.trim() || null,
@@ -2666,6 +2722,8 @@ function RegisterPatientPage() {
             vial_barcodes: activeVialBarcodes,
             meta: {
               ...(newPatient.meta || {}),
+              collection_date_time: collectionDateTime || new Date().toISOString(),
+              collectionDateTime: collectionDateTime || new Date().toISOString(),
               vial_barcode: joinedBarcodes,
               vial_barcodes: activeVialBarcodes,
               ...((!isCollectionCenterUser && !isReceptionistUser && !isB2BUser && selectedB2bCenter) ? {
@@ -2701,6 +2759,8 @@ function RegisterPatientPage() {
           },
           package_name: selectedPackage?.name || null,
           packageName: selectedPackage?.name || null,
+          collection_date_time: collectionDateTime || new Date().toISOString(),
+          collectionDateTime: collectionDateTime || new Date().toISOString(),
         };
 
         const bookingRes = await fetchFromLaravel("/bookings", {

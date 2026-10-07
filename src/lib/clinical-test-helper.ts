@@ -150,7 +150,36 @@ export function isGenuineCustomEditorTest(test: any): boolean {
     return false;
   }
 
-  // 2. Tests with standard numeric units or reference ranges are parameter tests
+  // 2. Culture & Sensitivity tests are ALWAYS Custom Editor
+  if (name.includes("culture")) {
+    return true;
+  }
+
+  // 3. Widal Slide Method uses the 4-dilution antigen matrix table
+  const fieldType = test.fieldType || test.field_type;
+  if (name.includes("widal") && (name.includes("slide") || fieldType === "Custom Editor")) {
+    return true;
+  }
+
+  // 4. Histopathology, Cytology, FNAC, Biopsy narrative templates
+  if (
+    category.includes("histopath") ||
+    category.includes("cytopath") ||
+    name.includes("biopsy") ||
+    name.includes("fnac") ||
+    name.includes("histopath") ||
+    name.includes("cytology") ||
+    name.includes("pap smear")
+  ) {
+    return true;
+  }
+
+  // 5. Explicit Custom Editor fieldType
+  if (fieldType === "Custom Editor") {
+    return true;
+  }
+
+  // 6. Tests with standard numeric units or reference ranges are parameter tests
   const unit = test.unit || test.unit_name;
   if (unit && typeof unit === "string" && unit.trim() !== "") {
     return false;
@@ -163,32 +192,7 @@ export function isGenuineCustomEditorTest(test: any): boolean {
     return false;
   }
 
-  // 3. Culture & Sensitivity tests are ALWAYS Custom Editor
-  if (name.includes("culture")) {
-    return true;
-  }
-
-  // 4. Widal Slide Method uses the 4-dilution antigen matrix table
-  if (name.includes("widal") && name.includes("slide")) {
-    return true;
-  }
-
-  // 5. Histopathology, Cytology, FNAC, Biopsy narrative templates
-  if (
-    category.includes("histopath") ||
-    category.includes("cytopath") ||
-    name.includes("biopsy") ||
-    name.includes("fnac") ||
-    name.includes("histopathology") ||
-    name.includes("cytology") ||
-    name.includes("pap smear")
-  ) {
-    return true;
-  }
-
-  // 6. Explicit Custom Editor fieldType (only if no analyte keyword matched)
-  const fieldType = test.fieldType || test.field_type;
-  return fieldType === "Custom Editor";
+  return false;
 }
 
 /**
@@ -275,3 +279,42 @@ export function getDefaultRangeForTest(testName: string): string {
 
   return "—";
 }
+
+export const DEFAULT_CULTURE_TEMPLATE = `<p>Sterile after 48 Hours. Incubation at 37°C.</p><p><strong>Date of Sample Collection:</strong><br><strong>Date of Reporting:</strong></p><p><strong>Sample Type:</strong><br><strong>Organism Isolated:</strong><br><strong>Colony Count:</strong> &lt;count&gt; Cfu/ml.</p><table style="width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 8px;"><thead><tr><th style="width: 60px; text-align: left; border: 1px solid #cbd5e1; padding: 6px 10px; background-color: #f1f5f9;"><strong>S. No.</strong></th><th style="text-align: left; border: 1px solid #cbd5e1; padding: 6px 10px; background-color: #f1f5f9;"><strong>Antibiotic Name</strong></th><th style="width: 160px; text-align: center; border: 1px solid #cbd5e1; padding: 6px 10px; background-color: #f1f5f9;"><strong>Sensitivity (S / I / R)</strong></th></tr></thead><tbody><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">1</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">AMOXYCLAV (AMC)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">2</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">AMIKACIN (AK)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">3</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">CEFTRIAXONE (CTR)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">4</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">CIPROFLOXACIN (CIP)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr><tr><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">5</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px;">MEROPENEM (MRP)</td><td style="border: 1px solid #e2e8f0; padding: 6px 10px; text-align: center;"></td></tr></tbody></table>`;
+
+export const DEFAULT_WIDAL_TEMPLATE = `<table style="width:100%; border-collapse:collapse; margin-top:8px; margin-bottom:8px;"><thead><tr style="background-color:#f4f4f5; text-align:left;"><th style="border:1px solid #d4d4d8; padding:6px 10px; width:28%;">Antigen</th><th style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">1/20</th><th style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">1/40</th><th style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">1/80</th><th style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">1/160</th><th style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">1/320</th></tr></thead><tbody><tr><td style="border:1px solid #d4d4d8; padding:6px 10px; font-weight:bold;">S. TYPHI "O"</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td></tr><tr><td style="border:1px solid #d4d4d8; padding:6px 10px; font-weight:bold;">S. TYPHI "H"</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td></tr><tr><td style="border:1px solid #d4d4d8; padding:6px 10px; font-weight:bold;">S. PARATYPHI "AH"</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td></tr><tr><td style="border:1px solid #d4d4d8; padding:6px 10px; font-weight:bold;">S. PARATYPHI "BH"</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td><td style="border:1px solid #d4d4d8; padding:6px 10px; text-align:center;">-</td></tr></tbody></table><p>Result: <strong>Negative</strong></p>`;
+
+export const DEFAULT_BIOPSY_TEMPLATE = `<p><strong>SPECIMEN:</strong> Tissue Biopsy in 10% Neutral Buffered Formalin</p><p><strong>CLINICAL HISTORY / DIAGNOSIS:</strong> &lt;Clinical indication &amp; anatomical biopsy site&gt;</p><p><strong>GROSS EXAMINATION:</strong><br>Received single formalin-fixed tissue specimen measuring &lt;dimensions&gt; cm. Greyish-white to tan in appearance, firm in consistency. Representative sections submitted in Block A.</p><p><strong>MICROSCOPIC EXAMINATION:</strong><br>Sections studied show tissue fragment lined by epithelium. The underlying fibrovascular stroma shows mild to moderate chronic inflammatory infiltrate predominantly composed of lymphocytes and plasma cells. There is no evidence of nuclear atypia, dysplasia, granulomatous inflammation, or malignancy in the sections examined.</p><p><strong>IMPRESSION / DIAGNOSIS:</strong><br><strong>BIOPSY EXAMINATION CONSISTENT WITH: &lt;BENIGN / CHRONIC NON-SPECIFIC INFLAMMATION / SPECIFY DIAGNOSIS&gt;</strong></p><p style="font-size:10px; color:#71717a; margin-top:8px;"><em>Note: Histopathological impression must be clinically correlated with patient's radiological, clinical, and operative findings.</em></p>`;
+
+export function getCustomEditorInitialTemplate(test: any): string {
+  if (!test) return "<p>Clinical and microscopic evaluation within normal reference limits.</p>";
+  if (test.customLayout && typeof test.customLayout === "string" && test.customLayout.trim()) {
+    return test.customLayout;
+  }
+  if (test.custom_layout && typeof test.custom_layout === "string" && test.custom_layout.trim()) {
+    return test.custom_layout;
+  }
+
+  const rawName = test.name || test.testName || "";
+  const name = rawName.trim().toLowerCase();
+  const category = (test.category || "").trim().toLowerCase();
+
+  if (name.includes("culture")) {
+    return DEFAULT_CULTURE_TEMPLATE;
+  }
+  if (name.includes("widal")) {
+    return DEFAULT_WIDAL_TEMPLATE;
+  }
+  if (
+    name.includes("biopsy") ||
+    category.includes("histopath") ||
+    category.includes("cytopath") ||
+    name.includes("fnac") ||
+    name.includes("pap smear")
+  ) {
+    return DEFAULT_BIOPSY_TEMPLATE;
+  }
+
+  return "<p>Clinical and microscopic evaluation within normal reference limits.</p>";
+}
+

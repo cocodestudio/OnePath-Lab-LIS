@@ -31,7 +31,7 @@ function normalizeReportSheet(rep: any, liveLab?: any): ReportSheetData {
     customId: rep.custom_id || rep.customId || "REP",
     status: rep.status,
     createdAt: rep.created_at || rep.createdAt,
-    reportDate: rep.reportDate || rep.report_date || rep.created_at || rep.createdAt,
+    reportDate: rep.reportDate || rep.report_date || new Date().toISOString(),
     patient: {
       name: rep.patient?.name || "Patient",
       age: Number(rep.patient?.age || 0),

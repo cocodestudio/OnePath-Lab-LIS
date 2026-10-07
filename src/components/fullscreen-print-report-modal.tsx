@@ -63,6 +63,7 @@ export function FullscreenPrintReportModal({
   // ── State ─────────────────────────────────────────────
   const [selectedMainTestIds, setSelectedMainTestIds] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isManualDate, setIsManualDate] = useState<boolean>(false);
   const [printWithHeaderFooter, setPrintWithHeaderFooter] = useState(false);
   const [separatePagePerTest, setSeparatePagePerTest] = useState<boolean>(false);
   const [autoFitToFooter, setAutoFitToFooter] = useState<boolean>(true);
@@ -130,13 +131,8 @@ export function FullscreenPrintReportModal({
   useEffect(() => {
     if (open && report) {
       setSelectedMainTestIds(mainTests.map((m) => m.id));
-      const ds = report.reportDate || report.createdAt;
-      if (ds) {
-        const d = new Date(ds);
-        setSelectedDate(isNaN(d.getTime()) ? new Date() : d);
-      } else {
-        setSelectedDate(new Date());
-      }
+      setIsManualDate(false);
+      setSelectedDate(new Date());
     }
   }, [open, report, mainTests]);
 
@@ -256,6 +252,7 @@ export function FullscreenPrintReportModal({
   // ── Date & Time Helpers ───────────────────────────────
   const adj = (fn: (d: Date) => void) =>
     setSelectedDate((prev) => {
+      setIsManualDate(true);
       const d = new Date(prev);
       fn(d);
       return d;
@@ -317,6 +314,10 @@ export function FullscreenPrintReportModal({
     if (!printRef.current || !activeReportData) {
       toast.error("Not Ready", "Report preview is still rendering. Please wait a moment.");
       return;
+    }
+
+    if (!isManualDate) {
+      setSelectedDate(new Date());
     }
 
     setIsDownloadingPdf(true);
@@ -643,7 +644,10 @@ export function FullscreenPrintReportModal({
                   </label>
                   <button
                     type="button"
-                    onClick={() => setSelectedDate(new Date())}
+                    onClick={() => {
+                      setSelectedDate(new Date());
+                      setIsManualDate(false);
+                    }}
                     className="text-[10.5px] text-primary hover:underline font-bold cursor-pointer"
                   >
                     Set Current (Now)

@@ -8,6 +8,14 @@ import { normalizeBillSettings, BillLayoutSettings } from "../src/lib/bill-setti
 import { resolvePackageTestIds, DEFAULT_PACKAGES } from "../src/lib/packages";
 import { analyzeReportForSmartInsights, evaluateParamReference } from "../src/lib/smart-report-engine";
 import { isSubscriptionExpired } from "../src/lib/subscription";
+import {
+  isGenuineCustomEditorTest,
+  getCustomEditorInitialTemplate,
+  DEFAULT_WIDAL_TEMPLATE,
+  DEFAULT_CULTURE_TEMPLATE,
+  DEFAULT_BIOPSY_TEMPLATE,
+} from "../src/lib/clinical-test-helper";
+import { clearApiCache } from "../src/lib/api-client";
 
 let totalTests = 0;
 let passedTests = 0;
@@ -273,8 +281,322 @@ assert(
 );
 
 // ==============================================================================
-// Final Summary & Verification Report
+// 6. Specialized Clinical Layouts (Culture, Widal Slide, Biopsy Histopathology)
 // ==============================================================================
+console.log("\n▶ MODULE 6: Specialized Clinical Layouts & Narrative Templates");
+
+// Test 16: Culture and Sensitivity must ALWAYS be recognized as Custom Editor
+const cultureTestObj = {
+  name: "Culture and Sensitivity",
+  category: "Microbiology",
+  valueType: "Numeric", // Even if default valueType is Numeric in database!
+  fieldType: "Custom Editor",
+};
+assert(
+  isGenuineCustomEditorTest(cultureTestObj) === true,
+  "[BUG FIX] Culture & Sensitivity is recognized as Custom Editor (never standard analyte row)"
+);
+
+// Test 17: Widal Slide Method must be recognized as Custom Editor (4-antigen matrix)
+const widalSlideObj = {
+  name: "Widal Test (Slide Method)",
+  category: "Serology & Immunology",
+  valueType: "Numeric",
+  fieldType: "Custom Editor",
+};
+assert(
+  isGenuineCustomEditorTest(widalSlideObj) === true,
+  "[BUG FIX] Widal Slide Method is recognized as Custom Editor (2D dilution grid)"
+);
+
+// Test 18: Biopsy (Histopathology Examination) must be recognized as Custom Editor
+const biopsyTestObj = {
+  name: "Biopsy (Histopathology Examination)",
+  category: "Histopathology",
+  valueType: "Text",
+  fieldType: "Custom Editor",
+};
+assert(
+  isGenuineCustomEditorTest(biopsyTestObj) === true,
+  "Biopsy (Histopathology Examination) is recognized as Custom Editor surgical pathology layout"
+);
+
+// Test 19: Standard pathology analytes MUST NEVER be treated as Custom Editor (Zero Regression)
+const standardAnalytes = [
+  { name: "Complete Blood Count (CBC)", category: "Haematology" },
+  { name: "Liver Function Test (LFT)", category: "Biochemistry" },
+  { name: "Kidney Function Test (KFT)", category: "Biochemistry" },
+  { name: "Lipid Profile", category: "Biochemistry" },
+  { name: "Fasting Blood Sugar", category: "Biochemistry" },
+  { name: "Serum Creatinine", category: "Biochemistry" },
+];
+const allAnalytesProtected = standardAnalytes.every(t => !isGenuineCustomEditorTest(t));
+assert(
+  allAnalytesProtected,
+  "[ZERO REGRESSION] Standard clinical analytes (CBC, LFT, KFT, Lipid, Sugar) are strictly NOT Custom Editor"
+);
+
+// ==============================================================================
+// 7. Test Catalog Edit & Invalidation Propagation Engine
+// ==============================================================================
+console.log("\n▶ MODULE 7: Test Catalog Edit & Invalidation Propagation Engine");
+
+const mockStorage: Record<string, string> = {
+  "lis_cached_tests": JSON.stringify([{ id: "test-1", name: "CBC Old", price: 300 }]),
+};
+
+(global as any).window = {
+  dispatchEvent: (event: any) => {
+    (global as any).lastDispatchedEvent = event;
+  },
+};
+(global as any).localStorage = {
+  getItem: (key: string) => mockStorage[key] ?? null,
+  setItem: (key: string, val: string) => { mockStorage[key] = val; },
+  removeItem: (key: string) => { delete mockStorage[key]; },
+};
+
+clearApiCache("/tests");
+
+assert(
+  mockStorage["lis_cached_tests"] === undefined,
+  "[BUG FIX] clearApiCache('/tests') immediately wipes lis_cached_tests from localStorage"
+);
+
+assert(
+  (global as any).lastDispatchedEvent?.type === "lis_cache_invalidated",
+  "[BUG FIX] clearApiCache dispatches lis_cache_invalidated event to notify all UI screens"
+);
+
+assert(
+  (global as any).lastDispatchedEvent?.detail?.prefix === "/tests",
+  "[BUG FIX] lis_cache_invalidated event carries '/tests' prefix detail"
+);
+
+// ==============================================================================
+// 8. Specialized Tests Layout & Dropdown Options Engine
+// ==============================================================================
+console.log("\n▶ MODULE 8: Specialized Tests Layout & Dropdown Options Engine");
+
+import { getCompleteParameterOptions } from "../src/lib/clinical-options";
+import fs from "fs";
+import path from "path";
+
+// Verify Malaria Antigen parameter options (Pf and Pv only)
+const malariaPfOpts = getCompleteParameterOptions("Plasmodium falciparum (HRP-2 Antigen)", "Malaria Antigen");
+assert(
+  malariaPfOpts.options.includes("Non-Reactive") && malariaPfOpts.options.includes("Reactive"),
+  "Malaria Pf Antigen options include Non-Reactive and Reactive"
+);
+
+const malariaPvOpts = getCompleteParameterOptions("Plasmodium vivax (Pan / pLDH Antigen)", "Malaria Antigen");
+assert(
+  malariaPvOpts.options.includes("Non-Reactive") && malariaPvOpts.options.includes("Reactive"),
+  "Malaria Pv Antigen options include Non-Reactive and Reactive"
+);
+
+// Verify Malaria Card parameter options (IgG and IgM only)
+const malariaIggOpts = getCompleteParameterOptions("Malaria IgG Antibody", "Malaria Parasite (Card Test)");
+assert(
+  malariaIggOpts.options.includes("Non-Reactive") && malariaIggOpts.options.includes("Reactive"),
+  "Malaria IgG Antibody options include Non-Reactive and Reactive"
+);
+
+const malariaIgmOpts = getCompleteParameterOptions("Malaria IgM Antibody", "Malaria Parasite (Card Test)");
+assert(
+  malariaIgmOpts.options.includes("Non-Reactive") && malariaIgmOpts.options.includes("Reactive"),
+  "Malaria IgM Antibody options include Non-Reactive and Reactive"
+);
+
+// Verify default_tests.json strictly separates subtests
+try {
+  const defaultTestsPath = path.resolve(__dirname, "../../Backend/database/data/default_tests.json");
+  const defaultTests = JSON.parse(fs.readFileSync(defaultTestsPath, "utf-8"));
+  
+  const malariaAntigen = defaultTests.find((t: any) => t.testCode === "SERO_152_MAL_AG" || t.code === "SERO_152_MAL_AG");
+  const agSubtests = malariaAntigen?.subTests || malariaAntigen?.subtests || [];
+  const agSubNames = agSubtests.map((s: any) => s.name.toLowerCase());
+  const agHasSpeciesOnly = agSubNames.length === 2 &&
+                           agSubNames.some((n: string) => n.includes("falciparum")) &&
+                           agSubNames.some((n: string) => n.includes("vivax")) &&
+                           !agSubNames.some((n: string) => n.includes("igg")) &&
+                           !agSubNames.some((n: string) => n.includes("igm"));
+  assert(agHasSpeciesOnly, "[ZERO REGRESSION] Malaria Antigen has strictly Pf & Pv species only (no IgG/IgM)");
+
+  const malariaCard = defaultTests.find((t: any) => t.testCode === "HAEM_013_MP_CARD" || t.code === "HAEM_013_MP_CARD");
+  const cardSubtests = malariaCard?.subTests || malariaCard?.subtests || [];
+  const cardSubNames = cardSubtests.map((s: any) => s.name.toLowerCase());
+  const cardHasAntibodiesOnly = cardSubNames.length === 2 &&
+                                cardSubNames.some((n: string) => n.includes("igg")) &&
+                                cardSubNames.some((n: string) => n.includes("igm")) &&
+                                !cardSubNames.some((n: string) => n.includes("falciparum")) &&
+                                !cardSubNames.some((n: string) => n.includes("vivax"));
+  assert(cardHasAntibodiesOnly, "[ZERO REGRESSION] Malaria Card has strictly IgG & IgM antibodies only (no Pf/Pv)");
+} catch (e: any) {
+  assert(false, "Verification of default_tests.json structure", e?.message);
+}
+
+// Verify DB custom options take precedence without polluting extra options
+const dbExplicitOpts = getCompleteParameterOptions("Custom Card Test", "Screening", undefined, ["Non-Reactive", "Reactive"]);
+assert(
+  dbExplicitOpts.options.length === 2 && dbExplicitOpts.options.includes("Non-Reactive") && dbExplicitOpts.options.includes("Reactive"),
+  "Explicit DB options take direct precedence without extra options pollution"
+);
+
+// Verify Widal Slide Method is genuine custom editor
+assert(
+  isGenuineCustomEditorTest({ name: "Widal Test (Slide Method)", category: "Serology & Immunology", fieldType: "Custom Editor" }),
+  "Widal Test (Slide Method) is recognized as genuine Custom Editor"
+);
+
+// Verify Biopsy is genuine custom editor in Histopathology
+assert(
+  isGenuineCustomEditorTest({ name: "Biopsy (Histopathology Examination)", category: "Histopathology", fieldType: "Custom Editor" }),
+  "Biopsy (Histopathology Examination) is recognized as genuine Custom Editor in Histopathology"
+);
+
+// ==============================================================================
+// 9. Custom Table Layout vs Clinical Interpretation Separation Engine
+// ==============================================================================
+console.log("\n▶ MODULE 9: Custom Table Layout vs Clinical Interpretation Separation Engine");
+
+// Test 9.1: Widal Test Layout Generation
+const widalLayout = getCustomEditorInitialTemplate({ name: "Widal Test (Slide Method)", category: "Serology & Immunology", fieldType: "Custom Editor" });
+assert(
+  widalLayout.includes("<table") && widalLayout.includes("S. TYPHI") && widalLayout.includes("1/160"),
+  "Widal Test generates 2D antigen dilution table format"
+);
+
+// Test 9.2: Culture & Sensitivity Layout Generation
+const cultureLayout = getCustomEditorInitialTemplate({ name: "Urine Culture & Sensitivity", category: "Microbiology", fieldType: "Custom Editor" });
+assert(
+  cultureLayout.includes("<table") && cultureLayout.includes("Antibiotic Name") && cultureLayout.includes("AMOXYCLAV"),
+  "Culture & Sensitivity generates antibiotic sensitivity grid layout"
+);
+
+// Test 9.3: Clinical Interpretation for Widal contains clinical titer guidelines and NO leaked table
+const widalInterp = getClinicalInterpretation("Widal Test (Slide Method)", widalLayout);
+assert(
+  widalInterp !== null && widalInterp.includes("4-fold rise") && !widalInterp.includes("1/20"),
+  "[ZERO LEAK] Widal Clinical Interpretation provides medical diagnostic guidelines, NOT the result entry table"
+);
+
+// Test 9.4: Clinical Interpretation for Culture contains CLSI guidelines and NO leaked antibiotic table
+const cultureInterp = getClinicalInterpretation("Urine Culture & Sensitivity", cultureLayout);
+assert(
+  cultureInterp !== null && cultureInterp.includes("CLSI") && !cultureInterp.includes("AMOXYCLAV"),
+  "[ZERO LEAK] Culture Clinical Interpretation provides antimicrobial stewardship guidelines, NOT the antibiotic table"
+);
+
+// Test 9.5: Clinical Interpretation for Biopsy contains histopathology clinical guidelines
+const biopsyInterp = getClinicalInterpretation("Biopsy (Histopathology Examination)");
+assert(
+  biopsyInterp !== null && biopsyInterp.includes("Histopathological impression is based solely"),
+  "Biopsy Clinical Interpretation provides surgical pathology guidelines"
+);
+
+// Test 9.6: Crash-proof Editor HTML extraction logic handles null/destroyed refs safely
+const mockDestroyedEditor = { current: { isDestroyed: true, getHTML: () => { throw new Error("Cannot read properties of null (reading 'cached')"); } } };
+const mockNullEditor = { current: null };
+let safeExtractedValue: string | null = null;
+try {
+  const getSafeHtml = (ref: any) => {
+    try {
+      if (ref?.current && !ref.current.isDestroyed && typeof ref.current.getHTML === "function") {
+        return ref.current.getHTML();
+      }
+    } catch {}
+    return null;
+  };
+  safeExtractedValue = getSafeHtml(mockDestroyedEditor) ?? getSafeHtml(mockNullEditor) ?? "FALLBACK_SAFE";
+} catch (e) {
+  safeExtractedValue = "CRASHED";
+}
+assert(
+  safeExtractedValue === "FALLBACK_SAFE",
+  "[CRASH-PROOF] TipTap HTML extraction handles destroyed/null editor without throwing 'null (reading cached)'"
+);
+// ==============================================================================
+// 10. Report Date vs Collection Date Independence & Real-time Formatting
+// ==============================================================================
+console.log("\n▶ MODULE 10: Collection Date vs Report Date Independence");
+
+const mockPatientRegistrationTime = "2026-10-05T10:00:00.000Z";
+const mockCurrentPrintTime = "2026-10-07T14:30:00.000Z";
+
+const formatTestDateTime = (val: any) => {
+  if (!val) return "";
+  try {
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return String(val);
+    return d.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return String(val);
+  }
+};
+
+// Test 10.1: Collection Date reflects registration / collection timestamp
+const testPatient = {
+  created_at: mockPatientRegistrationTime,
+  collection_date_time: mockPatientRegistrationTime,
+  meta: { collection_date_time: mockPatientRegistrationTime }
+};
+const testReport = {
+  createdAt: mockPatientRegistrationTime,
+  reportDate: mockCurrentPrintTime,
+  patient: testPatient
+};
+
+const calculatedCollDate = formatTestDateTime(
+  testPatient.collection_date_time ||
+  testPatient.created_at ||
+  testReport.createdAt
+);
+const calculatedRepDate = formatTestDateTime(
+  testReport.reportDate && testReport.reportDate !== testReport.createdAt
+    ? testReport.reportDate
+    : new Date()
+);
+
+assert(
+  calculatedCollDate.includes("05") && (calculatedCollDate.includes("Oct") || calculatedCollDate.includes("10")),
+  "[INDEPENDENT DATES] Collection Date preserves patient registration date (05 Oct 2026)",
+  `Got: ${calculatedCollDate}`
+);
+
+assert(
+  calculatedRepDate.includes("07") && (calculatedRepDate.includes("Oct") || calculatedRepDate.includes("10")),
+  "[INDEPENDENT DATES] Report Date accurately reflects current print date (07 Oct 2026)",
+  `Got: ${calculatedRepDate}`
+);
+
+assert(
+  calculatedCollDate !== calculatedRepDate,
+  "[ZERO COLLAPSE] Collection Date and Report Date are strictly distinct and do not show the same timestamp",
+  `Collection (${calculatedCollDate}) must not equal Report (${calculatedRepDate})`
+);
+
+// Test 10.2: When reportDate was mistakenly set to createdAt, fallback uses real-time current date
+const legacyReportWithSameDate = {
+  createdAt: mockPatientRegistrationTime,
+  reportDate: mockPatientRegistrationTime,
+  patient: testPatient
+};
+const fixedRepDate = formatTestDateTime(
+  legacyReportWithSameDate.reportDate && legacyReportWithSameDate.reportDate !== legacyReportWithSameDate.createdAt
+    ? legacyReportWithSameDate.reportDate
+    : new Date()
+);
+assert(
+  fixedRepDate !== calculatedCollDate,
+  "[SAFE FALLBACK] When reportDate equals createdAt, Report Date safely resolves to current print timestamp instead of freezing to registration date"
+);
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

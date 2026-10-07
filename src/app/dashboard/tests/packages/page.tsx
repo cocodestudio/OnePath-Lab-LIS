@@ -50,6 +50,14 @@ export default function PackagesPage() {
   useEffect(() => {
     loadPackages();
     loadTests();
+
+    const handleSync = () => {
+      loadTests(true);
+    };
+    window.addEventListener("lis_cache_invalidated", handleSync);
+    return () => {
+      window.removeEventListener("lis_cache_invalidated", handleSync);
+    };
   }, []);
 
   const loadPackages = async () => {
@@ -69,10 +77,10 @@ export default function PackagesPage() {
     }
   };
 
-  const loadTests = async () => {
+  const loadTests = async (skipCache = false) => {
     try {
       setLoadingTests(true);
-      const data = await fetchFromLaravel("/tests");
+      const data = await fetchFromLaravel("/tests", { skipCache });
       const list = Array.isArray(data) ? data : (data?.data || []);
       setAllTests(list);
     } catch (err) {

@@ -396,6 +396,7 @@ export default function BillingPage() {
 
     const handleSync = () => {
       fetchBills(true);
+      fetchAvailableTests(true);
     };
     window.addEventListener("lis_online_sync", handleSync);
     window.addEventListener("lis_cache_invalidated", handleSync);

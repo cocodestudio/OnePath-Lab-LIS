@@ -162,6 +162,75 @@ export const DEFAULT_INTERPRETATIONS: Record<string, string> = {
 </tr>
 </tbody>
 </table>
+</div>`,
+
+  WIDAL: `<div class="clinical-interpretation space-y-2">
+<p style="font-size:11px; font-weight:bold; color:#18181b; margin-bottom:4px;">Diagnostic Titers &amp; Clinical Significance:</p>
+<table style="width:100%; border-collapse:collapse; margin-top:4px; margin-bottom:4px; font-size:10px; border:1px solid #71717a;" cellpadding="3" cellspacing="0">
+<thead style="background-color:#f4f4f5; text-align:left;">
+<tr>
+<th style="border:1px solid #71717a; padding:4px 6px; font-weight:bold; color:#18181b;">Antigen</th>
+<th style="border:1px solid #71717a; padding:4px 6px; font-weight:bold; color:#18181b;">Significant Diagnostic Titer Cut-off</th>
+<th style="border:1px solid #71717a; padding:4px 6px; font-weight:bold; color:#18181b;">Clinical Significance</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="border:1px solid #71717a; padding:3px 6px; font-weight:600;">S. typhi &quot;O&quot; (Somatic)</td>
+<td style="border:1px solid #71717a; padding:3px 6px;">&ge; 1:80 / 1:160</td>
+<td style="border:1px solid #71717a; padding:3px 6px;">Indicates active or recent acute Enteric (Typhoid) Fever.</td>
+</tr>
+<tr>
+<td style="border:1px solid #71717a; padding:3px 6px; font-weight:600;">S. typhi &quot;H&quot; (Flagellar)</td>
+<td style="border:1px solid #71717a; padding:3px 6px;">&ge; 1:160</td>
+<td style="border:1px solid #71717a; padding:3px 6px;">Indicates past exposure, late typhoid infection, or prior TAB vaccination.</td>
+</tr>
+<tr>
+<td style="border:1px solid #71717a; padding:3px 6px; font-weight:600;">S. paratyphi &quot;AH&quot; / &quot;BH&quot;</td>
+<td style="border:1px solid #71717a; padding:3px 6px;">&ge; 1:80 / 1:160</td>
+<td style="border:1px solid #71717a; padding:3px 6px;">Indicates Paratyphoid infection.</td>
+</tr>
+</tbody>
+</table>
+<p style="font-size:10px; line-height:1.4; color:#52525b; margin-top:3px;">
+<strong>Clinical Remarks:</strong> A single Widal test has limited diagnostic value in endemic zones. A 4-fold rise in paired sera titer collected 7-10 days apart is diagnostic of Salmonella enterica infection. Advised correlation with blood culture for definitive confirmation.
+</p>
+</div>`,
+
+  CULTURE: `<div class="clinical-interpretation space-y-2">
+<p style="font-size:11px; font-weight:bold; color:#18181b; margin-bottom:4px;">Antimicrobial Susceptibility Testing (CLSI / EUCAST Guidelines):</p>
+<table style="width:100%; border-collapse:collapse; margin-top:4px; margin-bottom:4px; font-size:10px; border:1px solid #71717a;" cellpadding="3" cellspacing="0">
+<thead style="background-color:#f4f4f5; text-align:left;">
+<tr>
+<th style="border:1px solid #71717a; padding:4px 6px; font-weight:bold; color:#18181b; width:22%;">Category</th>
+<th style="border:1px solid #71717a; padding:4px 6px; font-weight:bold; color:#18181b;">Clinical Definition &amp; Therapy Guidance</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="border:1px solid #71717a; padding:3px 6px; font-weight:600; color:#15803d;">Sensitive (S)</td>
+<td style="border:1px solid #71717a; padding:3px 6px;">Pathogen is inhibited by attainable concentrations of antimicrobial agent when standard dosage is administered. Favorable clinical response expected.</td>
+</tr>
+<tr>
+<td style="border:1px solid #71717a; padding:3px 6px; font-weight:600; color:#b45309;">Intermediate (I)</td>
+<td style="border:1px solid #71717a; padding:3px 6px;">Higher dosages or physiological concentration at infection site (e.g. urinary tract) may be clinically effective. Buffer zone to prevent minor technical discrepancies.</td>
+</tr>
+<tr>
+<td style="border:1px solid #71717a; padding:3px 6px; font-weight:600; color:#b91c1c;">Resistant (R)</td>
+<td style="border:1px solid #71717a; padding:3px 6px;">Pathogen is not inhibited by reachable therapeutic concentrations of the drug; clinical failure likely. Alternate therapeutic agent required.</td>
+</tr>
+</tbody>
+</table>
+<p style="font-size:10px; line-height:1.4; color:#52525b; margin-top:3px;">
+<strong>Clinical Remarks:</strong> In vitro antimicrobial susceptibility does not guarantee in vivo clinical efficacy. Choice of antibiotic should consider site of infection, patient age, renal/hepatic function, host defense, and pharmacokinetic factors.
+</p>
+</div>`,
+
+  BIOPSY: `<div class="clinical-interpretation space-y-2">
+<p style="font-size:10px; line-height:1.4; color:#52525b;">
+<strong>Histopathological Guidelines &amp; Clinical Correlation:</strong><br>
+Histopathological impression is based solely on the microscopic examination of the tissue sections submitted. The final diagnosis must be clinically correlated with patient's radiological, laboratory, and intraoperative findings. In case of discrepancies with clinical suspicion, repeat tissue sampling or immunohistochemistry (IHC) is recommended.
+</p>
 </div>`
 };
 
@@ -173,7 +242,13 @@ export function getClinicalInterpretation(
   customInterpretation?: string | null,
   category?: string | null
 ): string | null {
-  if (customInterpretation && customInterpretation.trim() !== '' && customInterpretation !== '<p><br></p>') {
+  const isLeakedResultTable = customInterpretation && (
+    customInterpretation.includes("Sensitivity (S / I / R)") ||
+    (customInterpretation.includes("1/20") && customInterpretation.includes("1/40") && customInterpretation.includes("S. TYPHI")) ||
+    (customInterpretation.includes("GROSS EXAMINATION:") && customInterpretation.includes("MICROSCOPIC EXAMINATION:"))
+  );
+
+  if (customInterpretation && customInterpretation.trim() !== '' && customInterpretation !== '<p><br></p>' && !isLeakedResultTable) {
     return customInterpretation;
   }
 
@@ -215,6 +290,18 @@ export function getClinicalInterpretation(
 
   if (normalized.includes('GLUCOSE') || normalized.includes('SUGAR') || normalized.includes('HBA1C') || normalized.includes('DIABETES')) {
     return DEFAULT_INTERPRETATIONS.SUGAR;
+  }
+
+  if (normalized.includes('WIDAL')) {
+    return DEFAULT_INTERPRETATIONS.WIDAL;
+  }
+
+  if (normalized.includes('CULTURE')) {
+    return DEFAULT_INTERPRETATIONS.CULTURE;
+  }
+
+  if (normalized.includes('BIOPSY') || catNormalized.includes('HISTOPATH') || catNormalized.includes('CYTOPATH')) {
+    return DEFAULT_INTERPRETATIONS.BIOPSY;
   }
 
   return null;
