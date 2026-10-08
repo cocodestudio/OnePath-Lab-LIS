@@ -597,6 +597,72 @@ assert(
   fixedRepDate !== calculatedCollDate,
   "[SAFE FALLBACK] When reportDate equals createdAt, Report Date safely resolves to current print timestamp instead of freezing to registration date"
 );
+// ==============================================================================
+// 11. Patient Title & Designation Independence Engine
+// ==============================================================================
+console.log("\n▶ MODULE 11: Patient Title & Designation Independence Engine");
+
+import { normalizeDesignation, defaultReportLayoutSettings } from "../src/lib/report-settings";
+import { formatPatientListDisplayName, cleanPatientNameForReport, isBlankDesignation, extractPurePatientName } from "../src/lib/patient-title-helper";
+
+// 11.1 Default designation in settings is Blank
+assert(
+  normalizeDesignation() === "Blank" && normalizeDesignation(null) === "Blank" && normalizeDesignation("") === "Blank",
+  "[SETTINGS] normalizeDesignation defaults to Blank for empty/null inputs"
+);
+assert(
+  defaultReportLayoutSettings.defaultDesignation === "Blank",
+  "[SETTINGS] defaultReportLayoutSettings defaultDesignation is Blank"
+);
+
+// 11.2 Dashboard views (Reports, Patients, Billing) display Untitled when title is blank
+assert(
+  formatPatientListDisplayName("Rahul Sharma", "") === "Untitled Rahul Sharma",
+  "[DASHBOARD] Blank designation displays 'Untitled <Name>' in list views"
+);
+assert(
+  formatPatientListDisplayName("Rahul Sharma", "Blank") === "Untitled Rahul Sharma",
+  "[DASHBOARD] 'Blank' designation displays 'Untitled <Name>' in list views"
+);
+assert(
+  formatPatientListDisplayName("Rahul Sharma", "None") === "Untitled Rahul Sharma",
+  "[DASHBOARD] 'None' designation displays 'Untitled <Name>' in list views"
+);
+assert(
+  formatPatientListDisplayName("Mr. Rahul Sharma", "Mr.") === "Mr. Rahul Sharma",
+  "[DASHBOARD] Selected title 'Mr.' is preserved in list views"
+);
+assert(
+  formatPatientListDisplayName("Rahul Sharma", "Dr.") === "Dr. Rahul Sharma",
+  "[DASHBOARD] Selected title 'Dr.' is prefixed to patient name in list views"
+);
+assert(
+  formatPatientListDisplayName("Untitled Rahul Sharma", "") === "Untitled Rahul Sharma",
+  "[DASHBOARD] Existing 'Untitled' does not get duplicate 'Untitled Untitled'"
+);
+
+// 11.3 Report print & download views NEVER print title when title is blank
+assert(
+  cleanPatientNameForReport("Rahul Sharma", "") === "Rahul Sharma",
+  "[PRINT/DOWNLOAD] Blank title prints clean patient name directly from the beginning (no title)"
+);
+assert(
+  cleanPatientNameForReport("Rahul Sharma", "Blank") === "Rahul Sharma",
+  "[PRINT/DOWNLOAD] 'Blank' designation prints clean patient name (no title)"
+);
+assert(
+  cleanPatientNameForReport("Untitled Rahul Sharma", "") === "Rahul Sharma",
+  "[PRINT/DOWNLOAD] Any 'Untitled' prefix is strictly stripped from printed/downloaded reports"
+);
+assert(
+  cleanPatientNameForReport("Mr. Rahul Sharma", "Mr.") === "Mr. Rahul Sharma",
+  "[PRINT/DOWNLOAD] Explicitly selected title 'Mr.' is retained on report"
+);
+assert(
+  cleanPatientNameForReport("Rahul Sharma", "Dr.") === "Dr. Rahul Sharma",
+  "[PRINT/DOWNLOAD] Explicitly selected title 'Dr.' is retained on report"
+);
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

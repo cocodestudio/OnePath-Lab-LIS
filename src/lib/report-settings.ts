@@ -32,9 +32,9 @@ export const ALL_DESIGNATIONS = [
  * Safely preserves backward-compatibility for legacy database records and settings.
  */
 export function normalizeDesignation(val?: string | null): string {
-  if (!val) return "Mr.";
+  if (!val) return "Blank";
   const trimmed = val.trim();
-  if (!trimmed || trimmed.toLowerCase() === "null") return "Mr.";
+  if (!trimmed || trimmed.toLowerCase() === "null" || trimmed.toLowerCase() === "blank" || trimmed.toLowerCase() === "none") return "Blank";
 
   // Direct case-insensitive match against ALL_DESIGNATIONS
   const found = ALL_DESIGNATIONS.find(
@@ -345,7 +345,7 @@ export const DEFAULT_DEPARTMENT_ORDER = [
 ] as const;
 
 export const defaultReportLayoutSettings: ReportLayoutSettings = {
-  defaultDesignation: "Mr.",
+  defaultDesignation: "Blank",
   flags: {
     enabled: true,
     lowColor: "#000000",

@@ -23,9 +23,11 @@ import { printInvoiceElement } from "@/lib/print-invoice";
 import { getNativePdfBase64, downloadNativePdf } from "@/lib/pdf-report-downloader";
 import { useToast } from "@/components/ui/toast";
 import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
+import { formatPatientListDisplayName } from "@/lib/patient-title-helper";
 
 interface Patient {
   name: string;
+  designation?: string;
   custom_id: string;
   phone: string;
   age: number;
@@ -822,7 +824,8 @@ export default function BillingPage() {
 
   const filteredBills = safeBills.filter((b) => {
     if (!b) return false;
-    const patName = b.patient?.name || "Direct Patient";
+    const patName = formatPatientListDisplayName(b.patient?.name, b.patient?.designation);
+    const rawPatName = b.patient?.name || "";
     const patId = b.patient?.custom_id || (b.patient as any)?.customId || "";
     const billId = getBillInvoiceNo(b);
     const phone = b.patient?.phone || "";
@@ -830,6 +833,7 @@ export default function BillingPage() {
 
     const matchesSearch =
       patName.toLowerCase().includes(search.toLowerCase()) ||
+      rawPatName.toLowerCase().includes(search.toLowerCase()) ||
       patId.toLowerCase().includes(search.toLowerCase()) ||
       billId.toLowerCase().includes(search.toLowerCase()) ||
       phone.includes(search);
@@ -1435,7 +1439,7 @@ export default function BillingPage() {
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className="font-semibold text-foreground">{bill.patient?.name}</div>
+                        <div className="font-semibold text-foreground">{formatPatientListDisplayName(bill.patient?.name, bill.patient?.designation)}</div>
                         <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
                           <span className="font-mono">{bill.patient?.custom_id}</span>
                           <span>·</span>

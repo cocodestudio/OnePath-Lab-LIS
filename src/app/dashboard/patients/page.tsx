@@ -23,6 +23,7 @@ import { fetchFromLaravel, getStoredToken, getAuthBaseUrl, updateStoredUser } fr
 import { ALL_DESIGNATIONS } from "@/lib/report-settings";
 import { BarcodeSVG } from "@/components/barcode-svg";
 import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
+import { formatPatientListDisplayName } from "@/lib/patient-title-helper";
 
 interface Patient {
   id: string;
@@ -541,7 +542,8 @@ export default function PatientsPage() {
 
   const filteredPatients = safePatients.filter((p: any) => {
     if (!p) return false;
-    const patName = p.name || "";
+    const patName = formatPatientListDisplayName(p.name, p.designation);
+    const rawPatName = p.name || "";
     const patPhone = p.phone || "";
     const patId = p.custom_id || p.customId || "";
     const patDate = getRecordLocalDate(p.created_at || p.createdAt);
@@ -551,6 +553,7 @@ export default function PatientsPage() {
 
     const matchesSearch =
       patName.toLowerCase().includes(search.toLowerCase()) ||
+      rawPatName.toLowerCase().includes(search.toLowerCase()) ||
       patPhone.includes(search) ||
       patId.toLowerCase().includes(search.toLowerCase()) ||
       patAbhaAddress.toLowerCase().includes(search.toLowerCase()) ||
@@ -563,7 +566,7 @@ export default function PatientsPage() {
 
   const handleOpenEdit = (patient: any) => {
     setEditPatient(patient);
-    setEditDesignation(patient.designation || "Mr.");
+    setEditDesignation(patient.designation || "");
     setEditName(patient.name || "");
     setEditAgeYears((patient.age || 0).toString());
     setEditAgeMonths("0");
@@ -609,7 +612,7 @@ export default function PatientsPage() {
       await fetchFromLaravel(`/patients/${editPatient.id}`, {
         method: "PUT",
         body: JSON.stringify({
-          designation: editDesignation,
+          designation: editDesignation && editDesignation.toLowerCase() !== "blank" ? editDesignation : null,
           name: editName.trim(),
           age: calculatedAge,
           gender: editGender,
@@ -846,7 +849,7 @@ export default function PatientsPage() {
               <tbody className="divide-y divide-border/60">
                 {currentRows.map((patient: any) => {
                   const patId = patient.custom_id || patient.customId || "N/A";
-                  const patName = patient.name;
+                  const patName = formatPatientListDisplayName(patient.name, patient.designation);
                   const patGender = patient.gender || "Male";
                   const patAge = patient.age;
                   const patBarcode = patient.vial_barcode || patient.vialBarcode || patient.meta?.vial_barcode || patient.custom_id || patient.customId || "—";
@@ -1045,7 +1048,7 @@ export default function PatientsPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-display text-lg font-bold text-foreground">
-                    {viewPatient?.designation ? `${viewPatient.designation} ` : ""}{viewPatient?.name}
+                    {formatPatientListDisplayName(viewPatient?.name, viewPatient?.designation)}
                   </h3>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                     VERIFIED PATIENT
@@ -1075,7 +1078,7 @@ export default function PatientsPage() {
                   <div>
                     <p className="text-[10px] font-bold text-muted-foreground uppercase">Full Name</p>
                     <p className="font-bold text-foreground mt-0.5">
-                      {viewPatient.designation ? `${viewPatient.designation} ` : ""}{viewPatient.name}
+                      {formatPatientListDisplayName(viewPatient?.name, viewPatient?.designation)}
                     </p>
                   </div>
                   <div>

@@ -19,6 +19,7 @@ import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report
 import { Checkbox } from "@/components/ui/checkbox";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
+import { formatPatientListDisplayName } from "@/lib/patient-title-helper";
 
 interface Test { 
   name: string; 
@@ -450,13 +451,15 @@ export default function ReportsListPage() {
 
   const filteredReports = safeReports.filter((r: any) => {
     if (!r) return false;
-    const patName = r.patient?.name || "";
+    const patName = formatPatientListDisplayName(r.patient?.name, r.patient?.designation);
+    const rawPatName = r.patient?.name || "";
     const patId = r.patient?.custom_id || r.patient?.customId || "";
     const repId = r.custom_id || r.customId || "";
     const repDate = getRecordLocalDate(r.createdAt || r.created_at);
 
     const matchesSearch =
       patName.toLowerCase().includes(search.toLowerCase()) ||
+      rawPatName.toLowerCase().includes(search.toLowerCase()) ||
       patId.toLowerCase().includes(search.toLowerCase()) ||
       repId.toLowerCase().includes(search.toLowerCase());
 
@@ -963,7 +966,7 @@ export default function ReportsListPage() {
                   const isSelected = selectedIds.includes(rep.id);
                   const resultsList = Array.isArray(rep.results) ? rep.results : [];
                   const abnormalCount = resultsList.filter((r: any) => r.isAbnormal || r.is_abnormal).length;
-                  const patName = rep.patient?.name || "Patient";
+                  const patName = formatPatientListDisplayName(rep.patient?.name, rep.patient?.designation);
                   const patId = rep.patient?.custom_id || rep.patient?.customId || "N/A";
                   const patAge = rep.patient?.age || "N/A";
                   const patGender = rep.patient?.gender || "N/A";

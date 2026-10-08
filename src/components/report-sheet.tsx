@@ -9,6 +9,7 @@ import { getReportPackage } from "@/lib/packages";
 import { compareClinicalTests, compareClinicalParameters, getClinicalTestPriority } from "@/lib/clinical-order";
 import { isGenuineCustomEditorTest, getDefaultUnitForTest, getDefaultRangeForTest, getCustomEditorInitialTemplate } from "@/lib/clinical-test-helper";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { cleanPatientNameForReport } from "@/lib/patient-title-helper";
 
 interface Test { 
   id: string; name: string; category: string; price: number; unit: string; 
@@ -181,7 +182,7 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
   const packageName = (report as any).packageName || (report as any).package_name || (report as any).meta?.packageName || (report as any).meta?.package_name || getReportPackage(report.id) || getReportPackage(report.customId) || getReportPackage(patient.customId);
 
   const allMap: Record<string, { label: string; value: React.ReactNode }> = {
-    "Name": { label: "Patient Name:", value: <span className="font-extrabold text-[11.5px] text-black uppercase">{patient.name || "—"}</span> },
+    "Name": { label: "Patient Name:", value: <span className="font-extrabold text-[11.5px] text-black uppercase">{cleanPatientNameForReport(patient.name, patient.designation) || "—"}</span> },
     "Package": { label: "Package:", value: <span className="font-extrabold text-[11px] text-zinc-900">{packageName || "—"}</span> },
     "Package Name": { label: "Package:", value: <span className="font-extrabold text-[11px] text-zinc-900">{packageName || "—"}</span> },
     "Age/Gender": { 

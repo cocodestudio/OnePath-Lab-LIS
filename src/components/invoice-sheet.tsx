@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { QRCodeSVG } from "qrcode.react";
 import { BarcodeSVG } from "./barcode-svg";
 import { type BillLayoutSettings, defaultBillLayoutSettings, normalizeBillSettings } from "@/lib/bill-settings";
+import { cleanPatientNameForReport } from "@/lib/patient-title-helper";
 
 export interface InvoiceData {
   id?: string;
@@ -206,7 +207,8 @@ export const InvoiceSheet = React.forwardRef<
 
   const invoiceCustomId = invoice.customId || (invoice as any).custom_id || (invoice.id ? `OPL-INV-${String(invoice.id).substring(0, 6).toUpperCase()}` : "—");
   const patientCustomId = patient.customId || patient.custom_id || patient.customID || (patient.id ? `PID-${String(patient.id).substring(0, 6).toUpperCase()}` : "—");
-  const patientName = patient.name || patient.patient_name || "—";
+  const rawPatientName = patient.name || patient.patient_name || "—";
+  const patientName = cleanPatientNameForReport(rawPatientName, patient.designation) || rawPatientName;
   const patientAge = patient.age !== undefined && patient.age !== null ? patient.age : "—";
   const patientGender = patient.gender || "—";
   const patientDoctor = patient.refDoctor || patient.ref_doctor || "Self";

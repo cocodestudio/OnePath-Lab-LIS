@@ -688,7 +688,7 @@ function SettingsContent() {
             print_margin_left: settings.marginLeft,
             print_margin_right: settings.marginRight,
             print_with_letterhead: true,
-            default_designation: normalizeDesignation(layoutSettings.defaultDesignation || "Mr."),
+            default_designation: normalizeDesignation(layoutSettings.defaultDesignation || "Blank"),
             report_settings: layoutSettings,
             bill_settings: billSettings,
           }),
@@ -703,7 +703,7 @@ function SettingsContent() {
         formData.append("print_margin_left", String(settings.marginLeft));
         formData.append("print_margin_right", String(settings.marginRight));
         formData.append("print_with_letterhead", "1");
-        formData.append("default_designation", normalizeDesignation(layoutSettings.defaultDesignation || "Mr."));
+        formData.append("default_designation", normalizeDesignation(layoutSettings.defaultDesignation || "Blank"));
         formData.append("report_settings", JSON.stringify(layoutSettings));
         formData.append("bill_settings", JSON.stringify(billSettings));
 
@@ -760,7 +760,7 @@ function SettingsContent() {
           print_margin_left: settings.marginLeft,
           print_margin_right: settings.marginRight,
           print_with_letterhead: false,
-          default_designation: normalizeDesignation(layoutSettings.defaultDesignation || "Mr."),
+          default_designation: normalizeDesignation(layoutSettings.defaultDesignation || "Blank"),
           report_settings: layoutSettings,
           bill_settings: billSettings,
         }),
@@ -924,7 +924,7 @@ function SettingsContent() {
           print_margin_left: settings.marginLeft,
           print_margin_right: settings.marginRight,
           print_with_letterhead: settings.printWithLetterhead,
-          default_designation: normalizeDesignation(payloadLayoutSettings.defaultDesignation || "Mr."),
+          default_designation: normalizeDesignation(payloadLayoutSettings.defaultDesignation || "Blank"),
           report_settings: payloadLayoutSettings,
           bill_settings: billSettings,
         }),

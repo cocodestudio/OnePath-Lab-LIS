@@ -557,7 +557,7 @@ export default function TestMasterPage() {
           printWithLetterhead: withLetterhead,
           report_settings: normalizedSettings,
           reportSettings: normalizedSettings,
-          default_designation: labData?.default_designation || labData?.defaultDesignation || normalizedSettings.defaultDesignation || "Mr.",
+          default_designation: labData?.default_designation || labData?.defaultDesignation || normalizedSettings.defaultDesignation || "Blank",
         } as any,
         printedInterpretations: JSON.stringify([test.id, test.testCode || "", "ALL"]),
         testNotes: {

@@ -10,6 +10,7 @@ import { ReportSheet } from "@/components/report-sheet";
 import { getCleanLetterheadUrl } from "@/lib/api-client";
 import { useReactToPrint } from "react-to-print";
 import { downloadNativePdf } from "@/lib/pdf-report-downloader";
+import { cleanPatientNameForReport } from "@/lib/patient-title-helper";
 
 export default function PublicReportVerificationPage() {
   const params = useParams();
@@ -390,7 +391,7 @@ export default function PublicReportVerificationPage() {
               </div>
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-400 block leading-tight">Patient</span>
-                <strong className="text-slate-800 font-semibold text-xs">{patient.name}</strong>
+                <strong className="text-slate-800 font-semibold text-xs">{cleanPatientNameForReport(patient.name, patient.designation)}</strong>
                 <span className="text-slate-500 text-[11px] ml-1">({patient.age}Y / {patient.gender})</span>
               </div>
             </div>

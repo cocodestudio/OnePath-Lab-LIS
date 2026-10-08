@@ -464,14 +464,14 @@ function RegisterPatientPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [savingIntakeRules, setSavingIntakeRules] = useState(false);
 
-  // Demographics
-  const [designation, setDesignation] = useState("Mr.");
+  // Demographics (Unselected by default so user chooses according to preference)
+  const [designation, setDesignation] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [ageYears, setAgeYears] = useState("");
   const [ageMonths, setAgeMonths] = useState("");
   const [ageDays, setAgeDays] = useState("");
-  const [gender, setGender] = useState("Male");
+  const [gender, setGender] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
@@ -481,6 +481,10 @@ function RegisterPatientPage() {
   const [state, setState] = useState("");
 
   const handleTitleChange = (newTitle: string) => {
+    if (!newTitle || newTitle === "Blank" || newTitle === "Null") {
+      setDesignation("Blank");
+      return;
+    }
     setDesignation(newTitle);
     const lower = (newTitle || "").toLowerCase().trim();
     // If Baby or B/o, keep gender as none / unselected because baby can be male or female
@@ -1232,8 +1236,10 @@ function RegisterPatientPage() {
               localStorage.setItem("lis_intake_fields", JSON.stringify(normalized.intakeFields));
             } catch { }
           }
-          if (normalized.defaultDesignation) {
+          if (normalized.defaultDesignation && normalized.defaultDesignation.toLowerCase() !== "blank" && normalized.defaultDesignation.toLowerCase() !== "null" && normalized.defaultDesignation.toLowerCase() !== "none") {
             setDesignation(normalizeDesignation(normalized.defaultDesignation));
+          } else {
+            setDesignation("");
           }
         }
         const rawBillSettings = lab?.bill_settings || lab?.billSettings;
@@ -1373,11 +1379,17 @@ function RegisterPatientPage() {
     // Parse Name
     const rawName = (patientData.name || "").trim();
     const parts = rawName.split(/\s+/);
-    let des = normalizeDesignation(patientData.designation || "Mr.");
+    let des = "";
+    if (patientData.designation) {
+      const norm = normalizeDesignation(patientData.designation);
+      if (norm.toLowerCase() !== "blank" && norm.toLowerCase() !== "null" && norm.toLowerCase() !== "none") {
+        des = norm;
+      }
+    }
     let fn = "";
     let ln = "";
 
-    const isDesignationInName = ALL_DESIGNATIONS.some(
+    const isDesignationInName = ALL_DESIGNATIONS.filter(d => d !== "Blank" && d !== "Null").some(
       (d) =>
         d.toLowerCase() === parts[0].toLowerCase() ||
         d.replace(/\./g, "").toLowerCase() === parts[0].replace(/\./g, "").toLowerCase()
@@ -1916,10 +1928,14 @@ function RegisterPatientPage() {
       let cleanFirst = firstName.trim();
       const cleanLast = lastName.trim();
       const desTrimmed = (designation || "").trim();
-      if (desTrimmed && cleanFirst.toLowerCase().startsWith(desTrimmed.toLowerCase())) {
+      const isBlankTitle = !desTrimmed || desTrimmed.toLowerCase() === "blank" || desTrimmed.toLowerCase() === "null" || desTrimmed.toLowerCase() === "none" || desTrimmed.toLowerCase() === "untitled";
+
+      if (!isBlankTitle && cleanFirst.toLowerCase().startsWith(desTrimmed.toLowerCase())) {
         cleanFirst = cleanFirst.substring(desTrimmed.length).trim();
       }
-      const fullName = desTrimmed
+
+      const effectiveDesignation = isBlankTitle ? "" : desTrimmed;
+      const fullName = !isBlankTitle
         ? `${desTrimmed} ${cleanFirst}${cleanLast ? ` ${cleanLast}` : ""}`.trim()
         : `${cleanFirst}${cleanLast ? ` ${cleanLast}` : ""}`.trim();
       const calculatedAge = parseInt(ageYears) || (parseInt(ageMonths) > 0 ? 1 : 0) || 0;
@@ -1947,7 +1963,7 @@ function RegisterPatientPage() {
         data = await fetchFromLaravel(`/patients/${editPatientId}`, {
           method: "PUT",
           body: JSON.stringify({
-            designation,
+            designation: effectiveDesignation,
             name: fullName,
             age: calculatedAge,
             gender,
@@ -2046,7 +2062,7 @@ function RegisterPatientPage() {
         data = await fetchFromLaravel("/patients", {
           method: "POST",
           body: JSON.stringify({
-            designation,
+            designation: effectiveDesignation,
             name: fullName,
             age: calculatedAge,
             gender,
@@ -3298,14 +3314,17 @@ function RegisterPatientPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5">
                     <div className="sm:col-span-3 space-y-1.5">
                       <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
-                        Title <span className="text-primary">*</span>
+                        Title
                       </label>
-                      <Select value={normalizeDesignation(designation)} onValueChange={handleTitleChange} disabled={registering || (!!newPatient && !isEditMode)}>
+                      <Select value={designation || ""} onValueChange={handleTitleChange} disabled={registering || (!!newPatient && !isEditMode)}>
                         <SelectTrigger className="h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl font-medium text-foreground focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white shadow-2xs">
-                          <SelectValue />
+                          <SelectValue placeholder="Select Title" />
                         </SelectTrigger>
                         <SelectContent className="max-h-72">
-                          {ALL_DESIGNATIONS.map((title) => (
+                          <SelectItem value="Blank">
+                            <span className="text-muted-foreground italic">None (Blank)</span>
+                          </SelectItem>
+                          {ALL_DESIGNATIONS.filter(d => d !== "Blank" && d !== "Null").map((title) => (
                             <SelectItem key={title} value={title}>
                               {title}
                             </SelectItem>
