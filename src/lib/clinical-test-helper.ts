@@ -144,8 +144,16 @@ export function isGenuineCustomEditorTest(test: any): boolean {
   const rawName = test.name || test.testName || "";
   const name = rawName.trim().toLowerCase();
   const category = (test.category || "").trim().toLowerCase();
+  const fieldType = test.fieldType || test.field_type;
+  const isUserOverride = Boolean(test.is_json_override ?? test.isJsonOverride);
+  const customLayout = test.customLayout || test.custom_layout;
 
-  // 1. Absolute rule: Standard pathology / biochemistry tests are NEVER Custom Editor
+  // 0. Explicit user override with Custom Editor or custom layout ALWAYS wins
+  if (isUserOverride && (fieldType === "Custom Editor" || (customLayout && customLayout.trim().length > 0 && customLayout !== "<p></p>"))) {
+    return true;
+  }
+
+  // 1. Absolute rule: Standard pathology / biochemistry tests are NEVER Custom Editor by default (unless user customized)
   if (isStandardAnalyteTest(name)) {
     return false;
   }
@@ -156,7 +164,6 @@ export function isGenuineCustomEditorTest(test: any): boolean {
   }
 
   // 3. Widal Slide Method uses the 4-dilution antigen matrix table
-  const fieldType = test.fieldType || test.field_type;
   if (name.includes("widal") && (name.includes("slide") || fieldType === "Custom Editor")) {
     return true;
   }

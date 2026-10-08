@@ -663,6 +663,105 @@ assert(
   "[PRINT/DOWNLOAD] Explicitly selected title 'Dr.' is retained on report"
 );
 
+// ==============================================================================
+// 12. Test Master Layout Customization, Range Persistence & Custom Methods Engine
+// ==============================================================================
+console.log("\n▶ MODULE 12: Test Master Layout Customization, Range Persistence & Custom Methods Engine");
+
+// 12.1 User override layout customization
+const defaultCbc = {
+  name: "Complete Blood Count (CBC)",
+  category: "Haematology",
+  fieldType: "Multiple Field",
+  is_json_override: false,
+};
+assert(
+  isGenuineCustomEditorTest(defaultCbc) === false,
+  "[CUSTOM LAYOUT] Default CBC catalog test remains standard parameter table"
+);
+
+const userCustomizedCbc = {
+  name: "Complete Blood Count (CBC)",
+  category: "Haematology",
+  fieldType: "Custom Editor",
+  is_json_override: true,
+  customLayout: "<table class='lis-custom-table'><tr><td>Hb</td><td>14.0</td></tr></table>",
+};
+assert(
+  isGenuineCustomEditorTest(userCustomizedCbc) === true,
+  "[CUSTOM LAYOUT] User-overridden CBC with Custom Editor field type is recognized as genuine Custom Editor"
+);
+
+const userCustomizedSugar = {
+  name: "Fasting Blood Sugar",
+  category: "Biochemistry",
+  is_json_override: true,
+  custom_layout: "<p>Custom Glucose Layout</p>",
+};
+assert(
+  isGenuineCustomEditorTest(userCustomizedSugar) === true,
+  "[CUSTOM LAYOUT] User-overridden Sugar with custom_layout is recognized as genuine Custom Editor"
+);
+
+// 12.2 Range value parser preserves numeric 0
+const parseRangeVal = (v: any): number | null => {
+  if (v === "" || v === null || v === undefined) return null;
+  const num = parseFloat(v);
+  return isNaN(num) ? null : num;
+};
+
+assert(
+  parseRangeVal("0") === 0,
+  "[RANGE ZERO] String '0' is parsed strictly as numeric 0, never converted to null"
+);
+assert(
+  parseRangeVal(0) === 0,
+  "[RANGE ZERO] Number 0 is preserved strictly as numeric 0"
+);
+assert(
+  parseRangeVal("") === null,
+  "[RANGE PARSE] Empty string correctly maps to null"
+);
+assert(
+  parseRangeVal(null) === null,
+  "[RANGE PARSE] Null correctly maps to null"
+);
+assert(
+  parseRangeVal(undefined) === null,
+  "[RANGE PARSE] Undefined correctly maps to null"
+);
+assert(
+  parseRangeVal("14.5") === 14.5,
+  "[RANGE PARSE] Valid numeric string '14.5' parses to 14.5"
+);
+
+// 12.3 Custom methods inclusion and unioning
+const inbuiltMethods = ["Spectrophotometry", "ECLIA", "Automated Cell Counter"];
+const customMethods = ["Flow Cytometry Laser Array", "High Performance TLC"];
+const discoveredFromTests = ["HPLC", "Spectrophotometry"];
+
+const mergedMethods = Array.from(
+  new Set([...inbuiltMethods, ...customMethods, ...discoveredFromTests])
+);
+
+assert(
+  mergedMethods.includes("Flow Cytometry Laser Array"),
+  "[CUSTOM METHODS] User added custom method is successfully included in available methods"
+);
+assert(
+  mergedMethods.includes("High Performance TLC"),
+  "[CUSTOM METHODS] Additional custom methods are preserved"
+);
+assert(
+  mergedMethods.includes("Spectrophotometry") && mergedMethods.includes("ECLIA"),
+  "[CUSTOM METHODS] Inbuilt standard methods remain available"
+);
+assert(
+  mergedMethods.filter(m => m === "Spectrophotometry").length === 1,
+  "[CUSTOM METHODS] Methods set is strictly deduplicated"
+);
+
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

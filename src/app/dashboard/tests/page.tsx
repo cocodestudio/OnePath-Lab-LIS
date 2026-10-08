@@ -262,6 +262,8 @@ export default function TestMasterPage() {
 
   // Method Search / Dropdown State
   const [activeMethodDropdownId, setActiveMethodDropdownId] = useState<string | null>(null);
+  const [customMethods, setCustomMethods] = useState<string[]>([]);
+  const [newMethodInput, setNewMethodInput] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -302,6 +304,46 @@ export default function TestMasterPage() {
     return Array.from(combined);
   }, [dynamicCategories]);
 
+  // Combined Inbuilt + Custom + Discovered Methods
+  const allMethods = useMemo(() => {
+    const set = new Set<string>();
+    INBUILT_METHODS.forEach((m) => set.add(m));
+    customMethods.forEach((m) => set.add(m));
+    tests.forEach((t) => {
+      if (t.method?.trim()) set.add(t.method.trim());
+      t.subTests?.forEach((s) => {
+        if (s.method?.trim()) set.add(s.method.trim());
+        s.subTests?.forEach((ss) => {
+          if (ss.method?.trim()) set.add(ss.method.trim());
+        });
+      });
+    });
+    return Array.from(set);
+  }, [customMethods, tests]);
+
+  const handleAddCustomMethod = (methodName: string, selectForLocation?: { parentIdx: number; subIdx?: number }) => {
+    const trimmed = methodName.trim();
+    if (!trimmed) {
+      toast.error("Method Name Required", "Please enter a valid laboratory method name.");
+      return;
+    }
+    const updated = Array.from(new Set([...customMethods, trimmed]));
+    setCustomMethods(updated);
+    try {
+      localStorage.setItem("lis_custom_methods", JSON.stringify(updated));
+    } catch {}
+
+    if (selectForLocation) {
+      if (selectForLocation.subIdx !== undefined) {
+        handleNestedSubTestChange(selectForLocation.parentIdx, selectForLocation.subIdx, "method", trimmed);
+      } else {
+        handleSubTestChange(selectForLocation.parentIdx, "method", trimmed);
+      }
+    }
+    setNewMethodInput("");
+    toast.success("Method Added", `"${trimmed}" added and applied!`);
+  };
+
   useEffect(() => { 
     // 1. Instant cache load on client mount (0ms)
     try {
@@ -312,6 +354,14 @@ export default function TestMasterPage() {
           setTests(parsed);
           setLoading(false);
         }
+      }
+    } catch {}
+
+    try {
+      const savedMethods = localStorage.getItem("lis_custom_methods");
+      if (savedMethods) {
+        const parsed = JSON.parse(savedMethods);
+        if (Array.isArray(parsed)) setCustomMethods(parsed);
       }
     } catch {}
 
@@ -649,7 +699,11 @@ export default function TestMasterPage() {
     setComment(test.comment || "");
     setNotes(test.notes || "");
 
-    const isCustom = !isStandardAnalyteTest(test.name) && isGenuineCustomEditorTest(test);
+    const isCustom = test.fieldType === "Custom Editor" ||
+      (test as any).field_type === "Custom Editor" ||
+      Boolean(test.customLayout && test.customLayout.trim().length > 0 && test.customLayout !== "<p></p>") ||
+      Boolean((test as any).custom_layout && (test as any).custom_layout.trim().length > 0 && (test as any).custom_layout !== "<p></p>") ||
+      isGenuineCustomEditorTest(test);
 
     setReportFormat(isCustom ? "custom_editor" : "standard");
 
@@ -1087,12 +1141,14 @@ export default function TestMasterPage() {
     const safeCustomLayout = getSafeEditorHtml(tiptapLayoutRef) || latestLayoutRef.current || customLayout || "";
     const safeInterpretation = getSafeEditorHtml(tiptapInterpRef) || latestInterpretationRef.current || interpretation || "";
 
-    const isAnalyte = isStandardAnalyteTest(name);
-    const isCustomEditor = !isAnalyte && (
-      reportFormat === "custom_editor" ||
-      isGenuineCustomEditorTest(editingTest) ||
-      (name || "").toLowerCase().includes("culture")
-    );
+    const isCustomEditor = reportFormat === "custom_editor" ||
+      (!editingTest && (name || "").toLowerCase().includes("culture"));
+
+    const parseRangeVal = (v: any): number | null => {
+      if (v === "" || v === null || v === undefined) return null;
+      const num = parseFloat(v);
+      return isNaN(num) ? null : num;
+    };
 
     if (!isCustomEditor && subTests.some(s => !s.name.trim())) {
       setError("Every parameter must have a name.");
@@ -1137,16 +1193,27 @@ export default function TestMasterPage() {
       payload.age_ranges = primarySub.ageRanges;
 
       if (primarySub.rangeType === "numeric") {
-        payload.ref_range_min = primarySub.refRangeMin ? parseFloat(primarySub.refRangeMin) : null;
-        payload.ref_range_max = primarySub.refRangeMax ? parseFloat(primarySub.refRangeMax) : null;
-        payload.ref_range_min_male = primarySub.refRangeMinMale ? parseFloat(primarySub.refRangeMinMale) : null;
-        payload.ref_range_max_male = primarySub.refRangeMaxMale ? parseFloat(primarySub.refRangeMaxMale) : null;
-        payload.ref_range_min_female = primarySub.refRangeMinFemale ? parseFloat(primarySub.refRangeMinFemale) : null;
-        payload.ref_range_max_female = primarySub.refRangeMaxFemale ? parseFloat(primarySub.refRangeMaxFemale) : null;
-        payload.ref_range_min_child = primarySub.refRangeMinChild ? parseFloat(primarySub.refRangeMinChild) : null;
-        payload.ref_range_max_child = primarySub.refRangeMaxChild ? parseFloat(primarySub.refRangeMaxChild) : null;
-        payload.ref_range_min_newborn = primarySub.refRangeMinNewborn ? parseFloat(primarySub.refRangeMinNewborn) : null;
-        payload.ref_range_max_newborn = primarySub.refRangeMaxNewborn ? parseFloat(primarySub.refRangeMaxNewborn) : null;
+        payload.ref_range_min = parseRangeVal(primarySub.refRangeMin);
+        payload.ref_range_max = parseRangeVal(primarySub.refRangeMax);
+        payload.ref_range_min_male = parseRangeVal(primarySub.refRangeMinMale);
+        payload.ref_range_max_male = parseRangeVal(primarySub.refRangeMaxMale);
+        payload.ref_range_min_female = parseRangeVal(primarySub.refRangeMinFemale);
+        payload.ref_range_max_female = parseRangeVal(primarySub.refRangeMaxFemale);
+        payload.ref_range_min_child = parseRangeVal(primarySub.refRangeMinChild);
+        payload.ref_range_max_child = parseRangeVal(primarySub.refRangeMaxChild);
+        payload.ref_range_min_newborn = parseRangeVal(primarySub.refRangeMinNewborn);
+        payload.ref_range_max_newborn = parseRangeVal(primarySub.refRangeMaxNewborn);
+      } else {
+        payload.ref_range_min = null;
+        payload.ref_range_max = null;
+        payload.ref_range_min_male = null;
+        payload.ref_range_max_male = null;
+        payload.ref_range_min_female = null;
+        payload.ref_range_max_female = null;
+        payload.ref_range_min_child = null;
+        payload.ref_range_max_child = null;
+        payload.ref_range_min_newborn = null;
+        payload.ref_range_max_newborn = null;
       }
     }
 
@@ -1161,16 +1228,16 @@ export default function TestMasterPage() {
         gender_ref_type: sub.genderRefType,
         range_type: sub.rangeType,
         text_ref_range: sub.textRefRange || null,
-        ref_range_min: sub.refRangeMin ? parseFloat(sub.refRangeMin) : null,
-        ref_range_max: sub.refRangeMax ? parseFloat(sub.refRangeMax) : null,
-        ref_range_min_male: sub.refRangeMinMale ? parseFloat(sub.refRangeMinMale) : null,
-        ref_range_max_male: sub.refRangeMaxMale ? parseFloat(sub.refRangeMaxMale) : null,
-        ref_range_min_female: sub.refRangeMinFemale ? parseFloat(sub.refRangeMinFemale) : null,
-        ref_range_max_female: sub.refRangeMaxFemale ? parseFloat(sub.refRangeMaxFemale) : null,
-        ref_range_min_child: sub.refRangeMinChild ? parseFloat(sub.refRangeMinChild) : null,
-        ref_range_max_child: sub.refRangeMaxChild ? parseFloat(sub.refRangeMaxChild) : null,
-        ref_range_min_newborn: sub.refRangeMinNewborn ? parseFloat(sub.refRangeMinNewborn) : null,
-        ref_range_max_newborn: sub.refRangeMaxNewborn ? parseFloat(sub.refRangeMaxNewborn) : null,
+        ref_range_min: parseRangeVal(sub.refRangeMin),
+        ref_range_max: parseRangeVal(sub.refRangeMax),
+        ref_range_min_male: parseRangeVal(sub.refRangeMinMale),
+        ref_range_max_male: parseRangeVal(sub.refRangeMaxMale),
+        ref_range_min_female: parseRangeVal(sub.refRangeMinFemale),
+        ref_range_max_female: parseRangeVal(sub.refRangeMaxFemale),
+        ref_range_min_child: parseRangeVal(sub.refRangeMinChild),
+        ref_range_max_child: parseRangeVal(sub.refRangeMaxChild),
+        ref_range_min_newborn: parseRangeVal(sub.refRangeMinNewborn),
+        ref_range_max_newborn: parseRangeVal(sub.refRangeMaxNewborn),
         age_ranges: sub.ageRanges,
         field_type: (sub.subTests && sub.subTests.length > 0) ? "Multiple Field" : "Single Field",
         value_type: sub.valueType,
@@ -1188,16 +1255,16 @@ export default function TestMasterPage() {
           gender_ref_type: ss.genderRefType,
           range_type: ss.rangeType,
           text_ref_range: ss.textRefRange || null,
-          ref_range_min: ss.refRangeMin ? parseFloat(ss.refRangeMin) : null,
-          ref_range_max: ss.refRangeMax ? parseFloat(ss.refRangeMax) : null,
-          ref_range_min_male: ss.refRangeMinMale ? parseFloat(ss.refRangeMinMale) : null,
-          ref_range_max_male: ss.refRangeMaxMale ? parseFloat(ss.refRangeMaxMale) : null,
-          ref_range_min_female: ss.refRangeMinFemale ? parseFloat(ss.refRangeMinFemale) : null,
-          ref_range_max_female: ss.refRangeMaxFemale ? parseFloat(ss.refRangeMaxFemale) : null,
-          ref_range_min_child: ss.refRangeMinChild ? parseFloat(ss.refRangeMinChild) : null,
-          ref_range_max_child: ss.refRangeMaxChild ? parseFloat(ss.refRangeMaxChild) : null,
-          ref_range_min_newborn: ss.refRangeMinNewborn ? parseFloat(ss.refRangeMinNewborn) : null,
-          ref_range_max_newborn: ss.refRangeMaxNewborn ? parseFloat(ss.refRangeMaxNewborn) : null,
+          ref_range_min: parseRangeVal(ss.refRangeMin),
+          ref_range_max: parseRangeVal(ss.refRangeMax),
+          ref_range_min_male: parseRangeVal(ss.refRangeMinMale),
+          ref_range_max_male: parseRangeVal(ss.refRangeMaxMale),
+          ref_range_min_female: parseRangeVal(ss.refRangeMinFemale),
+          ref_range_max_female: parseRangeVal(ss.refRangeMaxFemale),
+          ref_range_min_child: parseRangeVal(ss.refRangeMinChild),
+          ref_range_max_child: parseRangeVal(ss.refRangeMaxChild),
+          ref_range_min_newborn: parseRangeVal(ss.refRangeMinNewborn),
+          ref_range_max_newborn: parseRangeVal(ss.refRangeMaxNewborn),
           age_ranges: ss.ageRanges,
           field_type: "Single Field",
           value_type: ss.valueType,
@@ -2207,17 +2274,64 @@ export default function TestMasterPage() {
 
                           {/* Method Dropdown */}
                           {activeMethodDropdownId === `m_${sIdx}` && (
-                            <div className="absolute z-50 left-0 right-0 top-12 bg-card border border-border rounded-xl shadow-2xl max-h-56 overflow-y-auto p-1.5 space-y-0.5 animate-fade-in">
-                              {INBUILT_METHODS.map(m => (
+                            <div className="absolute z-50 left-0 right-0 top-12 bg-card border border-border rounded-xl shadow-2xl max-h-64 overflow-y-auto p-1.5 space-y-0.5 animate-fade-in">
+                              {/* Quick Add Custom Method Sticky Bar */}
+                              <div className="p-2 border-b border-border bg-muted/60 rounded-lg sticky top-0 z-10 space-y-1.5 mb-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-[11px] text-foreground flex items-center gap-1.5">
+                                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                                    <span>+ Add Custom Method</span>
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground font-mono">Press Enter or Add</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    value={newMethodInput}
+                                    onChange={(e) => setNewMethodInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleAddCustomMethod(newMethodInput, { parentIdx: sIdx });
+                                        setActiveMethodDropdownId(null);
+                                      }
+                                    }}
+                                    placeholder="e.g. Chemiluminescence / Western Blot..."
+                                    className="flex-1 h-8 px-2.5 rounded-md border border-border bg-background text-xs outline-none focus:ring-1 focus:ring-primary font-medium"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleAddCustomMethod(newMethodInput, { parentIdx: sIdx });
+                                      setActiveMethodDropdownId(null);
+                                    }}
+                                    className="px-3 h-8 rounded-md bg-primary text-primary-foreground font-bold text-xs hover:bg-primary/90 cursor-pointer shrink-0 transition-colors"
+                                  >
+                                    + Add
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground">
+                                Available Methods ({allMethods.length})
+                              </div>
+
+                              {allMethods.map(m => (
                                 <div
                                   key={m}
                                   onClick={() => {
                                     handleSubTestChange(sIdx, "method", m);
                                     setActiveMethodDropdownId(null);
                                   }}
-                                  className="p-2.5 rounded-md hover:bg-muted cursor-pointer text-xs font-medium text-foreground transition-colors"
+                                  className="p-2 rounded-md hover:bg-muted cursor-pointer text-xs font-medium text-foreground transition-colors flex items-center justify-between"
                                 >
-                                  {m}
+                                  <span className="truncate">{m}</span>
+                                  {customMethods.includes(m) && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold shrink-0 ml-2">
+                                      Custom
+                                    </span>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -2437,14 +2551,79 @@ export default function TestMasterPage() {
                                     />
                                   </div>
 
-                                  <div className="sm:col-span-3">
+                                  <div className="sm:col-span-3 relative">
                                     <input
                                       type="text"
                                       value={nested.method || ""}
                                       onChange={(e) => handleNestedSubTestChange(sIdx, nIdx, "method", e.target.value)}
                                       placeholder="Method (Optional)"
-                                      className="w-full h-10 px-3 rounded-lg border border-border bg-background text-xs shadow-xs"
+                                      className="w-full h-10 px-3 pr-7 rounded-lg border border-border bg-background text-xs shadow-xs"
                                     />
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveMethodDropdownId(activeMethodDropdownId === `m_${sIdx}_${nIdx}` ? null : `m_${sIdx}_${nIdx}`)}
+                                      className="absolute right-2 top-3 text-muted-foreground hover:text-foreground cursor-pointer"
+                                    >
+                                      <ChevronDown className="h-3.5 w-3.5" />
+                                    </button>
+
+                                    {activeMethodDropdownId === `m_${sIdx}_${nIdx}` && (
+                                      <div className="absolute z-50 left-0 right-0 top-11 bg-card border border-border rounded-xl shadow-2xl max-h-56 overflow-y-auto p-1.5 space-y-0.5 animate-fade-in text-xs">
+                                        <div className="p-2 border-b border-border bg-muted/60 rounded-lg sticky top-0 z-10 space-y-1.5 mb-1">
+                                          <div className="flex items-center justify-between">
+                                            <span className="font-bold text-[11px] text-foreground flex items-center gap-1">
+                                              <Sparkles className="h-3 w-3 text-primary" />
+                                              <span>+ Add Method</span>
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center gap-1">
+                                            <input
+                                              type="text"
+                                              value={newMethodInput}
+                                              onChange={(e) => setNewMethodInput(e.target.value)}
+                                              onKeyDown={(e) => {
+                                                if (e.key === "Enter") {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                                  handleAddCustomMethod(newMethodInput, { parentIdx: sIdx, subIdx: nIdx });
+                                                  setActiveMethodDropdownId(null);
+                                                }
+                                              }}
+                                              placeholder="New method..."
+                                              className="flex-1 h-7 px-2 rounded-md border border-border bg-background text-[11px] outline-none"
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                handleAddCustomMethod(newMethodInput, { parentIdx: sIdx, subIdx: nIdx });
+                                                setActiveMethodDropdownId(null);
+                                              }}
+                                              className="px-2 h-7 rounded-md bg-primary text-primary-foreground font-bold text-[11px] hover:bg-primary/90 cursor-pointer shrink-0"
+                                            >
+                                              Add
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        {allMethods.map(m => (
+                                          <div
+                                            key={m}
+                                            onClick={() => {
+                                              handleNestedSubTestChange(sIdx, nIdx, "method", m);
+                                              setActiveMethodDropdownId(null);
+                                            }}
+                                            className="p-1.5 rounded-md hover:bg-muted cursor-pointer text-xs font-medium text-foreground transition-colors flex items-center justify-between"
+                                          >
+                                            <span className="truncate">{m}</span>
+                                            {customMethods.includes(m) && (
+                                              <span className="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary font-bold shrink-0 ml-1">
+                                                Custom
+                                              </span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
 
                                   <div className="sm:col-span-2 flex items-center gap-1.5">
