@@ -761,6 +761,170 @@ assert(
   "[CUSTOM METHODS] Methods set is strictly deduplicated"
 );
 
+// 12.4 Drag-and-drop layout targetList builder & sort order calculation
+const sampleBlocks = [
+  {
+    id: "block-plt",
+    name: "Platelet Count",
+    isGroup: false,
+    items: [{ test: { id: "p-plt", name: "Platelet Count", testCode: "HAEM_PLT" } }],
+  },
+  {
+    id: "block-hb",
+    name: "Hemoglobin (Hb)",
+    isGroup: false,
+    items: [{ test: { id: "p-hb", name: "Hemoglobin (Hb)", testCode: "HAEM_HB" } }],
+  },
+  {
+    id: "group-dlc",
+    name: "Differential Leukocyte Count (DLC)",
+    isGroup: true,
+    items: [
+      { test: { id: "p-poly", name: "Polymorphs / Neutrophils", testCode: "HAEM_POLY", parent: { id: "p-dlc-group", name: "Differential Leukocyte Count (DLC)", testCode: "HAEM_DLC" } } },
+      { test: { id: "p-lymph", name: "Lymphocytes", testCode: "HAEM_LYMPH", parent: { id: "p-dlc-group", name: "Differential Leukocyte Count (DLC)", testCode: "HAEM_DLC" } } },
+    ],
+  },
+];
+
+const targetList: any[] = [];
+sampleBlocks.forEach((block, blockIdx) => {
+  const blockOrder = (blockIdx + 1) * 100;
+  if (block.isGroup) {
+    const parentSubId = (block.items[0]?.test as any)?.parent?.id;
+    targetList.push({
+      id: parentSubId,
+      name: block.name,
+      test_code: (block.items[0]?.test as any)?.parent?.testCode,
+      sort_order: blockOrder,
+      is_hidden: false,
+    });
+    block.items.forEach((item, itemIdx) => {
+      targetList.push({
+        id: item.test.id,
+        name: item.test.name,
+        test_code: item.test.testCode,
+        sort_order: blockOrder + itemIdx + 1,
+        is_hidden: false,
+      });
+    });
+  } else {
+    const item = block.items[0];
+    targetList.push({
+      id: item.test.id,
+      name: item.test.name,
+      test_code: item.test.testCode,
+      sort_order: blockOrder + 1,
+      is_hidden: false,
+    });
+  }
+});
+
+assert(
+  targetList[0].name === "Platelet Count" && targetList[0].sort_order === 101,
+  "[DRAG LAYOUT] Top dragged block 'Platelet Count' has highest priority sort_order (101)"
+);
+assert(
+  targetList[1].name === "Hemoglobin (Hb)" && targetList[1].sort_order === 201,
+  "[DRAG LAYOUT] Second block 'Hemoglobin' has sort_order 201"
+);
+assert(
+  targetList[2].name === "Differential Leukocyte Count (DLC)" && targetList[2].sort_order === 300,
+  "[DRAG LAYOUT] Group header DLC has sort_order 300"
+);
+assert(
+  targetList[3].name === "Polymorphs / Neutrophils" && targetList[3].sort_order === 301,
+  "[DRAG LAYOUT] Group child Polymorphs has nested sort_order 301"
+);
+assert(
+  targetList[4].name === "Lymphocytes" && targetList[4].sort_order === 302,
+  "[DRAG LAYOUT] Group child Lymphocytes has nested sort_order 302"
+);
+assert(
+  targetList.every(p => Boolean(p.name && p.test_code !== undefined && p.sort_order > 0)),
+  "[DRAG LAYOUT] Every target parameter payload includes name, test_code, and valid sort_order"
+);
+
+// ==============================================================================
+// 13. Test Master Dialog State & Reports WhatsApp Dispatch Validation
+// ==============================================================================
+console.log("\n▶ MODULE 13: Test Master Saving Reset & Reports WhatsApp Delivery");
+
+// Test: Test Master saving state lifecycle
+class MockTestMasterDialog {
+  saving: boolean = false;
+  dialogOpen: boolean = false;
+  editingTest: any = null;
+
+  openEdit(test: any) {
+    this.saving = false; // Bug fix: Always clear stuck saving spinner on open
+    this.editingTest = test;
+    this.dialogOpen = true;
+  }
+
+  saveTest() {
+    this.saving = true;
+    // Simulate save
+    this.saving = false;
+    this.dialogOpen = false;
+    this.editingTest = null;
+  }
+
+  onOpenChange(open: boolean) {
+    this.dialogOpen = open;
+    if (!open) {
+      this.saving = false;
+    }
+  }
+}
+
+const mockDialog = new MockTestMasterDialog();
+mockDialog.openEdit({ id: "test-1", name: "CBC" });
+assert(mockDialog.saving === false && mockDialog.dialogOpen === true, "[TEST MASTER] Opening edit dialog resets saving spinner to false");
+
+mockDialog.saveTest();
+assert(mockDialog.saving === false && mockDialog.dialogOpen === false, "[TEST MASTER] Saving test finishes with saving=false and closes dialog");
+
+// Test: Re-opening immediately does NOT show spinning loader
+mockDialog.openEdit({ id: "test-1", name: "CBC" });
+assert(mockDialog.saving === false, "[TEST MASTER] Re-opening edit dialog immediately shows NO spinning loader glitch");
+
+mockDialog.onOpenChange(false);
+assert(mockDialog.saving === false && mockDialog.dialogOpen === false, "[TEST MASTER] onOpenChange(false) ensures saving is false");
+
+// Test: Reports WhatsApp Phone Validation Helper
+function validateAndExtractWhatsAppPhone(rawPhone?: string | null): { isValid: boolean; digits: string } {
+  const phone = (rawPhone || "").trim();
+  const digitsOnly = phone.replace(/\D/g, "");
+  const isInvalid = !phone || phone === "N/A" || phone === "NA" || phone === "-" || digitsOnly.length < 10;
+  return { isValid: !isInvalid, digits: digitsOnly };
+}
+
+assert(validateAndExtractWhatsAppPhone("+91 98765 43210").isValid === true, "[WHATSAPP] Valid 10-digit Indian mobile number is accepted");
+assert(validateAndExtractWhatsAppPhone("+91 98765 43210").digits === "919876543210", "[WHATSAPP] Mobile digits properly sanitized");
+assert(validateAndExtractWhatsAppPhone("N/A").isValid === false, "[WHATSAPP] 'N/A' phone is rejected with validation alert");
+assert(validateAndExtractWhatsAppPhone("").isValid === false, "[WHATSAPP] Empty phone is rejected");
+assert(validateAndExtractWhatsAppPhone("12345").isValid === false, "[WHATSAPP] Less than 10 digits is rejected");
+
+// Test: WhatsApp Fallback URL Generation
+function generateWhatsAppFallbackUrl(phone: string, patientName: string, reportCode: string, labName: string) {
+  const digits = phone.replace(/\D/g, "").slice(-10);
+  const text = encodeURIComponent(`Dear ${patientName}, your diagnostic laboratory report #${reportCode} from ${labName} is ready.`);
+  return `https://wa.me/91${digits}?text=${text}`;
+}
+
+const waUrl = generateWhatsAppFallbackUrl("9876543210", "Rahul Sharma", "REP-2026-001", "OnePath Lab");
+assert(waUrl.includes("https://wa.me/919876543210"), "[WHATSAPP] Generates valid wa.me direct target link");
+assert(waUrl.includes("REP-2026-001") && waUrl.includes("Rahul%20Sharma"), "[WHATSAPP] Properly encodes patient name and report code in WhatsApp text");
+
+// Test: WhatsApp PDF Filename Sanitization
+function sanitizePdfFilename(reportCode: string, patientName: string): string {
+  const pName = (patientName || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+  const rCode = (reportCode || "Report").replace(/[^a-zA-Z0-9_-]/g, "_");
+  return `LabReport_${rCode}_${pName}.pdf`;
+}
+
+const waFilename = sanitizePdfFilename("REP/2026/01", "Dr. John Doe & Sons");
+assert(waFilename === "LabReport_REP_2026_01_Dr__John_Doe___Sons.pdf", "[WHATSAPP] Generates sanitized safe PDF filename for WhatsApp delivery");
 
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);

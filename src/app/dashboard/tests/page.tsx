@@ -273,6 +273,7 @@ export default function TestMasterPage() {
   const [labProfile, setLabProfile] = useState<any>(null);
   const [sampleReportData, setSampleReportData] = useState<ReportSheetData | null>(null);
   const [samplePreviewOpen, setSamplePreviewOpen] = useState(false);
+  const [activePreviewTest, setActivePreviewTest] = useState<Test | null>(null);
 
   // Only pathology-relevant departments (exclude Radiology, Ultrasound, X-Ray, etc.)
   const PATHOLOGY_DEPARTMENTS = [
@@ -385,17 +386,21 @@ export default function TestMasterPage() {
         try {
           localStorage.setItem("lis_cached_tests", JSON.stringify(data));
         } catch {}
+        return data;
       } else if (isForce && tests.length === 0) {
         setTests([]);
+        return [];
       }
     } catch (err) {
       console.error("Failed to fetch tests:", err);
     } finally {
       setLoading(false);
     }
+    return null;
   };
 
   const handleOpenSampleReport = (test: Test) => {
+    setActivePreviewTest(test);
     const currentLab = labProfile;
     let cachedSettings: any = null;
     let cachedLetterhead: string | null = null;
@@ -636,6 +641,7 @@ export default function TestMasterPage() {
   };
 
   const handleOpenAddDialog = () => {
+    setSaving(false);
     setEditingTest(null);
     setName("");
     setTestCode("TEST-" + Math.floor(1000 + Math.random() * 9000));
@@ -678,6 +684,7 @@ export default function TestMasterPage() {
   };
 
   const handleOpenEditDialog = (test: Test) => {
+    setSaving(false);
     setEditingTest(test);
     setName(test.name);
     setTestCode(test.testCode || "");
@@ -1312,6 +1319,7 @@ export default function TestMasterPage() {
         }
         toast.success("New test created successfully!");
       }
+      setSaving(false);
       setDialogOpen(false);
       setEditingTest(null);
       await fetchTests(true);
@@ -1822,7 +1830,7 @@ export default function TestMasterPage() {
       {/* =========================================================================
           MAJESTIC FULL-WIDTH DIALOG WINDOW (w-[95vw] h-[92vh] max-w-[95vw])
       ========================================================================= */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setSaving(false); }}>
         <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-[95vw] h-[92vh] max-h-[94vh] p-0 gap-0 overflow-hidden rounded-2xl border border-border/90 bg-card shadow-2xl flex flex-col" hideClose>
           {/* Top Bar with Back Arrow & Actions (No redundant X cross icon) */}
           <div className="min-h-16 py-2.5 sm:py-0 border-b border-border/80 bg-card px-3 sm:px-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
@@ -3341,7 +3349,22 @@ export default function TestMasterPage() {
           open={samplePreviewOpen}
           onOpenChange={setSamplePreviewOpen}
           report={sampleReportData}
-          onLayoutSaved={() => fetchTests(true)}
+          onLayoutSaved={async () => {
+            clearApiCache("/tests");
+            clearApiCache("/reports");
+            const fresh = await fetchTests(true);
+            if (activePreviewTest && Array.isArray(fresh)) {
+              const updated = fresh.find((t: any) =>
+                t.id === activePreviewTest.id ||
+                (t.testCode && t.testCode === activePreviewTest.testCode) ||
+                t.name === activePreviewTest.name
+              );
+              if (updated) {
+                setActivePreviewTest(updated);
+                handleOpenSampleReport(updated);
+              }
+            }
+          }}
         />
       )}
     </div>

@@ -17,7 +17,7 @@ import { useReactToPrint } from "react-to-print";
 import { ReportSheet, PaginatedReportPreview, type PrintSettings, type ReportTest } from "@/components/report-sheet";
 import { WhatsAppQrDialog } from "@/components/whatsapp-qr-dialog";
 import { AiReportGenerationModal } from "@/components/ai-report-generation-modal";
-import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
+import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
 import { downloadNativePdf, getNativePdfBase64 } from "@/lib/pdf-report-downloader";
 
@@ -25,7 +25,7 @@ interface PrintPreviewDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   report: any;
-  onLayoutSaved?: () => void;
+  onLayoutSaved?: () => void | Promise<void>;
 }
 
 interface TopLevelBlock {
@@ -303,26 +303,30 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
         if (block.isGroup) {
           // If group is hidden, mark all its items hidden
           const parentSubTestId = block.items[0]?.test?.parent?.id;
-          if (parentSubTestId) {
-            targetList.push({
-              id: parentSubTestId,
-              sort_order: blockOrder,
-              is_hidden: isBlockHidden,
-            });
-          }
+          targetList.push({
+            id: parentSubTestId,
+            name: block.name,
+            test_code: (block.items[0]?.test?.parent as any)?.testCode || (block.items[0]?.test?.parent as any)?.test_code,
+            sort_order: blockOrder,
+            is_hidden: isBlockHidden,
+          });
 
           block.items.forEach((item, itemIdx) => {
             targetList.push({
-              id: item.test.id,
+              id: item.test?.id,
+              name: item.test?.name,
+              test_code: item.test?.testCode || (item.test as any)?.test_code,
               sort_order: blockOrder + itemIdx + 1,
               is_hidden: isBlockHidden,
             });
           });
         } else {
           const item = block.items[0];
-          if (item?.test?.id) {
+          if (item?.test) {
             targetList.push({
               id: item.test.id,
+              name: item.test.name || block.name,
+              test_code: item.test.testCode || (item.test as any)?.test_code,
               sort_order: blockOrder + 1,
               is_hidden: isBlockHidden,
             });
@@ -332,7 +336,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
 
       // Send layout save requests for all affected tests
       for (const [tId, pPayload] of Array.from(testParamMap.entries())) {
-        const cleanId = String(tId || "").replace(/^sample-/, '');
+        const cleanId = String(tId || cleanTestId || "").replace(/^sample-/, '');
         if (cleanId && cleanId !== "preview-temp-id" && cleanId !== "undefined") {
           await fetchFromLaravel(`/tests/${cleanId}/report-layout`, {
             method: "POST",
@@ -344,9 +348,15 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
         }
       }
 
+      // Invalidate API caches immediately so all pages reflect new parameter order
+      clearApiCache("/tests");
+      clearApiCache("/reports");
+
       setLayoutSavedSuccess(true);
       toast.success("Layout Saved", "Parameter sequence & report preferences saved permanently for this lab!");
-      onLayoutSaved?.();
+      if (onLayoutSaved) {
+        await onLayoutSaved();
+      }
       setTimeout(() => setLayoutSavedSuccess(false), 3000);
     } catch (err: any) {
       console.error("Failed to save layout:", err);

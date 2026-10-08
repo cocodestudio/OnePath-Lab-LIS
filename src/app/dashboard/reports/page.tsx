@@ -6,18 +6,20 @@ import { useReactToPrint } from "react-to-print";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { ReportSheet, type ReportSheetData } from "@/components/report-sheet";
+import { ReportSheet, type ReportSheetData, type PrintSettings } from "@/components/report-sheet";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   Search, Printer, ChevronLeft, ChevronRight, Edit3, AlertTriangle, AlertCircle,
-  Filter, X, Eye, Plus, Loader2, Clock, Wallet, CheckCircle2, Sparkles, IndianRupee, RefreshCw, Ban, Shield
+  Filter, X, Eye, Plus, Loader2, Clock, Wallet, CheckCircle2, Sparkles, IndianRupee, RefreshCw, Ban, Shield,
+  MessageCircle
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
 import { Checkbox } from "@/components/ui/checkbox";
-import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser, getCleanLetterheadUrl } from "@/lib/api-client";
+import { getNativePdfBase64 } from "@/lib/pdf-report-downloader";
 import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
 import { formatPatientListDisplayName } from "@/lib/patient-title-helper";
 
@@ -94,6 +96,9 @@ export default function ReportsListPage() {
   const [printReport, setPrintReport] = useState<any | null>(null);
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const [sendingWhatsAppId, setSendingWhatsAppId] = useState<string | null>(null);
+  const [whatsAppReportData, setWhatsAppReportData] = useState<ReportSheetData | null>(null);
+  const whatsAppOffscreenRef = useRef<HTMLDivElement>(null);
   const [insufficientBalanceModal, setInsufficientBalanceModal] = useState<{
     open: boolean;
     cost?: number;
@@ -288,6 +293,204 @@ export default function ReportsListPage() {
       });
     } finally {
       setPrintingId(null);
+    }
+  };
+
+  const whatsappOffscreenSettings: PrintSettings = useMemo(() => {
+    const lab = (whatsAppReportData?.lab || currentUser?.lab || DEFAULT_LAB) as any;
+    const rawBg = lab.printBgImage || lab.print_bg_image || null;
+    const hasBg = Boolean(rawBg && rawBg !== "null" && rawBg !== "undefined" && rawBg !== "none");
+    const bgImage = hasBg ? getCleanLetterheadUrl(rawBg) : null;
+
+    return {
+      bgImage,
+      headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? (hasBg ? 185 : 40),
+      footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? (hasBg ? 95 : 40),
+      marginLeft:   lab.printMarginLeft  ?? lab.print_margin_left  ?? (hasBg ? 32 : 40),
+      marginRight:  lab.printMarginRight ?? lab.print_margin_right ?? (hasBg ? 32 : 40),
+    };
+  }, [whatsAppReportData, currentUser]);
+
+  const triggerWhatsApp = async (rep: any) => {
+    if (sendingWhatsAppId === rep.id) return;
+
+    const isFinal = rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED";
+    if (isPartnerOrCC && !isFinal) {
+      toast({
+        variant: "info",
+        title: "Report Not Finalized",
+        description: `Report #${rep.custom_id || rep.customId || "Pending"} has not been finalized by the central lab yet. Sending is locked until final approval.`
+      });
+      return;
+    }
+
+    const rawPhone = (rep.patient?.phone || rep.patient_phone || "").trim();
+    const digitsOnly = rawPhone.replace(/\D/g, "");
+    if (!rawPhone || rawPhone === "N/A" || rawPhone === "NA" || rawPhone === "-" || digitsOnly.length < 10) {
+      toast({
+        variant: "warning",
+        title: "Phone Number Missing",
+        description: "Patient has no 10-digit mobile number registered for WhatsApp delivery. Please update patient details with mobile number.",
+      });
+      return;
+    }
+
+    // Enforce B2B wallet deduction if needed
+    if (isB2B) {
+      try {
+        const authRes = await fetchFromLaravel(`/b2b/reports/${rep.id}/deduct-and-print`, {
+          method: "POST"
+        });
+        if (authRes?.deducted) {
+          toast({
+            variant: "success",
+            title: "Report Unlocked",
+            description: `₹${Number(authRes.amount_deducted).toLocaleString("en-IN", { minimumFractionDigits: 2 })} debited from B2B wallet.`
+          });
+          setReports((prev: any[]) =>
+            prev.map((r) =>
+              r.id === rep.id ? { ...r, is_b2b_paid: true, isB2bPaid: true } : r
+            )
+          );
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("b2b_wallet_updated", { detail: authRes }));
+          }
+        }
+      } catch (authErr: any) {
+        console.error("B2B authorization failed:", authErr);
+        const errorMsg = authErr.message || authErr.error || "Authorization failed";
+        const isInsufficient =
+          authErr.error_code === "INSUFFICIENT_BALANCE" ||
+          authErr.error_code === "OUTSTANDING_LOCKED" ||
+          errorMsg.toLowerCase().includes("insufficient") ||
+          errorMsg.toLowerCase().includes("outstanding");
+
+        if (isInsufficient) {
+          setInsufficientBalanceModal({
+            open: true,
+            cost: authErr.report_cost || rep.b2b_price || rep.b2bPrice || 0,
+            balance: authErr.current_balance ?? 0,
+            deficit: authErr.deficit ?? Math.max(0, (authErr.report_cost || 0) - (authErr.current_balance || 0)),
+            repCode: rep.custom_id || rep.customId || rep.id,
+          });
+          return;
+        }
+
+        toast({
+          variant: "error",
+          title: "Authorization Failed",
+          description: errorMsg,
+        });
+        return;
+      }
+    }
+
+    setSendingWhatsAppId(rep.id);
+
+    try {
+      const fullReport = await fetchFromLaravel(`/reports/${rep.id}`);
+      const currentLab = fullReport.lab || currentUser?.lab || DEFAULT_LAB;
+
+      const rawLabSettings = currentLab?.reportSettings ?? currentLab?.report_settings;
+      let labReportSettings: any = {};
+      if (typeof rawLabSettings === "string") {
+        try { labReportSettings = JSON.parse(rawLabSettings || "{}"); } catch { labReportSettings = {}; }
+      } else if (rawLabSettings && typeof rawLabSettings === "object") {
+        labReportSettings = { ...rawLabSettings };
+      }
+
+      if (!labReportSettings.doctorSignatures && !labReportSettings.doctor_signatures && !labReportSettings.doctorSignature && !labReportSettings.doctor_signature) {
+        try {
+          if (typeof window !== "undefined") {
+            const cached = localStorage.getItem("lis_cached_report_settings");
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (parsed && typeof parsed === "object") {
+                labReportSettings = { ...parsed, ...labReportSettings };
+              }
+            }
+          }
+        } catch {}
+      }
+
+      let cachedLetterhead: string | null = null;
+      try {
+        if (typeof window !== "undefined") {
+          cachedLetterhead = localStorage.getItem("lis_cached_letterhead");
+        }
+      } catch {}
+
+      const rawBg = currentLab?.printBgImage || currentLab?.print_bg_image || cachedLetterhead;
+      const cleanBg = (rawBg && rawBg !== "null" && rawBg !== "undefined" && rawBg !== "none")
+        ? getCleanLetterheadUrl(rawBg)
+        : null;
+
+      const formattedReportData: ReportSheetData = {
+        ...fullReport,
+        lab: {
+          ...currentLab,
+          reportSettings: labReportSettings,
+          report_settings: labReportSettings,
+          printBgImage: cleanBg,
+        },
+      };
+
+      setWhatsAppReportData(formattedReportData);
+
+      // Wait a moment for offscreen DOM container to mount and layout
+      await new Promise((r) => setTimeout(r, 220));
+
+      if (!whatsAppOffscreenRef.current) {
+        throw new Error("Report print engine was not ready.");
+      }
+
+      const pName = (fullReport?.patient?.name || rep.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const rCode = (fullReport?.custom_id || fullReport?.customId || rep.custom_id || rep.customId || rep.id).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `LabReport_${rCode}_${pName}.pdf`;
+
+      const pdfBase64 = await getNativePdfBase64({
+        printContainer: whatsAppOffscreenRef.current,
+        filename,
+      });
+
+      const res = await fetchFromLaravel(`/reports/${rep.id}/send-whatsapp`, {
+        method: "POST",
+        body: JSON.stringify({
+          pdf_base64: pdfBase64,
+          phone: digitsOnly,
+          save_phone: false,
+        }),
+      });
+
+      if (res?.status === "success" || res?.success) {
+        toast({
+          variant: "success",
+          title: "Sent on WhatsApp!",
+          description: `Report PDF sent to patient's WhatsApp (${digitsOnly}) successfully.`,
+        });
+      } else {
+        const errorMsg = res?.message || "Could not deliver WhatsApp message via server gateway.";
+        toast({
+          variant: "warning",
+          title: "Gateway Alert",
+          description: `${errorMsg} Opening direct WhatsApp chat...`,
+        });
+        const tenDigits = digitsOnly.slice(-10);
+        const text = encodeURIComponent(
+          `Dear ${rep.patient?.name || "Patient"}, your diagnostic laboratory report #${rCode} from ${currentLab.name || "OnePath Lab"} is ready.`
+        );
+        window.open(`https://wa.me/91${tenDigits}?text=${text}`, "_blank");
+      }
+    } catch (err: any) {
+      console.error("WhatsApp dispatch error:", err);
+      toast({
+        variant: "error",
+        title: "WhatsApp Dispatch Failed",
+        description: err?.message || "An error occurred while preparing and sending the report PDF.",
+      });
+    } finally {
+      setSendingWhatsAppId(null);
+      setWhatsAppReportData(null);
     }
   };
 
@@ -1296,6 +1499,28 @@ export default function ReportsListPage() {
                                     : "Print Report"}
                                 </span>
                               </Button>
+
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => triggerWhatsApp(rep)}
+                                disabled={sendingWhatsAppId === rep.id}
+                                className="h-8 gap-1.5 w-full font-bold text-xs rounded-xl cursor-pointer border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-xs"
+                                title="Send report directly to patient's WhatsApp"
+                              >
+                                {sendingWhatsAppId === rep.id ? (
+                                  <>
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                    <span>Sending...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <MessageCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                    <span>Send WhatsApp</span>
+                                  </>
+                                )}
+                              </Button>
                             </div>
                           );
                         })()}
@@ -1346,6 +1571,19 @@ export default function ReportsListPage() {
         }} 
         report={printReport} 
       />
+
+      {/* Offscreen Target for Instant WhatsApp Vector PDF Rendering */}
+      {whatsAppReportData && (
+        <div style={{ position: "absolute", left: "-9999px", top: "-9999px", opacity: 0, pointerEvents: "none" }} aria-hidden>
+          <div ref={whatsAppOffscreenRef}>
+            <ReportSheet
+              report={whatsAppReportData}
+              settings={whatsappOffscreenSettings}
+              hideInterpretation={false}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Insufficient Wallet Balance Modal */}
       {insufficientBalanceModal?.open && (
