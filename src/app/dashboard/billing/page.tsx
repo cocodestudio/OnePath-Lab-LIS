@@ -22,6 +22,7 @@ import { normalizeBillSettings, type BillLayoutSettings } from "@/lib/bill-setti
 import { printInvoiceElement } from "@/lib/print-invoice";
 import { getNativePdfBase64, downloadNativePdf } from "@/lib/pdf-report-downloader";
 import { useToast } from "@/components/ui/toast";
+import { DateFilterRibbon } from "@/components/date-filter-ribbon";
 import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
 import { formatPatientListDisplayName } from "@/lib/patient-title-helper";
 
@@ -298,6 +299,9 @@ export default function BillingPage() {
   const receptionistUsers = useMemo(() => staffUsers.filter(u => String(u.role).toUpperCase() === "RECEPTIONIST"), [staffUsers]);
 
   const [filterDate, setFilterDate] = useState(() => getTodayStr());
+  const [dateMode, setDateMode] = useState<"single" | "range">("single");
+  const [startDate, setStartDate] = useState(() => getTodayStr());
+  const [endDate, setEndDate] = useState(() => getTodayStr());
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
@@ -410,28 +414,37 @@ export default function BillingPage() {
     };
   }, []);
 
-  const activeBillDateRef = useRef(filterDate);
-  activeBillDateRef.current = filterDate;
+  const activeBillDateRef = useRef({ dateMode, filterDate, startDate, endDate });
+  activeBillDateRef.current = { dateMode, filterDate, startDate, endDate };
 
   const fetchBills = useCallback(async (forceRefresh?: boolean | any, targetDate?: string) => {
     const isForce = forceRefresh === true;
-    const effectiveDate = targetDate !== undefined ? targetDate : activeBillDateRef.current;
+    const currentMode = activeBillDateRef.current.dateMode;
+    const effectiveDate = targetDate !== undefined ? targetDate : activeBillDateRef.current.filterDate;
+    const currentStart = activeBillDateRef.current.startDate;
+    const currentEnd = activeBillDateRef.current.endDate;
     setIsFetching(true);
     try {
       if (isForce && bills.length === 0) {
         setLoading(true);
       }
       const params = new URLSearchParams();
-      if (effectiveDate) {
-        params.append("date", effectiveDate);
-        params.append("limit", "200");
+      if (currentMode === "range") {
+        if (currentStart) params.append("start_date", currentStart);
+        if (currentEnd) params.append("end_date", currentEnd);
+        params.append("limit", "250");
       } else {
-        params.append("limit", "150");
+        if (effectiveDate) {
+          params.append("date", effectiveDate);
+          params.append("limit", "200");
+        } else {
+          params.append("limit", "150");
+        }
       }
 
       const data = await fetchFromLaravel(`/bills?${params.toString()}`, { skipCache: isForce });
 
-      if (effectiveDate !== activeBillDateRef.current) {
+      if (currentMode === "single" && effectiveDate !== activeBillDateRef.current.filterDate) {
         return;
       }
 
@@ -439,7 +452,7 @@ export default function BillingPage() {
       const billsList = rawList.map((b: any) => normalizeBillObj(b));
       setBills(billsList);
 
-      if (effectiveDate === getTodayStr()) {
+      if (currentMode === "single" && effectiveDate === getTodayStr()) {
         try {
           localStorage.setItem("lis_cached_bills", JSON.stringify(billsList));
         } catch {}
@@ -474,8 +487,8 @@ export default function BillingPage() {
   }, [bills.length, labData]);
 
   useEffect(() => {
-    fetchBills(false, filterDate);
-  }, [filterDate, fetchBills]);
+    fetchBills(false);
+  }, [dateMode, filterDate, startDate, endDate, fetchBills]);
 
   const fetchStaffUsers = async () => {
     try {
@@ -839,7 +852,9 @@ export default function BillingPage() {
       phone.includes(search);
 
     const matchesStatus = statusFilter === "ALL" || b.status === statusFilter;
-    const matchesDate = filterDate ? billDate === filterDate : true;
+    const matchesDate = dateMode === "range"
+      ? ((!startDate || billDate >= startDate) && (!endDate || billDate <= endDate))
+      : (filterDate ? billDate === filterDate : true);
 
     const matchesSource = (() => {
       if (sourceFilter === "ALL") return true;
@@ -1127,7 +1142,7 @@ export default function BillingPage() {
         </div>
       </div>
 
-      {/* Daily Payment Split Card (Cash vs UPI Breakdown) */}
+      {/* Daily Payment Split Card (Cash vs UPI Breakdown & Today Dues) */}
       <div className="p-5 rounded-2xl border border-border/90 bg-card/80 shadow-sm space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/70 pb-3">
           <div className="flex items-center gap-2.5">
@@ -1136,23 +1151,35 @@ export default function BillingPage() {
             </div>
             <div>
               <h3 className="font-display text-sm font-bold text-foreground">
-                Daily Payment Split (Cash vs UPI)
+                Daily Payment Split (Cash vs UPI & Dues)
               </h3>
               <p className="text-[11px] text-muted-foreground">
-                {filterDate ? `Real-time collection distribution for ${filterDate === getTodayStr() ? "Today" : filterDate}` : "Overall collection split across all recorded invoices"}
+                {dateMode === "range"
+                  ? (startDate && endDate ? `Real-time collection & dues from ${startDate} to ${endDate}` : "Custom date range collection distribution")
+                  : (filterDate ? `Real-time collection distribution for ${filterDate === getTodayStr() ? "Today" : filterDate}` : "Overall collection split across all recorded invoices")}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-muted/30 px-3 py-1.5 rounded-xl border border-border/60">
-            <span className="text-[11px] font-semibold text-muted-foreground">Total Settled:</span>
-            <span className="font-mono text-sm font-black text-emerald-600 dark:text-emerald-400">
-              ₹{totalSplitSum.toFixed(2)}
-            </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 bg-muted/30 px-3 py-1.5 rounded-xl border border-border/60">
+              <span className="text-[11px] font-semibold text-muted-foreground">Total Settled:</span>
+              <span className="font-mono text-sm font-black text-emerald-600 dark:text-emerald-400">
+                ₹{totalSplitSum.toFixed(2)}
+              </span>
+            </div>
+            {totalDue > 0 && (
+              <div className="flex items-center gap-2 bg-rose-500/10 px-3 py-1.5 rounded-xl border border-rose-500/30">
+                <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">Total Dues:</span>
+                <span className="font-mono text-sm font-black text-rose-600 dark:text-rose-400">
+                  ₹{totalDue.toFixed(2)}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Cash Card */}
           <div className="p-4 rounded-xl border border-emerald-500/25 bg-emerald-500/5 flex items-center justify-between">
             <div className="flex items-center gap-3.5">
@@ -1190,6 +1217,25 @@ export default function BillingPage() {
               UPI
             </span>
           </div>
+
+          {/* Today Dues Bill Card */}
+          <div className="p-4 rounded-xl border border-rose-500/25 bg-rose-500/5 flex items-center justify-between">
+            <div className="flex items-center gap-3.5">
+              <div className="h-11 w-11 rounded-xl bg-rose-500/15 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 shadow-2xs">
+                <AlertCircle className="h-6 w-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">Today Dues Bill</span>
+                <p className="font-mono text-2xl font-black text-rose-600 dark:text-rose-400">₹{totalDue.toFixed(2)}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {unpaidCount} pending due bill{unpaidCount === 1 ? "" : "s"} · {totalInvoiced > 0 ? Math.round((totalDue / totalInvoiced) * 100) : 0}% of total
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+              DUES
+            </span>
+          </div>
         </div>
 
       </div>
@@ -1208,134 +1254,83 @@ export default function BillingPage() {
           />
         </div>
 
-        {/* Row 2: Date filter + Status filter */}
-        <div className="flex flex-wrap items-center gap-2 w-full">
-          {/* Date Filter with < > Arrow Buttons */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            <div className="flex items-center bg-background border border-border/90 rounded-xl p-0.5 shadow-xs">
-              <button
-                type="button"
-                onClick={() => shiftDate(-1)}
-                className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                title="Previous Day"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
+        {/* Row 2: Date filter + Status & Source filters */}
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 w-full">
+          {/* Date Filter Ribbon */}
+          <DateFilterRibbon
+            dateMode={dateMode}
+            onDateModeChange={(m) => { setDateMode(m); setCurrentPage(1); }}
+            singleDate={filterDate}
+            onSingleDateChange={(d) => { setFilterDate(d); setCurrentPage(1); }}
+            startDate={startDate}
+            onStartDateChange={(d) => { setStartDate(d); setCurrentPage(1); }}
+            endDate={endDate}
+            onEndDateChange={(d) => { setEndDate(d); setCurrentPage(1); }}
+            onShiftSingleDate={shiftDate}
+          />
 
-              <input
-                type="date"
-                value={filterDate}
-                onChange={(e) => { setFilterDate(e.target.value); setCurrentPage(1); }}
-                className="h-8 px-2 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer"
-              />
-
-              <button
-                type="button"
-                onClick={() => shiftDate(1)}
-                className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                title="Next Day"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Status Filter */}
+            <div className="min-w-[130px] flex-1 sm:flex-none sm:w-36">
+              <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setCurrentPage(1); }}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All Statuses</SelectItem>
+                  <SelectItem value="PAID">Paid</SelectItem>
+                  <SelectItem value="PARTIAL">Partial</SelectItem>
+                  <SelectItem value="UNPAID">Unpaid</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setPreset("today")}
-              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                filterDate === getTodayStr()
-                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                  : "bg-background text-muted-foreground hover:text-foreground border-border/90"
-              }`}
-            >
-              Today
-            </button>
+            {/* Booking Source / User Filter (Collection Centre, B2B, Receptionist, Main Lab) */}
+            <div className="min-w-[170px] flex-1 sm:flex-none sm:w-56">
+              <Select value={sourceFilter} onValueChange={(val) => { setSourceFilter(val); setCurrentPage(1); }}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="All Sources & Users" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  <SelectItem value="ALL">All Sources & Users</SelectItem>
+                  <SelectItem value="MAIN_LAB">Main Lab (Direct In-house)</SelectItem>
 
-            <button
-              type="button"
-              onClick={() => setPreset("yesterday")}
-              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                filterDate === getYesterdayStr()
-                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                  : "bg-background text-muted-foreground hover:text-foreground border-border/90"
-              }`}
-            >
-              Yesterday
-            </button>
+                  {/* Role Groups */}
+                  <SelectItem value="ROLE_CC">All Collection Centres</SelectItem>
+                  <SelectItem value="ROLE_RECEPTIONIST">All Receptionists</SelectItem>
 
-            <button
-              type="button"
-              onClick={() => setPreset("all")}
-              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                !filterDate
-                  ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                  : "bg-background text-muted-foreground hover:text-foreground border-border/90"
-              }`}
-            >
-              All Dates
-            </button>
-          </div>
-
-          {/* Status Filter */}
-          <div className="min-w-[130px] flex-1 sm:flex-none sm:w-36">
-            <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setCurrentPage(1); }}>
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Statuses</SelectItem>
-                <SelectItem value="PAID">Paid</SelectItem>
-                <SelectItem value="PARTIAL">Partial</SelectItem>
-                <SelectItem value="UNPAID">Unpaid</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Booking Source / User Filter (Collection Centre, B2B, Receptionist, Main Lab) */}
-          <div className="min-w-[170px] flex-1 sm:flex-none sm:w-56">
-            <Select value={sourceFilter} onValueChange={(val) => { setSourceFilter(val); setCurrentPage(1); }}>
-              <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="All Sources & Users" />
-              </SelectTrigger>
-              <SelectContent className="max-h-72">
-                <SelectItem value="ALL">All Sources & Users</SelectItem>
-                <SelectItem value="MAIN_LAB">Main Lab (Direct In-house)</SelectItem>
-
-                {/* Role Groups */}
-                <SelectItem value="ROLE_CC">All Collection Centres</SelectItem>
-                <SelectItem value="ROLE_RECEPTIONIST">All Receptionists</SelectItem>
-
-                {/* Individual Admin-Added Collection Centres */}
-                {ccUsers.length > 0 && (
-                  <>
-                    <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
-                      Collection Centres
-                    </div>
-                    {ccUsers.map((u: any) => (
-                      <SelectItem key={u.id} value={`USER_${u.id}`}>
-                        CC: {u.labName || u.name}
-                      </SelectItem>
-                    ))}
-                  </>
-                )}
+                  {/* Individual Admin-Added Collection Centres */}
+                  {ccUsers.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
+                        Collection Centres
+                      </div>
+                      {ccUsers.map((u: any) => (
+                        <SelectItem key={u.id} value={`USER_${u.id}`}>
+                          CC: {u.labName || u.name}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
 
 
 
-                {/* Individual Admin-Added Receptionists */}
-                {receptionistUsers.length > 0 && (
-                  <>
-                    <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
-                      Receptionists / Staff
-                    </div>
-                    {receptionistUsers.map((u: any) => (
-                      <SelectItem key={u.id} value={`USER_${u.id}`}>
-                        Staff: {u.name}
-                      </SelectItem>
-                    ))}
-                  </>
-                )}
-              </SelectContent>
-            </Select>
+                  {/* Individual Admin-Added Receptionists */}
+                  {receptionistUsers.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
+                        Receptionists / Staff
+                      </div>
+                      {receptionistUsers.map((u: any) => (
+                        <SelectItem key={u.id} value={`USER_${u.id}`}>
+                          Staff: {u.name}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </div>

@@ -66,3 +66,18 @@ export function shiftDate(currentDateStr: string, days: number): string {
     return base.toISOString().split("T")[0];
   }
 }
+
+export function getDaysAgoStr(days: number): string {
+  return shiftDate(getTodayStr(), -Math.abs(days));
+}
+
+export function getStartOfMonthStr(): string {
+  try {
+    const todayStr = getTodayStr();
+    const [y, m] = todayStr.split("-");
+    return `${y}-${m}-01`;
+  } catch {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  }
+}

@@ -18,9 +18,10 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DateFilterRibbon } from "@/components/date-filter-ribbon";
 import { fetchFromLaravel, getStoredUser, getCleanLetterheadUrl } from "@/lib/api-client";
 import { getNativePdfBase64 } from "@/lib/pdf-report-downloader";
-import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
+import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate, getDaysAgoStr } from "@/lib/date-utils";
 import { formatPatientListDisplayName } from "@/lib/patient-title-helper";
 
 interface Test { 
@@ -64,6 +65,7 @@ export default function ReportsListPage() {
     }
     return [];
   });
+
   const [outstandingLock, setOutstandingLock] = useState<{
     isLocked: boolean;
     outstandingBalance: number;
@@ -73,7 +75,10 @@ export default function ReportsListPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [sourceFilter, setSourceFilter] = useState<"ALL" | "MAIN_LAB" | "B2B" | "COLLECTION_CENTER">("ALL");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [dateMode, setDateMode] = useState<"single" | "range">("single");
   const [filterDate, setFilterDate] = useState(() => getTodayStr());
+  const [startDate, setStartDate] = useState(() => getDaysAgoStr(6));
+  const [endDate, setEndDate] = useState(() => getTodayStr());
   const [sortOrder, setSortOrder] = useState<"oldest" | "recent">("recent");
 
   const isB2B = currentUser?.role === "B2B";
@@ -136,7 +141,11 @@ export default function ReportsListPage() {
         setLoading(true);
       }
       const params = new URLSearchParams();
-      if (effectiveDate) {
+      if (dateMode === "range") {
+        if (startDate) params.append("start_date", startDate);
+        if (endDate) params.append("end_date", endDate);
+        params.append("limit", "250");
+      } else if (effectiveDate) {
         params.append("date", effectiveDate);
         params.append("limit", "200");
       } else {
@@ -147,7 +156,7 @@ export default function ReportsListPage() {
       const data = await fetchFromLaravel(`/reports?${params.toString()}`, { skipCache: isForce });
 
       // Discard stale responses if user switched dates while request was pending
-      if (effectiveDate !== activeDateRef.current) {
+      if (dateMode === "single" && effectiveDate !== activeDateRef.current) {
         return;
       }
 
@@ -179,12 +188,12 @@ export default function ReportsListPage() {
       setIsFetching(false);
       setLoading(false);
     }
-  }, [sortOrder, reports.length]);
+  }, [sortOrder, reports.length, dateMode, startDate, endDate]);
 
-  // Reactive date & sort order fetching: ensures reports for any past date are loaded immediately
+  // Reactive date & sort order fetching: ensures reports for any past date or date range are loaded immediately
   useEffect(() => {
     fetchReports(false, filterDate);
-  }, [filterDate, sortOrder, fetchReports]);
+  }, [dateMode, filterDate, startDate, endDate, sortOrder, fetchReports]);
 
   useEffect(() => {
     setCurrentUser(getStoredUser());
@@ -684,7 +693,9 @@ export default function ReportsListPage() {
       ));
     const repSource = getReportSource(r);
     const matchesSource = sourceFilter === "ALL" || repSource === sourceFilter;
-    const matchesDate = filterDate ? repDate === filterDate : true;
+    const matchesDate = dateMode === "range"
+      ? ((!startDate || repDate >= startDate) && (!endDate || repDate <= endDate))
+      : (filterDate ? repDate === filterDate : true);
 
     return matchesSearch && matchesStatus && matchesSource && matchesDate;
   });
@@ -748,10 +759,18 @@ export default function ReportsListPage() {
     window.open(url, "_blank");
   };
 
-  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, sourceFilter, filterDate, sortOrder]);
+  useEffect(() => { setCurrentPage(1); }, [search, statusFilter, sourceFilter, dateMode, filterDate, startDate, endDate, sortOrder]);
 
-  const clearFilters = () => { setSearch(""); setStatusFilter("ALL"); setSourceFilter("ALL"); setFilterDate(""); setSortOrder("oldest"); };
-  const hasFilters = search || statusFilter !== "ALL" || sourceFilter !== "ALL" || filterDate || sortOrder !== "oldest";
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("ALL");
+    setSourceFilter("ALL");
+    setFilterDate("");
+    setStartDate("");
+    setEndDate("");
+    setSortOrder("oldest");
+  };
+  const hasFilters = search || statusFilter !== "ALL" || sourceFilter !== "ALL" || (dateMode === "range" ? Boolean(startDate || endDate) : Boolean(filterDate)) || sortOrder !== "oldest";
 
   const selectClass = "w-full h-10 bg-background border border-border rounded-lg px-3 text-sm focus:border-primary/60 focus:ring-2 focus:ring-primary/20 outline-none transition-all";
 
@@ -827,79 +846,17 @@ export default function ReportsListPage() {
             </div>
           </div>
           
-          <div className="space-y-1.5 w-full sm:w-auto">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Filter Date</label>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <div className="flex items-center bg-background border border-border/90 rounded-xl p-0.5 shadow-xs">
-                <button
-                  type="button"
-                  onClick={() => shiftDate(-1)}
-                  className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                  title="Previous Day"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-
-                <input 
-                  type="date" 
-                  className="h-8 px-2 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer"
-                  value={filterDate} 
-                  onChange={(e) => { setFilterDate(e.target.value); setCurrentPage(1); }} 
-                />
-
-                <button
-                  type="button"
-                  onClick={() => shiftDate(1)}
-                  className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                  title="Next Day"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setPreset("today")}
-                className={`h-10 px-3 text-xs font-bold cursor-pointer transition-all ${
-                  filterDate === getTodayStr()
-                    ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Today
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setPreset("yesterday")}
-                className={`h-10 px-3 text-xs font-bold cursor-pointer transition-all ${
-                  filterDate === getYesterdayStr()
-                    ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Yesterday
-              </Button>
-
-              <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setPreset("all")} 
-                className={`h-10 text-xs px-2.5 cursor-pointer font-bold transition-all ${
-                  !filterDate
-                    ? "bg-primary text-primary-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                All Dates
-              </Button>
-            </div>
-          </div>
+          <DateFilterRibbon
+            dateMode={dateMode}
+            onDateModeChange={(m) => { setDateMode(m); setCurrentPage(1); }}
+            singleDate={filterDate}
+            onSingleDateChange={(d) => { setFilterDate(d); setCurrentPage(1); }}
+            startDate={startDate}
+            onStartDateChange={(d) => { setStartDate(d); setCurrentPage(1); }}
+            endDate={endDate}
+            onEndDateChange={(d) => { setEndDate(d); setCurrentPage(1); }}
+            onShiftSingleDate={shiftDate}
+          />
 
           {/* Status Dropdown */}
           <div className="space-y-1.5 w-full sm:w-[170px]">

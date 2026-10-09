@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getStoredToken, getAuthBaseUrl, updateStoredUser } from "@/lib/api-client";
 import { ALL_DESIGNATIONS } from "@/lib/report-settings";
 import { BarcodeSVG } from "@/components/barcode-svg";
+import { DateFilterRibbon } from "@/components/date-filter-ribbon";
 import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
 import { formatPatientListDisplayName } from "@/lib/patient-title-helper";
 
@@ -310,6 +311,9 @@ export default function PatientsPage() {
 
   const [search, setSearch] = useState("");
   const [filterDate, setFilterDate] = useState(() => getTodayStr());
+  const [dateMode, setDateMode] = useState<"single" | "range">("single");
+  const [startDate, setStartDate] = useState(() => getTodayStr());
+  const [endDate, setEndDate] = useState(() => getTodayStr());
   const [loading, setLoading] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -460,23 +464,32 @@ export default function PatientsPage() {
   const [customRejectReason, setCustomRejectReason] = useState<string>("");
   const [rejecting, setRejecting] = useState(false);
 
-  const activePatientDateRef = useRef(filterDate);
-  activePatientDateRef.current = filterDate;
+  const activePatientDateRef = useRef({ dateMode, filterDate, startDate, endDate });
+  activePatientDateRef.current = { dateMode, filterDate, startDate, endDate };
 
   const fetchPatients = useCallback(async (forceRefresh?: boolean | any, targetDate?: string) => {
     const isForce = forceRefresh === true;
-    const effectiveDate = targetDate !== undefined ? targetDate : activePatientDateRef.current;
+    const currentMode = activePatientDateRef.current.dateMode;
+    const effectiveDate = targetDate !== undefined ? targetDate : activePatientDateRef.current.filterDate;
+    const currentStart = activePatientDateRef.current.startDate;
+    const currentEnd = activePatientDateRef.current.endDate;
     setIsFetching(true);
     try {
       if (patients.length === 0) {
         setLoading(true);
       }
       const params = new URLSearchParams();
-      if (effectiveDate) {
-        params.append("date", effectiveDate);
-        params.append("per_page", "200");
+      if (currentMode === "range") {
+        if (currentStart) params.append("start_date", currentStart);
+        if (currentEnd) params.append("end_date", currentEnd);
+        params.append("per_page", "250");
       } else {
-        params.append("per_page", "150");
+        if (effectiveDate) {
+          params.append("date", effectiveDate);
+          params.append("per_page", "200");
+        } else {
+          params.append("per_page", "150");
+        }
       }
       params.append("sort", "created_at");
       params.append("direction", "desc");
@@ -484,13 +497,13 @@ export default function PatientsPage() {
 
       const data = await fetchFromLaravel(`/patients?${params.toString()}`, { skipCache: isForce });
 
-      if (effectiveDate !== activePatientDateRef.current) {
+      if (currentMode === "single" && effectiveDate !== activePatientDateRef.current.filterDate) {
         return;
       }
 
       const list = Array.isArray(data) ? data : (data?.data || []);
       setPatients(list);
-      if (effectiveDate === getTodayStr()) {
+      if (currentMode === "single" && effectiveDate === getTodayStr()) {
         try {
           localStorage.setItem("lis_cached_patients", JSON.stringify(list));
         } catch {}
@@ -505,16 +518,16 @@ export default function PatientsPage() {
   }, [patients.length]);
 
   useEffect(() => {
-    fetchPatients(false, filterDate);
-  }, [filterDate, fetchPatients]);
+    fetchPatients(false);
+  }, [dateMode, filterDate, startDate, endDate, fetchPatients]);
 
   useEffect(() => {
     const handleSync = () => {
-      fetchPatients(false, activePatientDateRef.current);
+      fetchPatients(false);
     };
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        fetchPatients(false, activePatientDateRef.current);
+        fetchPatients(false);
       }
     };
     window.addEventListener("lis_online_sync", handleSync);
@@ -531,7 +544,7 @@ export default function PatientsPage() {
 
   const handleManualRefresh = async () => {
     try {
-      await fetchPatients(true, filterDate);
+      await fetchPatients(true);
       toast.success("Refreshed", "Patient list refreshed with latest data.");
     } catch (err: any) {
       toast.error("Refresh Failed", err?.message || "Could not refresh patient list.");
@@ -559,7 +572,9 @@ export default function PatientsPage() {
       patAbhaAddress.toLowerCase().includes(search.toLowerCase()) ||
       patAbhaNumber.toLowerCase().includes(search.toLowerCase());
 
-    const matchesDate = filterDate ? (patDate === filterDate || (p.meta?.sample_date && getRecordLocalDate(p.meta.sample_date) === filterDate)) : true;
+    const matchesDate = dateMode === "range"
+      ? ((!startDate || patDate >= startDate) && (!endDate || patDate <= endDate))
+      : (filterDate ? (patDate === filterDate || (p.meta?.sample_date && getRecordLocalDate(p.meta.sample_date) === filterDate)) : true);
 
     return matchesSearch && matchesDate;
   });
@@ -682,8 +697,8 @@ export default function PatientsPage() {
       </div>
 
       {/* Filter / Search Ribbon */}
-      <div className="flex flex-col sm:flex-row items-center gap-3 bg-card border border-border/80 p-3.5 rounded-xl shadow-xs">
-        <div className="relative flex-1 w-full">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 bg-card border border-border/80 p-3.5 rounded-xl shadow-xs">
+        <div className="relative flex-1 w-full min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search patients by name, PID, or phone number…"
@@ -702,65 +717,25 @@ export default function PatientsPage() {
         </div>
 
         {/* Quick Date Filters & Controls */}
-        <div className="flex flex-wrap items-center gap-1.5 shrink-0 w-full sm:w-auto">
-          {/* Date Filter with < > Arrow Buttons */}
-          <div className="flex items-center bg-background border border-border/90 rounded-xl p-0.5 shadow-xs">
-            <button
-              type="button"
-              onClick={() => shiftDate(-1)}
-              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-              title="Previous Day"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-
-            <input
-              type="date"
-              value={filterDate}
-              onChange={(e) => { setFilterDate(e.target.value); setCurrentPage(1); }}
-              className="h-8 px-2 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer"
-            />
-
-            <button
-              type="button"
-              onClick={() => shiftDate(1)}
-              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-              title="Next Day"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setPreset("today")}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-              filterDate === getTodayStr()
-                ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                : "bg-background text-muted-foreground hover:text-foreground border-border/90 hover:bg-muted"
-            }`}
-          >
-            Today
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setPreset("yesterday")}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-              filterDate === getYesterdayStr()
-                ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                : "bg-background text-muted-foreground hover:text-foreground border-border/90 hover:bg-muted"
-            }`}
-          >
-            Yesterday
-          </button>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <DateFilterRibbon
+            dateMode={dateMode}
+            onDateModeChange={(m) => { setDateMode(m); setCurrentPage(1); }}
+            singleDate={filterDate}
+            onSingleDateChange={(d) => { setFilterDate(d); setCurrentPage(1); }}
+            startDate={startDate}
+            onStartDateChange={(d) => { setStartDate(d); setCurrentPage(1); }}
+            endDate={endDate}
+            onEndDateChange={(d) => { setEndDate(d); setCurrentPage(1); }}
+            onShiftSingleDate={shiftDate}
+          />
 
           <Button
             variant="outline"
             size="icon"
             onClick={handleManualRefresh}
             disabled={isFetching || loading}
-            className="h-9 w-9 shrink-0 cursor-pointer rounded-xl border border-border/90 bg-background hover:bg-muted transition-colors shadow-xs ml-auto sm:ml-0"
+            className="h-9 w-9 shrink-0 cursor-pointer rounded-xl border border-border/90 bg-background hover:bg-muted transition-colors shadow-xs self-end mb-0.5"
             title="Refresh Patient List"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin text-primary" : "text-muted-foreground"}`} />

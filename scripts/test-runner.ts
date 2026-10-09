@@ -16,6 +16,7 @@ import {
   DEFAULT_BIOPSY_TEMPLATE,
 } from "../src/lib/clinical-test-helper";
 import { clearApiCache } from "../src/lib/api-client";
+import { getTodayStr, getYesterdayStr, getDaysAgoStr, getStartOfMonthStr, getRecordLocalDate } from "../src/lib/date-utils";
 
 let totalTests = 0;
 let passedTests = 0;
@@ -925,6 +926,101 @@ function sanitizePdfFilename(reportCode: string, patientName: string): string {
 
 const waFilename = sanitizePdfFilename("REP/2026/01", "Dr. John Doe & Sons");
 assert(waFilename === "LabReport_REP_2026_01_Dr__John_Doe___Sons.pdf", "[WHATSAPP] Generates sanitized safe PDF filename for WhatsApp delivery");
+
+// ==============================================================================
+// 14. Date Range Filters & Today Dues Bill Aggregation Engine
+// ==============================================================================
+console.log("\n▶ MODULE 14: Date Range Picker & Today Dues Bill Aggregation");
+
+// Test: Date Utility Helper Functions
+const todayIso = getTodayStr();
+const yesterdayIso = getYesterdayStr();
+const sevenDaysAgoIso = getDaysAgoStr(6);
+const thirtyDaysAgoIso = getDaysAgoStr(29);
+const startOfMonthIso = getStartOfMonthStr();
+
+assert(typeof todayIso === "string" && /^\d{4}-\d{2}-\d{2}$/.test(todayIso), "[DATE UTILS] getTodayStr returns YYYY-MM-DD");
+assert(typeof yesterdayIso === "string" && /^\d{4}-\d{2}-\d{2}$/.test(yesterdayIso), "[DATE UTILS] getYesterdayStr returns YYYY-MM-DD");
+assert(typeof sevenDaysAgoIso === "string" && /^\d{4}-\d{2}-\d{2}$/.test(sevenDaysAgoIso), "[DATE UTILS] getDaysAgoStr returns YYYY-MM-DD");
+assert(typeof startOfMonthIso === "string" && startOfMonthIso.endsWith("-01"), "[DATE UTILS] getStartOfMonthStr starts on day 01");
+assert(sevenDaysAgoIso <= todayIso, "[DATE UTILS] 7 days ago is less than or equal to today");
+
+// Test: Date Range Filter Predicate Matching
+function matchesDateRange(recordDate: string, mode: "single" | "range", singleDate: string, startDate: string, endDate: string) {
+  if (mode === "range") {
+    if (startDate && recordDate < startDate) return false;
+    if (endDate && recordDate > endDate) return false;
+    return true;
+  }
+  return singleDate ? recordDate === singleDate : true;
+}
+
+assert(matchesDateRange("2026-10-05", "range", "", "2026-10-01", "2026-10-10") === true, "[DATE FILTER] Date within start & end range matches");
+assert(matchesDateRange("2026-09-30", "range", "", "2026-10-01", "2026-10-10") === false, "[DATE FILTER] Date before start range does not match");
+assert(matchesDateRange("2026-10-15", "range", "", "2026-10-01", "2026-10-10") === false, "[DATE FILTER] Date after end range does not match");
+assert(matchesDateRange("2026-10-05", "range", "", "2026-10-05", "2026-10-05") === true, "[DATE FILTER] Boundary exact same date matches in range");
+assert(matchesDateRange("2026-10-05", "range", "", "2026-10-01", "") === true, "[DATE FILTER] Open-ended end range matches later dates");
+assert(matchesDateRange("2026-09-25", "range", "", "2026-10-01", "") === false, "[DATE FILTER] Open-ended end range excludes earlier dates");
+assert(matchesDateRange("2026-10-05", "range", "", "", "") === true, "[DATE FILTER] All Dates (empty range) matches any date");
+assert(matchesDateRange("2026-10-05", "single", "2026-10-05", "", "") === true, "[DATE FILTER] Single mode exact date match");
+assert(matchesDateRange("2026-10-06", "single", "2026-10-05", "", "") === false, "[DATE FILTER] Single mode mismatch rejected");
+assert(matchesDateRange("2026-10-06", "single", "", "", "") === true, "[DATE FILTER] Single mode empty matches all dates");
+
+// Test: Billing Today Dues Bill Aggregation Calculation
+interface MockBill {
+  id: string;
+  total: number;
+  paid_amount: number;
+  status: string;
+  payment_mode?: string;
+}
+
+const mockBillsCollection: MockBill[] = [
+  { id: "b1", total: 1000, paid_amount: 1000, status: "PAID", payment_mode: "CASH" },
+  { id: "b2", total: 1500, paid_amount: 1500, status: "PAID", payment_mode: "UPI" },
+  { id: "b3", total: 800, paid_amount: 300, status: "PARTIAL", payment_mode: "CASH" }, // Due: 500
+  { id: "b4", total: 1200, paid_amount: 0, status: "UNPAID", payment_mode: "UPI" },    // Due: 1200
+  { id: "b5", total: 600, paid_amount: 600, status: "PAID", payment_mode: "UPI" },
+];
+
+function calculateBillingDuesAndSplit(bills: MockBill[]) {
+  const isFullyPaid = (b: MockBill) => b.status === "PAID" || (b.total > 0 && b.paid_amount >= b.total);
+  const totalInvoiced = bills.reduce((acc, b) => acc + b.total, 0);
+  const totalDue = bills.reduce((acc, b) => acc + (isFullyPaid(b) ? 0 : Math.max(0, b.total - b.paid_amount)), 0);
+  const unpaidCount = bills.filter((b) => !isFullyPaid(b)).length;
+  const paidCount = bills.filter((b) => isFullyPaid(b)).length;
+
+  let cashTotal = 0;
+  let upiTotal = 0;
+  bills.forEach((b) => {
+    const paid = isFullyPaid(b) ? b.total : b.paid_amount;
+    if (paid <= 0) return;
+    if (b.payment_mode === "UPI") {
+      upiTotal += paid;
+    } else {
+      cashTotal += paid;
+    }
+  });
+
+  return { totalInvoiced, totalDue, unpaidCount, paidCount, cashTotal, upiTotal };
+}
+
+const duesResult = calculateBillingDuesAndSplit(mockBillsCollection);
+assert(duesResult.totalInvoiced === 5100, "[BILLING DUES] Total invoiced sum matches (5100)");
+assert(duesResult.totalDue === 1700, "[BILLING DUES] Today dues bill value matches expected 1700 (500 partial + 1200 unpaid)");
+assert(duesResult.unpaidCount === 2, "[BILLING DUES] Pending due bills count is exactly 2");
+assert(duesResult.paidCount === 3, "[BILLING DUES] Fully paid bills count is exactly 3");
+assert(duesResult.cashTotal === 1300, "[BILLING DUES] Cash received matches 1000 + 300 = 1300");
+assert(duesResult.upiTotal === 2100, "[BILLING DUES] UPI received matches 1500 + 600 = 2100");
+
+// Test: Edge Case — All Bills Fully Paid (Zero Dues)
+const allPaidBills: MockBill[] = [
+  { id: "p1", total: 500, paid_amount: 500, status: "PAID" },
+  { id: "p2", total: 1000, paid_amount: 1000, status: "PAID" },
+];
+const zeroDueResult = calculateBillingDuesAndSplit(allPaidBills);
+assert(zeroDueResult.totalDue === 0, "[BILLING DUES] Total due is 0 when all bills are settled");
+assert(zeroDueResult.unpaidCount === 0, "[BILLING DUES] Unpaid count is 0 when all bills are settled");
 
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
