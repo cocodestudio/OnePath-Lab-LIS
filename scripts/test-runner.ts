@@ -1378,6 +1378,122 @@ assert(classifyNetworkState(true, true, false) === "weak", "[NETWORK RESILIENCE]
 assert(classifyNetworkState(true, false, true) === "weak", "[NETWORK RESILIENCE] Failed fetch correctly classified as weak/unreachable server state");
 assert(classifyNetworkState(true, false, false) === "idle", "[NETWORK RESILIENCE] Healthy connection remains in idle state");
 
+// ==============================================================================
+// 18. Smart Panel Keep-Together Engine (Technique 1) & Letterhead Margin Boundary Guardrails
+// ==============================================================================
+console.log("\n▶ MODULE 18: Smart Panel Keep-Together Engine & Letterhead Margin Boundary Guardrails");
+
+import { computeReportPages, A4_W, A4_H, type ReportBlock } from "../src/components/report-sheet";
+
+// 18.1 Paper Saving: Two compact tests fitting within usable height remain on the same page
+const compactTestBlocks: ReportBlock[] = [
+  // Test 1: Blood Sugar Fasting (Total ~120px)
+  { key: "header-Bio-SugarFasting", node: null, isTestPanelStart: true, testGroup: "Bio:::SugarFasting" },
+  { key: "tblhead-Bio-SugarFasting", node: null, testGroup: "Bio:::SugarFasting" },
+  { key: "row-sugar-fasting-val", node: null, testGroup: "Bio:::SugarFasting" },
+  { key: "endline-Bio-SugarFasting", node: null, testGroup: "Bio:::SugarFasting" },
+  // Test 2: Blood Sugar PP (Total ~120px)
+  { key: "header-Bio-SugarPP", node: null, isTestPanelStart: true, testGroup: "Bio:::SugarPP" },
+  { key: "tblhead-Bio-SugarPP", node: null, testGroup: "Bio:::SugarPP" },
+  { key: "row-sugar-pp-val", node: null, testGroup: "Bio:::SugarPP" },
+  { key: "endline-Bio-SugarPP", node: null, testGroup: "Bio:::SugarPP" },
+];
+const compactHeights = [30, 24, 26, 6, 30, 24, 26, 6]; // Sum: 86px + 86px = 172px
+const standardUsableH = 700; // Typical clean page height after letterhead margins and patient info block
+
+const compactPages = computeReportPages(compactTestBlocks, compactHeights, standardUsableH);
+assert(compactPages.length === 1, "[KEEP-TOGETHER] Multiple short tests fitting on 1 page stay on 1 page to save paper");
+assert(compactPages[0].length === 8, "[KEEP-TOGETHER] All 8 blocks of both sugar tests packed onto page 1");
+
+// 18.2 Zero Chopped Test (Technique 1): CBC + Urine Routine
+// CBC takes 450px on Page 1. Urine Routine takes 340px.
+// 450 + 340 = 790px > 700px usable height.
+// Without keep-together, Urine would be chopped across page 1 and page 2.
+// With keep-together, Urine Routine is shifted to start fresh on Page 2!
+const cbcAndUrineBlocks: ReportBlock[] = [
+  // CBC (Blocks 0-6): Total 450px
+  { key: "header-Haem-CBC", node: null, isTestPanelStart: true, testGroup: "Haem:::CBC" },
+  { key: "tblhead-Haem-CBC", node: null, testGroup: "Haem:::CBC" },
+  { key: "row-cbc-hb", node: null, testGroup: "Haem:::CBC" },
+  { key: "row-cbc-rbc", node: null, testGroup: "Haem:::CBC" },
+  { key: "row-cbc-wbc", node: null, testGroup: "Haem:::CBC" },
+  { key: "row-cbc-plt", node: null, testGroup: "Haem:::CBC" },
+  { key: "endline-Haem-CBC", node: null, testGroup: "Haem:::CBC" },
+  // Urine Routine (Blocks 7-13): Total 340px
+  { key: "header-Path-Urine", node: null, isTestPanelStart: true, testGroup: "Path:::Urine" },
+  { key: "tblhead-Path-Urine", node: null, testGroup: "Path:::Urine" },
+  { key: "row-urine-color", node: null, testGroup: "Path:::Urine" },
+  { key: "row-urine-ph", node: null, testGroup: "Path:::Urine" },
+  { key: "row-urine-protein", node: null, testGroup: "Path:::Urine" },
+  { key: "row-urine-sugar", node: null, testGroup: "Path:::Urine" },
+  { key: "endline-Path-Urine", node: null, testGroup: "Path:::Urine" },
+];
+const cbcAndUrineHeights = [
+  35, 25, 95, 95, 100, 95, 5, // CBC total = 450px
+  35, 25, 70, 70, 70, 65, 5,  // Urine total = 340px
+];
+
+const cbcUrinePages = computeReportPages(cbcAndUrineBlocks, cbcAndUrineHeights, 700);
+assert(cbcUrinePages.length === 2, "[KEEP-TOGETHER] Urine routine shifted to page 2 instead of being chopped in half");
+assert(
+  cbcUrinePages[0].every(idx => cbcAndUrineBlocks[idx].testGroup === "Haem:::CBC"),
+  "[KEEP-TOGETHER] Page 1 contains exclusively CBC test blocks"
+);
+assert(
+  cbcUrinePages[1].every(idx => cbcAndUrineBlocks[idx].testGroup === "Path:::Urine"),
+  "[KEEP-TOGETHER] Page 2 contains the complete Urine Routine panel without fragmentation"
+);
+
+// 18.3 Giant Test (Exceeding 1 Full Clean Page): Culture & Sensitivity with 40 rows
+// If remaining space on page 1 is small (< 200px or < 30% of page), start cleanly on next page
+const giantTestBlocks: ReportBlock[] = [
+  { key: "header-Micro-Stool", node: null, isTestPanelStart: true, testGroup: "Micro:::Stool" },
+  { key: "row-stool-occult", node: null, testGroup: "Micro:::Stool" }, // takes 550px
+  // Giant Culture Test (Total 1100px)
+  { key: "header-Micro-Culture", node: null, isTestPanelStart: true, testGroup: "Micro:::Culture" },
+  { key: "tblhead-Micro-Culture", node: null, testGroup: "Micro:::Culture" },
+  { key: "custom-editor-row-1", node: null, testGroup: "Micro:::Culture" },
+  { key: "custom-editor-row-2", node: null, testGroup: "Micro:::Culture" },
+  { key: "custom-editor-row-3", node: null, testGroup: "Micro:::Culture" },
+];
+const giantHeights = [
+  50, 500, // Stool = 550px (leaves only 150px on Page 1)
+  30, 25, 400, 400, 245, // Culture = 1100px
+];
+const giantPages = computeReportPages(giantTestBlocks, giantHeights, 700);
+assert(giantPages[0].length === 2, "[KEEP-TOGETHER] Giant test does not awkwardly start with a 1-row fragment on page 1");
+assert(giantPages[1][0] === 2, "[KEEP-TOGETHER] Giant culture test starts clean from the top of page 2");
+
+// 18.4 Letterhead Margin Boundary Constraints: Content strictly bounded within margins
+// Standard letterhead: Header 185px, Footer 95px.
+// Custom letterhead: Header 240px, Footer 160px.
+function calculateContentAreaHeight(headerH: number, footerH: number, a4Height: number = A4_H): number {
+  return Math.max(120, a4Height - headerH - footerH);
+}
+
+const defaultContentH = calculateContentAreaHeight(185, 95);
+assert(defaultContentH === 1123 - 185 - 95, "[LETTERHEAD BOUNDS] Default content area height exactly 843px");
+assert(185 + defaultContentH + 95 === A4_H, "[LETTERHEAD BOUNDS] Header + Content Area + Footer strictly equals A4 height");
+
+const customContentH = calculateContentAreaHeight(240, 160);
+assert(customContentH === 1123 - 240 - 160, "[LETTERHEAD BOUNDS] Custom header (240px) & footer (160px) sets content area to 723px");
+assert(240 + customContentH + 160 === A4_H, "[LETTERHEAD BOUNDS] Custom letterhead bounds strictly align to A4 height");
+
+// Check that computeReportPages never places blocks exceeding the page usable height on any page
+cbcUrinePages.forEach((pageBlockIndices, pIdx) => {
+  const pageHeight = pageBlockIndices.reduce((sum, idx) => sum + cbcAndUrineHeights[idx], 0);
+  assert(
+    pageHeight <= 700,
+    `[LETTERHEAD BOUNDS] Page ${pIdx + 1} content height (${pageHeight}px) strictly stays within usable margin limit (700px)`
+  );
+});
+
+// 18.5 Separate Page Per Test setting override
+const separatePages = computeReportPages(compactTestBlocks, compactHeights, standardUsableH, { separatePagePerTest: true });
+assert(separatePages.length === 2, "[SEPARATE PAGE OPTION] When separatePagePerTest is enabled, each test gets its own page");
+assert(separatePages[0].length === 4, "[SEPARATE PAGE OPTION] Page 1 contains test 1");
+assert(separatePages[1].length === 4, "[SEPARATE PAGE OPTION] Page 2 contains test 2");
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

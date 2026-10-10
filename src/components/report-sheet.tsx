@@ -109,7 +109,13 @@ export interface ReportSheetData {
 export const A4_W = 794;
 export const A4_H = 1123;
 
-export interface ReportBlock { key: string; node: React.ReactNode; isTestStart?: boolean; }
+export interface ReportBlock {
+  key: string;
+  node: React.ReactNode;
+  isTestStart?: boolean;
+  testGroup?: string;
+  isTestPanelStart?: boolean;
+}
 
 export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
   const patient: any = report.patient || {};
@@ -501,11 +507,15 @@ export function buildReportBlocks(
   const blocks: ReportBlock[] = [];
   let isFirstMainTestPushed = false;
   let pendingPageBreakForNextBlock = false;
+  let currentActiveTestGroup: string | null = null;
 
   const pushBlock = (block: ReportBlock) => {
     if (pendingPageBreakForNextBlock) {
       block.isTestStart = true;
       pendingPageBreakForNextBlock = false;
+    }
+    if (!block.testGroup && currentActiveTestGroup) {
+      block.testGroup = currentActiveTestGroup;
     }
     blocks.push(block);
   };
@@ -765,14 +775,17 @@ export function buildReportBlocks(
       };
     };
 
-    // When department-wise grouping is OFF (default), show department header once per category
+    let pendingDeptHeaderBlock: ReportBlock | null = null;
+    let pendingPackageHeaderBlock: ReportBlock | null = null;
+
+    // When department-wise grouping is OFF (default), prepare department header once per category
     if (!isDeptGroupingEnabled) {
       const headerBlock = buildDepartmentHeaderNode("group");
-      if (headerBlock) pushBlock(headerBlock);
+      if (headerBlock) pendingDeptHeaderBlock = headerBlock;
 
       // Health Package display directly under Department Header on the left
       if (resolvedPackageName && catIdx === 0) {
-        pushBlock({
+        pendingPackageHeaderBlock = {
           key: `package-header-${category}`,
           node: (
             <div className="text-left mb-1 mt-0.5 flex items-center gap-1.5 select-none">
@@ -782,7 +795,7 @@ export function buildReportBlocks(
               </span>
             </div>
           ),
-        });
+        };
       }
     }
 
@@ -793,21 +806,47 @@ export function buildReportBlocks(
     sortedMainTests.forEach(([mainTestName, itemsList], testIdx) => {
       if (!itemsList || itemsList.length === 0) return;
 
+      const currentTestGroup = `${category}:::${mainTestName}`;
+      currentActiveTestGroup = currentTestGroup;
+      let hasMarkedPanelStart = false;
+
       if (reportSettings.separatePagePerTest && testIdx > 0 && isFirstMainTestPushed) {
         pendingPageBreakForNextBlock = true;
       } else if (!isFirstMainTestPushed) {
         isFirstMainTestPushed = true;
       }
 
+      // If department grouping is OFF, attach the category department header to the very first test
+      if (!isDeptGroupingEnabled && testIdx === 0) {
+        if (pendingDeptHeaderBlock) {
+          pendingDeptHeaderBlock.testGroup = currentTestGroup;
+          pendingDeptHeaderBlock.isTestPanelStart = true;
+          hasMarkedPanelStart = true;
+          pushBlock(pendingDeptHeaderBlock);
+          pendingDeptHeaderBlock = null;
+        }
+        if (pendingPackageHeaderBlock) {
+          pendingPackageHeaderBlock.testGroup = currentTestGroup;
+          pushBlock(pendingPackageHeaderBlock);
+          pendingPackageHeaderBlock = null;
+        }
+      }
+
       // When department-wise grouping is ON, show department header before EACH test in this department!
       if (isDeptGroupingEnabled) {
         const headerBlock = buildDepartmentHeaderNode(`test-${testIdx}-${mainTestName}`, testIdx > 0 || catIdx > 0);
-        if (headerBlock) pushBlock(headerBlock);
+        if (headerBlock) {
+          headerBlock.testGroup = currentTestGroup;
+          headerBlock.isTestPanelStart = true;
+          hasMarkedPanelStart = true;
+          pushBlock(headerBlock);
+        }
 
         // Health Package display under the very first department header
         if (resolvedPackageName && catIdx === 0 && testIdx === 0) {
           pushBlock({
             key: `package-header-${category}`,
+            testGroup: currentTestGroup,
             node: (
               <div className="text-left mb-1 mt-0.5 flex items-center gap-1.5 select-none">
                 <span className="text-[9.5px] font-bold text-zinc-500 uppercase tracking-wider">Health Package:</span>
@@ -833,6 +872,7 @@ export function buildReportBlocks(
       // 2. Test Panel Title Header (e.g. * COMPLETE BLOOD COUNT (CBC))
       pushBlock({
         key: `header-${category}-${mainTestName}`,
+        isTestPanelStart: !hasMarkedPanelStart,
         node: (
           <div 
             className={`border-b border-zinc-800 pb-0.5 flex items-baseline ${
@@ -1374,8 +1414,20 @@ export function buildReportBlocks(
           ),
         });
       }
+      currentActiveTestGroup = null;
     });
+
+    if (pendingDeptHeaderBlock) {
+      pushBlock(pendingDeptHeaderBlock);
+      pendingDeptHeaderBlock = null;
+    }
+    if (pendingPackageHeaderBlock) {
+      pushBlock(pendingPackageHeaderBlock);
+      pendingPackageHeaderBlock = null;
+    }
   });
+
+  currentActiveTestGroup = null;
 
   // End of report & Doctor Signatures Footer
   const doctorSignatures = Array.isArray(reportSettings.doctorSignatures) && reportSettings.doctorSignatures.length > 0
@@ -1439,6 +1491,120 @@ export function buildReportBlocks(
   return blocks;
 }
 
+export interface ComputeReportPagesOptions {
+  separatePagePerTest?: boolean;
+}
+
+/**
+ * Smart Panel Keep-Together Pagination Engine (Technique 1).
+ * Calculates optimal multi-page layout strictly respecting letterhead header/footer margin bounds.
+ * Tests that fit within available clean page height will stay intact on a single page,
+ * pushing cleanly to the next page rather than being chopped in half.
+ */
+export function computeReportPages(
+  blocks: ReportBlock[],
+  blockHeights: number[],
+  pageUsableHeight: number,
+  options: ComputeReportPagesOptions = {}
+): number[][] {
+  if (!blocks.length) return [[]];
+
+  const getH = (b: ReportBlock, idx: number) => {
+    const h = blockHeights[idx];
+    return typeof h === "number" && h > 0 ? h : 20;
+  };
+
+  // Pre-calculate total height for each test panel group
+  const testPanelTotalHeights = new Map<string, number>();
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (b.testGroup) {
+      const cur = testPanelTotalHeights.get(b.testGroup) || 0;
+      testPanelTotalHeights.set(b.testGroup, cur + getH(b, i));
+    }
+  }
+
+  const result: number[][] = [];
+  let current: number[] = [];
+  let used = 0;
+
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    const h = getH(b, i);
+
+    const shouldForceNewPage = Boolean(
+      options.separatePagePerTest &&
+      (b.isTestStart || b.isTestPanelStart) &&
+      current.length > 0
+    );
+
+    // Smart Panel Keep-Together Engine (Technique 1):
+    // If this block starts a test panel (or its attached department header), check if the ENTIRE test
+    // can fit on the remaining space of this page.
+    let shouldBreakForPanelKeepTogether = false;
+    if (
+      !options.separatePagePerTest &&
+      b.isTestPanelStart &&
+      b.testGroup &&
+      current.length > 0
+    ) {
+      const panelTotalH = testPanelTotalHeights.get(b.testGroup) || 0;
+      if (panelTotalH > 0) {
+        if (panelTotalH <= pageUsableHeight) {
+          // Entire test can fit on 1 clean page:
+          // If it does NOT fit in remaining space on this page, shift entire test to next page
+          if (used + panelTotalH > pageUsableHeight) {
+            shouldBreakForPanelKeepTogether = true;
+          }
+        } else {
+          // Giant test exceeding 1 full page (e.g. 35+ parameters):
+          // If remaining space on current page is small (< 30% or < 200px), start fresh on next page
+          const remainingSpace = pageUsableHeight - used;
+          if (remainingSpace < Math.min(200, pageUsableHeight * 0.3)) {
+            shouldBreakForPanelKeepTogether = true;
+          }
+        }
+      }
+    }
+
+    // Orphan prevention lookahead for table headers, test headers, etc.
+    let lookAheadH = 0;
+    if (
+      (b.key.startsWith("tblhead-") || b.key.startsWith("subgroup-title-")) &&
+      i + 1 < blocks.length
+    ) {
+      lookAheadH = Math.min(45, getH(blocks[i + 1], i + 1));
+    } else if (b.key.startsWith("header-") && i + 1 < blocks.length) {
+      const nextH = getH(blocks[i + 1], i + 1);
+      const secondH = (i + 2 < blocks.length) ? getH(blocks[i + 2], i + 2) : 0;
+      lookAheadH = Math.min(65, nextH + secondH);
+    } else if (b.key.startsWith("department-header-") && i + 1 < blocks.length) {
+      const nextH = getH(blocks[i + 1], i + 1);
+      const secondH = (i + 2 < blocks.length) ? getH(blocks[i + 2], i + 2) : 0;
+      lookAheadH = Math.min(85, nextH + secondH);
+    }
+
+    if (
+      shouldBreakForPanelKeepTogether ||
+      shouldForceNewPage ||
+      (current.length > 0 && (used + h + lookAheadH > pageUsableHeight))
+    ) {
+      result.push(current);
+      current = [];
+      used = 0;
+    }
+
+    current.push(i);
+    used += h;
+  }
+
+  if (current.length) {
+    result.push(current);
+  }
+
+  return result.length ? result : [[]];
+}
+
 /* ─────────────────────────────────────────────────────────
    PaginatedReportPreview — Complete multi-page report engine.
    Used for live preview, browser printing, and PDF export!
@@ -1466,20 +1632,28 @@ export const PaginatedReportPreview = React.forwardRef<
   const [patientH, setPatientH] = React.useState<number>(105);
 
   const effectiveSettings: PrintSettings = React.useMemo(() => {
-    if (settings) {
-      return {
-        ...settings,
-        bgImage: settings.bgImage ? getCleanLetterheadUrl(settings.bgImage) : null,
-      };
-    }
     const lab = (report.lab || {}) as any;
     const rawBg = lab.printBgImage || lab.print_bg_image || null;
+    const defaultHeaderH = lab.printHeaderHeight ?? lab.print_header_height ?? 185;
+    const defaultFooterH = lab.printFooterHeight ?? lab.print_footer_height ?? 95;
+    const defaultMarginL = lab.printMarginLeft ?? lab.print_margin_left ?? 32;
+    const defaultMarginR = lab.printMarginRight ?? lab.print_margin_right ?? 32;
+
+    if (settings) {
+      return {
+        bgImage: settings.bgImage ? getCleanLetterheadUrl(settings.bgImage) : getCleanLetterheadUrl(rawBg),
+        headerHeight: typeof settings.headerHeight === "number" ? settings.headerHeight : defaultHeaderH,
+        footerHeight: typeof settings.footerHeight === "number" ? settings.footerHeight : defaultFooterH,
+        marginLeft: typeof settings.marginLeft === "number" ? settings.marginLeft : defaultMarginL,
+        marginRight: typeof settings.marginRight === "number" ? settings.marginRight : defaultMarginR,
+      };
+    }
     return {
       bgImage: getCleanLetterheadUrl(rawBg),
-      headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? 185,
-      footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? 95,
-      marginLeft: lab.printMarginLeft ?? lab.print_margin_left ?? 32,
-      marginRight: lab.printMarginRight ?? lab.print_margin_right ?? 32,
+      headerHeight: defaultHeaderH,
+      footerHeight: defaultFooterH,
+      marginLeft: defaultMarginL,
+      marginRight: defaultMarginR,
     };
   }, [settings, report]);
 
@@ -1648,68 +1822,19 @@ export const PaginatedReportPreview = React.forwardRef<
   const pages = React.useMemo(() => {
     if (!blocks.length) return [[]];
 
-    const getH = (b: ReportBlock, idx: number) => {
+    const currentUsable = getPageUsableHeight(false);
+    const resolvedHeights = blocks.map((b, idx) => {
       const isSig = b.key === "report-signatures-footer";
       const measured = heights[idx];
       const measuredH = (measured && measured > 3)
         ? Math.ceil(measured)
         : Math.ceil(getEstimatedBlockHeight(b));
       return isSig ? Math.max(65, measuredH - maxUserMarginTop) : measuredH;
-    };
+    });
 
-    const result: number[][] = [];
-    let current: number[] = [];
-    let used = 0;
-
-    for (let i = 0; i < blocks.length; i++) {
-      const b = blocks[i];
-      const h = getH(b, i);
-
-      const shouldForceNewPage = Boolean(
-        reportSettings.separatePagePerTest &&
-        b.isTestStart &&
-        current.length > 0
-      );
-
-      // Usable height for standard page filling up to the user-configured footer line
-      const currentUsable = getPageUsableHeight(false);
-
-      // Orphan prevention: if this block is a table header, test header, department header, or subgroup title,
-      // make sure its required children will fit on the same page!
-      let lookAheadH = 0;
-      if (
-        (b.key.startsWith("tblhead-") || b.key.startsWith("subgroup-title-")) &&
-        i + 1 < blocks.length
-      ) {
-        lookAheadH = Math.min(45, getH(blocks[i + 1], i + 1));
-      } else if (b.key.startsWith("header-") && i + 1 < blocks.length) {
-        const nextH = getH(blocks[i + 1], i + 1);
-        const secondH = (i + 2 < blocks.length) ? getH(blocks[i + 2], i + 2) : 0;
-        lookAheadH = Math.min(65, nextH + secondH);
-      } else if (b.key.startsWith("department-header-") && i + 1 < blocks.length) {
-        const nextH = getH(blocks[i + 1], i + 1);
-        const secondH = (i + 2 < blocks.length) ? getH(blocks[i + 2], i + 2) : 0;
-        lookAheadH = Math.min(85, nextH + secondH);
-      }
-
-      if (
-        (current.length > 0 && (used + h + lookAheadH > currentUsable)) ||
-        shouldForceNewPage
-      ) {
-        result.push(current);
-        current = [];
-        used = 0;
-      }
-
-      current.push(i);
-      used += h;
-    }
-
-    if (current.length) {
-      result.push(current);
-    }
-
-    return result.length ? result : [[]];
+    return computeReportPages(blocks, resolvedHeights, currentUsable, {
+      separatePagePerTest: reportSettings.separatePagePerTest,
+    });
   }, [blocks, heights, getPageUsableHeight, maxUserMarginTop, reportSettings.separatePagePerTest]);
 
   React.useEffect(() => {
