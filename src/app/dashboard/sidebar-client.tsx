@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -79,10 +79,57 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [isMounted, setIsMounted] = useState(false);
-  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [isAiGuideOpen, setIsAiGuideOpen] = useState(false);
   const [isLocked, setIsLocked] = useState<boolean>(false);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear hover timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Prevent background scrolling when mobile sidebar/slider is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.touchAction = originalTouchAction;
+    };
+  }, [isOpen]);
+
+  // Click outside to collapse any open sub-tabs
+  useEffect(() => {
+    if (!expandedItem) return;
+
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("aside[data-sidebar='true']")) {
+        return;
+      }
+      setExpandedItem(null);
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+    };
+  }, [expandedItem]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -167,13 +214,41 @@ export default function Sidebar() {
       router.push("/dashboard/account/lab?tab=subscription");
       return;
     }
-    const isCurrentlyOpen = Boolean(expandedItems[itemName]) || hoveredItem === itemName;
-    if (isCurrentlyOpen) {
-      setExpandedItems((prev) => ({ ...prev, [itemName]: false }));
-      setHoveredItem(null);
-    } else {
-      setExpandedItems((prev) => ({ ...prev, [itemName]: true }));
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
     }
+    // Accordion: toggles current, closes any other open category
+    setExpandedItem((prev) => (prev === itemName ? null : itemName));
+  };
+
+  const handleMouseEnter = (itemName: string) => {
+    if (isLocked) return;
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setExpandedItem(itemName);
+  };
+
+  const handleMouseLeave = (itemName: string) => {
+    if (isLocked) return;
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setExpandedItem((curr) => (curr === itemName ? null : curr));
+    }, 150);
+  };
+
+  const handleNonExpandableMouseEnter = () => {
+    if (isLocked) return;
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setExpandedItem(null);
+    }, 150);
   };
 
   const handleLockedNavClick = (e: React.MouseEvent) => {
@@ -277,8 +352,22 @@ export default function Sidebar() {
     ? navigation
     : [];
 
+  useEffect(() => {
+    const activeParent = visibleNav.find(
+      (item) => item.children && item.children.some((c) => isActive(c.href))
+    );
+    if (activeParent) {
+      setExpandedItem(activeParent.name);
+    } else {
+      setExpandedItem(null);
+    }
+  }, [pathname, visibleNav]);
+
   const content = (
-    <aside className="flex h-full w-[280px] max-w-[88vw] flex-col bg-card border-r border-border/70">
+    <aside
+      data-sidebar="true"
+      className="flex h-full w-[280px] max-w-[88vw] flex-col bg-card border-r border-border/70 overscroll-contain"
+    >
       {/* Brand */}
       <div className="flex h-[68px] items-center gap-3 px-6 shrink-0 border-b border-border/60">
         <div className="relative h-8 w-8 shrink-0">
@@ -341,7 +430,10 @@ export default function Sidebar() {
       )}
 
       {/* Nav */}
-      <nav className="flex-1 px-3.5 py-3 space-y-1 overflow-y-auto">
+      <nav
+        className="flex-1 px-3.5 py-3 space-y-1 overflow-y-auto overscroll-contain"
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
         <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
           {!isRoleResolved
             ? "Portal"
@@ -383,14 +475,14 @@ export default function Sidebar() {
           visibleNav.map((item) => {
           if (item.children) {
             const isChildActive = !isLocked && item.children.some((c) => isActive(c.href));
-            const isExpanded = !isLocked && (expandedItems[item.name] !== undefined ? expandedItems[item.name] : (isChildActive || hoveredItem === item.name));
+            const isExpanded = !isLocked && expandedItem === item.name;
 
             return (
               <div
                 key={item.name}
                 className="space-y-1"
-                onMouseEnter={() => !isLocked && setHoveredItem(item.name)}
-                onMouseLeave={() => !isLocked && setHoveredItem(null)}
+                onMouseEnter={() => handleMouseEnter(item.name)}
+                onMouseLeave={() => handleMouseLeave(item.name)}
               >
                 <button
                   type="button"
@@ -473,6 +565,7 @@ export default function Sidebar() {
             <Link
               key={item.name}
               href={isLocked ? "/dashboard/account/lab?tab=subscription" : item.href!}
+              onMouseEnter={handleNonExpandableMouseEnter}
               onClick={(e) => {
                 if (isLocked) handleLockedNavClick(e);
                 setIsOpen(false);
@@ -575,16 +668,26 @@ export default function Sidebar() {
       {isOpen && (
         <div
           onClick={() => setIsOpen(false)}
-          className="fixed inset-0 z-40 bg-[hsl(165_30%_6%/0.5)] backdrop-blur-sm md:hidden"
+          onTouchMove={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          className="fixed inset-0 z-40 bg-[hsl(165_30%_6%/0.5)] backdrop-blur-sm md:hidden touch-none overscroll-none"
         />
       )}
 
       <div className="hidden md:flex h-full">{content}</div>
 
       <div
-        className={`fixed inset-y-0 left-0 z-40 flex md:hidden transition-transform duration-300 ease-out ${
+        className={`fixed inset-y-0 left-0 z-40 flex md:hidden transition-transform duration-300 ease-out overscroll-contain ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
+        onTouchMove={(e) => {
+          const target = e.target as HTMLElement | null;
+          if (!target?.closest?.("nav")) {
+            e.preventDefault();
+          }
+        }}
       >
         {content}
       </div>

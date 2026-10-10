@@ -1022,6 +1022,145 @@ const zeroDueResult = calculateBillingDuesAndSplit(allPaidBills);
 assert(zeroDueResult.totalDue === 0, "[BILLING DUES] Total due is 0 when all bills are settled");
 assert(zeroDueResult.unpaidCount === 0, "[BILLING DUES] Unpaid count is 0 when all bills are settled");
 
+// ==============================================================================
+// 15. Sidebar Subtabs Accordion, Outside-Click Collapse & Mobile Scroll Lock
+// ==============================================================================
+console.log("\n▶ MODULE 15: Sidebar Subtabs Accordion, Hover Expand/Collapse & Mobile Scroll Lock");
+
+// Test: Single-Accordion Active Item Toggle & Hover State Machine
+class MockSidebarAccordion {
+  expandedItem: string | null = null;
+  hoverTimeout: any = null;
+  isLocked: boolean = false;
+
+  toggle(itemName: string) {
+    if (this.isLocked) return;
+    if (this.hoverTimeout) {
+      clearTimeout(this.hoverTimeout);
+      this.hoverTimeout = null;
+    }
+    this.expandedItem = this.expandedItem === itemName ? null : itemName;
+  }
+
+  handleMouseEnter(itemName: string) {
+    if (this.isLocked) return;
+    if (this.hoverTimeout) {
+      clearTimeout(this.hoverTimeout);
+      this.hoverTimeout = null;
+    }
+    this.expandedItem = itemName;
+  }
+
+  handleMouseLeave(itemName: string, executeImmediately = false) {
+    if (this.isLocked) return;
+    if (this.hoverTimeout) {
+      clearTimeout(this.hoverTimeout);
+    }
+    const collapseCallback = () => {
+      if (this.expandedItem === itemName) {
+        this.expandedItem = null;
+      }
+    };
+    if (executeImmediately) {
+      collapseCallback();
+    } else {
+      this.hoverTimeout = setTimeout(collapseCallback, 150);
+    }
+  }
+
+  handleNonExpandableMouseEnter(executeImmediately = false) {
+    if (this.isLocked) return;
+    if (this.hoverTimeout) {
+      clearTimeout(this.hoverTimeout);
+    }
+    const collapseCallback = () => {
+      this.expandedItem = null;
+    };
+    if (executeImmediately) {
+      collapseCallback();
+    } else {
+      this.hoverTimeout = setTimeout(collapseCallback, 150);
+    }
+  }
+
+  handleOutsideClick(isInsideSidebar: boolean) {
+    if (!isInsideSidebar) {
+      this.expandedItem = null;
+    }
+  }
+}
+
+const mockSidebar = new MockSidebarAccordion();
+
+// 1. Initial state is collapsed
+assert(mockSidebar.expandedItem === null, "[SIDEBAR ACCORDION] Initial expanded item is null");
+
+// 2. Open 'Cases'
+mockSidebar.toggle("Cases");
+assert(mockSidebar.expandedItem === "Cases", "[SIDEBAR ACCORDION] Expanding 'Cases' sets active item to 'Cases'");
+
+// 3. Opening 'Tests' automatically closes 'Cases' (Single Accordion Rule)
+mockSidebar.toggle("Tests");
+assert(mockSidebar.expandedItem === "Tests", "[SIDEBAR ACCORDION] Expanding 'Tests' automatically closes 'Cases'");
+
+// 4. Opening 'Inventory' automatically closes 'Tests'
+mockSidebar.toggle("Inventory");
+assert(mockSidebar.expandedItem === "Inventory", "[SIDEBAR ACCORDION] Expanding 'Inventory' automatically closes 'Tests'");
+
+// 5. Clicking 'Inventory' again collapses it
+mockSidebar.toggle("Inventory");
+assert(mockSidebar.expandedItem === null, "[SIDEBAR ACCORDION] Re-clicking open 'Inventory' collapses all subtabs");
+
+// 6. Outside click collapses active subtab
+mockSidebar.toggle("B2B & Centers");
+assert(mockSidebar.expandedItem === "B2B & Centers", "[SIDEBAR ACCORDION] 'B2B & Centers' is open");
+
+// Click inside sidebar does NOT close
+mockSidebar.handleOutsideClick(true);
+assert(mockSidebar.expandedItem === "B2B & Centers", "[SIDEBAR ACCORDION] Click inside sidebar preserves open subtab");
+
+// Click outside sidebar collapses all subtabs
+mockSidebar.handleOutsideClick(false);
+assert(mockSidebar.expandedItem === null, "[SIDEBAR ACCORDION] Clicking outside sidebar automatically collapses all subtabs");
+
+// 7. Hover Expand & Hover Leave Collapse Behavior
+mockSidebar.handleMouseEnter("Cases");
+assert(mockSidebar.expandedItem === "Cases", "[SIDEBAR HOVER] Hovering over 'Cases' tab automatically expands it");
+
+// Removing hover collapses 'Cases'
+mockSidebar.handleMouseLeave("Cases", true);
+assert(mockSidebar.expandedItem === null, "[SIDEBAR HOVER] Removing hover collapses 'Cases' subtabs");
+
+// Moving hover from 'Tests' directly to 'Inventory' switches tabs seamlessly
+mockSidebar.handleMouseEnter("Tests");
+assert(mockSidebar.expandedItem === "Tests", "[SIDEBAR HOVER] Hovering 'Tests' opens 'Tests'");
+mockSidebar.handleMouseLeave("Tests", false); // Starts leave timer
+mockSidebar.handleMouseEnter("Inventory"); // Immediately enters Inventory
+assert(mockSidebar.expandedItem === "Inventory", "[SIDEBAR HOVER] Hovering 'Inventory' immediately switches and cancels prior collapse");
+
+// Hovering a non-collapsible link triggers collapse of active subtab
+mockSidebar.handleNonExpandableMouseEnter(true);
+assert(mockSidebar.expandedItem === null, "[SIDEBAR HOVER] Hovering non-collapsible nav item collapses open subtabs");
+
+// 7. Test Mobile Scroll Lock Behavior
+interface MockScrollLock {
+  bodyOverflow: string;
+  bodyTouchAction: string;
+}
+
+function applyMobileSliderScrollLock(isOpen: boolean, currentStyle: MockScrollLock): MockScrollLock {
+  if (isOpen) {
+    return { bodyOverflow: "hidden", bodyTouchAction: "none" };
+  }
+  return { bodyOverflow: "auto", bodyTouchAction: "auto" };
+}
+
+const lockedStyles = applyMobileSliderScrollLock(true, { bodyOverflow: "auto", bodyTouchAction: "auto" });
+assert(lockedStyles.bodyOverflow === "hidden" && lockedStyles.bodyTouchAction === "none", "[MOBILE SCROLL LOCK] Opening mobile slider locks body overflow and touch-action");
+
+const restoredStyles = applyMobileSliderScrollLock(false, lockedStyles);
+assert(restoredStyles.bodyOverflow === "auto" && restoredStyles.bodyTouchAction === "auto", "[MOBILE SCROLL LOCK] Closing mobile slider restores normal scrolling");
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

@@ -133,7 +133,8 @@ export function DashboardScroller({ children }: { children: React.ReactNode }) {
     <main
       ref={wrapperRef}
       id="main-content"
-      className="flex-1 overflow-y-auto overflow-x-hidden focus:outline-none"
+      className="flex-1 overflow-y-auto overflow-x-hidden focus:outline-none overscroll-contain"
+      style={{ WebkitOverflowScrolling: "touch" }}
     >
       <div
         ref={contentRef}
