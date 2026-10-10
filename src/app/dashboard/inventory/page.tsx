@@ -580,18 +580,18 @@ export default function ViewInventoryPage() {
       <div className="w-full space-y-4">
         {/* DESKTOP VIEW (Visible on screens >= 1024px) */}
         <Card className="border-border/70 shadow-xs overflow-hidden bg-card/60 backdrop-blur-xs w-full hidden lg:block">
-          <div className="table-responsive-container w-full">
-            <table className="w-full text-left border-collapse text-xs sm:text-sm min-w-[1150px]">
+          <div className="w-full">
+            <table className="w-full text-left border-collapse text-xs sm:text-sm">
               <thead>
                 <tr className="border-b border-border/70 bg-muted/40 text-[11px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wider select-none">
-                  <th className="py-3.5 px-4 w-[24%] min-w-[230px]">Item &amp; Specifications</th>
-                  <th className="py-3.5 px-3 w-[10%] min-w-[100px]">Category</th>
-                  <th className="py-3.5 px-3 w-[15%] min-w-[150px]">Storage / Location</th>
-                  <th className="py-3.5 px-3 w-[11%] min-w-[110px] text-right">Available Stock</th>
-                  <th className="py-3.5 px-3 w-[11%] min-w-[110px] text-center">Status</th>
-                  <th className="py-3.5 px-3 w-[17%] min-w-[170px]">Active Batches (LOT)</th>
-                  <th className="py-3.5 px-3 w-[9%] min-w-[90px] text-right">Valuation</th>
-                  <th className="py-3.5 px-4 min-w-[180px] text-center">Quick Actions</th>
+                  <th className="py-3 px-3 sm:px-4 w-[23%]">Item &amp; Specifications</th>
+                  <th className="py-3 px-2 sm:px-3 w-[10%]">Category</th>
+                  <th className="py-3 px-2 sm:px-3 w-[13%]">Storage / Location</th>
+                  <th className="py-3 px-2 sm:px-3 w-[11%] text-right">Available Stock</th>
+                  <th className="py-3 px-2 sm:px-3 w-[10%] text-center">Status</th>
+                  <th className="py-3 px-2 sm:px-3 w-[15%]">Active Batches (LOT)</th>
+                  <th className="py-3 px-2 sm:px-3 w-[8%] text-right">Valuation</th>
+                  <th className="py-3 px-2 sm:px-3 w-[10%] text-center">Quick Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
@@ -661,7 +661,7 @@ export default function ViewInventoryPage() {
                     return (
                       <tr key={item.id} className="hover:bg-muted/40 transition-colors group">
                         {/* Item & Specifications */}
-                        <td className="py-3.5 px-4">
+                        <td className="py-3 px-3 sm:px-4">
                           <div className="flex items-start gap-2.5">
                             <div className="mt-0.5 p-2 rounded-xl bg-primary/10 border border-primary/20 text-primary shrink-0">
                               <Package className="h-4 w-4" />
@@ -687,19 +687,19 @@ export default function ViewInventoryPage() {
                         </td>
 
                         {/* Category */}
-                        <td className="py-3.5 px-3">
+                        <td className="py-3 px-2 sm:px-3">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-muted text-foreground border border-border/60 whitespace-nowrap">
                             {item.category}
                           </span>
                         </td>
 
                         {/* Storage / Location */}
-                        <td className="py-3.5 px-3 text-xs">
+                        <td className="py-3 px-2 sm:px-3 text-xs">
                           <div className="space-y-1">
                             {isCold ? (
                               <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/25 whitespace-nowrap">
                                 <ThermometerSnowflake className="h-3 w-3 shrink-0" />
-                                <span>2°C - 8°C (Cold Chain)</span>
+                                <span>2°C - 8°C</span>
                               </div>
                             ) : (
                               <div className="text-muted-foreground text-[11px] font-medium whitespace-nowrap">
@@ -716,7 +716,7 @@ export default function ViewInventoryPage() {
                         </td>
 
                         {/* Available Stock */}
-                        <td className="py-3.5 px-3 text-right">
+                        <td className="py-3 px-2 sm:px-3 text-right">
                           <div className="font-extrabold text-base text-foreground leading-none">
                             {item.totalStock}{" "}
                             <span className="text-xs font-semibold text-muted-foreground">{item.uom}</span>
@@ -727,7 +727,7 @@ export default function ViewInventoryPage() {
                         </td>
 
                         {/* Status */}
-                        <td className="py-3.5 px-3 text-center">
+                        <td className="py-3 px-2 sm:px-3 text-center">
                           {item.stockStatus === "adequate" && (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 whitespace-nowrap">
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -749,7 +749,7 @@ export default function ViewInventoryPage() {
                         </td>
 
                         {/* Active Batches (LOT) */}
-                        <td className="py-3.5 px-3 text-xs">
+                        <td className="py-3 px-2 sm:px-3 text-xs">
                           {item.batches && item.batches.length > 0 ? (
                             <div className="space-y-1.5">
                               {item.batches.slice(0, 2).map((batch) => (
@@ -782,15 +782,15 @@ export default function ViewInventoryPage() {
                         </td>
 
                         {/* Valuation */}
-                        <td className="py-3.5 px-3 text-right text-xs">
+                        <td className="py-3 px-2 sm:px-3 text-right text-xs">
                           <div className="font-black text-sm text-foreground">
                             ₹{Number(item.totalValuation || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                           </div>
                         </td>
 
                         {/* Quick Actions */}
-                        <td className="py-3.5 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                        <td className="py-3 px-2 sm:px-3 text-center">
+                          <div className="flex items-center justify-center gap-1 whitespace-nowrap">
                             <Button
                               variant="outline"
                               size="sm"

@@ -3,6 +3,8 @@
  * Run with: npx tsx scripts/test-runner.ts
  */
 
+import fs from "fs";
+import path from "path";
 import { getClinicalInterpretation, DEFAULT_INTERPRETATIONS } from "../src/lib/clinical-interpretations";
 import { normalizeBillSettings, BillLayoutSettings } from "../src/lib/bill-settings";
 import { resolvePackageTestIds, DEFAULT_PACKAGES } from "../src/lib/packages";
@@ -380,8 +382,6 @@ assert(
 console.log("\n▶ MODULE 8: Specialized Tests Layout & Dropdown Options Engine");
 
 import { getCompleteParameterOptions } from "../src/lib/clinical-options";
-import fs from "fs";
-import path from "path";
 
 // Verify Malaria Antigen parameter options (Pf and Pv only)
 const malariaPfOpts = getCompleteParameterOptions("Plasmodium falciparum (HRP-2 Antigen)", "Malaria Antigen");
@@ -1520,6 +1520,145 @@ assert(
 assert(
   resolveEffectiveLetterheadBg(undefined, mockLabBg) === mockLabBg,
   "[LETTERHEAD TOGGLE] Undefined settings falls back to lab background"
+);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODULE 19: Comprehensive Phase 1-3 Performance, Bundle & Mobile Guardrails
+// ══════════════════════════════════════════════════════════════════════════════
+console.log("\n▶ MODULE 19: Comprehensive Phase 1-3 Performance, Bundle & Mobile Guardrails");
+
+// 19.1 Bundle Splitting Verification: download-invoice-pdf and download-doctor-statement
+const invoicePdfSrc = fs.readFileSync(path.resolve(__dirname, "../src/lib/download-invoice-pdf.ts"), "utf-8");
+const doctorStatementPdfSrc = fs.readFileSync(path.resolve(__dirname, "../src/lib/download-doctor-statement.ts"), "utf-8");
+
+assert(
+  !invoicePdfSrc.includes('import html2canvas from "html2canvas";') &&
+  !invoicePdfSrc.includes('import jsPDF from "jspdf";'),
+  "[BUNDLE SPLITTING] download-invoice-pdf does not contain top-level static imports of html2canvas or jsPDF"
+);
+
+assert(
+  invoicePdfSrc.includes('await import("html2canvas")') &&
+  invoicePdfSrc.includes('await import("jspdf")'),
+  "[BUNDLE SPLITTING] download-invoice-pdf dynamically imports html2canvas and jsPDF on demand"
+);
+
+assert(
+  !doctorStatementPdfSrc.includes('import html2canvas from "html2canvas";') &&
+  !doctorStatementPdfSrc.includes('import jsPDF from "jspdf";'),
+  "[BUNDLE SPLITTING] download-doctor-statement does not contain top-level static imports of html2canvas or jsPDF"
+);
+
+assert(
+  doctorStatementPdfSrc.includes('await import("html2canvas")') &&
+  doctorStatementPdfSrc.includes('await import("jspdf")'),
+  "[BUNDLE SPLITTING] download-doctor-statement dynamically imports html2canvas and jsPDF on demand"
+);
+
+// 19.2 High-Fidelity Vector PDF Engine & Resilient Fallback
+const pdfReportDownloaderSrc = fs.readFileSync(path.resolve(__dirname, "../src/lib/pdf-report-downloader.ts"), "utf-8");
+assert(
+  pdfReportDownloaderSrc.includes("generateNativePdfBlob(html, safeFilename)") &&
+  pdfReportDownloaderSrc.includes("generatePristineClientPdf(printContainer, safeFilename)"),
+  "[VECTOR PDF] pdf-report-downloader generates high-fidelity vector PDF with resilient client-side fallback"
+);
+
+// 19.3 Polling Throttling & Tab Visibility
+const navbarSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/navbar.tsx"), "utf-8");
+assert(
+  navbarSrc.includes("120000);"),
+  "[POLLING THROTTLE] Navbar polling interval is throttled to 120s (Rule 4.5)"
+);
+assert(
+  navbarSrc.includes("document.hidden"),
+  "[TAB VISIBILITY] Navbar polling checks document.hidden to eliminate inactive background tab queries"
+);
+
+// 19.4 Async WhatsApp Worker Dispatch
+const printPreviewSrc = fs.readFileSync(path.resolve(__dirname, "../src/components/print-preview-dialog.tsx"), "utf-8");
+assert(
+  printPreviewSrc.includes("async: true,"),
+  "[ASYNC WHATSAPP] Print preview dialog dispatches WhatsApp requests with async: true"
+);
+
+// 19.5 Natural Responsive Table Scroll Container & Mobile Touch Ergonomics
+const reportsPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/reports/page.tsx"), "utf-8");
+const billingPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/billing/page.tsx"), "utf-8");
+const dateRibbonSrc = fs.readFileSync(path.resolve(__dirname, "../src/components/date-filter-ribbon.tsx"), "utf-8");
+
+assert(
+  reportsPageSrc.includes("table-responsive-container") && !reportsPageSrc.includes("sticky right-0"),
+  "[RESPONSIVE SCROLL] Reports page table enables natural smooth horizontal scrolling across all columns"
+);
+
+assert(
+  billingPageSrc.includes("table-responsive-container") && !billingPageSrc.includes("sticky right-0"),
+  "[RESPONSIVE SCROLL] Billing page table enables natural smooth horizontal scrolling across all columns"
+);
+
+assert(
+  dateRibbonSrc.includes("min-w-[40px] min-h-[40px]"),
+  "[TOUCH ERGONOMICS] DateFilterRibbon chevrons enforce comfortable minimum touch targets on mobile"
+);
+
+// 19.6 Inventory & Overview Layout Guardrails
+const inventoryPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/inventory/page.tsx"), "utf-8");
+assert(
+  !inventoryPageSrc.includes("min-w-[1150px]"),
+  "[INVENTORY FIXED LAYOUT] View inventory table removes min-w-[1150px] to prevent horizontal scroll"
+);
+
+const manageInventorySrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/inventory/manage/page.tsx"), "utf-8");
+assert(
+  !manageInventorySrc.includes("overflow-x-auto border-b border-border/70 pb-2 scrollbar-none"),
+  "[MANAGE INVENTORY TABS] Manage inventory navigation tabs use fixed responsive grid without horizontal scrolling"
+);
+
+// 19.7 Sample Test Preview Modal: Hiding WhatsApp & Smart Report
+const testsPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/tests/page.tsx"), "utf-8");
+assert(
+  testsPageSrc.includes("hideWhatsApp={true}") && testsPageSrc.includes("hideSmartReport={true}"),
+  "[SAMPLE PREVIEW CLEANUP] Test catalog live overview hides WhatsApp and Smart Report buttons"
+);
+
+// 19.8 Referral Patients Mobile Responsiveness
+const doctorPatientsPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/doctors/patients/page.tsx"), "utf-8");
+assert(
+  doctorPatientsPageSrc.includes("block md:hidden") && doctorPatientsPageSrc.includes("hidden md:block"),
+  "[REFERRAL PATIENTS RESPONSIVE] Doctor referral patient view provides dedicated mobile card list alongside desktop table"
+);
+
+// 19.9 Targeted Cache Invalidation & Background Throttling Guardrails
+const settingsSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/settings/page.tsx"), "utf-8");
+const smartReportSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/smart-report/page.tsx"), "utf-8");
+const b2bOverviewSrc = fs.readFileSync(path.resolve(__dirname, "../src/components/b2b-overview.tsx"), "utf-8");
+
+assert(
+  settingsSrc.includes('clearApiCache("/lab");') && !settingsSrc.includes('clearApiCache();'),
+  "[TARGETED CACHE] Settings save uses targeted cache invalidation to prevent cold-start latency (Rule 4.2)"
+);
+
+assert(
+  smartReportSrc.includes('clearApiCache("/lab");') && !smartReportSrc.includes('clearApiCache();'),
+  "[TARGETED CACHE] Smart report save uses targeted cache invalidation to prevent cold-start latency (Rule 4.2)"
+);
+
+assert(
+  b2bOverviewSrc.includes("60000);") && b2bOverviewSrc.includes("document.hidden"),
+  "[POLLING THROTTLE] B2B overview polling is throttled to 60s with background tab suppression (Rule 4.5)"
+);
+
+// 19.10 Automated Midnight Summary Dispatch & Live Status Indicator
+const accountLabPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/account/lab/page.tsx"), "utf-8");
+
+assert(
+  accountLabPageSrc.includes("/lab/summary-dispatch/auto-check"),
+  "[AUTO DISPATCH] Lab account page automatically triggers background auto-check for pending summary dispatch"
+);
+
+assert(
+  accountLabPageSrc.includes("lastDispatchedAt") && accountLabPageSrc.includes("Next scheduled: Tonight at 12:00 AM (Midnight)"),
+  "[AUTO DISPATCH STATUS] Daily midnight option renders live last sent status and next scheduled time"
 );
 
 console.log("\n===============================================================================");

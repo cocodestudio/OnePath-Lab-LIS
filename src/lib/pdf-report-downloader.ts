@@ -732,7 +732,12 @@ export async function downloadNativePdf({ printContainer, filename }: GeneratePd
     const html = await prepareReportHtmlAsync(printContainer);
     pdfBlob = await generateNativePdfBlob(html, safeFilename);
   } catch (_serverErr) {
-    pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
+    console.warn("Primary native vector PDF engine encountered an issue, falling back to client engine:", _serverErr);
+    try {
+      pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
+    } catch (fallbackErr) {
+      throw fallbackErr;
+    }
   }
 
   // Trigger browser download
@@ -763,6 +768,7 @@ export async function getNativePdfBase64({ printContainer, filename }: GenerateP
     const html = await prepareReportHtmlAsync(printContainer);
     pdfBlob = await generateNativePdfBlob(html, safeFilename);
   } catch (_serverErr) {
+    console.warn("Primary native vector PDF engine encountered an issue, falling back to client engine:", _serverErr);
     pdfBlob = await generatePristineClientPdf(printContainer, safeFilename);
   }
 

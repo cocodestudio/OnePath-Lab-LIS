@@ -140,6 +140,8 @@ function LabAccountContent() {
     whatsappEnabled: false,
     frequency: "daily" as "daily" | "weekly" | "monthly" | "yearly",
     recipientEmailInput: "mohabuzar.net@gmail.com",
+    lastDispatchedAt: null as string | null,
+    lastDispatchStatus: null as string | null,
   });
   const [testingDispatch, setTestingDispatch] = useState(false);
   const [loadingDispatchSettings, setLoadingDispatchSettings] = useState(false);
@@ -345,7 +347,12 @@ function LabAccountContent() {
           whatsappEnabled: s.whatsapp_enabled ?? false,
           frequency: freq,
           recipientEmailInput: defaultEmail,
+          lastDispatchedAt: s.last_dispatched_at || s.lastDispatchedAt || null,
+          lastDispatchStatus: s.last_dispatch_status || null,
         });
+
+        // Background non-blocking check for pending dispatch
+        fetchFromLaravel("/lab/summary-dispatch/auto-check", { method: "POST" }).catch(() => {});
       }
     } catch (e) {
       console.warn("Failed to load dispatch settings:", e);
@@ -1959,6 +1966,15 @@ function LabAccountContent() {
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
                       Every night at 12:00 AM, compiles today&apos;s total billing, collected revenue, patient count, tests, and attaches full CSV.
                     </p>
+                    {dispatchSettings.lastDispatchedAt && (
+                      <div className="mt-2 pt-2 border-t border-border/50 text-[10px] space-y-0.5">
+                        <div className="text-muted-foreground flex items-center gap-1 font-mono">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />
+                          <span>Last sent: {new Date(dispatchSettings.lastDispatchedAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                        </div>
+                        <div className="text-primary font-semibold">Next scheduled: Tonight at 12:00 AM (Midnight)</div>
+                      </div>
+                    )}
                   </div>
                 </div>
 

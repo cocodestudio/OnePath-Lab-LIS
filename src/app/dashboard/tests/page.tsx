@@ -238,6 +238,7 @@ export default function TestMasterPage() {
 
   // Drag and drop state
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Modals
   const [layoutModalOpen, setLayoutModalOpen] = useState(false);
@@ -893,16 +894,29 @@ export default function TestMasterPage() {
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
     e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(index));
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   const handleDrop = (e: React.DragEvent, targetIndex: number) => {
     e.preventDefault();
-    if (draggedIndex === null || draggedIndex === targetIndex) return;
+    if (draggedIndex === null || draggedIndex === targetIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
 
     setSubTests(prev => {
       const list = [...prev];
@@ -911,6 +925,7 @@ export default function TestMasterPage() {
       return list;
     });
     setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   const moveParameterUp = (index: number) => {
@@ -2110,9 +2125,17 @@ export default function TestMasterPage() {
                       draggable
                       onDragStart={(e) => handleDragStart(e, sIdx)}
                       onDragOver={(e) => handleDragOver(e, sIdx)}
+                      onDragLeave={() => {
+                        if (dragOverIndex === sIdx) setDragOverIndex(null);
+                      }}
+                      onDragEnd={handleDragEnd}
                       onDrop={(e) => handleDrop(e, sIdx)}
-                      className={`p-6 bg-card border border-border/90 rounded-xl shadow-xs space-y-4 hover:border-primary/50 transition-all relative ${
-                        draggedIndex === sIdx ? "opacity-40 border-dashed border-primary" : ""
+                      className={`p-6 bg-card border rounded-xl shadow-xs space-y-4 transition-all relative ${
+                        draggedIndex === sIdx
+                          ? "opacity-50 border-2 border-primary/60 border-dashed bg-primary/5 shadow-inner"
+                          : dragOverIndex === sIdx
+                          ? "border-2 border-primary ring-2 ring-primary/25 bg-accent/20"
+                          : "border-border/90 hover:border-primary/50"
                       }`}
                     >
                       {/* Row 1: Drag handle, Reorder Arrows, Number, Name, Unit, Value Type, Range Mode, Sub-param CTA, Delete */}
@@ -3345,6 +3368,8 @@ export default function TestMasterPage() {
           open={samplePreviewOpen}
           onOpenChange={setSamplePreviewOpen}
           report={sampleReportData}
+          hideWhatsApp={true}
+          hideSmartReport={true}
           onLayoutSaved={async () => {
             clearApiCache("/tests");
             clearApiCache("/reports");

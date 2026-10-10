@@ -193,9 +193,6 @@ export async function POST(req: NextRequest) {
       preferCSSPageSize: true,
     });
 
-    await browser.close();
-    browser = null;
-
     const safeFilename = (filename || "LabReport.pdf").replace(/[^a-zA-Z0-9_.-]/g, "_");
 
     return new NextResponse(Buffer.from(pdfBuffer), {
@@ -210,17 +207,18 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error("Puppeteer PDF generation error:", err);
 
-    if (browser) {
-      try {
-        await browser.close();
-      } catch {}
-    }
-
     return NextResponse.json(
       {
         error: err.message || "Failed to generate PDF via Chrome engine",
       },
       { status: 500 }
     );
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {}
+      browser = null;
+    }
   }
 }

@@ -182,7 +182,7 @@ function DoctorPatientsContent() {
   );
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-fade-in pb-20">
+    <div className="flex flex-col gap-5 sm:gap-6 w-full max-w-full mx-auto animate-fade-in pb-20">
       {/* ── Page Header (Clean back button and title, no switcher/refresh/referrals buttons) ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/70 pb-5">
         <div className="flex items-center gap-3.5">
@@ -264,7 +264,7 @@ function DoctorPatientsContent() {
         </div>
 
         {/* 4 KPI Metric Cards (Strictly for this inherited period) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:min-w-[560px]">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 w-full lg:w-auto lg:min-w-[560px]">
           {/* Total Patients */}
           <div className="bg-muted/30 border border-border/70 rounded-xl p-3 shadow-2xs flex flex-col justify-between">
             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -354,8 +354,8 @@ function DoctorPatientsContent() {
           </div>
         </div>
 
-        {/* Responsive Table Container */}
-        <div className="table-responsive-container">
+        {/* Responsive Table Container (Desktop / Tablet >= 768px) */}
+        <div className="table-responsive-container hidden md:block">
           <table className="w-full text-left border-collapse min-w-[850px]">
             <thead>
               <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
@@ -546,6 +546,97 @@ function DoctorPatientsContent() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* ── Mobile Patient Cards View (Visible on screens < 768px) ── */}
+        <div className="block md:hidden divide-y divide-border/60">
+          {isLoadingPatients ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="p-4 space-y-3 animate-pulse">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-xl" />
+                  <div className="space-y-1.5 flex-1">
+                    <Skeleton className="h-4 w-32 rounded" />
+                    <Skeleton className="h-3 w-24 rounded" />
+                  </div>
+                </div>
+                <Skeleton className="h-4 w-full rounded" />
+              </div>
+            ))
+          ) : patientList.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-semibold text-foreground">No referred patients found</p>
+              <p className="text-xs text-muted-foreground mt-1">There are no visits for this period.</p>
+            </div>
+          ) : (
+            patientList.map((pat, idx) => (
+              <div key={pat.id} className="p-4 space-y-3 hover:bg-muted/30 transition-colors">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 uppercase shadow-2xs">
+                      {pat.name.slice(0, 2) || "PT"}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-foreground text-sm truncate">{pat.name}</div>
+                      <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                        {pat.custom_id && <span className="font-mono text-primary font-medium">{pat.custom_id}</span>}
+                        {(pat.age || pat.gender) && (
+                          <span>• {pat.age ? `${pat.age}y` : ""}{pat.gender ? ` (${pat.gender})` : ""}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                      pat.status === "PAID"
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                        : pat.status === "PARTIAL"
+                        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                        : pat.status === "NO_BILL"
+                        ? "bg-muted text-muted-foreground border border-border"
+                        : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                    }`}
+                  >
+                    {pat.status}
+                  </span>
+                </div>
+
+                <div className="text-xs text-muted-foreground flex items-center justify-between gap-2 pt-1 border-t border-border/40">
+                  <span className="flex items-center gap-1 font-mono text-[11px]">
+                    <Clock className="h-3 w-3 text-muted-foreground/70" />
+                    {pat.date_formatted}
+                  </span>
+                  {pat.phone && (
+                    <span className="flex items-center gap-1 font-mono text-[11px]">
+                      <Phone className="h-2.5 w-2.5" />
+                      {pat.phone}
+                    </span>
+                  )}
+                </div>
+
+                <div className="bg-muted/40 rounded-lg p-2 text-xs">
+                  <span className="text-[10.5px] font-bold text-muted-foreground uppercase block mb-0.5">Tests</span>
+                  <span className="text-foreground line-clamp-2 text-xs font-medium">{pat.tests_summary}</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-1 text-center font-mono text-xs">
+                  <div className="bg-muted/30 p-1.5 rounded-lg border border-border/50">
+                    <span className="text-[9.5px] text-muted-foreground block font-sans">Billed</span>
+                    <span className="font-bold text-foreground">₹{pat.bill?.net ? Math.round(pat.bill.net) : 0}</span>
+                  </div>
+                  <div className="bg-emerald-500/10 p-1.5 rounded-lg border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                    <span className="text-[9.5px] block font-sans">Paid</span>
+                    <span className="font-bold">₹{pat.bill?.paid ? Math.round(pat.bill.paid) : 0}</span>
+                  </div>
+                  <div className="bg-amber-500/10 p-1.5 rounded-lg border border-amber-500/20 text-amber-600 dark:text-amber-400">
+                    <span className="text-[9.5px] block font-sans">Due</span>
+                    <span className="font-bold">₹{pat.bill?.due ? Math.round(pat.bill.due) : 0}</span>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* ── Table Pagination Bar ── */}

@@ -102,9 +102,10 @@ export default function Navbar() {
     fetchNotifications();
     fetchLabAndSales();
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
       fetchNotifications();
       fetchLabAndSales();
-    }, 30000);
+    }, 120000);
 
     const handleUserUpdate = () => {
       setUser(getStoredUser());

@@ -1,7 +1,5 @@
 "use client";
 
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 
 export interface DoctorStatementPrintSettings {
   show_patient_name: boolean;
@@ -267,6 +265,9 @@ export async function downloadDoctorStatementPdf(
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   `;
   document.body.appendChild(sandbox);
+
+  const { default: jsPDF } = await import("jspdf");
+  const { default: html2canvas } = await import("html2canvas");
 
   const pdf = new jsPDF({
     orientation: "portrait",

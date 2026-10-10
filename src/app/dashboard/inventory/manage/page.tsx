@@ -766,66 +766,66 @@ export default function ManageInventoryPage() {
         </div>
       </div>
 
-      {/* Navigation Tabs (5 Tabs - Audit Ledger Removed, Edge-to-Edge Responsive) */}
-      <div className="flex items-center gap-2 overflow-x-auto border-b border-border/70 pb-2 scrollbar-none w-full">
+      {/* Navigation Tabs (5 Tabs - Fixed Responsive Grid, No Horizontal Scroll) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 border-b border-border/70 pb-3 w-full">
         <button
           onClick={() => setActiveTab("stock_in")}
-          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-center transition-all cursor-pointer ${
             activeTab === "stock_in"
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground bg-muted/30 border border-border/50"
           }`}
         >
-          <ArrowDownLeft className="h-4 w-4 text-emerald-400" />
-          <span>1. Stock In (Purchase Entry)</span>
+          <ArrowDownLeft className="h-4 w-4 text-emerald-400 shrink-0" />
+          <span className="truncate">1. Stock In</span>
         </button>
 
         <button
           onClick={() => setActiveTab("stock_out")}
-          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-center transition-all cursor-pointer ${
             activeTab === "stock_out"
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground bg-muted/30 border border-border/50"
           }`}
         >
-          <ArrowUpRight className="h-4 w-4 text-amber-400" />
-          <span>2. Stock Out (Consumption)</span>
+          <ArrowUpRight className="h-4 w-4 text-amber-400 shrink-0" />
+          <span className="truncate">2. Stock Out</span>
         </button>
 
         <button
           onClick={() => setActiveTab("adjustment")}
-          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-center transition-all cursor-pointer ${
             activeTab === "adjustment"
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground bg-muted/30 border border-border/50"
           }`}
         >
-          <Sliders className="h-4 w-4 text-sky-400" />
-          <span>3. Physical Audit Adjustment</span>
+          <Sliders className="h-4 w-4 text-sky-400 shrink-0" />
+          <span className="truncate">3. Audit Adjust</span>
         </button>
 
         <button
           onClick={() => setActiveTab("items")}
-          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-center transition-all cursor-pointer ${
             activeTab === "items"
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground bg-muted/30 border border-border/50"
           }`}
         >
-          <Package className="h-4 w-4 text-violet-400" />
-          <span>4. Catalog Master ({items.length})</span>
+          <Package className="h-4 w-4 text-violet-400 shrink-0" />
+          <span className="truncate">4. Catalog ({items.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab("vendors")}
-          className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+          className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold text-center transition-all cursor-pointer col-span-2 sm:col-span-1 ${
             activeTab === "vendors"
               ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground bg-muted/30 border border-border/50"
           }`}
         >
-          <Truck className="h-4 w-4 text-cyan-400" />
-          <span>5. Vendors &amp; Suppliers ({vendors.length})</span>
+          <Truck className="h-4 w-4 text-cyan-400 shrink-0" />
+          <span className="truncate">5. Vendors ({vendors.length})</span>
         </button>
       </div>
 

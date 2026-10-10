@@ -67,8 +67,18 @@ export default function SmartReportSettingsPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      if (window.innerWidth < 1280) setPreviewScale(0.58);
-      if (window.innerWidth < 768) setPreviewScale(0.44);
+      const updateScale = () => {
+        const w = window.innerWidth;
+        if (w < 480) setPreviewScale(0.38);
+        else if (w < 640) setPreviewScale(0.44);
+        else if (w < 768) setPreviewScale(0.50);
+        else if (w < 1024) setPreviewScale(0.58);
+        else if (w < 1440) setPreviewScale(0.65);
+        else setPreviewScale(0.72);
+      };
+      updateScale();
+      window.addEventListener("resize", updateScale);
+      return () => window.removeEventListener("resize", updateScale);
     }
   }, []);
 
@@ -127,7 +137,8 @@ export default function SmartReportSettingsPage() {
         localStorage.setItem("lis_cached_report_settings", JSON.stringify(updated));
         window.dispatchEvent(new Event("lis_settings_updated"));
       }
-      clearApiCache();
+      clearApiCache("/lab");
+      clearApiCache("/reports");
       setSaveSuccess(true);
       toast.success("Settings Saved!", "AI Smart Report settings updated successfully.");
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -558,7 +569,7 @@ export default function SmartReportSettingsPage() {
   }
 
   return (
-    <div className="max-w-[1680px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="w-full max-w-full p-3 sm:p-5 lg:p-6 space-y-5">
 
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/80 p-5 rounded-2xl shadow-xs">
@@ -731,7 +742,7 @@ export default function SmartReportSettingsPage() {
             {templateTab === "cover" && (
               <div>
                 <p className="text-[11px] text-muted-foreground mb-3">Front cover page visual template for your AI Smart Report.</p>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
                   {COVER_TEMPLATES.map((tpl) => {
                     const isSel = (ss.coverDesign || "cover-classic") === tpl.id;
                     return (
@@ -767,7 +778,7 @@ export default function SmartReportSettingsPage() {
             {templateTab === "interior" && (
               <div>
                 <p className="text-[11px] text-muted-foreground mb-3">Interior layout styling for clinical findings and analysis (pages 2–4).</p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                   {INTERIOR_TEMPLATES.map((tpl) => {
                     const isSel = (ss.interiorDesign || "interior-clean") === tpl.id;
                     return (
@@ -801,7 +812,7 @@ export default function SmartReportSettingsPage() {
             {templateTab === "exterior" && (
               <div>
                 <p className="text-[11px] text-muted-foreground mb-3">Back cover / final page design (optional 5th page).</p>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                   {EXTERIOR_TEMPLATES.map((tpl) => {
                     const isSel = (ss.exteriorDesign || "exterior-none") === tpl.id;
                     return (

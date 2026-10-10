@@ -219,10 +219,11 @@ export function B2BOverview({ user }: Props) {
     window.addEventListener("lis_cache_invalidated", handleCacheInvalidated);
     window.addEventListener("storage", handleCacheInvalidated);
 
-    // Real-time polling every 20s for live telemetry & balance updates
+    // Background polling throttled to 60s with tab visibility protection (Rule 4.5)
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
       loadData(false);
-    }, 20000);
+    }, 60000);
 
     return () => {
       window.removeEventListener("b2b_wallet_updated", handleWalletUpdated);

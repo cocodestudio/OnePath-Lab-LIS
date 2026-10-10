@@ -943,7 +943,8 @@ function SettingsContent() {
       setLayoutSettings(payloadLayoutSettings);
 
       // Invalidate API cache so all open pages/reports immediately get fresh lab settings
-      clearApiCache();
+      clearApiCache("/lab");
+      clearApiCache("/settings");
       try {
         localStorage.setItem("lis_cached_report_settings", JSON.stringify(payloadLayoutSettings));
         localStorage.setItem("lis_cached_print_settings", JSON.stringify(saved));

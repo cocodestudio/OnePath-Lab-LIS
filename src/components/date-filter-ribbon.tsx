@@ -108,8 +108,9 @@ export function DateFilterRibbon({
               <button
                 type="button"
                 onClick={() => onShiftSingleDate(-1)}
-                className="p-1.5 sm:p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                className="min-w-[40px] min-h-[40px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                 title="Previous Day"
+                aria-label="Previous Day"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -119,15 +120,16 @@ export function DateFilterRibbon({
               type="date"
               value={singleDate}
               onChange={(e) => onSingleDateChange(e.target.value)}
-              className="h-8 px-2 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer"
+              className="h-9 px-2 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer"
             />
 
             {onShiftSingleDate && (
               <button
                 type="button"
                 onClick={() => onShiftSingleDate(1)}
-                className="p-1.5 sm:p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                className="min-w-[40px] min-h-[40px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                 title="Next Day"
+                aria-label="Next Day"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>

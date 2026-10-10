@@ -80,9 +80,16 @@ export default function SmartReportGeneratedPage() {
   // Auto adjust zoom for viewport
   useEffect(() => {
     if (typeof window !== "undefined") {
-      if (window.innerWidth < 768) setZoomScale(0.44);
-      else if (window.innerWidth < 1200) setZoomScale(0.65);
-      else setZoomScale(0.85);
+      const handleResize = () => {
+        if (window.innerWidth < 480) setZoomScale(0.38);
+        else if (window.innerWidth < 768) setZoomScale(0.48);
+        else if (window.innerWidth < 1024) setZoomScale(0.62);
+        else if (window.innerWidth < 1440) setZoomScale(0.75);
+        else setZoomScale(0.85);
+      };
+      handleResize();
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
     }
   }, []);
 
@@ -568,8 +575,8 @@ export default function SmartReportGeneratedPage() {
           </button>
         </div>
 
-        {/* Right: STRICTLY 2 BUTTONS (1. Send on WhatsApp, 2. Download PDF) */}
-        <div className="flex items-center gap-2.5">
+        {/* Right: Action Buttons (WhatsApp, Download PDF, Print) */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-wrap justify-end">
           {/* Action 1: Send on WhatsApp */}
           <Button
             type="button"

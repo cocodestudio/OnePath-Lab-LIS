@@ -1,7 +1,5 @@
 "use client";
 
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import { type SubscriptionInvoiceData } from "@/components/subscription-tax-invoice";
 
@@ -260,6 +258,9 @@ export async function downloadSubscriptionTaxInvoicePdf(invoice: SubscriptionInv
           })
       )
     );
+
+    const { default: html2canvas } = await import("html2canvas");
+    const { default: jsPDF } = await import("jspdf");
 
     const canvas = await html2canvas(container, {
       scale: 2,
