@@ -114,6 +114,7 @@ export function FullscreenPrintReportModal({
   // ── Sync on modal open & Fetch Latest Lab Settings ────
   useEffect(() => {
     if (open) {
+      setPrintWithHeaderFooter(false);
       setShowClinicalInterpretation(true);
       const initialSetting = Boolean(
         report?.lab?.report_settings?.separatePagePerTest ??

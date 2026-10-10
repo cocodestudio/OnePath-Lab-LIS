@@ -41,7 +41,7 @@ const A4_W = 794;
 export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }: PrintPreviewDialogProps) {
   const router = useRouter();
   const toast = useToast();
-  const [useCustomLetterpad, setUseCustomLetterpad] = useState(true);
+  const [useCustomLetterpad, setUseCustomLetterpad] = useState(false);
   const [showInterpretation, setShowInterpretation] = useState(true);
   const [separatePagePerTest, setSeparatePagePerTest] = useState<boolean>(() => {
     const rs = report?.lab?.report_settings || report?.lab?.reportSettings;
@@ -163,8 +163,7 @@ export function PrintPreviewDialog({ open, onOpenChange, report, onLayoutSaved }
   useEffect(() => {
     if (open && report) {
       const rs = report.lab?.report_settings || report.lab?.reportSettings;
-      const initialLetterhead = Boolean(report.lab?.printWithLetterhead ?? report.lab?.print_with_letterhead ?? true);
-      setUseCustomLetterpad(initialLetterhead);
+      setUseCustomLetterpad(false);
       setShowInterpretation(true);
       setSeparatePagePerTest(Boolean(rs?.separatePagePerTest));
       setExcludedMainTests([]);

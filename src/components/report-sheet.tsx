@@ -1641,7 +1641,7 @@ export const PaginatedReportPreview = React.forwardRef<
 
     if (settings) {
       return {
-        bgImage: settings.bgImage ? getCleanLetterheadUrl(settings.bgImage) : getCleanLetterheadUrl(rawBg),
+        bgImage: settings.bgImage ? getCleanLetterheadUrl(settings.bgImage) : null,
         headerHeight: typeof settings.headerHeight === "number" ? settings.headerHeight : defaultHeaderH,
         footerHeight: typeof settings.footerHeight === "number" ? settings.footerHeight : defaultFooterH,
         marginLeft: typeof settings.marginLeft === "number" ? settings.marginLeft : defaultMarginL,

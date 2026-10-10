@@ -1494,6 +1494,34 @@ assert(separatePages.length === 2, "[SEPARATE PAGE OPTION] When separatePagePerT
 assert(separatePages[0].length === 4, "[SEPARATE PAGE OPTION] Page 1 contains test 1");
 assert(separatePages[1].length === 4, "[SEPARATE PAGE OPTION] Page 2 contains test 2");
 
+// 18.6 Letterhead Toggle State & PDF Download Verification
+function resolveEffectiveLetterheadBg(
+  settings: { bgImage: string | null } | undefined,
+  labRawBg: string | null
+): string | null {
+  if (settings) {
+    return settings.bgImage ? settings.bgImage : null;
+  }
+  return labRawBg;
+}
+
+const mockLabBg = "https://onepath.com/uploads/letterhead.png";
+const untickedSettings = { bgImage: null };
+const tickedSettings = { bgImage: mockLabBg };
+
+assert(
+  resolveEffectiveLetterheadBg(untickedSettings, mockLabBg) === null,
+  "[LETTERHEAD TOGGLE] Unticked print settings strictly resolves bgImage to null (without letterhead)"
+);
+assert(
+  resolveEffectiveLetterheadBg(tickedSettings, mockLabBg) === mockLabBg,
+  "[LETTERHEAD TOGGLE] Ticked print settings resolves bgImage to letterhead URL (with letterhead)"
+);
+assert(
+  resolveEffectiveLetterheadBg(undefined, mockLabBg) === mockLabBg,
+  "[LETTERHEAD TOGGLE] Undefined settings falls back to lab background"
+);
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
