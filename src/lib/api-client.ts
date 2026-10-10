@@ -449,7 +449,29 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
 
       return data;
     } catch (err: any) {
-      if (err?.name === "AbortError" || controller.signal.aborted) {
+      const isAbort = err?.name === "AbortError" || controller.signal.aborted;
+      const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      const isNetworkFail = isOffline ||
+        isAbort ||
+        err?.message?.includes("Failed to fetch") ||
+        err?.message?.includes("NetworkError") ||
+        err?.name === "TypeError";
+
+      if (typeof window !== "undefined" && isNetworkFail) {
+        window.dispatchEvent(
+          new CustomEvent("lis_network_error", {
+            detail: {
+              endpoint: cleanEndpoint,
+              isTimeout: isAbort,
+              message: isAbort
+                ? `Connection slow or weak. Request timed out (${timeoutMs / 1000}s).`
+                : "Network connection lost or server unreachable. LIS is in offline mode.",
+            },
+          })
+        );
+      }
+
+      if (isAbort) {
         throw new Error(`Network timeout (${timeoutMs / 1000}s) while calling ${cleanEndpoint}. Please check your connection.`);
       }
       throw err;

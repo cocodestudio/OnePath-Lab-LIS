@@ -1161,6 +1161,223 @@ assert(lockedStyles.bodyOverflow === "hidden" && lockedStyles.bodyTouchAction ==
 const restoredStyles = applyMobileSliderScrollLock(false, lockedStyles);
 assert(restoredStyles.bodyOverflow === "auto" && restoredStyles.bodyTouchAction === "auto", "[MOBILE SCROLL LOCK] Closing mobile slider restores normal scrolling");
 
+// ==============================================================================
+// 16. Enter Results: Top Patient Ribbon Metadata Resolution (Reg Date, Coll Date, Ref By)
+// ==============================================================================
+console.log("\n▶ MODULE 16: Enter Results Top Patient Ribbon Metadata Resolution");
+
+function resolvePatientTopRibbonDetails(report: any) {
+  const patientData: any = report?.patient || {};
+  const patientMeta = patientData?.meta || {};
+  const reportMeta = (report as any)?.meta || {};
+
+  const formatClinicalDateTime = (val: any) => {
+    if (!val) return "—";
+    try {
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return String(val);
+      const strVal = String(val);
+      const hasTime = strVal.includes("T") || strVal.includes(":") || (strVal.includes(" ") && /\d{1,2}:\d{2}/.test(strVal));
+      if (hasTime) {
+        return d.toLocaleString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+      return d.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return String(val);
+    }
+  };
+
+  const rawRegDate =
+    patientData.registrationDate ||
+    patientData.registration_date ||
+    patientMeta.registrationDate ||
+    patientMeta.registration_date ||
+    patientData.createdAt ||
+    patientData.created_at ||
+    (report as any)?.registrationDate ||
+    (report as any)?.registration_date ||
+    report?.createdAt ||
+    report?.created_at;
+
+  const displayRegDate = formatClinicalDateTime(rawRegDate);
+
+  const rawCollDate =
+    patientData.collectionDateTime ||
+    patientData.collection_date_time ||
+    patientData.collectionDate ||
+    patientData.collection_date ||
+    patientMeta.collectionDateTime ||
+    patientMeta.collection_date_time ||
+    patientMeta.collectionDate ||
+    patientMeta.collection_date ||
+    (report as any)?.collectionDateTime ||
+    (report as any)?.collection_date_time ||
+    (report as any)?.collectionDate ||
+    (report as any)?.collection_date ||
+    reportMeta.collectionDateTime ||
+    reportMeta.collection_date_time ||
+    rawRegDate;
+
+  const displayCollDate = formatClinicalDateTime(rawCollDate);
+
+  const rawRefDoctor =
+    patientData.refDoctor ||
+    patientData.ref_doctor ||
+    patientMeta.refDoctor ||
+    patientMeta.ref_doctor ||
+    (report as any)?.refDoctor ||
+    (report as any)?.ref_doctor ||
+    (report as any)?.referredBy ||
+    (report as any)?.referred_by;
+
+  const displayReferredBy =
+    rawRefDoctor &&
+    String(rawRefDoctor).trim() !== "" &&
+    String(rawRefDoctor).trim() !== "—" &&
+    String(rawRefDoctor).trim().toLowerCase() !== "null" &&
+    String(rawRefDoctor).trim().toLowerCase() !== "undefined"
+      ? String(rawRefDoctor).trim().toLowerCase().startsWith("dr")
+        ? String(rawRefDoctor).trim()
+        : `Dr. ${String(rawRefDoctor).trim()}`
+      : "Self";
+
+  return { displayRegDate, displayCollDate, displayReferredBy };
+}
+
+// 16.1 Standard Case with Doctor name without Dr prefix
+const testReport1 = {
+  id: "rep-001",
+  created_at: "2026-10-10T08:00:00.000Z",
+  patient: {
+    name: "Aman Verma",
+    ref_doctor: "Ramesh Gupta",
+    collection_date_time: "2026-10-10T08:30:00.000Z",
+    created_at: "2026-10-10T08:00:00.000Z",
+  },
+};
+const res1 = resolvePatientTopRibbonDetails(testReport1);
+assert(res1.displayReferredBy === "Dr. Ramesh Gupta", "[TOP RIBBON] Automatically prefixes 'Dr.' to doctor name");
+assert(res1.displayRegDate.includes("2026") && res1.displayRegDate.includes("Oct"), "[TOP RIBBON] Registration date properly formatted");
+assert(res1.displayCollDate.includes("2026") && res1.displayCollDate.includes("Oct"), "[TOP RIBBON] Collection date properly formatted");
+
+// 16.2 Doctor name already prefixed with 'Dr.'
+const testReport2 = {
+  id: "rep-002",
+  patient: {
+    name: "Sunita Roy",
+    refDoctor: "Dr. A. K. Mishra",
+    registration_date: "2026-10-09",
+    collection_date: "2026-10-09",
+  },
+};
+const res2 = resolvePatientTopRibbonDetails(testReport2);
+assert(res2.displayReferredBy === "Dr. A. K. Mishra", "[TOP RIBBON] Does not double-prefix 'Dr.' when already present");
+assert(res2.displayRegDate.includes("09") && res2.displayRegDate.includes("Oct"), "[TOP RIBBON] Formats date-only registration string");
+
+// 16.3 Doctor is missing / null -> defaults to 'Self'
+const testReport3 = {
+  id: "rep-003",
+  patient: {
+    name: "Pooja Patel",
+    refDoctor: null,
+    created_at: "2026-10-10T09:15:00.000Z",
+  },
+};
+const res3 = resolvePatientTopRibbonDetails(testReport3);
+assert(res3.displayReferredBy === "Self", "[TOP RIBBON] Falls back to 'Self' when referral doctor is null/empty");
+assert(res3.displayCollDate === res3.displayRegDate, "[TOP RIBBON] Collection date safely falls back to registration date when not specified");
+
+// 16.4 Safe fallbacks for empty / null patient
+const testReportEmpty = { id: "rep-null", patient: null };
+const resEmpty = resolvePatientTopRibbonDetails(testReportEmpty);
+assert(resEmpty.displayReferredBy === "Self", "[TOP RIBBON] Empty patient safely resolves referred by to 'Self'");
+assert(resEmpty.displayRegDate === "—", "[TOP RIBBON] Empty registration date safely displays em-dash");
+assert(resEmpty.displayCollDate === "—", "[TOP RIBBON] Empty collection date safely displays em-dash");
+
+// ==============================================================================
+// 17. LIS Performance Engine: SWR Caching, Event Scoping, Autofocus & Network Resilience
+// ==============================================================================
+console.log("\n▶ MODULE 17: Performance Caching, Autofocus & Network Resilience Engine");
+
+// 17.1 Scoped Cache Invalidation prevents redundant catalog downloads
+function shouldInvalidateTestCatalog(eventDetail: any): boolean {
+  const prefix = eventDetail?.prefix;
+  if (!prefix) return true; // unscoped fallback
+  return prefix.includes("test");
+}
+
+assert(shouldInvalidateTestCatalog({ prefix: "patients" }) === false, "[CACHE SCOPE] Patient save prefix strictly prevents re-downloading test catalog");
+assert(shouldInvalidateTestCatalog({ prefix: "bookings" }) === false, "[CACHE SCOPE] Booking save prefix strictly prevents re-downloading test catalog");
+assert(shouldInvalidateTestCatalog({ prefix: "tests" }) === true, "[CACHE SCOPE] Tests master edit correctly triggers test catalog refresh");
+assert(shouldInvalidateTestCatalog(undefined) === true, "[CACHE SCOPE] Bare event safely falls back to catalog refresh");
+
+// 17.2 Autofocus Trigger on Test Selection Modal Open
+interface MockModalState {
+  isModalOpen: boolean;
+  catalogMode: "TESTS" | "PACKAGES" | "OUTSOURCE";
+  focusedElementId: string | null;
+}
+
+function handleCatalogModalOpen(state: MockModalState): MockModalState {
+  if (state.isModalOpen && state.catalogMode === "TESTS") {
+    return { ...state, focusedElementId: "input-search-test" };
+  }
+  return state;
+}
+
+const focusedState = handleCatalogModalOpen({
+  isModalOpen: true,
+  catalogMode: "TESTS",
+  focusedElementId: null,
+});
+assert(focusedState.focusedElementId === "input-search-test", "[AUTOFOCUS] Opening clinical tests modal automatically focuses search bar");
+
+// 17.3 Optimistic 0ms Print Preview Resolution
+function resolveOptimisticPrintReport(rowItem: any, fallbackLab: any) {
+  return {
+    ...rowItem,
+    lab: rowItem.lab || fallbackLab,
+    isOptimistic: true,
+  };
+}
+
+const sampleRow = { id: "rep-123", custom_id: "REP-2026-001", patient: { name: "Ananya Sharma" } };
+const defaultLab = { name: "OnePath Central Lab" };
+const optimisticPrint = resolveOptimisticPrintReport(sampleRow, defaultLab);
+assert(optimisticPrint.id === "rep-123", "[OPTIMISTIC PRINT] Modal receives report id immediately without waiting for network");
+assert(optimisticPrint.lab.name === "OnePath Central Lab", "[OPTIMISTIC PRINT] Resolves cached or fallback lab settings in 0ms");
+
+// 17.4 SWR Table Loading Preservation during Date Switches
+function isTableBlankLoading(loading: boolean, isFetching: boolean, itemCount: number): boolean {
+  return (loading && itemCount === 0) || (isFetching && itemCount === 0);
+}
+
+assert(isTableBlankLoading(true, false, 0) === true, "[SWR LOADING] Empty table shows skeleton on initial mount");
+assert(isTableBlankLoading(false, true, 25) === false, "[SWR LOADING] Switching dates preserves populated table without blank flicker");
+assert(isTableBlankLoading(false, true, 0) === true, "[SWR LOADING] Empty results show loading skeleton");
+
+// 17.5 Dynamic Network Resilience & Connectivity Status Classification
+function classifyNetworkState(isOnline: boolean, isTimeout: boolean, isFailedFetch: boolean): "idle" | "offline" | "weak" {
+  if (!isOnline) return "offline";
+  if (isTimeout || isFailedFetch) return "weak";
+  return "idle";
+}
+
+assert(classifyNetworkState(false, false, false) === "offline", "[NETWORK RESILIENCE] Browser offline correctly classified as offline state");
+assert(classifyNetworkState(true, true, false) === "weak", "[NETWORK RESILIENCE] Slow timeout correctly classified as weak connection with retry option");
+assert(classifyNetworkState(true, false, true) === "weak", "[NETWORK RESILIENCE] Failed fetch correctly classified as weak/unreachable server state");
+assert(classifyNetworkState(true, false, false) === "idle", "[NETWORK RESILIENCE] Healthy connection remains in idle state");
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

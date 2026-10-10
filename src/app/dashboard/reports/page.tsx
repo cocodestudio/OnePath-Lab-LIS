@@ -291,9 +291,24 @@ export default function ReportsListPage() {
         }
       }
 
-      const data = await fetchFromLaravel(`/reports/${rep.id}`);
-      setPrintReport({ ...data, lab: data.lab || DEFAULT_LAB });
+      // Optimistic instant modal open (0ms) using existing row metadata
+      setPrintReport({ ...rep, lab: rep.lab || DEFAULT_LAB });
       setShowPrintOptions(true);
+
+      // Asynchronously hydrate detailed clinical results and interpretations in background
+      fetchFromLaravel(`/reports/${rep.id}`)
+        .then((data) => {
+          if (data) {
+            setPrintReport((prev: any) => ({
+              ...(prev || {}),
+              ...data,
+              lab: data.lab || prev?.lab || DEFAULT_LAB,
+            }));
+          }
+        })
+        .catch((err) => {
+          console.warn("Background report hydration note:", err);
+        });
     } catch (err: any) {
       toast({
         variant: "error",
@@ -1041,8 +1056,21 @@ export default function ReportsListPage() {
       )}
 
       {/* Table */}
-      <div className="bg-card border border-border/70 rounded-xl shadow-card overflow-hidden">
-        <div className="table-responsive-container">
+      <div className="bg-card border border-border/70 rounded-xl shadow-card overflow-hidden relative">
+        {/* Top Micro-Progress Bar for Date Switch / Revalidation Feedback */}
+        {isFetching && (
+          <div className="w-full h-1 bg-muted/60 overflow-hidden relative shrink-0">
+            <div className="h-full bg-primary animate-pulse w-full origin-left" />
+          </div>
+        )}
+        {isFetching && safeReports.length > 0 && (
+          <div className="absolute top-3 right-4 z-20 flex items-center gap-1.5 px-3 py-1 rounded-full bg-background/95 border border-primary/30 shadow-md backdrop-blur-md text-[11px] font-semibold text-primary animate-pulse pointer-events-none">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>Fetching {dateMode === "range" ? `${startDate} to ${endDate}` : (filterDate ? filterDate : "all records")}…</span>
+          </div>
+        )}
+
+        <div className={`table-responsive-container transition-opacity duration-200 ${isFetching && safeReports.length > 0 ? "opacity-60 pointer-events-none" : ""}`}>
           {(loading && safeReports.length === 0) || (isFetching && safeReports.length === 0) ? (
             <table className="w-full min-w-[640px] text-left">
               <thead>

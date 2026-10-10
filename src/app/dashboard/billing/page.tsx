@@ -392,17 +392,26 @@ export default function BillingPage() {
       }
     } catch {}
 
-    fetchBills(true);
-    fetchAvailableTests();
+    fetchBills(false);
     fetchStaffUsers();
+
+    // Low-priority background hydration for tests master so billing table displays in 0ms
+    setTimeout(() => {
+      fetchAvailableTests(false);
+    }, 150);
 
     try {
       setAvailablePackages(getStoredPackages());
     } catch (e) {}
 
-    const handleSync = () => {
-      fetchBills(true);
-      fetchAvailableTests(true);
+    const handleSync = (e?: any) => {
+      const prefix = e?.detail?.prefix;
+      if (!prefix || prefix.includes("bill") || prefix.includes("booking") || prefix.includes("payment")) {
+        fetchBills(false);
+      }
+      if (!prefix || prefix.includes("test")) {
+        fetchAvailableTests(false);
+      }
     };
     window.addEventListener("lis_online_sync", handleSync);
     window.addEventListener("lis_cache_invalidated", handleSync);
@@ -1012,8 +1021,8 @@ export default function BillingPage() {
     return getMainBillItems(selectedBillForInvoice, allTestsMap);
   }, [selectedBillForInvoice, allTestsMap]);
 
-  // True whenever initial load is underway or live data is being fetched
-  const isTableLoading = loading || isFetching;
+  // True only when completely empty and fetching from scratch
+  const isTableLoading = (loading && bills.length === 0) || (isFetching && bills.length === 0);
 
   return (
     <div className="w-full space-y-7 pb-12 animate-fade-in text-foreground">
@@ -1336,8 +1345,21 @@ export default function BillingPage() {
       </div>
 
       {/* Invoices List Table */}
-      <div className="bg-card border border-border/80 rounded-xl overflow-hidden shadow-sm">
-        <div className="table-responsive-container">
+      <div className="bg-card border border-border/80 rounded-xl overflow-hidden shadow-sm relative">
+        {/* Top Micro-Progress Bar for Date Switch / SWR Revalidation */}
+        {isFetching && (
+          <div className="w-full h-1 bg-muted/60 overflow-hidden relative shrink-0">
+            <div className="h-full bg-primary animate-pulse w-full origin-left" />
+          </div>
+        )}
+        {isFetching && bills.length > 0 && (
+          <div className="absolute top-3 right-4 z-20 flex items-center gap-1.5 px-3 py-1 rounded-full bg-background/95 border border-primary/30 shadow-md backdrop-blur-md text-[11px] font-semibold text-primary animate-pulse pointer-events-none">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>Updating bills…</span>
+          </div>
+        )}
+
+        <div className={`table-responsive-container transition-opacity duration-200 ${isFetching && bills.length > 0 ? "opacity-60 pointer-events-none" : ""}`}>
           <table className="w-full min-w-[890px] text-xs text-left border-collapse">
             <thead>
               <tr className="border-b border-border/80 bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">

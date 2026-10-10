@@ -139,6 +139,13 @@ interface Report {
     collected_by?: string;
     created_at?: string;
     createdAt?: string;
+    collectionDateTime?: string;
+    collection_date_time?: string;
+    collectionDate?: string;
+    collection_date?: string;
+    registrationDate?: string;
+    registration_date?: string;
+    meta?: any;
     abhaNumber?: string;
     abha_number?: string;
     abhaAddress?: string;
@@ -2993,6 +3000,90 @@ function ResultEntryContent() {
   }
   if (!report) return null;
 
+  const patientData: any = report?.patient || {};
+  const patientMeta = patientData?.meta || {};
+  const reportMeta = (report as any)?.meta || {};
+
+  const formatClinicalDateTime = (val: any) => {
+    if (!val) return "—";
+    try {
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return String(val);
+      const strVal = String(val);
+      const hasTime = strVal.includes("T") || strVal.includes(":") || (strVal.includes(" ") && /\d{1,2}:\d{2}/.test(strVal));
+      if (hasTime) {
+        return d.toLocaleString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      }
+      return d.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+    } catch {
+      return String(val);
+    }
+  };
+
+  const rawRegDate =
+    patientData.registrationDate ||
+    patientData.registration_date ||
+    patientMeta.registrationDate ||
+    patientMeta.registration_date ||
+    patientData.createdAt ||
+    patientData.created_at ||
+    (report as any)?.registrationDate ||
+    (report as any)?.registration_date ||
+    report?.createdAt ||
+    report?.created_at;
+
+  const displayRegDate = formatClinicalDateTime(rawRegDate);
+
+  const rawCollDate =
+    patientData.collectionDateTime ||
+    patientData.collection_date_time ||
+    patientData.collectionDate ||
+    patientData.collection_date ||
+    patientMeta.collectionDateTime ||
+    patientMeta.collection_date_time ||
+    patientMeta.collectionDate ||
+    patientMeta.collection_date ||
+    (report as any)?.collectionDateTime ||
+    (report as any)?.collection_date_time ||
+    (report as any)?.collectionDate ||
+    (report as any)?.collection_date ||
+    reportMeta.collectionDateTime ||
+    reportMeta.collection_date_time ||
+    rawRegDate;
+
+  const displayCollDate = formatClinicalDateTime(rawCollDate);
+
+  const rawRefDoctor =
+    patientData.refDoctor ||
+    patientData.ref_doctor ||
+    patientMeta.refDoctor ||
+    patientMeta.ref_doctor ||
+    (report as any)?.refDoctor ||
+    (report as any)?.ref_doctor ||
+    (report as any)?.referredBy ||
+    (report as any)?.referred_by;
+
+  const displayReferredBy =
+    rawRefDoctor &&
+    String(rawRefDoctor).trim() !== "" &&
+    String(rawRefDoctor).trim() !== "—" &&
+    String(rawRefDoctor).trim().toLowerCase() !== "null" &&
+    String(rawRefDoctor).trim().toLowerCase() !== "undefined"
+      ? String(rawRefDoctor).trim().toLowerCase().startsWith("dr")
+        ? String(rawRefDoctor).trim()
+        : `Dr. ${String(rawRefDoctor).trim()}`
+      : "Self";
+
   return (
     <div className="flex flex-col gap-6 max-w-[1400px] mx-auto animate-fade-in min-h-[calc(100vh-68px-1.75rem)] -mb-7">
       {/* Main Container */}
@@ -3089,11 +3180,28 @@ function ResultEntryContent() {
                   </span>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-muted-foreground">
-                <span className="font-mono text-primary bg-accent px-1.5 py-0.5 rounded font-bold">{report.patient.customId}</span>
-                <span>Ref: Dr. {report.patient.refDoctor || "Self"}</span>
-                <span>·</span>
-                <span className="font-mono">Rep: {report.customId}</span>
+              <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 mt-2 text-xs text-muted-foreground">
+                <span className="font-mono text-primary bg-accent px-1.5 py-0.5 rounded font-bold">
+                  {patientData.customId || patientData.custom_id || "—"}
+                </span>
+                <span className="font-mono text-foreground/80 font-medium">
+                  Rep: {report.customId || report.custom_id || "—"}
+                </span>
+                <span className="text-muted-foreground/40 hidden sm:inline">·</span>
+                <span className="inline-flex items-center gap-1.5 text-foreground/90 font-medium">
+                  <Stethoscope className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span><strong>Referred By:</strong> {displayReferredBy}</span>
+                </span>
+                <span className="text-muted-foreground/40 hidden sm:inline">·</span>
+                <span className="inline-flex items-center gap-1.5 text-foreground/90 font-medium">
+                  <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span><strong>Reg Date:</strong> {displayRegDate}</span>
+                </span>
+                <span className="text-muted-foreground/40 hidden sm:inline">·</span>
+                <span className="inline-flex items-center gap-1.5 text-foreground/90 font-medium">
+                  <Clock className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <span><strong>Collection Date:</strong> {displayCollDate}</span>
+                </span>
               </div>
             </div>
           </div>
@@ -3963,7 +4071,7 @@ function ResultEntryContent() {
                   <div className="p-2.5 rounded-xl bg-muted/40 border border-border/60">
                     <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Referred By (Doctor)</p>
                     <p className="font-bold text-foreground text-xs mt-0.5 truncate">
-                      Dr. {report.patient.refDoctor || report.patient.ref_doctor || "Self"}
+                      {displayReferredBy}
                     </p>
                   </div>
 
@@ -4042,15 +4150,16 @@ function ResultEntryContent() {
                   </div>
 
                   <div className="p-2.5 rounded-xl bg-muted/40 border border-border/60">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Order Date</p>
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Registration Date</p>
                     <p className="font-mono text-xs font-semibold text-foreground mt-0.5">
-                      {(report.createdAt || report.created_at)
-                        ? new Date((report.createdAt || report.created_at) as string).toLocaleDateString("en-IN", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric"
-                        })
-                        : "—"}
+                      {displayRegDate}
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-muted/40 border border-border/60">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Collection Date</p>
+                    <p className="font-mono text-xs font-semibold text-foreground mt-0.5">
+                      {displayCollDate}
                     </p>
                   </div>
 

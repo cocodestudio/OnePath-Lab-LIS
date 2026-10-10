@@ -650,6 +650,21 @@ function RegisterPatientPage() {
 
   // Booking & Test Selection State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const testSearchInputRef = useRef<HTMLInputElement>(null);
+
+  // Automatically focus on test search bar whenever test catalog modal is opened
+  useEffect(() => {
+    if (isModalOpen) {
+      const timer = setTimeout(() => {
+        try {
+          testSearchInputRef.current?.focus();
+          testSearchInputRef.current?.select();
+        } catch (_) {}
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [isModalOpen, catalogMode]);
+
   const [newPatient, setNewPatient] = useState<Patient | null>(null);
   const [availableTests, setAvailableTests] = useState<Test[]>([]);
   const [selectedTests, setSelectedTests] = useState<string[]>([]);
@@ -2241,7 +2256,7 @@ function RegisterPatientPage() {
       if (typeof window !== "undefined") {
         window.dispatchEvent(new Event("lis_online_sync"));
         window.dispatchEvent(new Event("lis_patient_updated"));
-        window.dispatchEvent(new Event("lis_cache_invalidated"));
+        window.dispatchEvent(new CustomEvent("lis_cache_invalidated", { detail: { prefix: "patients" } }));
       }
 
       setNewPatient(patientObj);
@@ -2814,7 +2829,7 @@ function RegisterPatientPage() {
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("lis_online_sync"));
           window.dispatchEvent(new Event("lis_patient_updated"));
-          window.dispatchEvent(new Event("lis_cache_invalidated"));
+          window.dispatchEvent(new CustomEvent("lis_cache_invalidated", { detail: { prefix: "bookings" } }));
         }
       }
 
@@ -5246,6 +5261,8 @@ function RegisterPatientPage() {
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
+                ref={testSearchInputRef}
+                autoFocus
                 className="w-full pl-10 pr-4 py-2 bg-background border border-border/90 rounded-xl text-xs placeholder:text-muted-foreground/60 focus:border-primary outline-none text-foreground font-medium shadow-2xs"
                 placeholder={
                   catalogMode === "TESTS"

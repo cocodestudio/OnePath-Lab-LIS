@@ -71,7 +71,15 @@ export function FullscreenPrintReportModal({
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [zoomScale, setZoomScale] = useState<number>(0.80);
   const [totalPages, setTotalPages] = useState(1);
-  const [liveLab, setLiveLab] = useState<any>(null);
+  const [liveLab, setLiveLab] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cachedLab = localStorage.getItem("lis_cached_lab");
+        if (cachedLab) return JSON.parse(cachedLab);
+      } catch (_) {}
+    }
+    return null;
+  });
   const [mobileTab, setMobileTab] = useState<"preview" | "tests" | "actions">("preview");
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
@@ -113,10 +121,11 @@ export function FullscreenPrintReportModal({
       );
       setSeparatePagePerTest(initialSetting);
 
-      fetchFromLaravel("/lab?include_letterhead=1", { skipCache: true })
+      fetchFromLaravel("/lab?include_letterhead=1")
         .then((fresh) => {
           if (fresh) {
             setLiveLab(fresh);
+            try { localStorage.setItem("lis_cached_lab", JSON.stringify(fresh)); } catch (_) {}
             const freshRaw = fresh.reportSettings ?? fresh.report_settings;
             const raw = typeof freshRaw === 'string' ? JSON.parse(freshRaw || '{}') : freshRaw;
             if (raw && typeof raw.separatePagePerTest === 'boolean') {
