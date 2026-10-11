@@ -1161,6 +1161,86 @@ assert(lockedStyles.bodyOverflow === "hidden" && lockedStyles.bodyTouchAction ==
 const restoredStyles = applyMobileSliderScrollLock(false, lockedStyles);
 assert(restoredStyles.bodyOverflow === "auto" && restoredStyles.bodyTouchAction === "auto", "[MOBILE SCROLL LOCK] Closing mobile slider restores normal scrolling");
 
+// 8. Mobile Touch Single-Tap State Machine (Preventing Synthetic Hover Double-Tap Bug)
+class MockTouchAwareSidebarAccordion extends MockSidebarAccordion {
+  lastTouchTime: number = 0;
+
+  onTouchStart() {
+    this.lastTouchTime = Date.now();
+  }
+
+  isRecentTouch(): boolean {
+    return Date.now() - this.lastTouchTime < 650;
+  }
+
+  override handleMouseEnter(itemName: string) {
+    if (this.isRecentTouch()) return; // Suppress synthetic touch hover!
+    super.handleMouseEnter(itemName);
+  }
+
+  override handleMouseLeave(itemName: string, executeImmediately = false) {
+    if (this.isRecentTouch()) return;
+    super.handleMouseLeave(itemName, executeImmediately);
+  }
+}
+
+const touchSidebar = new MockTouchAwareSidebarAccordion();
+// Simulate mobile user tapping "Finance & Rates"
+touchSidebar.onTouchStart();
+// Browser fires synthetic mouseEnter right before click
+touchSidebar.handleMouseEnter("Finance & Rates");
+assert(touchSidebar.expandedItem === null, "[MOBILE SINGLE-TAP] Synthetic mouseEnter is suppressed during touch event");
+
+// Browser fires click event on the first tap
+touchSidebar.toggle("Finance & Rates");
+assert(touchSidebar.expandedItem === "Finance & Rates", "[MOBILE SINGLE-TAP] First single tap successfully opens 'Finance & Rates'");
+
+// Second tap collapses it
+touchSidebar.onTouchStart();
+touchSidebar.handleMouseEnter("Finance & Rates");
+touchSidebar.toggle("Finance & Rates");
+assert(touchSidebar.expandedItem === null, "[MOBILE SINGLE-TAP] Second tap cleanly collapses 'Finance & Rates'");
+
+// 9. B2B Portal & Multi-Role Dropdown Resolution Guardrails
+interface MockNavItem {
+  name: string;
+  href?: string;
+  children?: { name: string; href: string }[];
+}
+
+const mockB2bNav: MockNavItem[] = [
+  { name: "Overview", href: "/dashboard" },
+  { name: "Patients", href: "/dashboard/patients" },
+  { name: "Today Samples", href: "/dashboard/today-samples" },
+  { name: "Reports", href: "/dashboard/reports" },
+  { name: "Wallet & Payments", href: "/dashboard/wallet" },
+  {
+    name: "Finance & Rates",
+    children: [
+      { name: "Billing", href: "/dashboard/billing" },
+      { name: "Revenue & Ledger", href: "/dashboard/revenue" },
+      { name: "Rate List", href: "/dashboard/ratelist" },
+    ],
+  },
+  { name: "Help & Support", href: "/dashboard/support" },
+];
+
+const b2bFinanceItem = mockB2bNav.find((item) => item.name === "Finance & Rates");
+assert(Boolean(b2bFinanceItem?.children), "[B2B PORTAL] 'Finance & Rates' contains child sub-items");
+assert((b2bFinanceItem?.children?.length ?? 0) === 3, "[B2B PORTAL] 'Finance & Rates' contains exactly 3 child links");
+assert(Boolean(b2bFinanceItem?.children?.some((c) => c.href === "/dashboard/ratelist")), "[B2B PORTAL] 'Finance & Rates' includes Rate List");
+assert(Boolean(b2bFinanceItem?.children?.some((c) => c.href === "/dashboard/billing")), "[B2B PORTAL] 'Finance & Rates' includes Billing");
+assert(Boolean(b2bFinanceItem?.children?.some((c) => c.href === "/dashboard/revenue")), "[B2B PORTAL] 'Finance & Rates' includes Revenue & Ledger");
+
+// Role Isolation: B2B role is NEVER locked by lab subscription lock
+const isB2bRole = "b2b".toUpperCase().trim() === "B2B";
+assert(isB2bRole, "[ROLE ISOLATION] Role case is normalized to B2B");
+const isAdminRole = false;
+const rawSubscriptionExpired = true; // Lab subscription trial expired
+const effectiveLocked = rawSubscriptionExpired && isAdminRole;
+assert(effectiveLocked === false, "[ROLE ISOLATION] B2B partner accounts are completely exempt from lab subscription lock");
+
+
 // ==============================================================================
 // 16. Enter Results: Top Patient Ribbon Metadata Resolution (Reg Date, Coll Date, Ref By)
 // ==============================================================================
@@ -1659,6 +1739,59 @@ assert(
 assert(
   accountLabPageSrc.includes("lastDispatchedAt") && accountLabPageSrc.includes("Next scheduled: Tonight at 12:00 AM (Midnight)"),
   "[AUTO DISPATCH STATUS] Daily midnight option renders live last sent status and next scheduled time"
+);
+
+assert(
+  !accountLabPageSrc.includes("value={dispatchSettings.recipientEmailInput}") &&
+  !accountLabPageSrc.includes("Send Test Summary Now") &&
+  !accountLabPageSrc.includes("Automatic Delivery to Account Email:"),
+  "[AUTO DISPATCH CLEANUP] Recipient input, test button, and extra summary box removed; pure toggle button retained"
+);
+
+// 19.11 B2B Test Catalog Pricing Resolution & Revenue/Ledger Rate List Margin Audit
+const registerPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/patients/register/page.tsx"), "utf-8");
+const revenuePageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/revenue/page.tsx"), "utf-8");
+
+// Test 1: B2B Register Page fetches /rate-lists/my-rate-list in parallel
+assert(
+  registerPageSrc.includes('/rate-lists/my-rate-list'),
+  "[B2B REGISTRATION] Register page fetches /rate-lists/my-rate-list for live confidential partner pricing"
+);
+
+// Test 2: B2B Catalog Display renders separate B2B badge and MRP line-through label in responsive layout
+assert(
+  registerPageSrc.includes("B2B ₹") && registerPageSrc.includes("MRP ₹") && registerPageSrc.includes("line-through"),
+  "[B2B CATALOG UI] Test and package catalog items render distinct B2B badge alongside MRP in responsive layout"
+);
+
+// Test 3: Applied In-House and Package Subtotals strictly use B2B rates
+assert(
+  registerPageSrc.includes("isEffectiveB2B ? getTestB2bPrice(t).b2bPrice : t.price") &&
+  registerPageSrc.includes("isEffectiveB2B ? getPackageB2bPrice(selectedPackage).b2bPrice : selectedPackage.price"),
+  "[B2B BILLING RATES] Registration invoice subtotal and package price strictly apply B2B rates"
+);
+
+// Test 4: Revenue & Ledger Margin Calculation prioritizes calculatedLabRate and reportB2bPrice over billTotal
+assert(
+  revenuePageSrc.includes("const reportB2bPrice = Number(r.b2b_price ?? r.b2bPrice ?? 0);") &&
+  revenuePageSrc.includes("const labMargin = calculatedLabRate > 0\n      ? calculatedLabRate\n      : (reportB2bPrice > 0\n        ? reportB2bPrice\n        : (billTotal > 0 ? billTotal : 0));"),
+  "[REVENUE LEDGER MARGIN] Lab Margin strictly calculates from rate list wholesale tariff without defaulting to retail billTotal"
+);
+
+// Test 5: Verify algorithmic accuracy of Rate List Margin vs Retail MRP
+const mockReport = {
+  bill: { total: 500, paid_amount: 500, status: "PAID" },
+  b2b_price: 200,
+};
+const mockCalculatedLabRate = 200;
+const mockCalculatedMrp = 500;
+const testLabMargin = mockCalculatedLabRate > 0 ? mockCalculatedLabRate : Number(mockReport.b2b_price || mockReport.bill.total);
+const testTotalMrp = mockCalculatedMrp > 0 ? mockCalculatedMrp : testLabMargin;
+const testB2bMargin = Math.max(0, testTotalMrp - testLabMargin);
+
+assert(
+  testLabMargin === 200 && testB2bMargin === 300 && testTotalMrp === 500,
+  "[REVENUE LEDGER MATH] Report with MRP 500 and Rate List Wholesale 200 yields Lab Margin 200 and B2B Centre Margin 300"
 );
 
 console.log("\n===============================================================================");

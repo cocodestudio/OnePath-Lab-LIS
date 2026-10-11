@@ -633,6 +633,133 @@ function RegisterPatientPage() {
   const [availablePackages, setAvailablePackages] = useState<LabPackage[]>([]);
   const [selectedPackage, setSelectedPackage] = useState<LabPackage | null>(null);
 
+  // B2B Assigned Rate List State & Fast Lookup Map
+  const [b2bRateData, setB2bRateData] = useState<any>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("lis_cached_b2b_ratelist");
+        return cached ? JSON.parse(cached) : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const b2bRatesMap = useMemo(() => {
+    const map = new Map<string, { mrp: number; b2b_price: number; name: string }>();
+    if (b2bRateData?.tests && Array.isArray(b2bRateData.tests)) {
+      b2bRateData.tests.forEach((t: any) => {
+        const item = {
+          mrp: Number(t.mrp || 0),
+          b2b_price: Number(t.b2b_price || 0),
+          name: t.name || "",
+        };
+        if (t.id) map.set(String(t.id), item);
+        if (t.test_code) map.set(t.test_code.toLowerCase().trim(), item);
+        if (t.name) map.set(t.name.toLowerCase().trim(), item);
+      });
+    }
+    if (b2bRateData?.packages && Array.isArray(b2bRateData.packages)) {
+      b2bRateData.packages.forEach((p: any) => {
+        const item = {
+          mrp: Number(p.mrp || 0),
+          b2b_price: Number(p.b2b_price || 0),
+          name: p.name || "",
+        };
+        if (p.id) map.set(String(p.id), item);
+        if (p.code) map.set(p.code.toLowerCase().trim(), item);
+        if (p.name) map.set(p.name.toLowerCase().trim(), item);
+      });
+    }
+    return map;
+  }, [b2bRateData]);
+
+  const getTestB2bPrice = useCallback((test: any) => {
+    const mrp = Number(test?.price ?? 0);
+    const partnerTier = (
+      (typeof window !== "undefined" ? getStoredUser()?.rate_tier || getStoredUser()?.rateTier : "") ||
+      "HIGH"
+    ).toUpperCase();
+
+    // 1. Check assigned rate list map
+    const fromMap = test?.id ? b2bRatesMap.get(String(test.id))
+      : (test?.test_code ? b2bRatesMap.get(test.test_code.toLowerCase().trim())
+      : (test?.name ? b2bRatesMap.get(test.name.toLowerCase().trim()) : null));
+
+    if (fromMap && (fromMap.b2b_price > 0 || fromMap.mrp > 0)) {
+      return {
+        b2bPrice: fromMap.b2b_price > 0 ? fromMap.b2b_price : mrp,
+        mrp: fromMap.mrp > 0 ? fromMap.mrp : mrp,
+        hasB2b: true,
+      };
+    }
+
+    // 2. Direct property on test
+    const directB2b = test?.b2bPrice ?? test?.b2b_price;
+    if (directB2b !== undefined && directB2b !== null && !isNaN(Number(directB2b)) && Number(directB2b) > 0) {
+      return {
+        b2bPrice: Number(directB2b),
+        mrp,
+        hasB2b: true,
+      };
+    }
+
+    // 3. Tier rates if present on test
+    const low = Number(test?.b2b_price_low ?? test?.b2bPriceLow ?? 0);
+    const med = Number(test?.b2b_price_medium ?? test?.b2bPriceMedium ?? test?.b2b_price ?? test?.b2bPrice ?? 0);
+    const high = Number(test?.b2b_price_high ?? test?.b2bPriceHigh ?? 0);
+    if (low > 0 || med > 0 || high > 0) {
+      let tierRate = high > 0 ? high : (med > 0 ? med : mrp);
+      if (partnerTier === "LOW" && low > 0) tierRate = low;
+      else if (partnerTier === "MEDIUM" && med > 0) tierRate = med;
+      return { b2bPrice: tierRate, mrp, hasB2b: true };
+    }
+
+    // 4. Default wholesale margin tier (e.g. 70% of MRP) for any B2B user
+    if (isB2B || !!selectedB2bCenter) {
+      const discountFactor = partnerTier === "LOW" ? 0.5 : (partnerTier === "MEDIUM" ? 0.6 : 0.7);
+      return { b2bPrice: Math.round(mrp * discountFactor), mrp, hasB2b: true };
+    }
+
+    return { b2bPrice: mrp, mrp, hasB2b: false };
+  }, [b2bRatesMap, isB2B, selectedB2bCenter]);
+
+  const getPackageB2bPrice = useCallback((pkg: any) => {
+    const mrp = Number(pkg?.price ?? 0);
+    const partnerTier = (
+      (typeof window !== "undefined" ? getStoredUser()?.rate_tier || getStoredUser()?.rateTier : "") ||
+      "HIGH"
+    ).toUpperCase();
+
+    // 1. Check assigned rate list map
+    const fromMap = pkg?.id ? b2bRatesMap.get(String(pkg.id))
+      : (pkg?.code ? b2bRatesMap.get(pkg.code.toLowerCase().trim())
+      : (pkg?.name ? b2bRatesMap.get(pkg.name.toLowerCase().trim()) : null));
+
+    if (fromMap && (fromMap.b2b_price > 0 || fromMap.mrp > 0)) {
+      return {
+        b2bPrice: fromMap.b2b_price > 0 ? fromMap.b2b_price : mrp,
+        mrp: fromMap.mrp > 0 ? fromMap.mrp : mrp,
+        hasB2b: true,
+      };
+    }
+
+    // 2. Direct property on pkg
+    const directB2b = pkg?.b2bPrice ?? pkg?.b2b_price;
+    if (directB2b !== undefined && directB2b !== null && !isNaN(Number(directB2b)) && Number(directB2b) > 0) {
+      return { b2bPrice: Number(directB2b), mrp, hasB2b: true };
+    }
+
+    // 3. Default wholesale margin tier for packages (e.g. 70-80% of MRP)
+    if (isB2B || !!selectedB2bCenter) {
+      const discountFactor = partnerTier === "LOW" ? 0.6 : (partnerTier === "MEDIUM" ? 0.7 : 0.8);
+      return { b2bPrice: Math.round(mrp * discountFactor), mrp, hasB2b: true };
+    }
+
+    return { b2bPrice: mrp, mrp, hasB2b: false };
+  }, [b2bRatesMap, isB2B, selectedB2bCenter]);
+
   // Outsource Investigations State
   const [outsourcePartnerLabsList, setOutsourcePartnerLabsList] = useState<OutsourcePartnerLab[]>(() => getCachedPartnerLabs());
   const [selectedOutsourceTests, setSelectedOutsourceTests] = useState<
@@ -1209,12 +1336,13 @@ function RegisterPatientPage() {
 
     (async () => {
       // Parallelize all catalog and setup fetches for instantaneous page readiness
-      const [testsResult, docsResult, labResult, ccResult, outsourceResult] = await Promise.allSettled([
+      const [testsResult, docsResult, labResult, ccResult, outsourceResult, rateListResult] = await Promise.allSettled([
         fetchFromLaravel("/tests?compact=1", { skipCache: true }),
         fetchFromLaravel("/doctors?filter=all&include_inactive=1"),
         fetchFromLaravel("/lab"),
         fetchFromLaravel("/collection-centers"),
         fetchFromLaravel("/outsource/partner-labs"),
+        fetchFromLaravel("/rate-lists/my-rate-list"),
       ]);
 
       if (testsResult.status === "fulfilled" && testsResult.value) {
@@ -1224,6 +1352,11 @@ function RegisterPatientPage() {
           setAvailableTests(list);
           try { localStorage.setItem("lis_cached_tests", JSON.stringify(list)); } catch { }
         }
+      }
+
+      if (rateListResult.status === "fulfilled" && rateListResult.value?.data) {
+        setB2bRateData(rateListResult.value.data);
+        try { localStorage.setItem("lis_cached_b2b_ratelist", JSON.stringify(rateListResult.value.data)); } catch { }
       }
 
       if (docsResult.status === "fulfilled" && docsResult.value) {
@@ -2336,8 +2469,9 @@ function RegisterPatientPage() {
       }
 
       const basePrice = Number(test.price) || 0;
-      const b2bRate = (test as any).b2bPrice ?? (test as any).b2b_price;
-      const effectivePrice = customRate !== null ? customRate : ((isB2B || !!selectedB2bCenter) && b2bRate != null ? Number(b2bRate) : basePrice);
+      const isEffectiveB2B = isB2B || !!selectedB2bCenter;
+      const b2bInfo = getTestB2bPrice(test);
+      const effectivePrice = customRate !== null ? customRate : (isEffectiveB2B ? b2bInfo.b2bPrice : basePrice);
 
       return {
         hasCustomRate: customRate !== null,
@@ -2346,7 +2480,7 @@ function RegisterPatientPage() {
         effectivePrice,
       };
     },
-    [selectedPartnerLabObj, isB2B, selectedB2bCenter]
+    [selectedPartnerLabObj, isB2B, selectedB2bCenter, getTestB2bPrice]
   );
 
   const handlePartnerLabChange = (newLabName: string) => {
@@ -2487,11 +2621,13 @@ function RegisterPatientPage() {
   const isEffectiveB2B = isB2B || !!selectedB2bCenter;
 
   const rawSubtotal = selectedTestObjects.reduce((sum, t) => {
-    const rate = isEffectiveB2B ? (t.b2bPrice ?? (t as any).b2b_price ?? t.price) : t.price;
+    const rate = isEffectiveB2B ? getTestB2bPrice(t).b2bPrice : t.price;
     return sum + (Number(rate) || 0);
   }, 0);
   const outsourceSubtotal = selectedOutsourceTests.reduce((sum, t) => sum + (Number(t.price) || 0), 0);
-  const inHouseSubtotal = selectedPackage ? selectedPackage.price : rawSubtotal;
+  const inHouseSubtotal = selectedPackage
+    ? (isEffectiveB2B ? getPackageB2bPrice(selectedPackage).b2bPrice : selectedPackage.price)
+    : rawSubtotal;
   const subtotal = inHouseSubtotal + outsourceSubtotal;
   const parsedDiscount = Math.min(subtotal, Math.max(0, parseFloat(discount) || 0));
   const grandTotal = Math.max(0, subtotal - parsedDiscount);
@@ -4530,8 +4666,8 @@ function RegisterPatientPage() {
                   ) : (
                     <ul className="divide-y divide-border/60">
                       {selectedTestObjects.map((test) => {
-                        const b2bRate = test.b2bPrice ?? (test as any).b2b_price;
-                        const showB2B = isB2B && (b2bRate !== undefined && b2bRate !== null);
+                        const isEffectiveB2B = isB2B || !!selectedB2bCenter;
+                        const b2bInfo = getTestB2bPrice(test);
                         return (
                           <li key={`inhouse-${test.id}`} className="py-2.5 flex justify-between items-center gap-2 group">
                             <div className="min-w-0 flex-1">
@@ -4539,13 +4675,13 @@ function RegisterPatientPage() {
                               <p className="text-[10px] text-muted-foreground">{test.category || "Pathology"}</p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                              {showB2B ? (
+                              {isEffectiveB2B ? (
                                 <div className="text-right leading-tight">
-                                  <div className="font-mono text-xs font-bold text-purple-600 dark:text-purple-400">
-                                    B2B ₹{Number(b2bRate ?? test.price).toFixed(0)}
+                                  <div className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                                    B2B ₹{b2bInfo.b2bPrice.toFixed(0)}
                                   </div>
-                                  <div className="text-[10px] text-muted-foreground font-medium">
-                                    MRP ₹{Number(test.price).toFixed(0)}
+                                  <div className="text-[10px] text-muted-foreground font-medium line-through">
+                                    MRP ₹{b2bInfo.mrp.toFixed(0)}
                                   </div>
                                 </div>
                               ) : (
@@ -5361,20 +5497,27 @@ function RegisterPatientPage() {
                             <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
                               {pkg.code}
                             </span>
-                            {isB2B && ((pkg as any).b2bPrice ?? (pkg as any).b2b_price) ? (
-                              <div className="flex flex-col items-end leading-tight">
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                                  B2B ₹{Number((pkg as any).b2bPrice ?? (pkg as any).b2b_price).toFixed(0)}
+                            {(() => {
+                              const isEffectiveB2B = isB2B || !!selectedB2bCenter;
+                              if (isEffectiveB2B) {
+                                const { b2bPrice, mrp } = getPackageB2bPrice(pkg);
+                                return (
+                                  <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-2 shrink-0">
+                                    <span className="px-2 py-0.5 rounded-md text-[11px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 whitespace-nowrap shadow-xs">
+                                      B2B ₹{b2bPrice.toFixed(0)}
+                                    </span>
+                                    <span className="text-[11px] font-semibold text-muted-foreground line-through whitespace-nowrap">
+                                      MRP ₹{mrp.toFixed(0)}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <span className="font-mono text-sm font-extrabold text-primary">
+                                  ₹{pkg.price.toFixed(2)}
                                 </span>
-                                <span className="text-[10px] font-medium text-muted-foreground mt-0.5">
-                                  MRP ₹{pkg.price.toFixed(0)}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="font-mono text-sm font-extrabold text-primary">
-                                ₹{pkg.price.toFixed(2)}
-                              </span>
-                            )}
+                              );
+                            })()}
                           </div>
                           <h4 className="font-bold text-foreground text-sm">{pkg.name}</h4>
                           {pkg.description && (
@@ -5581,16 +5724,16 @@ function RegisterPatientPage() {
                                     </div>
                                   );
                                 }
-                                const b2bRate = (test as any).b2bPrice ?? (test as any).b2b_price;
-                                const showB2B = (isB2B || !!selectedB2bCenter) && (b2bRate !== undefined && b2bRate !== null);
-                                if (showB2B) {
+                                const isEffectiveB2B = isB2B || !!selectedB2bCenter;
+                                if (isEffectiveB2B) {
+                                  const { b2bPrice, mrp } = getTestB2bPrice(test);
                                   return (
-                                    <div className="flex flex-col items-end shrink-0 leading-tight">
-                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                                        B2B ₹{Number(b2bRate ?? test.price).toFixed(0)}
+                                    <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-2 shrink-0">
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 whitespace-nowrap shadow-xs">
+                                        B2B ₹{b2bPrice.toFixed(0)}
                                       </span>
-                                      <span className="text-[10px] font-medium text-muted-foreground mt-0.5">
-                                        MRP ₹{Number(test.price).toFixed(0)}
+                                      <span className="text-[11px] font-semibold text-muted-foreground line-through whitespace-nowrap">
+                                        MRP ₹{mrp.toFixed(0)}
                                       </span>
                                     </div>
                                   );
@@ -5655,16 +5798,16 @@ function RegisterPatientPage() {
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               {(() => {
-                                const b2bRate = (test as any).b2bPrice ?? (test as any).b2b_price;
-                                const showB2B = isB2B && (b2bRate !== undefined && b2bRate !== null);
-                                if (showB2B) {
+                                const isEffectiveB2B = isB2B || !!selectedB2bCenter;
+                                if (isEffectiveB2B) {
+                                  const { b2bPrice, mrp } = getTestB2bPrice(test);
                                   return (
-                                    <div className="flex flex-col items-end shrink-0 leading-tight">
-                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-                                        B2B ₹{Number(b2bRate ?? test.price).toFixed(0)}
+                                    <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-2 shrink-0">
+                                      <span className="px-2 py-0.5 rounded-md text-[11px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 whitespace-nowrap shadow-xs">
+                                        B2B ₹{b2bPrice.toFixed(0)}
                                       </span>
-                                      <span className="text-[10px] font-medium text-muted-foreground mt-0.5">
-                                        MRP ₹{Number(test.price).toFixed(0)}
+                                      <span className="text-[11px] font-semibold text-muted-foreground line-through whitespace-nowrap">
+                                        MRP ₹{mrp.toFixed(0)}
                                       </span>
                                     </div>
                                   );

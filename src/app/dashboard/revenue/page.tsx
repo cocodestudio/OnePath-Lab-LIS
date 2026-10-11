@@ -278,17 +278,22 @@ export default function B2BRevenuePage() {
       });
     }
 
-    // Lab Margin is the wholesale tariff that the B2B partner owes the Central Lab
-    // For test bookings, billTotal is that exact rate
-    const labMargin = billTotal > 0 ? billTotal : calculatedLabRate;
+    const reportB2bPrice = Number(r.b2b_price ?? r.b2bPrice ?? 0);
+
+    // Lab Margin is strictly the wholesale tariff according to the assigned rate list
+    const labMargin = calculatedLabRate > 0
+      ? calculatedLabRate
+      : (reportB2bPrice > 0
+        ? reportB2bPrice
+        : (billTotal > 0 ? billTotal : 0));
 
     // Total MRP is the true retail patient MRP from admin catalog
-    let totalMrp = calculatedTestMrp > 0 ? calculatedTestMrp : labMargin;
+    let totalMrp = calculatedTestMrp > 0 ? calculatedTestMrp : (billTotal > 0 ? billTotal : labMargin);
     if (totalMrp < labMargin) {
       totalMrp = labMargin;
     }
 
-    // B2B Centre Margin is the retained earnings for the B2B center
+    // B2B Centre Margin is the retained earnings for the B2B center (MRP - Lab Margin)
     const b2bMargin = Math.max(0, totalMrp - labMargin);
 
     // Settlement due: payable wholesale fee minus what has been paid

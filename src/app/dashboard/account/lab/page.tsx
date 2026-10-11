@@ -139,11 +139,10 @@ function LabAccountContent() {
     emailEnabled: true,
     whatsappEnabled: false,
     frequency: "daily" as "daily" | "weekly" | "monthly" | "yearly",
-    recipientEmailInput: "mohabuzar.net@gmail.com",
     lastDispatchedAt: null as string | null,
     lastDispatchStatus: null as string | null,
   });
-  const [testingDispatch, setTestingDispatch] = useState(false);
+  const [accountDefaultEmail, setAccountDefaultEmail] = useState<string>("");
   const [loadingDispatchSettings, setLoadingDispatchSettings] = useState(false);
   const [savingDispatchSettings, setSavingDispatchSettings] = useState(false);
   const [dispatchSaveSuccess, setDispatchSaveSuccess] = useState(false);
@@ -338,15 +337,15 @@ function LabAccountContent() {
           else freq = "daily";
         }
 
-        const recList = s.recipient_emails || s.recipientEmails || [];
-        const cleanList = Array.isArray(recList) ? recList : [];
-        const defaultEmail = cleanList.length > 0 ? cleanList.join(", ") : (res.lab_info?.email || "mohabuzar.net@gmail.com");
+        const defaultEmail = res.default_email || res.lab_info?.email || (typeof window !== "undefined" ? getStoredUser()?.email : "") || "";
+        if (defaultEmail) {
+          setAccountDefaultEmail(defaultEmail);
+        }
 
         setDispatchSettings({
           emailEnabled: s.email_enabled ?? true,
           whatsappEnabled: s.whatsapp_enabled ?? false,
           frequency: freq,
-          recipientEmailInput: defaultEmail,
           lastDispatchedAt: s.last_dispatched_at || s.lastDispatchedAt || null,
           lastDispatchStatus: s.last_dispatch_status || null,
         });
@@ -367,16 +366,10 @@ function LabAccountContent() {
       setSavingDispatchSettings(true);
       setDispatchSaveSuccess(false);
 
-      const parsedEmails = dispatchSettings.recipientEmailInput
-        .split(",")
-        .map(e => e.trim())
-        .filter(e => e.includes("@"));
-
       const payload = {
         email_enabled: dispatchSettings.emailEnabled,
         whatsapp_enabled: dispatchSettings.whatsappEnabled,
         frequency: dispatchSettings.frequency,
-        recipient_emails: parsedEmails.length > 0 ? parsedEmails : ["mohabuzar.net@gmail.com"],
       };
 
       const res = await fetchFromLaravel("/lab/summary-dispatch/settings", {
@@ -393,31 +386,6 @@ function LabAccountContent() {
       toast.error("Failed to save summary dispatch settings", err.message || "");
     } finally {
       setSavingDispatchSettings(false);
-    }
-  };
-
-  const handleSendTestSummary = async () => {
-    try {
-      setTestingDispatch(true);
-      const targetEmail = dispatchSettings.recipientEmailInput.trim() || "mohabuzar.net@gmail.com";
-      const res = await fetchFromLaravel("/lab/summary-dispatch/test", {
-        method: "POST",
-        body: JSON.stringify({
-          force_email: true,
-          override_email: targetEmail,
-          frequency: dispatchSettings.frequency,
-        }),
-      });
-
-      if (res && (res.status === "success" || res.data?.success)) {
-        toast.success(`Test summary email & CSV ledger dispatched to ${targetEmail}!`);
-      } else {
-        toast.error("Test summary failed", res?.data?.email?.message || res?.message || "Please verify email.");
-      }
-    } catch (err: any) {
-      toast.error("Failed to dispatch test summary", err.message || "");
-    } finally {
-      setTestingDispatch(false);
     }
   };
 
@@ -1903,26 +1871,6 @@ function LabAccountContent() {
                     />
                   </div>
                 </button>
-
-                {/* Recipient Email Address Input */}
-                {dispatchSettings.emailEnabled && (
-                  <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-2 animate-in fade-in duration-200">
-                    <label className="text-xs font-bold text-foreground flex items-center justify-between">
-                      <span>Recipient Email Address</span>
-                      <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">AWS SES Verified</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={dispatchSettings.recipientEmailInput}
-                      onChange={(e) => setDispatchSettings(prev => ({ ...prev, recipientEmailInput: e.target.value }))}
-                      placeholder="e.g. mohabuzar.net@gmail.com"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-xs text-foreground placeholder:text-muted-foreground font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-2xs"
-                    />
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Daily business summaries and patient audit CSV ledger will be automatically dispatched to this inbox every night at 12:00 AM (Asia/Kolkata).
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1964,7 +1912,7 @@ function LabAccountContent() {
                       12:00 AM Sharp (Recommended)
                     </span>
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Every night at 12:00 AM, compiles today&apos;s total billing, collected revenue, patient count, tests, and attaches full CSV.
+                      Every night at 12:00 AM (Midnight / 23:59:59), compiles today&apos;s complete billing, collected revenue, patient count, tests, and attaches full CSV.
                     </p>
                     {dispatchSettings.lastDispatchedAt && (
                       <div className="mt-2 pt-2 border-t border-border/50 text-[10px] space-y-0.5">
@@ -2063,26 +2011,7 @@ function LabAccountContent() {
             </div>
 
             {/* Save Action Footer */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <button
-                type="button"
-                onClick={handleSendTestSummary}
-                disabled={testingDispatch || !dispatchSettings.emailEnabled}
-                className="px-5 py-2.5 rounded-xl border border-border bg-card hover:bg-muted text-foreground font-bold text-xs shadow-2xs inline-flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-all"
-              >
-                {testingDispatch ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    <span>Dispatching Test Email...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 text-primary" />
-                    <span>Send Test Summary Now</span>
-                  </>
-                )}
-              </button>
-
+            <div className="flex items-center justify-end pt-2">
               <button
                 type="submit"
                 disabled={savingDispatchSettings}

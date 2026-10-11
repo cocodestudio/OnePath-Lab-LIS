@@ -73,6 +73,51 @@ const navigation: NavItem[] = [
   { name: "Refer & Earn", href: "/dashboard/refer", icon: Gift },
 ];
 
+const receptionistNav: NavItem[] = [
+  { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Patients", href: "/dashboard/patients", icon: Users },
+  { name: "Track Samples", href: "/dashboard/track-samples", icon: Activity },
+  { name: "Reports", href: "/dashboard/reports", icon: FileText },
+  { name: "Billing", href: "/dashboard/billing", icon: Receipt },
+  {
+    name: "Cases",
+    icon: Stethoscope,
+    children: [
+      { name: "View Referral", href: "/dashboard/doctors" },
+      { name: "Referral Manage", href: "/dashboard/doctors/manage" },
+      { name: "Outsource Cases", href: "/dashboard/cases/outsource" },
+    ],
+  },
+  { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
+];
+
+const collectionNav: NavItem[] = [
+  { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Today Samples", href: "/dashboard/today-samples", icon: Clock },
+  { name: "Patients", href: "/dashboard/patients", icon: Users },
+  { name: "Reports", href: "/dashboard/reports", icon: FileText },
+  { name: "Billing", href: "/dashboard/billing", icon: Receipt },
+  { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
+];
+
+const b2bNav: NavItem[] = [
+  { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Patients", href: "/dashboard/patients", icon: Users },
+  { name: "Today Samples", href: "/dashboard/today-samples", icon: Clock },
+  { name: "Reports", href: "/dashboard/reports", icon: FileText },
+  { name: "Wallet & Payments", href: "/dashboard/wallet", icon: Wallet },
+  {
+    name: "Finance & Rates",
+    icon: TrendingUp,
+    children: [
+      { name: "Billing", href: "/dashboard/billing" },
+      { name: "Revenue & Ledger", href: "/dashboard/revenue" },
+      { name: "Rate List", href: "/dashboard/ratelist" },
+    ],
+  },
+  { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
+];
+
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -83,6 +128,16 @@ export default function Sidebar() {
   const [isAiGuideOpen, setIsAiGuideOpen] = useState(false);
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTouchTimeRef = useRef<number>(0);
+
+  // Global touch listener to record touch timestamps with zero passive lag
+  useEffect(() => {
+    const onTouch = () => {
+      lastTouchTimeRef.current = Date.now();
+    };
+    window.addEventListener("touchstart", onTouch, { passive: true });
+    return () => window.removeEventListener("touchstart", onTouch);
+  }, []);
 
   // Clear hover timeout on unmount
   useEffect(() => {
@@ -135,9 +190,16 @@ export default function Sidebar() {
     setIsMounted(true);
     const u = getStoredUser();
     if (u) setUser(u);
+    const uRole = (u?.role || "").toUpperCase().trim();
+    const canBeLocked = !uRole || uRole === "ADMIN" || uRole === "PATHOLOGIST" || uRole === "SUPER_ADMIN" || uRole === "LAB_ADMIN";
     try {
       if (typeof window !== "undefined") {
-        setIsLocked(sessionStorage.getItem("lis_subscription_locked") === "true");
+        if (canBeLocked) {
+          setIsLocked(sessionStorage.getItem("lis_subscription_locked") === "true");
+        } else {
+          setIsLocked(false);
+          sessionStorage.removeItem("lis_subscription_locked");
+        }
       }
     } catch {}
   }, []);
@@ -156,8 +218,10 @@ export default function Sidebar() {
     const checkLock = async () => {
       const u = getStoredUser();
       setUser(u);
-      if (u?.role === "B2B" || u?.role === "COLLECTION_CENTER") {
+      const uRole = (u?.role || "").toUpperCase().trim();
+      if (uRole === "B2B" || uRole === "COLLECTION_CENTER" || uRole === "COLLECTION_CENTRE" || uRole === "RECEPTIONIST") {
         setIsLocked(false);
+        try { sessionStorage.removeItem("lis_subscription_locked"); } catch {}
         return;
       }
       try {
@@ -181,6 +245,13 @@ export default function Sidebar() {
     checkLock();
 
     const onLockEvent = (e: any) => {
+      const u = getStoredUser();
+      const uRole = (u?.role || "").toUpperCase().trim();
+      const canBeLocked = !uRole || uRole === "ADMIN" || uRole === "PATHOLOGIST" || uRole === "SUPER_ADMIN" || uRole === "LAB_ADMIN";
+      if (!canBeLocked) {
+        setIsLocked(false);
+        return;
+      }
       if (typeof e.detail?.isLocked === "boolean") {
         setIsLocked(e.detail.isLocked);
       } else {
@@ -209,8 +280,20 @@ export default function Sidebar() {
 
   const userAvatar = user?.avatarUrl || user?.avatar_url || (user as any)?.avatar || user?.lab?.logoUrl || user?.lab?.logo_url;
 
+  const role = (user?.role || "").toUpperCase().trim();
+  const isB2B = role === "B2B";
+  const isCollectionCenter = role === "COLLECTION_CENTER" || role === "COLLECTION_CENTRE";
+  const isReceptionist = role === "RECEPTIONIST";
+  const isAdmin = !role || role === "ADMIN" || role === "PATHOLOGIST" || role === "SUPER_ADMIN" || role === "LAB_ADMIN";
+  const isRoleResolved = isMounted || isB2B || isCollectionCenter || isReceptionist || isAdmin;
+  const effectiveLocked = isLocked && isAdmin;
+
+  const isRecentTouch = () => {
+    return Date.now() - lastTouchTimeRef.current < 650;
+  };
+
   const handleToggle = (itemName: string) => {
-    if (isLocked) {
+    if (effectiveLocked) {
       router.push("/dashboard/account/lab?tab=subscription");
       return;
     }
@@ -223,7 +306,13 @@ export default function Sidebar() {
   };
 
   const handleMouseEnter = (itemName: string) => {
-    if (isLocked) return;
+    if (effectiveLocked) return;
+    // Suppress synthetic mouseenter fired after touch events on mobile/tablets
+    if (isRecentTouch()) return;
+    // Also ignore on devices without hover support
+    if (typeof window !== "undefined" && window.matchMedia && !window.matchMedia("(hover: hover)").matches) {
+      return;
+    }
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
@@ -232,7 +321,11 @@ export default function Sidebar() {
   };
 
   const handleMouseLeave = (itemName: string) => {
-    if (isLocked) return;
+    if (effectiveLocked) return;
+    if (isRecentTouch()) return;
+    if (typeof window !== "undefined" && window.matchMedia && !window.matchMedia("(hover: hover)").matches) {
+      return;
+    }
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
     }
@@ -242,7 +335,11 @@ export default function Sidebar() {
   };
 
   const handleNonExpandableMouseEnter = () => {
-    if (isLocked) return;
+    if (effectiveLocked) return;
+    if (isRecentTouch()) return;
+    if (typeof window !== "undefined" && window.matchMedia && !window.matchMedia("(hover: hover)").matches) {
+      return;
+    }
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
     }
@@ -252,7 +349,7 @@ export default function Sidebar() {
   };
 
   const handleLockedNavClick = (e: React.MouseEvent) => {
-    if (isLocked) {
+    if (effectiveLocked) {
       e.preventDefault();
       router.push("/dashboard/account/lab?tab=subscription");
     }
@@ -288,69 +385,13 @@ export default function Sidebar() {
     return pathname.startsWith(href + "/");
   };
 
-  const role = (user?.role || "").toUpperCase().trim();
-  const isB2B = role === "B2B";
-  const isCollectionCenter = role === "COLLECTION_CENTER" || role === "COLLECTION_CENTRE";
-  const isReceptionist = role === "RECEPTIONIST";
-  const isAdmin = role === "ADMIN" || role === "PATHOLOGIST" || role === "SUPER_ADMIN" || role === "LAB_ADMIN";
-  const isRoleResolved = isMounted || isB2B || isCollectionCenter || isReceptionist || isAdmin;
-
-  const receptionistNav: NavItem[] = [
-    { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Patients", href: "/dashboard/patients", icon: Users },
-    { name: "Track Samples", href: "/dashboard/track-samples", icon: Activity },
-    { name: "Reports", href: "/dashboard/reports", icon: FileText },
-    { name: "Billing", href: "/dashboard/billing", icon: Receipt },
-    {
-      name: "Cases",
-      icon: Stethoscope,
-      children: [
-        { name: "View Referral", href: "/dashboard/doctors" },
-        { name: "Referral Manage", href: "/dashboard/doctors/manage" },
-        { name: "Outsource Cases", href: "/dashboard/cases/outsource" },
-      ],
-    },
-    { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
-  ];
-
-  const collectionNav: NavItem[] = [
-    { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Today Samples", href: "/dashboard/today-samples", icon: Clock },
-    { name: "Patients", href: "/dashboard/patients", icon: Users },
-    { name: "Reports", href: "/dashboard/reports", icon: FileText },
-    { name: "Billing", href: "/dashboard/billing", icon: Receipt },
-    { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
-  ];
-
-  const b2bNav: NavItem[] = [
-    { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Patients", href: "/dashboard/patients", icon: Users },
-    { name: "Today Samples", href: "/dashboard/today-samples", icon: Clock },
-    { name: "Reports", href: "/dashboard/reports", icon: FileText },
-    { name: "Wallet & Payments", href: "/dashboard/wallet", icon: Wallet },
-    {
-      name: "Finance & Rates",
-      icon: TrendingUp,
-      children: [
-        { name: "Billing", href: "/dashboard/billing" },
-        { name: "Revenue & Ledger", href: "/dashboard/revenue" },
-        { name: "Rate List", href: "/dashboard/ratelist" },
-      ],
-    },
-    { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
-  ];
-
   const visibleNav = isB2B
     ? b2bNav
     : isCollectionCenter
     ? collectionNav
     : isReceptionist
     ? receptionistNav
-    : isAdmin
-    ? navigation
-    : isMounted
-    ? navigation
-    : [];
+    : navigation;
 
   useEffect(() => {
     const activeParent = visibleNav.find(
@@ -358,10 +399,8 @@ export default function Sidebar() {
     );
     if (activeParent) {
       setExpandedItem(activeParent.name);
-    } else {
-      setExpandedItem(null);
     }
-  }, [pathname, visibleNav]);
+  }, [pathname, role]);
 
   const content = (
     <aside
@@ -381,11 +420,11 @@ export default function Sidebar() {
 
       {/* Quick Action: Register Patient / Sample Entry */}
       <div className="px-3.5 pt-4 pb-2">
-        {isLocked && isAdmin ? (
+        {effectiveLocked ? (
           <Link
             href="/dashboard/account/lab?tab=subscription"
             onClick={() => setIsOpen(false)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs shadow-xs hover:bg-rose-500/20 transition-all cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs shadow-xs hover:bg-rose-500/20 transition-all cursor-pointer touch-manipulation"
           >
             <Lock className="h-3.5 w-3.5" />
             <span>Plan Expired · Locked</span>
@@ -394,7 +433,7 @@ export default function Sidebar() {
           <Link
             href="/dashboard/patients/register"
             onClick={() => setIsOpen(false)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md ring-inset-top hover:-translate-y-px active:scale-[0.98] transition-all cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md ring-inset-top hover:-translate-y-px active:scale-[0.98] transition-all cursor-pointer touch-manipulation"
           >
             <span className="text-base leading-none font-bold">+</span>
             <span suppressHydrationWarning>
@@ -409,7 +448,7 @@ export default function Sidebar() {
       </div>
 
       {/* Subscription Locked Alert Banner in Sidebar */}
-      {isLocked && isAdmin && (
+      {effectiveLocked && (
         <div className="mx-3.5 my-2 p-3 rounded-2xl bg-gradient-to-br from-rose-500/15 via-amber-500/10 to-transparent border border-rose-500/30 text-xs space-y-2 animate-pulse">
           <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-extrabold text-[12px]">
             <Lock className="h-4 w-4 shrink-0" />
@@ -421,7 +460,7 @@ export default function Sidebar() {
           <Link
             href="/dashboard/account/lab?tab=subscription"
             onClick={() => setIsOpen(false)}
-            className="w-full py-2 px-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition-all block text-center cursor-pointer"
+            className="w-full py-2 px-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition-all block text-center cursor-pointer touch-manipulation"
           >
             <Sparkles className="h-3 w-3" />
             <span>Activate Plan Now →</span>
@@ -443,16 +482,16 @@ export default function Sidebar() {
             ? "Terminal Portal"
             : isReceptionist
             ? "Front Desk Portal"
-            : isLocked
+            : effectiveLocked
             ? "Locked Navigation"
             : "Navigation"}
         </p>
 
-        {isLocked && isAdmin && (
+        {effectiveLocked && (
           <Link
             href="/dashboard/account/lab?tab=subscription"
             onClick={() => setIsOpen(false)}
-            className="group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13.5px] font-bold transition-all bg-primary/15 text-primary border border-primary/30 mb-2 shadow-xs"
+            className="group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13.5px] font-bold transition-all bg-primary/15 text-primary border border-primary/30 mb-2 shadow-xs touch-manipulation"
           >
             <Sparkles className="h-[18px] w-[18px] text-primary shrink-0" />
             <span className="flex-1">Lab Subscription</span>
@@ -474,8 +513,8 @@ export default function Sidebar() {
         ) : (
           visibleNav.map((item) => {
           if (item.children) {
-            const isChildActive = !isLocked && item.children.some((c) => isActive(c.href));
-            const isExpanded = !isLocked && expandedItem === item.name;
+            const isChildActive = !effectiveLocked && item.children.some((c) => isActive(c.href));
+            const isExpanded = !effectiveLocked && expandedItem === item.name;
 
             return (
               <div
@@ -487,8 +526,12 @@ export default function Sidebar() {
                 <button
                   type="button"
                   onClick={() => handleToggle(item.name)}
-                  className={`group w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-200 cursor-pointer ${
-                    isLocked
+                  onTouchStart={() => {
+                    lastTouchTimeRef.current = Date.now();
+                  }}
+                  aria-expanded={isExpanded}
+                  className={`group w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-200 cursor-pointer touch-manipulation select-none active:scale-[0.99] ${
+                    effectiveLocked
                       ? "opacity-50 hover:opacity-80 text-muted-foreground hover:bg-muted/40 cursor-not-allowed"
                       : isChildActive
                       ? "text-foreground font-semibold hover:bg-muted/40"
@@ -503,7 +546,7 @@ export default function Sidebar() {
                     />
                     <span>{item.name}</span>
                   </div>
-                  {isLocked ? (
+                  {effectiveLocked ? (
                     <Lock className="h-3.5 w-3.5 text-rose-500/70" />
                   ) : (
                     <ChevronDown
@@ -524,17 +567,17 @@ export default function Sidebar() {
                   <div className="overflow-hidden">
                     <div className="pl-4 pr-1 space-y-1 border-l-2 border-border/70 ml-5 py-1">
                       {item.children.map((child) => {
-                        const childActive = !isLocked && isActive(child.href);
+                        const childActive = !effectiveLocked && isActive(child.href);
                         return (
                           <Link
                             key={child.name}
-                            href={isLocked ? "/dashboard/account/lab?tab=subscription" : child.href}
+                            href={effectiveLocked ? "/dashboard/account/lab?tab=subscription" : child.href}
                             onClick={(e) => {
-                              if (isLocked) handleLockedNavClick(e);
+                              if (effectiveLocked) handleLockedNavClick(e);
                               setIsOpen(false);
                             }}
-                            className={`flex items-center justify-between px-3 py-2 rounded-lg text-[12.5px] font-medium transition-colors ${
-                              isLocked
+                            className={`flex items-center justify-between px-3 py-2 rounded-lg text-[12.5px] font-medium transition-colors touch-manipulation ${
+                              effectiveLocked
                                 ? "opacity-50 text-muted-foreground hover:opacity-80"
                                 : childActive
                                 ? "bg-primary/10 text-primary font-bold"
@@ -549,7 +592,7 @@ export default function Sidebar() {
                               />
                               <span>{child.name}</span>
                             </div>
-                            {isLocked && <Lock className="h-3 w-3 text-rose-500/70" />}
+                            {effectiveLocked && <Lock className="h-3 w-3 text-rose-500/70" />}
                           </Link>
                         );
                       })}
@@ -560,18 +603,18 @@ export default function Sidebar() {
             );
           }
 
-          const active = !isLocked && isActive(item.href);
+          const active = !effectiveLocked && isActive(item.href);
           return (
             <Link
               key={item.name}
-              href={isLocked ? "/dashboard/account/lab?tab=subscription" : item.href!}
+              href={effectiveLocked ? "/dashboard/account/lab?tab=subscription" : item.href!}
               onMouseEnter={handleNonExpandableMouseEnter}
               onClick={(e) => {
-                if (isLocked) handleLockedNavClick(e);
+                if (effectiveLocked) handleLockedNavClick(e);
                 setIsOpen(false);
               }}
-              className={`group relative flex items-center justify-between px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-200 ${
-                isLocked
+              className={`group relative flex items-center justify-between px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-200 touch-manipulation select-none active:scale-[0.99] ${
+                effectiveLocked
                   ? "opacity-50 hover:opacity-80 text-muted-foreground hover:bg-muted/40 cursor-not-allowed"
                   : active
                   ? "bg-accent text-accent-foreground"
@@ -594,7 +637,7 @@ export default function Sidebar() {
                   </span>
                 )}
               </div>
-              {isLocked && <Lock className="h-3.5 w-3.5 text-rose-500/70" />}
+              {effectiveLocked && <Lock className="h-3.5 w-3.5 text-rose-500/70" />}
             </Link>
           );
         }))}
@@ -657,7 +700,7 @@ export default function Sidebar() {
     <>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed top-3.5 left-3.5 z-50 h-10 w-10 flex items-center justify-center rounded-xl bg-card/95 backdrop-blur-md border border-border/90 text-foreground md:hidden shadow-elevated transition-all active:scale-95 cursor-pointer ${
+        className={`fixed top-3.5 left-3.5 z-50 h-10 w-10 flex items-center justify-center rounded-xl bg-card/95 backdrop-blur-md border border-border/90 text-foreground md:hidden shadow-elevated transition-all active:scale-95 cursor-pointer touch-manipulation ${
           isOpen ? "opacity-0 pointer-events-none" : "opacity-100"
         }`}
         aria-label="Toggle Menu"
