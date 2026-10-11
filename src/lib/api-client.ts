@@ -49,6 +49,35 @@ export function updateStoredUser(updates: Partial<any>) {
 }
 
 export function logout(reason?: string) {
+  // 1. Immediately show smooth visual feedback so user knows logout is in progress
+  if (typeof document !== "undefined") {
+    try {
+      let overlay = document.getElementById("lis-logout-overlay");
+      if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "lis-logout-overlay";
+        overlay.style.position = "fixed";
+        overlay.style.inset = "0";
+        overlay.style.zIndex = "999999";
+        overlay.style.display = "flex";
+        overlay.style.flexDirection = "column";
+        overlay.style.alignItems = "center";
+        overlay.style.justifyContent = "center";
+        overlay.style.backgroundColor = "rgba(15, 23, 42, 0.75)";
+        overlay.style.backdropFilter = "blur(8px)";
+        overlay.innerHTML = `
+          <div style="background: rgba(30, 41, 59, 0.95); border: 1px solid rgba(255,255,255,0.12); border-radius: 18px; padding: 24px 32px; display: flex; flex-direction: column; align-items: center; gap: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); text-align: center;">
+            <div style="width: 34px; height: 34px; border: 3px solid rgba(16, 185, 129, 0.2); border-top-color: #10b981; border-radius: 50%; animation: lis-spin 0.8s linear infinite;"></div>
+            <div style="color: #f8fafc; font-size: 14px; font-weight: 700; font-family: system-ui, sans-serif;">Signing Out Securely...</div>
+            <div style="color: #94a3b8; font-size: 11px; font-family: system-ui, sans-serif;">Clearing active workstation session and local caches</div>
+          </div>
+          <style>@keyframes lis-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+        `;
+        document.body.appendChild(overlay);
+      }
+    } catch {}
+  }
+
   const token = getStoredToken();
   if (token) {
     try {
@@ -66,14 +95,15 @@ export function logout(reason?: string) {
   clearApiCache();
   if (typeof window !== "undefined") {
     try {
-      localStorage.removeItem("lis_token");
-      localStorage.removeItem("lis_user");
-      localStorage.removeItem("lis_cached_reports");
-      localStorage.removeItem("lis_cached_patients");
-      localStorage.removeItem("lis_cached_bills");
-      localStorage.removeItem("lis_cached_today_samples");
-      localStorage.removeItem("lis_cached_tests");
-      localStorage.removeItem("lis_cached_lab");
+      // Thoroughly clean ALL user and lab cached items so switching accounts never leaks previous account data
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith("lis_") || k.startsWith("b2b_") || k.startsWith("admin_") || k.startsWith("dashboard_"))) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
       sessionStorage.clear();
       sessionStorage.setItem("lis_logged_out", "true");
     } catch {}
@@ -88,7 +118,10 @@ export function logout(reason?: string) {
     try {
       window.history.replaceState(null, "", targetUrl);
     } catch {}
-    window.location.href = targetUrl;
+    // Brief 200ms cushion for smooth visual transition before navigation
+    setTimeout(() => {
+      window.location.href = targetUrl;
+    }, 200);
   }
 }
 
@@ -412,6 +445,14 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
         b2bErr.current_balance = errData.current_balance;
         b2bErr.report_cost = errData.report_cost;
         throw b2bErr;
+      }
+
+      if (response.status === 304) {
+        const cached = apiMemoryCache.get(cleanEndpoint);
+        if (cached?.data) {
+          return cloneData(cached.data);
+        }
+        return {} as any;
       }
 
       const text = await response.text();

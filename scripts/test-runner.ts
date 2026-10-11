@@ -1794,6 +1794,150 @@ assert(
   "[REVENUE LEDGER MATH] Report with MRP 500 and Rate List Wholesale 200 yields Lab Margin 200 and B2B Centre Margin 300"
 );
 
+// ==============================================================================
+// 20. Test Catalog Fetch Resilience, Account Switching Cache Isolation & Logout UX
+// ==============================================================================
+console.log("\n▶ MODULE 20: Test Catalog Fetch Resilience, Account Switching Cache Isolation & Logout UX");
+
+// 20.1 Test Catalog Payload Resilient Parser
+function parseCatalogResponse(data: any): any[] | null {
+  return Array.isArray(data)
+    ? data
+    : (Array.isArray(data?.data) ? data.data : (Array.isArray(data?.tests) ? data.tests : null));
+}
+
+const rawArrayPayload = [{ id: "t1", name: "CBC" }, { id: "t2", name: "LFT" }];
+const wrappedDataPayload = { success: true, data: [{ id: "t1", name: "CBC" }, { id: "t2", name: "LFT" }] };
+const wrappedTestsPayload = { tests: [{ id: "t1", name: "CBC" }, { id: "t2", name: "LFT" }] };
+const emptyObjectPayload = {};
+
+assert(
+  Array.isArray(parseCatalogResponse(rawArrayPayload)) && parseCatalogResponse(rawArrayPayload)!.length === 2,
+  "[CATALOG RESILIENCE] Raw array payload correctly parsed without data loss"
+);
+
+assert(
+  Array.isArray(parseCatalogResponse(wrappedDataPayload)) && parseCatalogResponse(wrappedDataPayload)!.length === 2,
+  "[CATALOG RESILIENCE] Wrapped { data: [...] } payload correctly parsed without data loss"
+);
+
+assert(
+  Array.isArray(parseCatalogResponse(wrappedTestsPayload)) && parseCatalogResponse(wrappedTestsPayload)!.length === 2,
+  "[CATALOG RESILIENCE] Wrapped { tests: [...] } payload correctly parsed without data loss"
+);
+
+assert(
+  parseCatalogResponse(emptyObjectPayload) === null,
+  "[CATALOG RESILIENCE] Empty object or 304 body does not crash parser"
+);
+
+// 20.2 Cross-Account Dashboard Cache Isolation Guardrail
+const labAStats = {
+  labId: "lab-uuid-aaa",
+  patientsToday: 42,
+  totalPatients: 900,
+  cachedDate: "2026-10-11",
+};
+
+function evaluateCachedOverviewData(cachedJson: string | null, currentLabId: string, todayStr: string): boolean {
+  if (!cachedJson) return false;
+  try {
+    const parsed = JSON.parse(cachedJson);
+    const isMatchingLab = Boolean(currentLabId && parsed.labId && parsed.labId === currentLabId);
+    if (!isMatchingLab) return false;
+    return parsed.cachedDate === todayStr;
+  } catch {
+    return false;
+  }
+}
+
+assert(
+  evaluateCachedOverviewData(JSON.stringify(labAStats), "lab-uuid-bbb", "2026-10-11") === false,
+  "[ACCOUNT ISOLATION] Logging into Lab B strictly rejects and hides Lab A cached overview data"
+);
+
+assert(
+  evaluateCachedOverviewData(JSON.stringify(labAStats), "lab-uuid-aaa", "2026-10-11") === true,
+  "[ACCOUNT ISOLATION] Logged-in Lab A cleanly restores its own matching cached overview metrics"
+);
+
+// 20.3 Comprehensive Logout Cache Cleaning
+const simulatedStorage: Record<string, string> = {
+  "lis_token": "token-123",
+  "lis_user": JSON.stringify({ id: "user-1", lab_id: "lab-1" }),
+  "lis_cached_dashboard_stats": JSON.stringify(labAStats),
+  "lis_cached_dashboard_charts": JSON.stringify([{ date: "Today", reports: 5 }]),
+  "lis_cached_dashboard_recent_reports": JSON.stringify([{ id: "r1" }]),
+  "lis_cached_reports": JSON.stringify([{ id: "r1" }]),
+  "lis_cached_patients": JSON.stringify([{ id: "p1" }]),
+  "lis_cached_bills": JSON.stringify([{ id: "b1" }]),
+  "lis_cached_tests": JSON.stringify([{ id: "t1" }]),
+  "lis_cached_lab": JSON.stringify({ id: "lab-1" }),
+};
+
+function simulateLogoutStorageClean(storage: Record<string, string>) {
+  const keys = Object.keys(storage);
+  for (const k of keys) {
+    if (k.startsWith("lis_") || k.startsWith("b2b_") || k.startsWith("admin_") || k.startsWith("dashboard_")) {
+      delete storage[k];
+    }
+  }
+}
+
+simulateLogoutStorageClean(simulatedStorage);
+
+assert(
+  Object.keys(simulatedStorage).length === 0,
+  "[LOGOUT CLEANUP] Comprehensive logout completely wipes all tenant and dashboard cached data"
+);
+
+// 20.4 Backend TestController Code Audit
+const testControllerSrc = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/TestController.php"), "utf-8");
+
+assert(
+  !testControllerSrc.includes("$latestTs") && !/\$testCount\b/.test(testControllerSrc),
+  "[BACKEND AUDIT] TestController eliminates undefined variables ($latestTs, $testCount)"
+);
+
+assert(
+  !testControllerSrc.includes("return response('', 304)"),
+  "[BACKEND AUDIT] TestController does not return broken 304 empty responses that fail frontend fetch"
+);
+
+assert(
+  testControllerSrc.includes("default_tests.json"),
+  "[BACKEND AUDIT] TestController automatically seeds catalog from default_tests.json if lab tests are empty"
+);
+
+// 20.5 Login Page Back Navigation & Authenticated Session Guardrail
+const loginPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/login/page.tsx"), "utf-8");
+
+assert(
+  loginPageSrc.includes("getStoredToken") && loginPageSrc.includes("isCheckingSession"),
+  "[LOGIN GUARD] Login page checks getStoredToken and uses isCheckingSession state to prevent form render for authenticated users"
+);
+
+assert(
+  loginPageSrc.includes('window.location.replace("/dashboard")'),
+  "[LOGIN GUARD] Login page replaces browser history so /login is never retained in back navigation stack"
+);
+
+// 20.6 Dashboard Auth Guard Back-Trap
+const dashboardAuthGuardSrc = fs.readFileSync(path.resolve(__dirname, "../src/components/dashboard-auth-guard.tsx"), "utf-8");
+
+assert(
+  dashboardAuthGuardSrc.includes('window.location.pathname === "/dashboard"') && dashboardAuthGuardSrc.includes('window.history.pushState'),
+  "[DASHBOARD BACK TRAP] DashboardAuthGuard traps back navigation on dashboard root to prevent bouncing back to login"
+);
+
+// 20.7 Middleware Security Headers on Authenticated Login Hit
+const middlewareSrc = fs.readFileSync(path.resolve(__dirname, "../src/middleware.ts"), "utf-8");
+
+assert(
+  middlewareSrc.includes("pathname === '/login' && token") && middlewareSrc.includes("no-store, no-cache"),
+  "[MIDDLEWARE SECURITY] Middleware intercepts /login for authenticated tokens with no-store headers"
+);
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

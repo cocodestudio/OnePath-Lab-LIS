@@ -21,7 +21,10 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname === '/login' && token) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    const redirectRes = NextResponse.redirect(new URL('/dashboard', request.url))
+    redirectRes.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
+    redirectRes.headers.set('Pragma', 'no-cache')
+    return redirectRes
   }
 
   const response = NextResponse.next()

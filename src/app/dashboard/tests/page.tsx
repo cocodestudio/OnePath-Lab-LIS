@@ -381,18 +381,33 @@ export default function TestMasterPage() {
         setLoading(true);
       }
       const data = await fetchFromLaravel("/tests", { skipCache: true });
-      if (Array.isArray(data)) {
-        setTests(data);
+      const testList = Array.isArray(data)
+        ? data
+        : (Array.isArray(data?.data) ? data.data : (Array.isArray(data?.tests) ? data.tests : null));
+
+      if (testList && testList.length > 0) {
+        setTests(testList);
         try {
-          localStorage.setItem("lis_cached_tests", JSON.stringify(data));
+          localStorage.setItem("lis_cached_tests", JSON.stringify(testList));
         } catch {}
-        return data;
-      } else if (isForce && tests.length === 0) {
+        return testList;
+      } else if (Array.isArray(testList) && testList.length === 0) {
         setTests([]);
         return [];
       }
     } catch (err) {
       console.error("Failed to fetch tests:", err);
+      // Graceful fallback to cached tests if network had a glitch
+      try {
+        const cached = localStorage.getItem("lis_cached_tests");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setTests(parsed);
+            return parsed;
+          }
+        }
+      } catch {}
     } finally {
       setLoading(false);
     }

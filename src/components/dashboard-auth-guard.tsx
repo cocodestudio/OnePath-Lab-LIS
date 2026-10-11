@@ -20,12 +20,21 @@ export function DashboardAuthGuard() {
       }
     };
 
-    // 3. Prevent browser back/forward history navigation if token was removed
+    // 3. Prevent browser back navigation from exiting authenticated session
     const handlePopState = () => {
       if (!getStoredToken()) {
         window.location.replace("/login");
+      } else if (window.location.pathname === "/dashboard") {
+        // Keep active session securely inside workstation
+        window.history.pushState(null, "", window.location.href);
       }
     };
+
+    try {
+      if (window.location.pathname === "/dashboard") {
+        window.history.pushState(null, "", window.location.href);
+      }
+    } catch {}
 
     window.addEventListener("pageshow", handlePageShow);
     window.addEventListener("popstate", handlePopState);

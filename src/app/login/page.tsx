@@ -8,7 +8,7 @@ import {
   Eye, EyeOff, ArrowRight, Microscope, Activity, Building2,
   Sparkles, CheckCircle2, X, Briefcase
 } from "lucide-react";
-import { getAuthBaseUrl } from "@/lib/api-client";
+import { getAuthBaseUrl, getStoredToken } from "@/lib/api-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,24 +18,51 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [showForgotModal, setShowForgotModal] = useState(false);
 
-  // Check if redirected due to admin suspension and trap back button
+  // Zero-delay session check: If already authenticated, never display login screen
   React.useEffect(() => {
+    const token = getStoredToken();
+    if (token) {
+      window.location.replace("/dashboard");
+      return;
+    }
+    setIsCheckingSession(false);
+
+    // Prevent bfcache from serving login screen when navigating back
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (getStoredToken()) {
+        window.location.replace("/dashboard");
+      }
+    };
+
+    // Re-check on window focus
+    const handleFocus = () => {
+      if (getStoredToken()) {
+        window.location.replace("/dashboard");
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("focus", handleFocus);
+
+    try {
+      router.prefetch("/dashboard");
+    } catch {}
+
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       if (params.get("suspended") === "true") {
         setError("Your account has been suspended. Please contact support@onepathlab.com.");
       }
-      try {
-        window.history.pushState(null, "", window.location.href);
-        const handlePopState = () => {
-          window.history.pushState(null, "", window.location.href);
-        };
-        window.addEventListener("popstate", handlePopState);
-        return () => window.removeEventListener("popstate", handlePopState);
-      } catch {}
     }
+
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("focus", handleFocus);
+    };
   }, []);
 
   // Forgot password flow states
@@ -119,24 +146,51 @@ export default function LoginPage() {
       const token = data.access_token || data.token;
       const user = data.user;
 
+      setIsRedirecting(true);
+
+      // Clean all cached data from any previous session on this PC
+      if (typeof window !== "undefined") {
+        try {
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && (k.startsWith("lis_cached_") || k.startsWith("lis_dashboard_") || k.startsWith("b2b_") || k.startsWith("admin_"))) {
+              keysToRemove.push(k);
+            }
+          }
+          keysToRemove.forEach((k) => localStorage.removeItem(k));
+        } catch {}
+      }
+
       localStorage.setItem("lis_token", token);
       localStorage.setItem("lis_user", JSON.stringify(user || {}));
-      localStorage.removeItem("lis_cached_reports");
-      localStorage.removeItem("lis_cached_patients");
-      localStorage.removeItem("lis_cached_bills");
-      localStorage.removeItem("lis_cached_today_samples");
       sessionStorage.removeItem("lis_subscription_locked");
+      sessionStorage.removeItem("lis_logged_out");
+
       const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";
       document.cookie = `lis_token=${token}; path=/; max-age=86400; SameSite=Lax${isSecure ? "; Secure" : ""}`;
       document.cookie = `lis_role=${encodeURIComponent(user?.role || "")}; path=/; max-age=86400; SameSite=Lax${isSecure ? "; Secure" : ""}`;
 
-      window.location.href = "/dashboard";
+      // Replace history so /login is never retained in the browser back stack
+      window.location.replace("/dashboard");
     } catch (err: any) {
       console.error("Login request failed:", err);
       setError(err?.message || "An unexpected network error occurred. Please try again.");
       setLoading(false);
+      setIsRedirecting(false);
     }
   };
+
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-900 text-slate-100 selection:bg-emerald-500/20 antialiased font-sans">
+        <div className="flex flex-col items-center gap-3.5 p-6 rounded-2xl bg-slate-800/60 border border-slate-700/60 shadow-xl">
+          <Loader2 className="h-7 w-7 animate-spin text-emerald-400" />
+          <p className="text-xs font-semibold tracking-wide text-slate-300">Checking active security session...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen md:h-screen md:max-h-screen w-full flex flex-col justify-between overflow-y-auto md:overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-100/40 text-slate-900 selection:bg-emerald-500/20 selection:text-emerald-800 antialiased font-sans relative">
@@ -430,10 +484,15 @@ export default function LoginPage() {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || isRedirecting}
                 className="w-full h-11 sm:h-12 rounded-xl bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 text-white font-semibold text-sm tracking-wide flex items-center justify-center gap-2 transition-all duration-200 shadow-sm hover:shadow-md hover:scale-[1.005] active:scale-[0.99] disabled:opacity-60 cursor-pointer group mt-2"
               >
-                {loading ? (
+                {isRedirecting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-white" />
+                    <span>Launching Workstation...</span>
+                  </>
+                ) : loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span>Signing in...</span>
