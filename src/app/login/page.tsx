@@ -19,34 +19,24 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [showForgotModal, setShowForgotModal] = useState(false);
 
-  // Zero-delay session check: If already authenticated, never display login screen
   React.useEffect(() => {
+    // If already authenticated, redirect to dashboard silently
     const token = getStoredToken();
     if (token) {
       window.location.replace("/dashboard");
       return;
     }
-    setIsCheckingSession(false);
 
-    // Prevent bfcache from serving login screen when navigating back
-    const handlePageShow = (event: PageTransitionEvent) => {
-      if (getStoredToken()) {
-        window.location.replace("/dashboard");
-      }
-    };
-
-    // Re-check on window focus
-    const handleFocus = () => {
+    // Prevent bfcache from serving stale login page if session is active
+    const handlePageShow = () => {
       if (getStoredToken()) {
         window.location.replace("/dashboard");
       }
     };
 
     window.addEventListener("pageshow", handlePageShow);
-    window.addEventListener("focus", handleFocus);
 
     try {
       router.prefetch("/dashboard");
@@ -61,7 +51,6 @@ export default function LoginPage() {
 
     return () => {
       window.removeEventListener("pageshow", handlePageShow);
-      window.removeEventListener("focus", handleFocus);
     };
   }, []);
 
@@ -180,17 +169,6 @@ export default function LoginPage() {
       setIsRedirecting(false);
     }
   };
-
-  if (isCheckingSession) {
-    return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-900 text-slate-100 selection:bg-emerald-500/20 antialiased font-sans">
-        <div className="flex flex-col items-center gap-3.5 p-6 rounded-2xl bg-slate-800/60 border border-slate-700/60 shadow-xl">
-          <Loader2 className="h-7 w-7 animate-spin text-emerald-400" />
-          <p className="text-xs font-semibold tracking-wide text-slate-300">Checking active security session...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen md:h-screen md:max-h-screen w-full flex flex-col justify-between overflow-y-auto md:overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-100/40 text-slate-900 selection:bg-emerald-500/20 selection:text-emerald-800 antialiased font-sans relative">

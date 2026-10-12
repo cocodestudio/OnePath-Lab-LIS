@@ -49,32 +49,11 @@ export function updateStoredUser(updates: Partial<any>) {
 }
 
 export function logout(reason?: string) {
-  // 1. Immediately show smooth visual feedback so user knows logout is in progress
+  // Ensure any legacy overlay element is cleaned up immediately
   if (typeof document !== "undefined") {
     try {
-      let overlay = document.getElementById("lis-logout-overlay");
-      if (!overlay) {
-        overlay = document.createElement("div");
-        overlay.id = "lis-logout-overlay";
-        overlay.style.position = "fixed";
-        overlay.style.inset = "0";
-        overlay.style.zIndex = "999999";
-        overlay.style.display = "flex";
-        overlay.style.flexDirection = "column";
-        overlay.style.alignItems = "center";
-        overlay.style.justifyContent = "center";
-        overlay.style.backgroundColor = "rgba(15, 23, 42, 0.75)";
-        overlay.style.backdropFilter = "blur(8px)";
-        overlay.innerHTML = `
-          <div style="background: rgba(30, 41, 59, 0.95); border: 1px solid rgba(255,255,255,0.12); border-radius: 18px; padding: 24px 32px; display: flex; flex-direction: column; align-items: center; gap: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); text-align: center;">
-            <div style="width: 34px; height: 34px; border: 3px solid rgba(16, 185, 129, 0.2); border-top-color: #10b981; border-radius: 50%; animation: lis-spin 0.8s linear infinite;"></div>
-            <div style="color: #f8fafc; font-size: 14px; font-weight: 700; font-family: system-ui, sans-serif;">Signing Out Securely...</div>
-            <div style="color: #94a3b8; font-size: 11px; font-family: system-ui, sans-serif;">Clearing active workstation session and local caches</div>
-          </div>
-          <style>@keyframes lis-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-        `;
-        document.body.appendChild(overlay);
-      }
+      const existing = document.getElementById("lis-logout-overlay");
+      if (existing) existing.remove();
     } catch {}
   }
 
@@ -118,10 +97,7 @@ export function logout(reason?: string) {
     try {
       window.history.replaceState(null, "", targetUrl);
     } catch {}
-    // Brief 200ms cushion for smooth visual transition before navigation
-    setTimeout(() => {
-      window.location.href = targetUrl;
-    }, 200);
+    window.location.replace(targetUrl);
   }
 }
 

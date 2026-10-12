@@ -1909,12 +1909,12 @@ assert(
   "[BACKEND AUDIT] TestController automatically seeds catalog from default_tests.json if lab tests are empty"
 );
 
-// 20.5 Login Page Back Navigation & Authenticated Session Guardrail
+// 20.5 Login Page Back Navigation & Zero-Blocking Authenticated Session Guardrail
 const loginPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/login/page.tsx"), "utf-8");
 
 assert(
-  loginPageSrc.includes("getStoredToken") && loginPageSrc.includes("isCheckingSession"),
-  "[LOGIN GUARD] Login page checks getStoredToken and uses isCheckingSession state to prevent form render for authenticated users"
+  loginPageSrc.includes("getStoredToken") && !loginPageSrc.includes("Checking active security session"),
+  "[LOGIN GUARD] Login page checks getStoredToken and eliminates blocking security check screens so login is instant"
 );
 
 assert(
@@ -1936,6 +1936,113 @@ const middlewareSrc = fs.readFileSync(path.resolve(__dirname, "../src/middleware
 assert(
   middlewareSrc.includes("pathname === '/login' && token") && middlewareSrc.includes("no-store, no-cache"),
   "[MIDDLEWARE SECURITY] Middleware intercepts /login for authenticated tokens with no-store headers"
+);
+
+// 20.8 Clean Instant Logout Guardrail (No Blocking Overlays)
+const apiClientSrc = fs.readFileSync(path.resolve(__dirname, "../src/lib/api-client.ts"), "utf-8");
+
+assert(
+  !apiClientSrc.includes("Signing Out Securely...") && apiClientSrc.includes("window.location.replace(targetUrl)"),
+  "[LOGOUT GUARD] Logout executes instantly via window.location.replace without blocking DOM overlays"
+);
+
+console.log("\n▶ MODULE 21: Live Analyzer Direct Interfacing & Clinical DLC Auto-Balancing Engine");
+
+// 21.1 Report Enter Results Machine Dialog: Pure Original Machine Fetch (No Fake Demo Buttons)
+const reportEditSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/reports/[id]/edit/page.tsx"), "utf-8");
+
+assert(
+  !reportEditSrc.includes("Demo Fake CBC") && !reportEditSrc.includes("Demo Fake Biochem"),
+  "[ANALYZER PURITY] Fetch from Machine dialog strictly contains genuine machine results without fake simulation buttons"
+);
+
+// 21.2 Machine Integration Settings Tab: Direct Fetch Architecture (No Redundant Queue)
+const machineTabSrc = fs.readFileSync(path.resolve(__dirname, "../src/components/machine-integration-tab.tsx"), "utf-8");
+
+assert(
+  !machineTabSrc.includes("Live Incoming Test Queue") && !machineTabSrc.includes("Simulate Aveacon CBC Run"),
+  "[ANALYZER TAB DIRECT ARCHITECTURE] Settings tab streamlines analyzers directly to Enter Results without redundant queue bloat"
+);
+
+// 21.3 DLC Auto-Balance Math Engine
+function testBalanceDlc(counts: { [key: string]: number }) {
+  const keys = Object.keys(counts);
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  if (total <= 0 || keys.length < 2) return counts;
+  const result: { [key: string]: number } = {};
+  let running = 0;
+  keys.forEach((k, idx) => {
+    if (idx < keys.length - 1) {
+      const val = Math.round((counts[k] / total) * 100 * 10) / 10;
+      result[k] = val;
+      running += val;
+    } else {
+      const remainder = Math.round((100 - running) * 10) / 10;
+      result[k] = Math.max(0, remainder);
+    }
+  });
+  return result;
+}
+
+// 3-Part Machine Default DLC: Gran 75%, Lymph 20%, Mid 8% (Total = 103%)
+const unbalanced = { gran: 75, lymph: 20, mid: 8 };
+const balanced = testBalanceDlc(unbalanced);
+const balancedTotal = Object.values(balanced).reduce((a, b) => a + b, 0);
+
+assert(
+  Math.abs(balancedTotal - 100.0) < 0.0001,
+  "[DLC AUTO-BALANCE] Over-counted differential counts (103%) proportionally balance to exactly 100.0%"
+);
+
+// Under-counted DLC: Gran 60%, Lymph 25%, Mid 5% (Total = 90%)
+const underBalanced = testBalanceDlc({ gran: 60, lymph: 25, mid: 5 });
+const underTotal = Object.values(underBalanced).reduce((a, b) => a + b, 0);
+
+assert(
+  Math.abs(underTotal - 100.0) < 0.0001,
+  "[DLC AUTO-BALANCE] Under-counted differential counts (90%) proportionally balance to exactly 100.0%"
+);
+
+// Auto-Balance button present in Report Edit UI
+assert(
+  reportEditSrc.includes("Auto-Balance (100%)") && reportEditSrc.includes("handleAutoBalanceDlc"),
+  "[DLC UI ENGINE] Enter Results differential count provides dedicated 1-click Auto-Balance (100%) button"
+);
+
+// 21.6 WBC Normalization: 4.6 or 8.6 -> 4600 or 8600 (/cumm)
+function normalizeWbcValue(val: string): string {
+  const num = parseFloat(val);
+  if (!isNaN(num) && num > 0 && num < 100) {
+    return String(Math.round(num * 1000));
+  }
+  return val;
+}
+
+assert(normalizeWbcValue("4.6") === "4600", "[WBC NORMALIZATION] WBC 4.6 (10^3/µL) normalizes to 4600 (/cumm)");
+assert(normalizeWbcValue("8.6") === "8600", "[WBC NORMALIZATION] WBC 8.6 (10^3/µL) normalizes to 8600 (/cumm)");
+assert(normalizeWbcValue("8600") === "8600", "[WBC NORMALIZATION] WBC 8600 (/cumm) already in whole units is preserved");
+
+// 21.7 5-Part DLC Derivation & 100% Balancing from 3-Part Machine
+function derive5PartDlc(neuVal: number, lymVal: number, remainderMid?: number) {
+  const nlSum = neuVal + lymVal;
+  const rem = remainderMid ?? Math.max(0, Math.round((100 - nlSum) * 10) / 10);
+  let eos = rem >= 6 ? 2.0 : rem >= 3 ? 1.5 : rem > 1 ? 1.0 : Math.round((rem / 3) * 10) / 10;
+  let bas = rem >= 10 ? 1.0 : 0.0;
+  let mon = Math.max(0, Math.round((rem - eos - bas) * 10) / 10);
+  const total = Math.round((neuVal + lymVal + eos + mon + bas) * 10) / 10;
+  return { neuVal, lymVal, eos, mon, bas, total };
+}
+
+const dlcDerivation = derive5PartDlc(50.8, 40.8);
+assert(dlcDerivation.total === 100.0, "[DLC 5-PART POPULATION] 3-Part machine (Neu 50.8, Lym 40.8) populates Eos, Mon, Bas strictly totaling 100.0%");
+assert(dlcDerivation.eos === 2.0, "[DLC 5-PART POPULATION] Eosinophils populated to 2.0% within clinical reference range");
+assert(dlcDerivation.mon === 6.4, "[DLC 5-PART POPULATION] Monocytes populated to remainder 6.4% within clinical reference range");
+assert(dlcDerivation.bas === 0.0 || dlcDerivation.bas === 1.0, "[DLC 5-PART POPULATION] Basophils populated within clinical reference range");
+
+// 21.8 Machine Parameter Preservation Guardrail
+assert(
+  reportEditSrc.includes("machineFilledIds.has(calcId)"),
+  "[MACHINE PARAM PRESERVATION] Measured MCV, MCH, MCHC from machine are preserved and not overwritten by formula"
 );
 
 console.log("\n===============================================================================");

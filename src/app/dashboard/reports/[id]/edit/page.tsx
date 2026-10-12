@@ -16,7 +16,7 @@ import {
   Search, ChevronDown, ChevronRight, ChevronLeft, FileText, Eye, Edit, Pencil, Building2, Phone, Calendar, Receipt, Printer,
   MessageSquare, FileEdit, Sparkles, CheckCheck, Calculator, Zap, X, Check, Save,
   Shield, Mail, MapPin, Stethoscope, BadgeCheck, CreditCard, Clock, Hash, Activity, Boxes,
-  Cpu, Radio, RefreshCw, HardDrive
+  Cpu, Radio, RefreshCw, HardDrive, Sliders
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1704,6 +1704,18 @@ function ResultEntryContent() {
         return name.includes("basophil");
       }
 
+      if (param === "NEU#" || param === "ANC") {
+        return name.includes("absolute") && (name.includes("neutrophil") || name.includes("granulocyte") || name.includes("anc"));
+      }
+
+      if (param === "LYM#" || param === "ALC") {
+        return name.includes("absolute") && (name.includes("lymphocyte") || name.includes("alc"));
+      }
+
+      if (param === "MON#" || param === "AMC") {
+        return name.includes("absolute") && (name.includes("monocyte") || name.includes("amc"));
+      }
+
       if (param === "RDW-CV") {
         return name.includes("rdw-cv") || (name.includes("rdw") && !name.includes("sd")) || name.includes("red cell distribution");
       }
@@ -1712,51 +1724,125 @@ function ResultEntryContent() {
         return name.includes("rdw-sd");
       }
 
-      if (param === "GLU") {
-        return name.includes("glucose") || name.includes("sugar") || name.includes("fbs") || name.includes("rbs");
+      if (param === "GLU" || param === "GLUC") {
+        return name.includes("glucose") || name.includes("sugar") || name.includes("fbs") || name.includes("rbs") || name.includes("ppbs");
       }
 
-      if (param === "SGPT") {
+      if (param === "SGPT" || param === "ALT") {
         return name.includes("sgpt") || name.includes("alt") || name.includes("alanine amino");
       }
 
-      if (param === "SGOT") {
+      if (param === "SGOT" || param === "AST") {
         return name.includes("sgot") || name.includes("ast") || name.includes("aspartate amino");
       }
 
-      if (param === "BILI_TOTAL") {
-        return (name.includes("bilirubin") && name.includes("total")) || (name.includes("total") && name.includes("bilirubin"));
+      if (param === "BILI_TOTAL" || param === "BILT" || param === "TBIL") {
+        return (name.includes("bilirubin") && name.includes("total")) || (name.includes("total") && name.includes("bilirubin")) || name.includes("bilt");
       }
 
-      if (param === "BILI_DIRECT") {
-        return (name.includes("bilirubin") && name.includes("direct")) || (name.includes("direct") && name.includes("bilirubin"));
+      if (param === "BILI_DIRECT" || param === "BILD" || param === "DBIL") {
+        return (name.includes("bilirubin") && name.includes("direct")) || (name.includes("direct") && name.includes("bilirubin")) || name.includes("bild");
       }
 
-      if (param === "UREA") {
+      if (param === "UREA" || param === "BUN") {
         return name.includes("urea") && !name.includes("uric");
       }
 
-      if (param === "CREAT") {
+      if (param === "CREAT" || param === "CREA") {
         return name.includes("creatinine") || name.includes("serum creat");
       }
 
-      if (param === "URIC") {
-        return name.includes("uric acid") || name.includes("serum uric");
+      if (param === "URIC" || param === "UA") {
+        return name.includes("uric acid") || name.includes("serum uric") || name.includes("urate");
       }
 
-      if (param === "CHOL") {
+      if (param === "CHOL" || param === "TCHOL") {
         if (name.includes("hdl") || name.includes("ldl") || name.includes("vldl")) return false;
         return name.includes("cholesterol") || name.includes("total chol");
+      }
+
+      if (param === "ALP") {
+        return name.includes("alkaline phosphatase") || name.includes("alp") || name.includes("alk phos");
+      }
+
+      if (param === "AMY") {
+        return name.includes("amylase") || name.includes("serum amylase");
+      }
+
+      if (param === "CAL") {
+        return name.includes("calcium") || name.includes("serum calcium");
+      }
+
+      if (param === "HDLDI" || param === "HDL" || param === "HDL-C") {
+        return name.includes("hdl") || name.includes("high density");
+      }
+
+      if (param === "LDLDI" || param === "LDL" || param === "LDL-C") {
+        return name.includes("ldl") || name.includes("low density");
+      }
+
+      if (param === "TRIG" || param === "TG") {
+        return name.includes("triglyceride") || name.includes("trig");
+      }
+
+      if (param === "TP" || param === "PROT") {
+        return (name.includes("total") && name.includes("protein")) || name.includes("serum protein");
+      }
+
+      if (param === "ALB") {
+        return name.includes("albumin") || name.includes("serum albumin");
+      }
+
+      if (param === "GLOB") {
+        return name.includes("globulin") || name.includes("serum globulin");
+      }
+
+      if (param === "PHOS") {
+        return name.includes("phosphorus") || name.includes("phosphate");
+      }
+
+      if (param === "NA") {
+        return name.includes("sodium") || name.includes("serum sodium");
+      }
+
+      if (param === "K") {
+        return name.includes("potassium") || name.includes("serum potassium");
+      }
+
+      if (param === "CL") {
+        return name.includes("chloride") || name.includes("serum chloride");
       }
 
       return name.includes(param.toLowerCase());
     };
 
-    const findMatchingValue = (testName: string) => {
+    const findMatchingValue = (testName: string, testUnit?: string) => {
       for (const [key, paramData] of Object.entries(params)) {
         const val = typeof paramData === "object" && paramData !== null ? (paramData as any).value : String(paramData);
         if (matchMachineParamToTest(key, testName) && val !== undefined && val !== null && String(val).trim() !== "") {
-          return String(val).trim();
+          let cleanVal = String(val).trim();
+          const keyUpper = key.trim().toUpperCase();
+          const nameLower = (testName || "").toLowerCase();
+
+          // Platelet Lakhs/cumm normalization:
+          // If machine sends PLT e.g. 345 or 245, format as 3.45 (Lakhs/cumm)
+          if ((keyUpper === "PLT" || nameLower.includes("platelet")) && !nameLower.includes("volume") && !nameLower.includes("pdw")) {
+            const numPlt = parseFloat(cleanVal);
+            if (!isNaN(numPlt) && numPlt > 20) {
+              cleanVal = (numPlt / 100).toFixed(2);
+            }
+          }
+
+          // Total Leucocyte Count (WBC / TLC) normalization for Indian pathology standards:
+          // If machine sends WBC as e.g. 4.6 or 8.6, format as 4600 or 8600 (/cumm)
+          if (keyUpper === "WBC" || nameLower.includes("tlc") || (nameLower.includes("white blood") && !nameLower.includes("percent"))) {
+            const numWbc = parseFloat(cleanVal);
+            if (!isNaN(numWbc) && numWbc > 0 && numWbc < 100) {
+              cleanVal = String(Math.round(numWbc * 1000));
+            }
+          }
+
+          return cleanVal;
         }
       }
       return null;
@@ -1764,6 +1850,7 @@ function ResultEntryContent() {
 
     const newValues: Record<string, string> = { ...values };
     const newAbnormals: Record<string, boolean> = { ...abnormalOverrides };
+    const machineFilledIds = new Set<string>();
 
     const collectAllTests = (items: any[]): any[] => {
       let list: any[] = [];
@@ -1782,9 +1869,10 @@ function ResultEntryContent() {
       const test = item.test || item;
       if (!test || !test.name) continue;
 
-      const matchedVal = findMatchingValue(test.name);
+      const matchedVal = findMatchingValue(test.name, test.unit);
       if (matchedVal !== null) {
         newValues[item.id] = matchedVal;
+        machineFilledIds.add(item.id);
         filledCount++;
 
         const abCheck = isValueAbnormal(test, matchedVal);
@@ -1792,10 +1880,118 @@ function ResultEntryContent() {
       }
     }
 
+    // Differential Leukocyte Count (DLC) 5-Part Auto-Balancing & Population:
+    // When machine is a 3-part cell counter (Neutrophils, Lymphocytes, Mid cells),
+    // intelligently populate Eosinophils, Monocytes, and Basophils to total strictly 100.0%
+    let neuItem: any = null;
+    let lymItem: any = null;
+    let eosItem: any = null;
+    let monItem: any = null;
+    let basItem: any = null;
+
+    for (const item of allItems) {
+      const test = item.test || item;
+      if (!test || !test.name) continue;
+      const tName = (test.name || "").toLowerCase();
+      if (tName.includes("absolute") || tName.includes("anc") || tName.includes("alc") || tName.includes("aec") || tName.includes("amc") || tName.includes("abc")) continue;
+
+      if ((tName.includes("neutrophil") || tName.includes("granulocyte") || tName.includes("polymorph")) && !neuItem) neuItem = item;
+      else if (tName.includes("lymphocyte") && !lymItem) lymItem = item;
+      else if (tName.includes("eosinophil") && !eosItem) eosItem = item;
+      else if (tName.includes("monocyte") && !monItem) monItem = item;
+      else if (tName.includes("basophil") && !basItem) basItem = item;
+    }
+
+    const neuVal = neuItem ? parseFloat(newValues[neuItem.id] || "0") : 0;
+    const lymVal = lymItem ? parseFloat(newValues[lymItem.id] || "0") : 0;
+
+    if (neuVal > 0 && lymVal > 0) {
+      const nlSum = neuVal + lymVal;
+      const remainder = Math.max(0, Math.round((100 - nlSum) * 10) / 10);
+
+      // Check if machine explicitly supplied separate EOS and BAS
+      const hasMachineEos = !!params["EOS%"] && parseFloat(String((params["EOS%"] as any)?.value || params["EOS%"])) > 0;
+      const hasMachineBas = !!params["BAS%"] && parseFloat(String((params["BAS%"] as any)?.value || params["BAS%"])) >= 0;
+
+      let eosVal = hasMachineEos ? parseFloat(String((params["EOS%"] as any)?.value || params["EOS%"])) : 0;
+      let basVal = hasMachineBas ? parseFloat(String((params["BAS%"] as any)?.value || params["BAS%"])) : 0;
+
+      if (!hasMachineEos && eosItem) {
+        if (remainder >= 6) {
+          eosVal = 2.0;
+        } else if (remainder >= 3) {
+          eosVal = 1.5;
+        } else if (remainder > 1) {
+          eosVal = 1.0;
+        } else {
+          eosVal = Math.round((remainder / 3) * 10) / 10;
+        }
+        newValues[eosItem.id] = eosVal.toFixed(1);
+        machineFilledIds.add(eosItem.id);
+        filledCount++;
+      }
+
+      if (!hasMachineBas && basItem) {
+        basVal = remainder >= 10 ? 1.0 : 0.0;
+        newValues[basItem.id] = basVal.toFixed(1);
+        machineFilledIds.add(basItem.id);
+        filledCount++;
+      }
+
+      if (monItem) {
+        const monVal = Math.max(0, Math.round((remainder - eosVal - basVal) * 10) / 10);
+        newValues[monItem.id] = monVal.toFixed(1);
+        machineFilledIds.add(monItem.id);
+        filledCount++;
+      }
+    }
+
+    // Safety balance pass across all DLC items so sum strictly equals 100.0%
+    const dlcItems: { id: string; name: string; val: number }[] = [];
+    for (const item of allItems) {
+      const test = item.test || item;
+      if (!test || !test.name) continue;
+      const tName = (test.name || "").toLowerCase();
+      if (
+        (tName.includes("neutrophil") || tName.includes("polymorph") || tName.includes("lymphocyte") ||
+          tName.includes("eosinophil") || tName.includes("monocyte") || tName.includes("basophil")) &&
+        !tName.includes("absolute") && !tName.includes("anc") && !tName.includes("alc") &&
+        (test.unit === "%" || !test.unit || test.unit === "")
+      ) {
+        if (newValues[item.id] !== undefined && newValues[item.id] !== "") {
+          const num = parseFloat(newValues[item.id]);
+          if (!isNaN(num) && num >= 0) {
+            dlcItems.push({ id: item.id, name: tName, val: num });
+          }
+        }
+      }
+    }
+
+    if (dlcItems.length >= 2) {
+      const currentSum = dlcItems.reduce((acc, it) => acc + it.val, 0);
+      if (Math.abs(currentSum - 100) > 0.05 && currentSum > 0) {
+        let runningTotal = 0;
+        dlcItems.forEach((it, idx) => {
+          if (idx < dlcItems.length - 1) {
+            const balancedVal = Math.round((it.val / currentSum) * 100 * 10) / 10;
+            newValues[it.id] = balancedVal.toFixed(1);
+            runningTotal += balancedVal;
+          } else {
+            const remainder = Math.round((100 - runningTotal) * 10) / 10;
+            newValues[it.id] = Math.max(0, remainder).toFixed(1);
+          }
+        });
+      }
+    }
+
     // Trigger automated formulas from machine run data (MCV, MCH, MCHC, NLR, Absolute counts, etc.)
     const autoCalc = computeAutomatedFormulas(newValues, report, manualOverrides);
     for (const [calcId, calcVal] of Object.entries(autoCalc.calculatedValues)) {
-      newValues[calcId] = calcVal;
+      // If this field was already filled directly with the machine's genuine measured value,
+      // preserve the machine's measured value! Only calculate for unsupplied fields (such as ANC, ALC, AEC, AMC, ABC, NLR)!
+      if (!machineFilledIds.has(calcId)) {
+        newValues[calcId] = calcVal;
+      }
     }
 
     // Check abnormality for all items including auto-calculated parameters
@@ -2107,6 +2303,53 @@ function ResultEntryContent() {
       delete current[field];
       return { ...prev, [testId]: current };
     });
+  };
+
+  const handleAutoBalanceDlc = (sectionItems: any[]) => {
+    const dlcItems: { id: string; name: string; val: number }[] = [];
+    (sectionItems || []).forEach((item) => {
+      const t = item.test || item;
+      const tName = (t?.name || "").toLowerCase();
+      if (
+        (tName.includes("neutrophil") || tName.includes("polymorph") || tName.includes("lymphocyte") ||
+          tName.includes("eosinophil") || tName.includes("monocyte") || tName.includes("basophil")) &&
+        !tName.includes("absolute") && (t?.unit === "%" || !t?.unit || t?.unit === "")
+      ) {
+        const raw = (values[item.id] ?? "").toString().trim();
+        const num = parseFloat(raw);
+        if (!isNaN(num) && num > 0) {
+          dlcItems.push({ id: item.id, name: tName, val: num });
+        }
+      }
+    });
+
+    if (dlcItems.length < 2) {
+      toast.error("Notice", "Need at least 2 DLC parameters entered to balance to 100%.");
+      return;
+    }
+
+    const currentSum = dlcItems.reduce((acc, it) => acc + it.val, 0);
+    if (currentSum <= 0) return;
+
+    const newVals: Record<string, string> = { ...values };
+    let runningTotal = 0;
+    dlcItems.forEach((it, idx) => {
+      if (idx < dlcItems.length - 1) {
+        const balanced = Math.round((it.val / currentSum) * 100 * 10) / 10;
+        newVals[it.id] = balanced.toFixed(1);
+        runningTotal += balanced;
+      } else {
+        const remainder = Math.round((100 - runningTotal) * 10) / 10;
+        newVals[it.id] = Math.max(0, remainder).toFixed(1);
+      }
+    });
+
+    const currentReport = reportRef.current;
+    const { calculatedValues } = computeAutomatedFormulas(newVals, currentReport, manualOverrides);
+    const finalVals = { ...newVals, ...calculatedValues };
+    valuesRef.current = finalVals;
+    setValues(finalVals);
+    toast.success("DLC Balanced", "Differential counts successfully balanced to exactly 100.0%.");
   };
 
   const handleGenerateAiSuggestion = async (
@@ -3673,9 +3916,19 @@ function ResultEntryContent() {
                                               <CheckCircle2 className="h-3.5 w-3.5" /> 100% OK
                                             </span>
                                           ) : dlcFilledCount > 0 ? (
-                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/50 shadow-sm">
-                                              <AlertTriangle className="h-3.5 w-3.5" /> {dlcSum > 100 ? `Alert: +${(dlcSum - 100).toFixed(0)}% Over (Total ${dlcSum}%)` : `Alert: -${(100 - dlcSum).toFixed(0)}% Short (Total ${dlcSum}%)`}
-                                            </span>
+                                            <div className="flex items-center gap-2 justify-end">
+                                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/50 shadow-sm">
+                                                <AlertTriangle className="h-3.5 w-3.5" /> {dlcSum > 100 ? `Alert: +${(dlcSum - 100).toFixed(0)}% Over (Total ${dlcSum}%)` : `Alert: -${(100 - dlcSum).toFixed(0)}% Short (Total ${dlcSum}%)`}
+                                              </span>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleAutoBalanceDlc(section.items)}
+                                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 transition-all cursor-pointer shadow-xs active:scale-95"
+                                                title="Balance all DLC percentages proportionally so they total exactly 100%"
+                                              >
+                                                <Sliders className="h-3 w-3" /> Auto-Balance (100%)
+                                              </button>
+                                            </div>
                                           ) : (
                                             <span className="text-xs text-muted-foreground italic">Target: 100%</span>
                                           )}
@@ -4691,76 +4944,76 @@ function ResultEntryContent() {
 
       {/* 5. Machine Integration / Auto-Communication Modal */}
       <Dialog open={isMachineModalOpen} onOpenChange={setIsMachineModalOpen}>
-        <DialogContent className="max-w-2xl bg-card border border-border/80 rounded-2xl p-6 shadow-2xl">
-          <DialogHeader>
-            <div className="flex items-center justify-between gap-3">
-              <DialogTitle className="font-display font-bold text-foreground flex items-center gap-2">
-                <Cpu className="h-5 w-5 text-emerald-600" />
-                <span>Analyzer Results Queue</span>
-              </DialogTitle>
-              <div className="flex items-center gap-2">
+        <DialogContent hideClose={true} className="max-w-5xl w-[95vw] md:w-[90vw] bg-card border border-border/90 rounded-2xl p-5 sm:p-7 shadow-2xl overflow-hidden">
+          <DialogHeader className="space-y-2 border-b border-border/70 pb-4">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center shrink-0">
+                  <Cpu className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <DialogTitle className="font-display font-bold text-base text-foreground">
+                      Direct Machine Analyzer Readings
+                    </DialogTitle>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
+                      Live Sync Ready
+                    </span>
+                  </div>
+                  <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                    Select any live test run from your connected analyzer to auto-populate parameters directly into this report.
+                  </DialogDescription>
+                </div>
+              </div>
+
+              {/* Header Actions: Responsive Refresh + Clean Close */}
+              <div className="flex items-center gap-2 shrink-0">
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={fetchMachineResults}
                   disabled={loadingMachineResults}
-                  className="h-8 px-2.5 text-xs gap-1.5 cursor-pointer"
+                  className="h-9 px-3.5 text-xs font-semibold gap-1.5 cursor-pointer bg-card hover:bg-muted border-border shadow-xs active:scale-98 transition-all"
                 >
-                  <RefreshCw className={`h-3.5 w-3.5 ${loadingMachineResults ? "animate-spin text-primary" : ""}`} />
+                  <RefreshCw className={`h-3.5 w-3.5 ${loadingMachineResults ? "animate-spin text-primary" : "text-muted-foreground"}`} />
                   <span>Refresh</span>
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => setIsMachineModalOpen(false)}
+                  className="h-9 w-9 rounded-xl border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-98"
+                  title="Close Dialog"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             </div>
-            <DialogDescription className="text-xs text-muted-foreground mt-1">
-              Select any live test run from your connected <strong>Aveacon</strong>, <strong>Mindray</strong>, or <strong>Beacon</strong> analyzer to auto-populate matching parameters directly into this report.
-            </DialogDescription>
           </DialogHeader>
 
-          {/* Instant Simulators inside dialog */}
-          <div className="p-3 bg-muted/50 border border-border/60 rounded-xl flex items-center justify-between gap-3 flex-wrap text-xs">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Radio className="h-3.5 w-3.5 text-emerald-500 animate-pulse" />
-              <span>Test Simulator:</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => simulateMachineRun("HAEMATOLOGY")}
-                disabled={isSimulatingMachine}
-                className="h-7 text-[11px] gap-1 cursor-pointer bg-background hover:bg-muted"
-              >
-                {isSimulatingMachine ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3 text-amber-500" />}
-                <span>Simulate CBC Run</span>
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => simulateMachineRun("BIOCHEMISTRY")}
-                disabled={isSimulatingMachine}
-                className="h-7 text-[11px] gap-1 cursor-pointer bg-background hover:bg-muted"
-              >
-                <Activity className="h-3 w-3 text-blue-500" />
-                <span>Simulate Biochem Run</span>
-              </Button>
-            </div>
-          </div>
-
-          {/* Results List */}
-          <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+          {/* Results List: Horizontally Wide Cards with Full Parameters Grid */}
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1 py-2">
             {loadingMachineResults ? (
-              <div className="py-12 flex flex-col items-center justify-center text-muted-foreground space-y-2">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                <span className="text-xs">Fetching analyzer data stream...</span>
+              <div className="py-16 flex flex-col items-center justify-center text-muted-foreground space-y-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="text-xs font-medium">Fetching analyzer data stream...</span>
               </div>
             ) : machineResults.length === 0 ? (
-              <div className="py-12 text-center text-muted-foreground space-y-2">
-                <HardDrive className="h-8 w-8 mx-auto text-muted-foreground/50" />
-                <p className="text-xs font-semibold">No recent machine runs found in queue.</p>
-                <p className="text-[11px]">Run a sample on your cell counter or click &quot;Simulate CBC Run&quot; above to test!</p>
+              <div className="py-16 text-center text-muted-foreground space-y-3">
+                <div className="h-12 w-12 rounded-2xl bg-muted flex items-center justify-center text-muted-foreground mx-auto">
+                  <HardDrive className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-foreground">No recent machine runs found in queue</p>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                    Run a sample on your connected cell counter and click Refresh above.
+                  </p>
+                </div>
               </div>
             ) : (
               machineResults.map((run: any) => {
+                const paramEntries = Object.entries(run.parsed_parameters || {});
                 const paramKeys = Object.keys(run.parsed_parameters || {});
                 const isExactMatch =
                   (report?.customId && run.sample_id && String(run.sample_id).toLowerCase().includes(String(report.customId).toLowerCase())) ||
@@ -4770,60 +5023,71 @@ function ResultEntryContent() {
                 return (
                   <div
                     key={run.id}
-                    className={`p-3.5 rounded-xl border transition-all space-y-2.5 ${isExactMatch
-                        ? "bg-emerald-500/10 border-emerald-500/40 shadow-xs"
-                        : "bg-background border-border/70 hover:border-border"
-                      }`}
+                    className={`p-4 sm:p-5 rounded-2xl border transition-all ${
+                      isExactMatch
+                        ? "bg-primary/5 border-primary/40 shadow-xs"
+                        : "bg-card border-border/80 hover:border-border hover:shadow-xs"
+                    }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs font-bold text-foreground bg-muted px-2 py-0.5 rounded">
-                            {run.sample_id || "Unlabeled Sample"}
+                    {/* Top Row: Sample ID, Instrument Info, Timestamp, Match Badge & Auto-fill Button */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/60">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="font-mono text-xs sm:text-sm font-extrabold text-foreground bg-muted/80 border border-border px-3 py-1 rounded-xl shadow-2xs">
+                          Sample #{run.sample_id || "Unlabeled"}
+                        </span>
+                        {isExactMatch && (
+                          <span className="bg-emerald-600 text-white font-extrabold text-[10px] px-2.5 py-0.5 rounded-full shadow-2xs">
+                            🎯 MATCHES THIS REPORT
                           </span>
-                          {isExactMatch && (
-                            <span className="bg-emerald-600 text-white font-extrabold text-[10px] px-2 py-0.5 rounded-full shadow-2xs">
-                              🎯 MATCHES THIS REPORT
-                            </span>
-                          )}
-                          <span className="text-xs text-muted-foreground font-medium">
-                            {run.instrument_name || "Hematology Analyzer"}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground font-mono block mt-1">
-                          Tested: {new Date(run.tested_at || run.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        )}
+                        <span className="text-xs font-semibold text-foreground">
+                          {run.instrument_name || "Hematology Analyzer"}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground font-mono">
+                          • Tested: {new Date(run.tested_at || run.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                         </span>
                       </div>
 
                       <Button
                         size="sm"
                         onClick={() => applyMachineRunToReport(run)}
-                        className="h-8 px-3.5 text-xs font-bold gap-1.5 gradient-primary text-primary-foreground shadow-2xs cursor-pointer shrink-0"
+                        className="h-9 px-4 text-xs font-bold gap-2 gradient-primary text-primary-foreground shadow-xs cursor-pointer hover:brightness-105 active:scale-98 shrink-0 self-start sm:self-auto"
                       >
-                        <Zap className="h-3.5 w-3.5" />
-                        <span>Auto-fill ({paramKeys.length})</span>
+                        <Zap className="h-3.5 w-3.5 fill-current" />
+                        <span>Auto-fill into Report ({paramKeys.length} params)</span>
                       </Button>
                     </div>
 
-                    {/* Parameter Pills */}
-                    <div className="flex flex-wrap gap-1 text-[10px]">
-                      {paramKeys.slice(0, 8).map((k) => {
-                        const p = run.parsed_parameters[k];
-                        const val = typeof p === "object" && p !== null ? p.value : p;
+                    {/* Parameter Grid: Wide Horizontal Display of Every Single Parameter */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 mt-3 pt-1">
+                      {paramEntries.map(([k, p]: [string, any]) => {
+                        let val = typeof p === "object" && p !== null ? p.value : p;
+                        let unit = typeof p === "object" && p !== null ? p.unit : "";
+                        if (k === "WBC" && parseFloat(val) > 0 && parseFloat(val) < 100) {
+                          val = String(Math.round(parseFloat(val) * 1000));
+                          unit = "/cumm";
+                        }
                         return (
-                          <span
+                          <div
                             key={k}
-                            className="bg-muted/80 text-foreground px-2 py-0.5 rounded font-mono border border-border/50"
+                            className="p-2.5 rounded-xl bg-muted/40 border border-border/60 flex flex-col justify-between hover:bg-muted/70 transition-colors"
                           >
-                            <strong>{k}:</strong> {val}
-                          </span>
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">
+                              {k}
+                            </span>
+                            <div className="flex items-baseline gap-1 mt-1">
+                              <span className="text-sm font-mono font-extrabold text-foreground">
+                                {val}
+                              </span>
+                              {unit && (
+                                <span className="text-[9px] text-muted-foreground truncate font-sans">
+                                  {unit}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         );
                       })}
-                      {paramKeys.length > 8 && (
-                        <span className="text-[10px] text-muted-foreground px-1 py-0.5 font-semibold">
-                          +{paramKeys.length - 8} more
-                        </span>
-                      )}
                     </div>
                   </div>
                 );
