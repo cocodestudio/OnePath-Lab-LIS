@@ -1946,6 +1946,12 @@ assert(
   "[LOGOUT GUARD] Logout executes instantly via window.location.replace without blocking DOM overlays"
 );
 
+// 20.9 Infinite Login Redirect Loop Defense
+assert(
+  loginPageSrc.includes("isUnauth") && loginPageSrc.includes("lis_last_redirect") && middlewareSrc.includes("loginUrl.searchParams.set('unauth', '1')"),
+  "[LOGIN LOOP DEFENSE] Login page and middleware defend against rapid infinite redirect loops on expired cookies"
+);
+
 console.log("\n▶ MODULE 21: Live Analyzer Direct Interfacing & Clinical DLC Auto-Balancing Engine");
 
 // 21.1 Report Enter Results Machine Dialog: Pure Original Machine Fetch (No Fake Demo Buttons)
@@ -2056,3 +2062,4 @@ if (failedTests === 0) {
   console.error("❌ UNIT TEST SUITE DETECTED FAILURES.");
   process.exit(1);
 }
+

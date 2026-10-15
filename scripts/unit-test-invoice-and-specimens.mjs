@@ -314,4 +314,137 @@ console.log("  ✓ Case 3.5 (Null/undefined safe fallback): —");
 
 console.log("-> Suite 3 Passed: 5/5 bill invoice number resolution tests.\n");
 
+// ── TEST SUITE 4: Due Reports & Outstanding Balance Calculations ──
+console.log("--- Suite 4: Due Reports & Outstanding Balance Tests ---");
+
+function calculateOutstandingDue(bill) {
+  const total = Number(bill?.total || 0);
+  const discount = Number(bill?.discount || 0);
+  const net = Math.max(0, total - discount);
+  const paid = Number(bill?.paid_amount ?? bill?.paidAmount ?? 0);
+  const due = Math.max(0, net - paid);
+  const status = due <= 0 ? "PAID" : (paid > 0 ? "PARTIAL" : "UNPAID");
+  return { net, paid, due, status };
+}
+
+// Case 4.1: Net and due calculation with discount
+const dueCase1 = calculateOutstandingDue({ total: 500, discount: 50, paid_amount: 200 });
+assert.strictEqual(dueCase1.net, 450);
+assert.strictEqual(dueCase1.due, 250);
+assert.strictEqual(dueCase1.status, "PARTIAL");
+console.log("  ✓ Case 4.1 (Due with discount): Total=500, Disc=50, Paid=200 => Due=250 (PARTIAL)");
+
+// Case 4.2: Fully settled bill
+const dueCase2 = calculateOutstandingDue({ total: 800, discount: 0, paid_amount: 800 });
+assert.strictEqual(dueCase2.due, 0);
+assert.strictEqual(dueCase2.status, "PAID");
+console.log("  ✓ Case 4.2 (Zero due): Total=800, Paid=800 => Due=0 (PAID)");
+
+// Case 4.3: Unpaid bill
+const dueCase3 = calculateOutstandingDue({ total: 600, discount: 100, paid_amount: 0 });
+assert.strictEqual(dueCase3.net, 500);
+assert.strictEqual(dueCase3.due, 500);
+assert.strictEqual(dueCase3.status, "UNPAID");
+console.log("  ✓ Case 4.3 (Unpaid bill): Total=600, Disc=100, Paid=0 => Due=500 (UNPAID)");
+
+// Case 4.4: Partial due collection
+function applyDueCollection(bill, collectAmount) {
+  const current = calculateOutstandingDue(bill);
+  const actualCollect = Math.min(current.due, collectAmount);
+  const newPaid = current.paid + actualCollect;
+  const newDue = Math.max(0, current.net - newPaid);
+  const newStatus = newDue <= 0 ? "PAID" : "PARTIAL";
+  return { newPaid, newDue, newStatus, actualCollect };
+}
+
+const partialCollect = applyDueCollection({ total: 1000, discount: 0, paid_amount: 300 }, 400);
+assert.strictEqual(partialCollect.actualCollect, 400);
+assert.strictEqual(partialCollect.newPaid, 700);
+assert.strictEqual(partialCollect.newDue, 300);
+assert.strictEqual(partialCollect.newStatus, "PARTIAL");
+console.log("  ✓ Case 4.4 (Partial collection): Collected 400 of 700 due => New Paid=700, Remaining=300 (PARTIAL)");
+
+// Case 4.5: Full due collection
+const fullCollect = applyDueCollection({ total: 500, discount: 0, paid_amount: 0 }, 500);
+assert.strictEqual(fullCollect.actualCollect, 500);
+assert.strictEqual(fullCollect.newPaid, 500);
+assert.strictEqual(fullCollect.newDue, 0);
+assert.strictEqual(fullCollect.newStatus, "PAID");
+console.log("  ✓ Case 4.5 (Full collection): Collected full 500 due => New Paid=500, Remaining=0 (PAID)");
+
+console.log("-> Suite 4 Passed: 5/5 due reports calculation tests.\n");
+
+// ── TEST SUITE 5: Doctor Portal Access, WhatsApp Links & Referral Demographics ──
+console.log("--- Suite 5: Doctor Portal Access, WhatsApp Links & Scoping Tests ---");
+
+function generateDoctorPortalUrl(baseUrl, token) {
+  if (!token) return null;
+  const cleanBase = (baseUrl || "http://localhost:3000").replace(/\/+$/, "");
+  return `${cleanBase}/doctor-portal?token=${encodeURIComponent(token)}`;
+}
+
+function normalizeDoctorCleanPhone(phone) {
+  if (!phone) return null;
+  const digits = String(phone).replace(/[^0-9]/g, "");
+  if (digits.length === 10) return `91${digits}`;
+  if (digits.length === 12 && digits.startsWith("91")) return digits;
+  return digits || null;
+}
+
+function formatDoctorWhatsAppInvite(doctor, portalUrl, labName = "OnePath Diagnostic Laboratory") {
+  const cleanPhone = normalizeDoctorCleanPhone(doctor?.phone);
+  if (!cleanPhone || !portalUrl) return null;
+  const docName = doctor?.name || "Doctor";
+  const msg = `Namaste Dr. ${docName}, ${labName} ki taraf se aapka digital Doctor Portal link taiyar hai: ${portalUrl}\n\nIs secure link par click karke aap apne sabhi referral patients ki diagnostic reports online check aur download kar sakte hain.`;
+  return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+}
+
+function isDoctorReportAuthorized(doctorName, patientRefDoctor) {
+  if (!doctorName || !patientRefDoctor) return false;
+  const cleanDoc = doctorName.toLowerCase().replace(/^(dr\.?|doctor)\s+/i, "").replace(/[^a-z0-9]/g, "").trim();
+  const cleanRef = patientRefDoctor.toLowerCase().replace(/^(dr\.?|doctor)\s+/i, "").replace(/[^a-z0-9]/g, "").trim();
+  return cleanDoc.length >= 3 && (cleanRef.includes(cleanDoc) || cleanDoc.includes(cleanRef));
+}
+
+// Case 5.1: Portal URL Generation
+const portalUrl = generateDoctorPortalUrl("http://localhost:3000", "doc_abc123xyz");
+assert.strictEqual(portalUrl, "http://localhost:3000/doctor-portal?token=doc_abc123xyz");
+console.log("  ✓ Case 5.1 (Portal URL): Correctly generated 1-click tokenized URL");
+
+// Case 5.2: Phone Number Normalization
+const clean10 = normalizeDoctorCleanPhone("9876543210");
+assert.strictEqual(clean10, "919876543210");
+const cleanFormatted = normalizeDoctorCleanPhone("+91 (987) 654-3210");
+assert.strictEqual(cleanFormatted, "919876543210");
+console.log("  ✓ Case 5.2 (Phone Normalization): Correctly formatted 10-digit Indian phone to 91XXXXXXXXXX");
+
+// Case 5.3: WhatsApp Invite Formulation
+const waLink = formatDoctorWhatsAppInvite(
+  { name: "Dr. Rajesh Sharma", phone: "9876543210" },
+  portalUrl,
+  "Metro Diagnostics"
+);
+assert.ok(waLink.startsWith("https://wa.me/919876543210?text="));
+assert.ok(waLink.includes(encodeURIComponent("Dr. Rajesh Sharma")));
+assert.ok(waLink.includes(encodeURIComponent(portalUrl)));
+console.log("  ✓ Case 5.3 (WhatsApp Invite): Generated valid WhatsApp deep-link with custom invite text");
+
+// Case 5.4: Scoping Isolation (Authorized referral doctor)
+const authSelf = isDoctorReportAuthorized("Dr. Rajesh Sharma", "Dr. Rajesh Sharma");
+const authClean = isDoctorReportAuthorized("Dr. Rajesh Sharma", "Rajesh Sharma");
+const authClinic = isDoctorReportAuthorized("Dr. Rajesh Sharma", "Dr Rajesh Sharma Clinic");
+assert.strictEqual(authSelf, true);
+assert.strictEqual(authClean, true);
+assert.strictEqual(authClinic, true);
+console.log("  ✓ Case 5.4 (Doctor Isolation Scoping): Correctly authorized referral cases for Dr. Rajesh Sharma");
+
+// Case 5.5: Scoping Isolation (Unauthorized doctor rejected)
+const authOther = isDoctorReportAuthorized("Dr. Rajesh Sharma", "Dr. A. K. Verma");
+const authSelfRef = isDoctorReportAuthorized("Dr. Rajesh Sharma", "Self");
+assert.strictEqual(authOther, false);
+assert.strictEqual(authSelfRef, false);
+console.log("  ✓ Case 5.5 (Cross-Doctor Privacy Defense): Successfully rejected access to patients of other doctors");
+
+console.log("-> Suite 5 Passed: 5/5 Doctor Portal access and scoping tests.\n");
+
 console.log("=== ALL UNIT TESTS PASSED SUCCESSFULLY! ===");

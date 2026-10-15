@@ -1032,13 +1032,13 @@ export default function BillingPage() {
         <div>
           <div className="flex items-center gap-2">
             <span className={`h-2 w-2 rounded-full ${isFetching ? "bg-amber-500 animate-ping" : "bg-primary animate-pulse"}`} />
-            <p className="text-[11px] font-bold text-primary uppercase tracking-[0.2em]">Financial Operations</p>
+            <p className="text-[11px] font-bold text-primary uppercase tracking-[0.2em]">Billing Operations</p>
           </div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-1">
             Billing & Invoices
           </h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Manage patient invoices, update diagnostic panels, track payments, and issue medical receipts.
+            Comprehensive billing, revenue tracking, patient invoices, and ledger settlements.
           </p>
         </div>
 
@@ -1363,53 +1363,51 @@ export default function BillingPage() {
           <table className="w-full min-w-[890px] text-xs text-left border-collapse">
             <thead>
               <tr className="border-b border-border/80 bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-3 px-4">Invoice / Date</th>
-                <th className="py-3 px-4">Patient Information</th>
-                <th className="py-3 px-4">Diagnostic Panels</th>
-                <th className="py-3 px-4 text-right">Total (₹)</th>
-                <th className="py-3 px-4 text-right">Paid (₹)</th>
-                <th className="py-3 px-4 text-right">Due (₹)</th>
-                <th className="py-3 px-4 text-right">Discount (₹)</th>
-                <th className="py-3 px-4 text-center">Status</th>
-                <th className="py-3 px-4 text-center">Method</th>
-                <th className="py-3 px-4 text-right">Actions</th>
+                <th className="py-3 px-3.5 text-left">Date</th>
+                <th className="py-3 px-3.5 text-left">Patient Name</th>
+                <th className="py-3 px-3.5 text-left">Diagnostic Panels</th>
+                <th className="py-3 px-3.5 text-right">Total (₹)</th>
+                <th className="py-3 px-3.5 text-right">Paid (₹)</th>
+                <th className="py-3 px-3.5 text-right">Due (₹)</th>
+                <th className="py-3 px-3.5 text-right">Discount (₹)</th>
+                <th className="py-3 px-3.5 text-center">Status</th>
+                <th className="py-3 px-3.5 text-center">Method</th>
+                <th className="py-3 px-3.5 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
               {isTableLoading ? (
                 Array.from({ length: 7 }).map((_, idx) => (
                   <tr key={idx} className="animate-fade-in">
-                    <td className="py-3.5 px-4">
-                      <div className="h-4 w-24 rounded shimmer-gradient mb-1" />
-                      <div className="h-3 w-16 rounded shimmer-gradient" />
+                    <td className="py-3 px-3.5 text-left align-middle">
+                      <div className="h-4 w-20 rounded shimmer-gradient" />
                     </td>
-                    <td className="py-3.5 px-4 space-y-1">
+                    <td className="py-3 px-3.5 text-left align-middle">
+                      <div className="h-4 w-32 rounded shimmer-gradient" />
+                    </td>
+                    <td className="py-3 px-3.5 text-left align-middle">
                       <div className="h-4 w-36 rounded shimmer-gradient" />
-                      <div className="h-3 w-20 rounded shimmer-gradient" />
                     </td>
-                    <td className="py-3.5 px-4">
-                      <div className="h-4 w-44 rounded shimmer-gradient" />
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="h-4 w-16 rounded shimmer-gradient ml-auto" />
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="h-4 w-16 rounded shimmer-gradient ml-auto" />
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="h-4 w-16 rounded shimmer-gradient ml-auto" />
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
+                    <td className="py-3 px-3.5 text-right align-middle">
                       <div className="h-4 w-14 rounded shimmer-gradient ml-auto" />
                     </td>
-                    <td className="py-3.5 px-4 text-center">
+                    <td className="py-3 px-3.5 text-right align-middle">
+                      <div className="h-4 w-14 rounded shimmer-gradient ml-auto" />
+                    </td>
+                    <td className="py-3 px-3.5 text-right align-middle">
+                      <div className="h-4 w-14 rounded shimmer-gradient ml-auto" />
+                    </td>
+                    <td className="py-3 px-3.5 text-right align-middle">
+                      <div className="h-4 w-12 rounded shimmer-gradient ml-auto" />
+                    </td>
+                    <td className="py-3 px-3.5 text-center align-middle">
                       <div className="h-5 w-16 rounded-full shimmer-gradient mx-auto" />
                     </td>
-                    <td className="py-3.5 px-4 text-center">
+                    <td className="py-3 px-3.5 text-center align-middle">
                       <div className="h-5 w-14 rounded-full shimmer-gradient mx-auto" />
                     </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="h-7 w-20 rounded-lg shimmer-gradient ml-auto" />
+                    <td className="py-3 px-3.5 text-center align-middle">
+                      <div className="h-6 w-6 rounded-md shimmer-gradient mx-auto" />
                     </td>
                   </tr>
                 ))
@@ -1450,40 +1448,36 @@ export default function BillingPage() {
 
                   return (
                     <tr key={bill.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="py-3.5 px-4">
-                        <span className="font-mono font-bold text-foreground block">{getBillInvoiceNo(bill)}</span>
-                        <span className="text-[10px] text-muted-foreground" suppressHydrationWarning>{billDate}</span>
+                      <td className="py-3 px-3.5 text-left align-middle">
+                        <span className="text-xs font-semibold text-foreground whitespace-nowrap" suppressHydrationWarning>{billDate}</span>
                       </td>
 
-                      <td className="py-3.5 px-4">
-                        <div className="font-semibold text-foreground">{formatPatientListDisplayName(bill.patient?.name, bill.patient?.designation)}</div>
-                        <div className="text-[10px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                          <span className="font-mono">{bill.patient?.custom_id}</span>
-                          <span>·</span>
-                          <span>{bill.patient?.gender?.charAt(0)}/{bill.patient?.age}y</span>
+                      <td className="py-3 px-3.5 text-left align-middle">
+                        <div className="font-semibold text-foreground truncate max-w-[220px]" title={formatPatientListDisplayName(bill.patient?.name, bill.patient?.designation)}>
+                          {formatPatientListDisplayName(bill.patient?.name, bill.patient?.designation)}
                         </div>
                       </td>
 
-                      <td className="py-3.5 px-4">
+                      <td className="py-3 px-3.5 text-left align-middle">
                         <div className="max-w-[240px] truncate font-medium text-foreground">
                           {mainItems.map(item => item.name).slice(0, 2).join(", ")}
                           {mainItems.length > 2 ? ` +${mainItems.length - 2} more` : ""}
                         </div>
                       </td>
 
-                      <td className="py-3.5 px-4 text-right font-mono font-bold text-foreground">
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-foreground align-middle">
                         ₹{(Number(bill.total) || 0).toFixed(2)}
                       </td>
 
-                      <td className="py-3.5 px-4 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                      <td className="py-3 px-3.5 text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400 align-middle">
                         ₹{displayPaid.toFixed(2)}
                       </td>
 
-                      <td className="py-3.5 px-4 text-right font-mono font-bold text-amber-600 dark:text-amber-400">
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-amber-600 dark:text-amber-400 align-middle">
                         ₹{due.toFixed(2)}
                       </td>
 
-                      <td className="py-3.5 px-4 text-right font-mono font-semibold">
+                      <td className="py-3 px-3.5 text-right font-mono font-semibold align-middle">
                         {discountVal > 0 ? (
                           <span className="text-rose-600 dark:text-rose-400 font-bold">₹{discountVal.toFixed(2)}</span>
                         ) : (
@@ -1491,7 +1485,7 @@ export default function BillingPage() {
                         )}
                       </td>
 
-                      <td className="py-3.5 px-4 text-center">
+                      <td className="py-3 px-3.5 text-center align-middle">
                         <button
                           type="button"
                           onClick={(e) => handleToggleBillStatus(bill, e)}
@@ -1539,7 +1533,7 @@ export default function BillingPage() {
                         </button>
                       </td>
 
-                      <td className="py-3.5 px-4 text-center">
+                      <td className="py-3 px-3.5 text-center align-middle">
                         {(() => {
                           const payMethod = resolvePaymentMode(bill);
                           if (!isBillPaid && Number(bill.paid_amount || 0) <= 0) {
@@ -1569,12 +1563,12 @@ export default function BillingPage() {
                         })()}
                       </td>
 
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="py-3 px-3.5 text-center align-middle">
+                        <div className="flex items-center justify-center">
                           <button
                             type="button"
                             onClick={() => handleOpenInvoiceModal(bill)}
-                            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                             title="Preview / Print Invoice"
                           >
                             <Printer className="h-4 w-4" />

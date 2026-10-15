@@ -7,7 +7,7 @@ export function DashboardAuthGuard() {
   useEffect(() => {
     // 1. Immediate mount check
     if (!getStoredToken()) {
-      window.location.replace("/login");
+      window.location.replace("/login?unauth=1");
       return;
     }
 
@@ -15,7 +15,7 @@ export function DashboardAuthGuard() {
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted || !getStoredToken()) {
         if (!getStoredToken()) {
-          window.location.replace("/login");
+          window.location.replace("/login?unauth=1");
         }
       }
     };
@@ -23,7 +23,7 @@ export function DashboardAuthGuard() {
     // 3. Prevent browser back navigation from exiting authenticated session
     const handlePopState = () => {
       if (!getStoredToken()) {
-        window.location.replace("/login");
+        window.location.replace("/login?unauth=1");
       } else if (window.location.pathname === "/dashboard") {
         // Keep active session securely inside workstation
         window.history.pushState(null, "", window.location.href);

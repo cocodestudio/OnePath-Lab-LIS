@@ -16,6 +16,7 @@ import { CollectionCenterOverview } from "@/components/collection-center-overvie
 import { B2BOverview } from "@/components/b2b-overview";
 import { DashboardShimmer } from "@/components/dashboard-shimmer";
 import { LabSetupProgress } from "@/components/lab-setup-progress";
+import { AcceptDueModal } from "@/components/accept-due-modal";
 
 interface Stats {
   patientsToday: number;
@@ -101,6 +102,8 @@ export default function DashboardOverviewPage() {
   });
   const [chartData, setChartData] = useState<ChartItem[]>([]);
   const [recentReports, setRecentReports] = useState<RecentReport[]>([]);
+  const [dueBills, setDueBills] = useState<any[]>([]);
+  const [selectedBillForDue, setSelectedBillForDue] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [labInfo, setLabInfo] = useState<any>(null);
 
@@ -154,6 +157,17 @@ export default function DashboardOverviewPage() {
               }
             } catch {}
           }
+          const cachedDueBills = localStorage.getItem("lis_cached_dashboard_due_bills");
+          if (cachedDueBills) {
+            try {
+              const parsedDues = JSON.parse(cachedDueBills);
+              if (parsedDues.labId === currentLabId && Array.isArray(parsedDues.data)) {
+                setDueBills(parsedDues.data);
+              } else if (Array.isArray(parsedDues)) {
+                setDueBills(parsedDues);
+              }
+            } catch {}
+          }
           const cachedLab = localStorage.getItem("lis_cached_lab");
           if (cachedLab) {
             try {
@@ -166,6 +180,7 @@ export default function DashboardOverviewPage() {
           localStorage.removeItem("lis_cached_dashboard_stats");
           localStorage.removeItem("lis_cached_dashboard_charts");
           localStorage.removeItem("lis_cached_dashboard_recent_reports");
+          localStorage.removeItem("lis_cached_dashboard_due_bills");
         }
       }
     } catch {}
@@ -225,10 +240,12 @@ export default function DashboardOverviewPage() {
       setIsRefreshing(true);
       clearApiCache("/analytics");
       clearApiCache("/reports");
+      clearApiCache("/bills");
       try {
         localStorage.removeItem("lis_cached_dashboard_stats");
         localStorage.removeItem("lis_cached_dashboard_charts");
         localStorage.removeItem("lis_cached_dashboard_recent_reports");
+        localStorage.removeItem("lis_cached_dashboard_due_bills");
       } catch {}
       try {
         fetchFromLaravel("/lab", { skipCache: true }).then((res) => {
@@ -237,13 +254,14 @@ export default function DashboardOverviewPage() {
       } catch {}
     }
     try {
-      const hasExistingData = stats.totalPatients > 0 || recentReports.length > 0;
+      const hasExistingData = stats.totalPatients > 0 || recentReports.length > 0 || dueBills.length > 0;
       if (forceRefresh && !hasExistingData) {
         setLoading(true);
       }
-      const [analytics, reports] = await Promise.all([
+      const [analytics, reports, duesRes] = await Promise.all([
         fetchFromLaravel(forceRefresh ? "/analytics?refresh=1" : "/analytics", { skipCache: forceRefresh }),
         fetchFromLaravel(forceRefresh ? "/reports?limit=6&refresh=1" : "/reports?limit=6", { skipCache: forceRefresh }),
+        fetchFromLaravel(forceRefresh ? "/bills?with_due=1&limit=6&refresh=1" : "/bills?with_due=1&limit=6", { skipCache: forceRefresh }).catch(() => null),
       ]);
 
       const totReports = analytics?.totalReports ?? 0;
@@ -290,6 +308,13 @@ export default function DashboardOverviewPage() {
         localStorage.setItem("lis_cached_dashboard_recent_reports", JSON.stringify({ labId: currentLabId, data: slicedReports }));
       } catch {}
 
+      const duesList = Array.isArray(duesRes) ? duesRes : (duesRes?.data ?? []);
+      const slicedDues = duesList.slice(0, 6);
+      setDueBills(slicedDues);
+      try {
+        localStorage.setItem("lis_cached_dashboard_due_bills", JSON.stringify({ labId: currentLabId, data: slicedDues }));
+      } catch {}
+
       if (forceRefresh) {
         toast.success("Overview Refreshed", "Dashboard metrics and reports updated with latest live data.");
       }
@@ -302,6 +327,30 @@ export default function DashboardOverviewPage() {
       setIsRefreshing(false);
       setLoading(false);
     }
+  };
+
+  const handleDueCollectedSuccess = (updatedBill: any) => {
+    setDueBills((prev) => {
+      const net = Math.max(0, Number(updatedBill.total || 0) - Number(updatedBill.discount || 0));
+      const paid = Number(updatedBill.paid_amount ?? updatedBill.paidAmount ?? 0);
+      const remainingDue = Math.max(0, net - paid);
+      let nextList: any[];
+      if (remainingDue <= 0) {
+        nextList = prev.filter((b) => b.id !== updatedBill.id);
+      } else {
+        nextList = prev.map((b) => (b.id === updatedBill.id ? { ...b, ...updatedBill } : b));
+      }
+      const activeUser = user || getStoredUser();
+      const currentLabId = activeUser?.lab_id || activeUser?.labId;
+      try {
+        localStorage.setItem(
+          "lis_cached_dashboard_due_bills",
+          JSON.stringify({ labId: currentLabId, data: nextList })
+        );
+      } catch {}
+      return nextList;
+    });
+    loadDashboardData(false);
   };
 
   if (!isMounted || (loading && !stats.totalPatients && !stats.totalReports && !recentReports.length)) {
@@ -466,27 +515,101 @@ export default function DashboardOverviewPage() {
           </div>
         </div>
 
-        <div className="col-span-12 lg:col-span-4 bg-card border border-border/70 rounded-xl p-6 shadow-card">
-          <h3 className="font-display text-lg font-semibold text-foreground mb-5">Quick Actions</h3>
-          <div className="space-y-2.5">
-            {[
-              { href: "/dashboard/patients/register", icon: UserPlus, label: "Add Patient", sub: "Register a new patient", tone: "bg-accent text-primary" },
-              { href: "/dashboard/reports", icon: FileSpreadsheet, label: "Enter Results", sub: "Enter pending test values", tone: "bg-gold/12 text-gold" },
-              { href: "/dashboard/reports", icon: Printer, label: "Print Reports", sub: "View and print completed reports", tone: "bg-muted text-muted-foreground" },
-            ].map(({ href, icon: Icon, label, sub, tone }) => (
-              <Link key={label} href={href}
-                className="flex items-center gap-3.5 p-3.5 rounded-lg border border-border/60 hover:border-primary/40 hover:bg-accent/40 transition-all group">
-                <span className={`flex items-center justify-center w-10 h-10 rounded-lg shrink-0 ${tone}`}>
-                  <Icon className="h-[18px] w-[18px]" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">{label}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>
-                </div>
-                <ArrowUpRight className="h-4 w-4 ml-auto text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0" />
+        <div className="col-span-12 lg:col-span-4 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-display text-lg font-semibold text-foreground">Payments due</h3>
+              <Link
+                href="/dashboard/billing/dues"
+                className="text-[11px] font-semibold text-primary hover:text-secondary flex items-center gap-1 transition-colors"
+              >
+                View all <ArrowUpRight className="h-3 w-3" />
               </Link>
-            ))}
+            </div>
+            <p className="text-xs text-muted-foreground mb-3.5">For all time</p>
+
+            <div className="overflow-x-auto -mx-2">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border/60 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-2 py-2">Patient</th>
+                    <th className="px-2 py-2 text-right">Due</th>
+                    <th className="px-2 py-2 text-right">Accept Due</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {dueBills.length > 0 ? (
+                    dueBills.map((b) => {
+                      const total = Number(b.total || 0);
+                      const discount = Number(b.discount || 0);
+                      const net = Math.max(0, total - discount);
+                      const paid = Number(b.paid_amount ?? b.paidAmount ?? 0);
+                      const due = Math.max(0, net - paid);
+                      const regNo =
+                        b.patient?.custom_id ||
+                        b.patient?.customId ||
+                        b.custom_id ||
+                        b.customId ||
+                        (b.id ? String(b.id).slice(0, 6) : "—");
+                      const patientName = b.patient?.name || b.patientName || "Patient";
+                      let dateStr = "";
+                      try {
+                        const d = new Date(b.created_at || b.createdAt);
+                        if (!isNaN(d.getTime())) {
+                          const day = String(d.getDate()).padStart(2, "0");
+                          const mon = String(d.getMonth() + 1).padStart(2, "0");
+                          dateStr = `${day}/${mon}/${d.getFullYear()}`;
+                        }
+                      } catch {}
+
+                      return (
+                        <tr key={b.id} className="hover:bg-muted/20 transition-colors">
+                          <td className="px-2 py-2.5">
+                            <p className="font-semibold text-foreground leading-tight text-xs">{patientName}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                              Reg. no. {regNo} {dateStr ? `| ${dateStr}` : ""}
+                            </p>
+                          </td>
+                          <td className="px-2 py-2.5 text-right font-mono font-bold text-rose-600 dark:text-rose-400 whitespace-nowrap">
+                            Rs.{due.toFixed(0)}
+                          </td>
+                          <td className="px-2 py-2.5 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedBillForDue(b)}
+                              title="Accept Due"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-2xs transition-all cursor-pointer active:scale-95"
+                            >
+                              <IndianRupee className="w-3 h-3" />
+                              <span>Accept</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={3} className="py-8 text-center text-xs text-muted-foreground">
+                        <CheckCircle2 className="w-5 h-5 mx-auto text-emerald-500 mb-1" />
+                        No payments due. All accounts clear!
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
+
+          {dueBills.length > 0 && (
+            <div className="pt-3 border-t border-border/50 mt-3 text-center">
+              <Link
+                href="/dashboard/billing/dues"
+                className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1"
+              >
+                View all due accounts in Due report <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
@@ -576,6 +699,16 @@ export default function DashboardOverviewPage() {
           </div>
         </div>
       </div>
+
+      {/* Accept Due Payment Modal */}
+      {selectedBillForDue && (
+        <AcceptDueModal
+          isOpen={Boolean(selectedBillForDue)}
+          onClose={() => setSelectedBillForDue(null)}
+          bill={selectedBillForDue}
+          onSuccess={handleDueCollectedSuccess}
+        />
+      )}
 
       {/* Footer Branding Line */}
       <div className="pt-8 pb-4 border-t border-border/60 text-center text-xs text-muted-foreground">

@@ -20,11 +20,47 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [showForgotModal, setShowForgotModal] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const isUnauth = params.get("unauth") === "1" || params.get("expired") === "1";
+    const isLogout = params.get("logout") === "1";
+
+    if (isUnauth || isLogout) {
+      // Server rejected dashboard access or user logged out - wipe stale storage to break any loop!
+      try {
+        localStorage.removeItem("lis_token");
+        localStorage.removeItem("lis_user");
+        sessionStorage.removeItem("lis_last_redirect");
+        document.cookie = "lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0;";
+        document.cookie = "lis_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0;";
+      } catch {}
+      if (isUnauth) {
+        setError("Your session has expired. Please sign in to continue.");
+      }
+      return;
+    }
+
+    // Detect and break any rapid redirect loop (< 3 seconds between redirects)
+    const lastRedirect = sessionStorage.getItem("lis_last_redirect");
+    const now = Date.now();
+    if (lastRedirect && now - parseInt(lastRedirect, 10) < 3000) {
+      // Loop detected! Wipe credentials and stop redirecting
+      sessionStorage.removeItem("lis_last_redirect");
+      localStorage.removeItem("lis_token");
+      localStorage.removeItem("lis_user");
+      document.cookie = "lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0;";
+      setError("Session expired. Please sign in with your credentials.");
+      return;
+    }
+
     // If already authenticated, redirect to dashboard silently
     const token = getStoredToken();
     if (token) {
+      sessionStorage.setItem("lis_last_redirect", String(now));
       window.location.replace("/dashboard");
       return;
     }
@@ -42,11 +78,8 @@ export default function LoginPage() {
       router.prefetch("/dashboard");
     } catch {}
 
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("suspended") === "true") {
-        setError("Your account has been suspended. Please contact support@onepathlab.com.");
-      }
+    if (params.get("suspended") === "true") {
+      setError("Your account has been suspended. Please contact support@onepathlab.com.");
     }
 
     return () => {
@@ -156,9 +189,13 @@ export default function LoginPage() {
       sessionStorage.removeItem("lis_subscription_locked");
       sessionStorage.removeItem("lis_logged_out");
 
+      const maxAge = rememberMe ? 2592000 : 86400 * 7;
       const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";
-      document.cookie = `lis_token=${token}; path=/; max-age=86400; SameSite=Lax${isSecure ? "; Secure" : ""}`;
-      document.cookie = `lis_role=${encodeURIComponent(user?.role || "")}; path=/; max-age=86400; SameSite=Lax${isSecure ? "; Secure" : ""}`;
+      document.cookie = `lis_token=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
+      document.cookie = `lis_role=${encodeURIComponent(user?.role || "")}; path=/; max-age=${maxAge}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
+
+      // Clear any redirect loop flag on successful login
+      sessionStorage.removeItem("lis_last_redirect");
 
       // Replace history so /login is never retained in the browser back stack
       window.location.replace("/dashboard");
@@ -453,6 +490,8 @@ export default function LoginPage() {
                 <label className="inline-flex items-center gap-2 cursor-pointer select-none text-xs text-slate-600 hover:text-slate-900 transition-colors">
                   <input
                     type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
                     className="h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-500/20 accent-emerald-700 cursor-pointer"
                   />
                   <span>Remember this device for 30 days</span>

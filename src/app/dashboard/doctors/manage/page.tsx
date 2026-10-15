@@ -34,6 +34,7 @@ import {
 interface Doctor {
   id: string;
   name: string;
+  degree?: string | null;
   phone?: string | null;
   email?: string | null;
   specialty?: string | null;
@@ -104,6 +105,7 @@ export default function ManageDoctorsPage() {
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
   const [doctorForm, setDoctorForm] = useState({
     name: "",
+    degree: "",
     phone: "",
     email: "",
     specialty: "",
@@ -400,6 +402,7 @@ export default function ManageDoctorsPage() {
       setEditingDoctor(doc);
       setDoctorForm({
         name: doc.name,
+        degree: doc.degree || "",
         phone: doc.phone || "",
         email: doc.email || "",
         specialty: doc.specialty || "",
@@ -412,6 +415,7 @@ export default function ManageDoctorsPage() {
       setEditingDoctor(null);
       setDoctorForm({
         name: "",
+        degree: "",
         phone: "",
         email: "",
         specialty: "",
@@ -436,6 +440,7 @@ export default function ManageDoctorsPage() {
     try {
       const payload = {
         name: doctorForm.name.trim(),
+        degree: doctorForm.degree.trim() || null,
         phone: doctorForm.phone.trim() || null,
         email: doctorForm.email.trim() || null,
         specialty: doctorForm.specialty.trim() || null,
@@ -1180,16 +1185,29 @@ export default function ManageDoctorsPage() {
           </DialogHeader>
 
           <form onSubmit={handleSaveDoctorProfile} className="space-y-4 pt-2">
-            <div>
-              <Label className="text-xs font-bold text-foreground">Doctor Full Name *</Label>
-              <Input
-                type="text"
-                required
-                placeholder="e.g. Dr. Rajesh Sharma"
-                value={doctorForm.name}
-                onChange={(e) => setDoctorForm({ ...doctorForm, name: e.target.value })}
-                className="mt-1 h-9 text-xs rounded-xl"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold text-foreground">Doctor Full Name *</Label>
+                <Input
+                  type="text"
+                  required
+                  placeholder="e.g. Dr. Rajesh Sharma"
+                  value={doctorForm.name}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, name: e.target.value })}
+                  className="mt-1 h-9 text-xs rounded-xl"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs font-bold text-foreground">Degree (Optional)</Label>
+                <Input
+                  type="text"
+                  placeholder="e.g. MBBS, MD"
+                  value={doctorForm.degree}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, degree: e.target.value })}
+                  className="mt-1 h-9 text-xs rounded-xl"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

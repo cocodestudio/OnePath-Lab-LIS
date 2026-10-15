@@ -529,6 +529,11 @@ function RegisterPatientPage() {
   const [secondReferral, setSecondReferral] = useState("");
   const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
   const [newDoctorInput, setNewDoctorInput] = useState("");
+  const [newDoctorPhone, setNewDoctorPhone] = useState("");
+  const [newDoctorDegree, setNewDoctorDegree] = useState("");
+  const [newDoctorSpecialty, setNewDoctorSpecialty] = useState("");
+  const [newDoctorClinic, setNewDoctorClinic] = useState("");
+  const [newDoctorAddress, setNewDoctorAddress] = useState("");
   const [isDoctorActive, setIsDoctorActive] = useState<boolean>(true);
   const [editingDoctor, setEditingDoctor] = useState<{ oldName: string; newName: string } | null>(null);
 
@@ -1785,14 +1790,33 @@ function RegisterPatientPage() {
     }
     setRefDoctorSelect(trimmed);
     const activeStatus = isDoctorActive;
+    const phoneVal = newDoctorPhone.trim();
+    const degreeVal = newDoctorDegree.trim();
+    const specialtyVal = newDoctorSpecialty.trim();
+    const clinicVal = newDoctorClinic.trim();
+    const addressVal = newDoctorAddress.trim();
+
     setNewDoctorInput("");
+    setNewDoctorPhone("");
+    setNewDoctorDegree("");
+    setNewDoctorSpecialty("");
+    setNewDoctorClinic("");
+    setNewDoctorAddress("");
     setIsDoctorActive(true);
 
-    // Sync to database so doctor immediately appears in Manage Doctors with active status
+    // Sync to database so doctor immediately appears in Manage Doctors with active status & demographics
     try {
       await fetchFromLaravel("/doctors", {
         method: "POST",
-        body: JSON.stringify({ name: trimmed, is_active: activeStatus }),
+        body: JSON.stringify({
+          name: trimmed,
+          phone: phoneVal || null,
+          degree: degreeVal || null,
+          specialty: specialtyVal || null,
+          clinic_hospital: clinicVal || null,
+          address: addressVal || null,
+          is_active: activeStatus,
+        }),
       });
     } catch (err) {
       console.error("Failed to sync new doctor to database:", err);
@@ -6040,40 +6064,114 @@ function RegisterPatientPage() {
               </div>
             </div>
 
-            <form onSubmit={handleAddDoctor} className="space-y-3">
-              <div className="flex gap-2">
+            <form onSubmit={handleAddDoctor} className="space-y-3 p-3 rounded-xl border border-border/70 bg-muted/20">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-foreground">
+                  Doctor Full Name <span className="text-destructive">*</span>
+                </label>
                 <input
                   type="text"
-                  placeholder="Enter Doctor Name (e.g. Dr. Name)"
+                  required
+                  placeholder="e.g. Dr. Rajesh Sharma"
                   value={newDoctorInput}
                   onChange={(e) => setNewDoctorInput(e.target.value)}
-                  className="flex-1 px-3 h-10 bg-background border border-border/90 rounded-lg text-sm placeholder:text-muted-foreground/50 focus:border-primary outline-none"
+                  className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
                 />
-                <button
-                  type="submit"
-                  disabled={!newDoctorInput.trim()}
-                  className="gradient-primary text-primary-foreground font-bold text-xs px-4 h-10 rounded-lg disabled:opacity-50 flex items-center gap-1.5 shadow-sm cursor-pointer"
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  <span>Add</span>
-                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground">
+                    Mobile / WhatsApp (Optional)
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. 9876543210"
+                    value={newDoctorPhone}
+                    onChange={(e) => setNewDoctorPhone(e.target.value)}
+                    className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground">
+                    Degree / Qualification (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. MBBS, MD (Path)"
+                    value={newDoctorDegree}
+                    onChange={(e) => setNewDoctorDegree(e.target.value)}
+                    className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground">
+                    Specialty (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. General Physician"
+                    value={newDoctorSpecialty}
+                    onChange={(e) => setNewDoctorSpecialty(e.target.value)}
+                    className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground">
+                    Clinic / Hospital (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Apollo Clinic"
+                    value={newDoctorClinic}
+                    onChange={(e) => setNewDoctorClinic(e.target.value)}
+                    className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-foreground">
+                  Address (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Main Market, City"
+                  value={newDoctorAddress}
+                  onChange={(e) => setNewDoctorAddress(e.target.value)}
+                  className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
+                />
               </div>
 
               {/* Active / Temporary Doctor Checkbox */}
-              <div className="flex items-center gap-2 px-1">
-                <input
-                  type="checkbox"
-                  id="doctor-active-checkbox"
-                  checked={isDoctorActive}
-                  onChange={(e) => setIsDoctorActive(e.target.checked)}
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
-                />
+              <div className="flex items-center justify-between gap-2 pt-1">
                 <label
                   htmlFor="doctor-active-checkbox"
-                  className="text-xs font-medium text-foreground cursor-pointer select-none"
+                  className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer select-none"
                 >
-                  Active Doctor <span className="text-[11px] text-muted-foreground font-normal">(Uncheck for temporary doctor — will not track/count referrals in cases tab)</span>
+                  <input
+                    type="checkbox"
+                    id="doctor-active-checkbox"
+                    checked={isDoctorActive}
+                    onChange={(e) => setIsDoctorActive(e.target.checked)}
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
+                  />
+                  <span>Active Doctor <span className="text-[10px] text-muted-foreground font-normal">(Track cases & portal access)</span></span>
                 </label>
+
+                <button
+                  type="submit"
+                  disabled={!newDoctorInput.trim()}
+                  className="gradient-primary text-primary-foreground font-bold text-xs px-4 h-9 rounded-lg disabled:opacity-50 flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  <span>Add Doctor</span>
+                </button>
               </div>
             </form>
 

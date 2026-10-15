@@ -30,13 +30,21 @@ const navigation: NavItem[] = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "Patients", href: "/dashboard/patients", icon: Users },
   { name: "Reports", href: "/dashboard/reports", icon: FileText },
-  { name: "Billing", href: "/dashboard/billing", icon: Receipt },
+  {
+    name: "Financial Analytics",
+    icon: Receipt,
+    children: [
+      { name: "Due Reports", href: "/dashboard/billing/dues" },
+      { name: "Billing", href: "/dashboard/billing" },
+    ],
+  },
   {
     name: "Cases",
     icon: Stethoscope,
     children: [
       { name: "View Referral", href: "/dashboard/doctors" },
       { name: "Referral Manage", href: "/dashboard/doctors/manage" },
+      { name: "Doctor Portal", href: "/dashboard/doctors/portal" },
       { name: "Outsource Cases", href: "/dashboard/cases/outsource" },
     ],
   },
@@ -78,13 +86,21 @@ const receptionistNav: NavItem[] = [
   { name: "Patients", href: "/dashboard/patients", icon: Users },
   { name: "Track Samples", href: "/dashboard/track-samples", icon: Activity },
   { name: "Reports", href: "/dashboard/reports", icon: FileText },
-  { name: "Billing", href: "/dashboard/billing", icon: Receipt },
+  {
+    name: "Financial Analytics",
+    icon: Receipt,
+    children: [
+      { name: "Due Reports", href: "/dashboard/billing/dues" },
+      { name: "Billing", href: "/dashboard/billing" },
+    ],
+  },
   {
     name: "Cases",
     icon: Stethoscope,
     children: [
       { name: "View Referral", href: "/dashboard/doctors" },
       { name: "Referral Manage", href: "/dashboard/doctors/manage" },
+      { name: "Doctor Portal", href: "/dashboard/doctors/portal" },
       { name: "Outsource Cases", href: "/dashboard/cases/outsource" },
     ],
   },
@@ -96,7 +112,14 @@ const collectionNav: NavItem[] = [
   { name: "Today Samples", href: "/dashboard/today-samples", icon: Clock },
   { name: "Patients", href: "/dashboard/patients", icon: Users },
   { name: "Reports", href: "/dashboard/reports", icon: FileText },
-  { name: "Billing", href: "/dashboard/billing", icon: Receipt },
+  {
+    name: "Financial Analytics",
+    icon: Receipt,
+    children: [
+      { name: "Due Reports", href: "/dashboard/billing/dues" },
+      { name: "Billing", href: "/dashboard/billing" },
+    ],
+  },
   { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
 ];
 
@@ -110,6 +133,7 @@ const b2bNav: NavItem[] = [
     name: "Finance & Rates",
     icon: TrendingUp,
     children: [
+      { name: "Due Reports", href: "/dashboard/billing/dues" },
       { name: "Billing", href: "/dashboard/billing" },
       { name: "Revenue & Ledger", href: "/dashboard/revenue" },
       { name: "Rate List", href: "/dashboard/ratelist" },
@@ -362,6 +386,7 @@ export default function Sidebar() {
     // Strict exact matching for base routes that have sibling sub-tabs
     if (
       href === "/dashboard" ||
+      href === "/dashboard/billing" ||
       href === "/dashboard/tests" ||
       href === "/dashboard/doctors" ||
       href === "/dashboard/inventory" ||

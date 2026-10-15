@@ -24,7 +24,17 @@ export function getStoredUser() {
 export function getStoredToken() {
   if (typeof window === "undefined") return null;
   const lsToken = localStorage.getItem("lis_token");
-  if (lsToken && lsToken.trim()) return lsToken.trim();
+  if (lsToken && lsToken.trim()) {
+    const trimmed = lsToken.trim();
+    // Keep cookie synchronized so server-side middleware matches client storage
+    try {
+      if (!document.cookie.includes("lis_token=")) {
+        const isSecure = window.location.protocol === "https:";
+        document.cookie = `lis_token=${encodeURIComponent(trimmed)}; path=/; max-age=2592000; SameSite=Lax${isSecure ? "; Secure" : ""}`;
+      }
+    } catch (_) {}
+    return trimmed;
+  }
 
   // Check document.cookie fallback
   try {

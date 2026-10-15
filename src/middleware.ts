@@ -14,17 +14,22 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith('/dashboard') && !token) {
-    const response = NextResponse.redirect(new URL('/login', request.url))
+    const loginUrl = new URL('/login', request.url)
+    loginUrl.searchParams.set('unauth', '1')
+    const response = NextResponse.redirect(loginUrl, 302)
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
     response.headers.set('Pragma', 'no-cache')
     return response
   }
 
   if (pathname === '/login' && token) {
-    const redirectRes = NextResponse.redirect(new URL('/dashboard', request.url))
-    redirectRes.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
-    redirectRes.headers.set('Pragma', 'no-cache')
-    return redirectRes
+    const isUnauthRedirect = request.nextUrl.searchParams.get('unauth') === '1' || request.nextUrl.searchParams.get('logout') === '1'
+    if (!isUnauthRedirect) {
+      const redirectRes = NextResponse.redirect(new URL('/dashboard', request.url))
+      redirectRes.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
+      redirectRes.headers.set('Pragma', 'no-cache')
+      return redirectRes
+    }
   }
 
   const response = NextResponse.next()
