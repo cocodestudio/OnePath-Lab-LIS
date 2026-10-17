@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
-  IndianRupee, Calendar, Search, RefreshCw, ChevronDown, ChevronRight,
+  IndianRupee, Calendar, Search, RefreshCw, ChevronDown, ChevronRight, ChevronLeft,
   Printer, Clock, CheckCircle2, User, Stethoscope, AlertCircle,
   FileText, ArrowLeft, X
 } from "lucide-react";
@@ -63,6 +63,19 @@ export default function DueReportsPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
+  // Pagination State for high performance
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [perPage, setPerPage] = useState<number>(25);
+  const [paginationInfo, setPaginationInfo] = useState<{
+    total: number;
+    last_page: number;
+    current_page: number;
+  }>({
+    total: 0,
+    last_page: 1,
+    current_page: 1,
+  });
+
   // Modals state
   const [selectedBillForDue, setSelectedBillForDue] = useState<any | null>(null);
   const [selectedBillForInvoice, setSelectedBillForInvoice] = useState<any | null>(null);
@@ -71,6 +84,7 @@ export default function DueReportsPage() {
 
   const applyPreset = (preset: string) => {
     setDatePreset(preset);
+    setCurrentPage(1);
     const today = new Date();
     if (preset === "today") {
       const t = formatDateOnly(today);
@@ -98,28 +112,51 @@ export default function DueReportsPage() {
     }
   };
 
-  const loadDueBills = useCallback(async (force = false) => {
+  const loadDueBills = useCallback(async (force = false, pageToLoad?: number, limitToLoad?: number) => {
     if (force) {
       setIsRefreshing(true);
     } else {
       setLoading(true);
     }
 
+    const activePage = pageToLoad ?? currentPage;
+    const activeLimit = limitToLoad ?? perPage;
+
     try {
       const params = new URLSearchParams();
       params.append("with_due", "1");
-      params.append("limit", "150");
+      params.append("page", String(activePage));
+      params.append("limit", String(activeLimit));
       if (startDate) params.append("start_date", startDate);
       if (endDate) params.append("end_date", endDate);
+      if (searchQuery.trim()) params.append("search", searchQuery.trim());
 
       const res = await fetchFromLaravel(`/bills?${params.toString()}`, { skipCache: force });
       const rawList = Array.isArray(res) ? res : (res?.data || []);
       setBills(rawList);
 
+      if (res && typeof res.total === "number") {
+        setPaginationInfo({
+          total: res.total,
+          last_page: res.last_page ?? 1,
+          current_page: res.current_page ?? activePage,
+        });
+      } else {
+        setPaginationInfo({
+          total: rawList.length,
+          last_page: 1,
+          current_page: activePage,
+        });
+      }
+
       // Cache client-side for rapid reload
-      if (datePreset === "30days") {
+      if (datePreset === "30days" && activePage === 1 && !searchQuery) {
         try {
-          localStorage.setItem("lis_cached_due_report", JSON.stringify(rawList));
+          localStorage.setItem("lis_cached_due_report", JSON.stringify({
+            data: rawList,
+            total: res?.total ?? rawList.length,
+            last_page: res?.last_page ?? 1,
+          }));
         } catch {}
       }
 
@@ -133,7 +170,7 @@ export default function DueReportsPage() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [startDate, endDate, datePreset, toast]);
+  }, [startDate, endDate, datePreset, searchQuery, currentPage, perPage, toast]);
 
   // Read cache on mount for instant zero-latency display
   useEffect(() => {
@@ -141,8 +178,16 @@ export default function DueReportsPage() {
       const cached = localStorage.getItem("lis_cached_due_report");
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setBills(parsed);
+        const list = Array.isArray(parsed) ? parsed : (parsed?.data || []);
+        if (Array.isArray(list) && list.length > 0) {
+          setBills(list);
+          if (parsed && typeof parsed.total === "number") {
+            setPaginationInfo({
+              total: parsed.total,
+              last_page: parsed.last_page || 1,
+              current_page: 1,
+            });
+          }
           setLoading(false);
         }
       }
@@ -374,13 +419,19 @@ export default function DueReportsPage() {
               type="text"
               placeholder="Search patient, reg no, doctor..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full pl-9 pr-8 py-2 rounded-lg border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             />
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery("")}
+                onClick={() => {
+                  setSearchQuery("");
+                  setCurrentPage(1);
+                }}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
               >
                 <X className="w-3.5 h-3.5" />
@@ -403,6 +454,7 @@ export default function DueReportsPage() {
               onChange={(e) => {
                 setStartDate(e.target.value);
                 setDatePreset("custom");
+                setCurrentPage(1);
               }}
               className="px-2.5 py-1.5 rounded-md border border-border bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
@@ -413,6 +465,7 @@ export default function DueReportsPage() {
               onChange={(e) => {
                 setEndDate(e.target.value);
                 setDatePreset("custom");
+                setCurrentPage(1);
               }}
               className="px-2.5 py-1.5 rounded-md border border-border bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
@@ -739,6 +792,79 @@ export default function DueReportsPage() {
                 );
               })}
             </div>
+
+            {/* Pagination Controls */}
+            {paginationInfo.total > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 border-t border-border bg-card/60 text-xs text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>
+                    Showing{" "}
+                    <strong className="text-foreground">
+                      {Math.min(paginationInfo.total, (paginationInfo.current_page - 1) * perPage + 1)}
+                    </strong>
+                    {" "}-{" "}
+                    <strong className="text-foreground">
+                      {Math.min(paginationInfo.total, (paginationInfo.current_page - 1) * perPage + bills.length)}
+                    </strong>
+                    {" "}of{" "}
+                    <strong className="text-foreground">{paginationInfo.total}</strong> due bills
+                  </span>
+                  <span className="text-muted-foreground/40">·</span>
+                  <div className="flex items-center gap-1.5">
+                    <span>Rows:</span>
+                    <select
+                      value={perPage}
+                      onChange={(e) => {
+                        const newLimit = Number(e.target.value);
+                        setPerPage(newLimit);
+                        setCurrentPage(1);
+                        loadDueBills(false, 1, newLimit);
+                      }}
+                      className="px-2 py-1 rounded-md border border-border bg-background text-foreground text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      <option value={15}>15</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newPage = Math.max(1, currentPage - 1);
+                      setCurrentPage(newPage);
+                      loadDueBills(false, newPage);
+                    }}
+                    disabled={currentPage <= 1 || loading}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted font-semibold text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>Previous</span>
+                  </button>
+
+                  <span className="px-3 py-1.5 rounded-lg bg-rose-500/10 text-rose-700 dark:text-rose-400 font-bold border border-rose-500/20">
+                    Page {paginationInfo.current_page} of {Math.max(1, paginationInfo.last_page)}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newPage = Math.min(paginationInfo.last_page, currentPage + 1);
+                      setCurrentPage(newPage);
+                      loadDueBills(false, newPage);
+                    }}
+                    disabled={currentPage >= paginationInfo.last_page || loading}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted font-semibold text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

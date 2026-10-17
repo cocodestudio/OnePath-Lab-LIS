@@ -6,13 +6,24 @@ import Link from "next/link";
 import {
   Stethoscope, FileText, Download, Calendar, Search,
   CheckCircle2, Clock, Lock, Building2, ShieldCheck,
-  X, Loader2, ArrowLeft, ArrowUpRight
+  X, Loader2, ArrowLeft, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { PaginatedReportPreview, PrintSettings } from "@/components/report-sheet";
 import { downloadNativePdf } from "@/lib/pdf-report-downloader";
-import { getStoredToken, fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
+import { getCleanLetterheadUrl } from "@/lib/api-client";
 
 function getDoctorPortalApiBase(): string {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    // Production domain mapping
+    if (host.includes("onepathlab.com")) {
+      return "https://api.onepathlab.com/api/doctor-portal";
+    }
+    // Remote mobile testing on same LAN IP (e.g. 192.168.x.x)
+    if (host !== "localhost" && host !== "127.0.0.1") {
+      return `${window.location.protocol}//${host}:8000/api/doctor-portal`;
+    }
+  }
   const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (!envUrl) return "http://localhost:8000/api/doctor-portal";
   const clean = envUrl.replace(/\/+$/, "");
@@ -26,10 +37,11 @@ function DoctorPortalContent() {
   const router = useRouter();
 
   // Resolve token from query param ?token=... or route param [token]
-  const token =
+  const rawToken =
     (searchParams.get("token") as string) ||
     (routeParams?.token as string) ||
     "";
+  const token = rawToken ? rawToken.trim() : "";
 
   // Doctor & Lab Profile
   const [isVerifying, setIsVerifying] = useState<boolean>(true);
@@ -37,10 +49,20 @@ function DoctorPortalContent() {
   const [doctorInfo, setDoctorInfo] = useState<any>(null);
   const [labInfo, setLabInfo] = useState<any>(null);
 
-  // Admin Preview Mode State (if opened by logged-in user without token)
-  const [isAdminTester, setIsAdminTester] = useState<boolean>(false);
-  const [adminDoctorsList, setAdminDoctorsList] = useState<any[]>([]);
-  const [isLoadingAdminDirectory, setIsLoadingAdminDirectory] = useState<boolean>(false);
+  // Pagination state for rapid loading
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [perPage, setPerPage] = useState<number>(20);
+  const [pagination, setPagination] = useState<{
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  }>({
+    current_page: 1,
+    last_page: 1,
+    per_page: 20,
+    total: 0,
+  });
 
   // Reports & Filters
   const [reports, setReports] = useState<any[]>([]);
@@ -65,84 +87,52 @@ function DoctorPortalContent() {
 
   const apiBase = useMemo(() => getDoctorPortalApiBase(), []);
 
-  // Verify Token on mount or check for Admin logged-in state
+  // Strict Token Verification on mount: No leak of other doctors
   useEffect(() => {
     if (!token) {
       setIsVerifying(false);
-      const staffToken = getStoredToken();
-      if (staffToken) {
-        setIsAdminTester(true);
-        loadAdminPreviewDirectory();
-      } else {
-        setAuthError("No access token provided. Please click the link sent to your WhatsApp by the laboratory.");
-      }
+      setAuthError("No access token provided. Please click the personal 1-click link sent to your WhatsApp by the laboratory.");
       return;
     }
 
+    let isMounted = true;
     const verifyToken = async () => {
       try {
         setIsVerifying(true);
         setAuthError(null);
-        const res = await fetch(`${apiBase}/verify?token=${encodeURIComponent(token)}`);
+        const res = await fetch(`${apiBase}/verify?token=${encodeURIComponent(token)}`, {
+          headers: { "Accept": "application/json" },
+        });
         const data = await res.json();
 
-        if (res.ok && data.success) {
-          setDoctorInfo(data.doctor);
-          setLabInfo(data.lab);
-        } else {
-          const staffToken = getStoredToken();
-          if (staffToken) {
-            setIsAdminTester(true);
-            loadAdminPreviewDirectory();
+        if (isMounted) {
+          if (res.ok && data.success) {
+            setDoctorInfo(data.doctor);
+            setLabInfo(data.lab);
           } else {
-            throw new Error(data.error || "Invalid or expired Doctor Portal access link.");
+            throw new Error(data.error || "Invalid or expired Doctor Portal access link. Please request a fresh link from your laboratory.");
           }
         }
       } catch (err: any) {
         console.error("Token verification failed:", err);
-        const staffToken = getStoredToken();
-        if (staffToken) {
-          setIsAdminTester(true);
-          loadAdminPreviewDirectory();
-        } else {
-          setAuthError(err.message || "Failed to verify access link. Please contact your diagnostic lab.");
+        if (isMounted) {
+          setAuthError(err.message || "Failed to verify access link. Please request a fresh link from your diagnostic lab.");
         }
       } finally {
-        setIsVerifying(false);
+        if (isMounted) {
+          setIsVerifying(false);
+        }
       }
     };
 
     verifyToken();
+
+    return () => {
+      isMounted = false;
+    };
   }, [token, apiBase]);
 
-  // Load Directory for Admin Preview Mode
-  const loadAdminPreviewDirectory = async () => {
-    try {
-      setIsLoadingAdminDirectory(true);
-      const res = await fetchFromLaravel("/doctors/portal-directory");
-      if (res && res.success && Array.isArray(res.doctors)) {
-        setAdminDoctorsList(res.doctors);
-        if (res.lab) {
-          setLabInfo(res.lab);
-        }
-      }
-    } catch (e) {
-      console.error("Admin preview load error:", e);
-    } finally {
-      setIsLoadingAdminDirectory(false);
-    }
-  };
-
-  // Switch to doctor in Admin Preview Mode
-  const handleSelectAdminDoctor = (doc: any) => {
-    if (doc.portal_token) {
-      router.push(`/doctor-portal?token=${encodeURIComponent(doc.portal_token)}`);
-    } else {
-      router.push(`/dashboard/doctors/portal`);
-    }
-  };
-
-  // Fetch Reports when token or filters change
+  // Fetch Reports with server-side pagination & filtering
   const fetchReports = useCallback(async () => {
     if (!token || authError) return;
 
@@ -150,6 +140,8 @@ function DoctorPortalContent() {
       setIsLoadingReports(true);
       const url = new URL(`${apiBase}/reports`);
       url.searchParams.set("token", token);
+      url.searchParams.set("page", String(currentPage));
+      url.searchParams.set("per_page", String(perPage));
 
       if (selectedFilter === "custom") {
         if (customStartDate && customEndDate) {
@@ -167,7 +159,9 @@ function DoctorPortalContent() {
         url.searchParams.set("search", searchQuery.trim());
       }
 
-      const res = await fetch(url.toString());
+      const res = await fetch(url.toString(), {
+        headers: { "Accept": "application/json" },
+      });
       const data = await res.json();
 
       if (res.ok && data.success) {
@@ -175,13 +169,16 @@ function DoctorPortalContent() {
         if (data.summary) {
           setSummary(data.summary);
         }
+        if (data.pagination) {
+          setPagination(data.pagination);
+        }
       }
     } catch (err) {
       console.error("Failed to load doctor reports:", err);
     } finally {
       setIsLoadingReports(false);
     }
-  }, [token, authError, selectedFilter, customStartDate, customEndDate, searchQuery, apiBase]);
+  }, [token, authError, selectedFilter, customStartDate, customEndDate, searchQuery, currentPage, perPage, apiBase]);
 
   useEffect(() => {
     if (!isVerifying && !authError && doctorInfo) {
@@ -277,84 +274,6 @@ function DoctorPortalContent() {
     }
   };
 
-  // ── Admin Preview Switcher Screen (Allows instant testing by Lab Staff) ──
-  if (isAdminTester && !doctorInfo) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 sm:p-8 flex items-center justify-center">
-        <div className="max-w-xl w-full p-6 sm:p-8 rounded-3xl bg-card border border-border/80 shadow-2xl space-y-5">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
-              <Stethoscope className="w-6 h-6" />
-            </div>
-            <div>
-              <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">
-                Laboratory Staff Mode
-              </span>
-              <h1 className="font-display text-lg sm:text-xl font-bold text-foreground">
-                Doctor Portal Test & Preview
-              </h1>
-            </div>
-          </div>
-
-          <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            You are logged in as laboratory staff. Select a referral doctor below to preview exactly what they see on their mobile or PC browser:
-          </p>
-
-          {isLoadingAdminDirectory ? (
-            <div className="p-8 text-center">
-              <Loader2 className="w-6 h-6 animate-spin text-emerald-600 mx-auto" />
-              <p className="text-xs text-muted-foreground mt-2">Loading referral clinicians...</p>
-            </div>
-          ) : adminDoctorsList.length === 0 ? (
-            <div className="p-6 text-center border border-dashed border-border rounded-2xl">
-              <p className="text-xs text-muted-foreground">No referral doctors registered in this lab yet.</p>
-              <Link
-                href="/dashboard/doctors/manage"
-                className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold"
-              >
-                Go to Doctor Management
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {adminDoctorsList.map((d) => (
-                <button
-                  key={d.id || d.name}
-                  type="button"
-                  onClick={() => handleSelectAdminDoctor(d)}
-                  className="w-full p-3.5 rounded-2xl border border-border/80 bg-background hover:border-emerald-500/50 hover:bg-emerald-500/5 text-left transition-all flex items-center justify-between gap-3 group cursor-pointer"
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm font-bold text-foreground group-hover:text-emerald-600 truncate">
-                      {d.name} {d.degree ? `(${d.degree})` : ""}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      {d.clinic_hospital || d.specialty || "Referral Doctor"} · {d.total_referred_patients || 0} Patients
-                    </p>
-                  </div>
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 shrink-0">
-                    <span>Preview</span>
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="pt-2 flex items-center justify-between border-t border-border/60">
-            <Link
-              href="/dashboard/doctors/portal"
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground font-semibold"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back to LIS Dashboard</span>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // ── Auth Error Screen (for external visitors with missing or invalid token) ──
   if (!isVerifying && authError) {
     return (
@@ -365,13 +284,16 @@ function DoctorPortalContent() {
           </div>
           <h1 className="font-display text-xl font-bold text-foreground">Doctor Portal Access Required</h1>
           <p className="text-xs text-muted-foreground leading-relaxed">{authError}</p>
-          <div className="p-3.5 rounded-xl bg-muted/40 border border-border/60 text-left text-xs space-y-1">
-            <p className="font-semibold text-foreground">How to get access:</p>
-            <p className="text-muted-foreground text-[11px]">
-              1. Ask your pathology laboratory to share your 1-click Doctor Portal link on WhatsApp.
+          <div className="p-4 rounded-xl bg-muted/40 border border-border/60 text-left text-xs space-y-2">
+            <p className="font-semibold text-foreground flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>Strict Privacy & Patient Data Security</span>
+            </p>
+            <p className="text-muted-foreground text-[11px] leading-relaxed">
+              Diagnostic patient reports are protected by clinical confidentiality protocols. Each referring clinician is assigned a personalized, tamper-proof WhatsApp portal link.
             </p>
             <p className="text-muted-foreground text-[11px]">
-              2. Open the link directly on your mobile or PC browser.
+              Please open the link sent directly to your registered mobile WhatsApp, or contact your laboratory administration to issue a fresh link.
             </p>
           </div>
           <div className="pt-2">
@@ -379,7 +301,7 @@ function DoctorPortalContent() {
               href="/login"
               className="text-xs text-primary hover:underline font-semibold"
             >
-              Are you lab staff? Click here to sign in
+              Diagnostic Laboratory Staff Sign In →
             </Link>
           </div>
         </div>
@@ -478,13 +400,19 @@ function DoctorPortalContent() {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
               placeholder="Search by patient name, phone, or PID..."
               className="w-full pl-9 pr-8 py-2 rounded-xl border border-border/80 bg-background text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery("")}
+                onClick={() => {
+                  setSearchQuery("");
+                  setCurrentPage(1);
+                }}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
               >
                 <X className="w-3.5 h-3.5" />
@@ -506,7 +434,10 @@ function DoctorPortalContent() {
               return (
                 <button
                   key={f.id}
-                  onClick={() => setSelectedFilter(f.id)}
+                  onClick={() => {
+                    setSelectedFilter(f.id);
+                    setCurrentPage(1);
+                  }}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                     active
                       ? "bg-emerald-600 text-white shadow-xs font-bold"
@@ -685,6 +616,68 @@ function DoctorPortalContent() {
                 </div>
               );
             })}
+
+            {/* Pagination Controls */}
+            {pagination.total > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl bg-card border border-border/80 shadow-xs text-xs text-muted-foreground mt-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>
+                    Showing{" "}
+                    <strong className="text-foreground">
+                      {Math.min(pagination.total, (pagination.current_page - 1) * pagination.per_page + 1)}
+                    </strong>
+                    {" "}-{" "}
+                    <strong className="text-foreground">
+                      {Math.min(pagination.total, pagination.current_page * pagination.per_page)}
+                    </strong>
+                    {" "}of{" "}
+                    <strong className="text-foreground">{pagination.total}</strong> reports
+                  </span>
+                  <span className="text-muted-foreground/40">·</span>
+                  <div className="flex items-center gap-1.5">
+                    <span>Rows:</span>
+                    <select
+                      value={perPage}
+                      onChange={(e) => {
+                        setPerPage(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="px-2 py-1 rounded-lg border border-border bg-background text-foreground text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1 || isLoadingReports}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-border bg-background hover:bg-muted font-semibold text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>Previous</span>
+                  </button>
+
+                  <span className="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold border border-emerald-500/20">
+                    Page {pagination.current_page} of {Math.max(1, pagination.last_page)}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(pagination.last_page, p + 1))}
+                    disabled={currentPage >= pagination.last_page || isLoadingReports}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-border bg-background hover:bg-muted font-semibold text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
