@@ -394,8 +394,9 @@ function normalizeDoctorCleanPhone(phone) {
 function formatDoctorWhatsAppInvite(doctor, portalUrl, labName = "OnePath Diagnostic Laboratory") {
   const cleanPhone = normalizeDoctorCleanPhone(doctor?.phone);
   if (!cleanPhone || !portalUrl) return null;
-  const docName = doctor?.name || "Doctor";
-  const msg = `Namaste Dr. ${docName}, ${labName} ki taraf se aapka digital Doctor Portal link taiyar hai: ${portalUrl}\n\nIs secure link par click karke aap apne sabhi referral patients ki diagnostic reports online check aur download kar sakte hain.`;
+  const rawName = doctor?.name || "Doctor";
+  const docName = rawName.replace(/^(dr\.?|doctor)\s+/i, "").trim() || "Doctor";
+  const msg = `Dear Dr. ${docName},\n\nYour digital Doctor Portal access link from ${labName} is ready:\n👉 ${portalUrl}\n\nPlease click the link to view and download diagnostic reports for all your referred patients online. No password required.\n\nThank you,\nRegards, ${labName} Team.`;
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
 }
 
