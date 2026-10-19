@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   IndianRupee, Calendar, Search, RefreshCw, ChevronDown, ChevronRight, ChevronLeft,
   Printer, Clock, CheckCircle2, User, Stethoscope, AlertCircle,
-  FileText, ArrowLeft, X
+  FileText, ArrowLeft, X, Building2
 } from "lucide-react";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
@@ -18,6 +18,13 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function formatDisplayDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "—";
@@ -82,6 +89,11 @@ export default function DueReportsPage() {
   const [labData, setLabData] = useState<any>(null);
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
 
+  // Collection Center Filter State (default to Main Lab)
+  const [selectedCenter, setSelectedCenter] = useState<string>("MAIN_LAB");
+  const [collectionCenters, setCollectionCenters] = useState<any[]>([]);
+  const [isLoadingCenters, setIsLoadingCenters] = useState<boolean>(false);
+
   const applyPreset = (preset: string) => {
     setDatePreset(preset);
     setCurrentPage(1);
@@ -112,7 +124,41 @@ export default function DueReportsPage() {
     }
   };
 
-  const loadDueBills = useCallback(async (force = false, pageToLoad?: number, limitToLoad?: number) => {
+  const loadCollectionCenters = useCallback(async () => {
+    try {
+      setIsLoadingCenters(true);
+      // Instant cache read for zero perceived latency
+      const cached = localStorage.getItem("lis_cached_collection_centers");
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const filtered = parsed.filter((c: any) => String(c.role || "").toUpperCase().includes("COLLECTION"));
+            setCollectionCenters(filtered);
+          }
+        } catch {}
+      }
+
+      const res = await fetchFromLaravel("/collection-centers");
+      const list = Array.isArray(res) ? res : (res?.data || []);
+      const filtered = list.filter((c: any) => String(c.role || "").toUpperCase().includes("COLLECTION"));
+      setCollectionCenters(filtered);
+      try {
+        localStorage.setItem("lis_cached_collection_centers", JSON.stringify(list));
+      } catch {}
+    } catch (err) {
+      console.error("Failed to load collection centers for dues filter:", err);
+    } finally {
+      setIsLoadingCenters(false);
+    }
+  }, []);
+
+  const loadDueBills = useCallback(async (
+    force = false,
+    pageToLoad?: number,
+    limitToLoad?: number,
+    centerToFilter?: string
+  ) => {
     if (force) {
       setIsRefreshing(true);
     } else {
@@ -121,12 +167,16 @@ export default function DueReportsPage() {
 
     const activePage = pageToLoad ?? currentPage;
     const activeLimit = limitToLoad ?? perPage;
+    const activeCenter = centerToFilter ?? selectedCenter;
 
     try {
       const params = new URLSearchParams();
       params.append("with_due", "1");
       params.append("page", String(activePage));
       params.append("limit", String(activeLimit));
+      if (activeCenter) {
+        params.append("collection_center_id", activeCenter);
+      }
       if (startDate) params.append("start_date", startDate);
       if (endDate) params.append("end_date", endDate);
       if (searchQuery.trim()) params.append("search", searchQuery.trim());
@@ -152,7 +202,7 @@ export default function DueReportsPage() {
       // Cache client-side for rapid reload
       if (datePreset === "30days" && activePage === 1 && !searchQuery) {
         try {
-          localStorage.setItem("lis_cached_due_report", JSON.stringify({
+          localStorage.setItem(`lis_cached_due_report_${activeCenter}`, JSON.stringify({
             data: rawList,
             total: res?.total ?? rawList.length,
             last_page: res?.last_page ?? 1,
@@ -170,12 +220,40 @@ export default function DueReportsPage() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [startDate, endDate, datePreset, searchQuery, currentPage, perPage, toast]);
+  }, [startDate, endDate, datePreset, searchQuery, currentPage, perPage, selectedCenter, toast]);
+
+  const handleCenterChange = (newCenter: string) => {
+    setSelectedCenter(newCenter);
+    setCurrentPage(1);
+
+    // Instant cache switch
+    try {
+      const cached = localStorage.getItem(`lis_cached_due_report_${newCenter}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const list = Array.isArray(parsed) ? parsed : (parsed?.data || []);
+        if (Array.isArray(list)) {
+          setBills(list);
+          if (parsed && typeof parsed.total === "number") {
+            setPaginationInfo({
+              total: parsed.total,
+              last_page: parsed.last_page || 1,
+              current_page: 1,
+            });
+          }
+        }
+      }
+    } catch {}
+
+    loadDueBills(false, 1, undefined, newCenter);
+  };
 
   // Read cache on mount for instant zero-latency display
   useEffect(() => {
     try {
-      const cached = localStorage.getItem("lis_cached_due_report");
+      const cached =
+        localStorage.getItem("lis_cached_due_report_MAIN_LAB") ||
+        localStorage.getItem("lis_cached_due_report");
       if (cached) {
         const parsed = JSON.parse(cached);
         const list = Array.isArray(parsed) ? parsed : (parsed?.data || []);
@@ -201,6 +279,7 @@ export default function DueReportsPage() {
       }
     } catch {}
 
+    loadCollectionCenters();
     loadDueBills();
 
     // Background fetch lab profile
@@ -212,7 +291,7 @@ export default function DueReportsPage() {
         }
       }
     }).catch(() => {});
-  }, [loadDueBills]);
+  }, [loadCollectionCenters, loadDueBills]);
 
   // Compute Dues Data
   const processedBills = useMemo(() => {
@@ -315,12 +394,62 @@ export default function DueReportsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
+          {/* Collection Centre Dropdown Filter */}
+          <div className="min-w-[190px] sm:w-60">
+            <Select
+              value={selectedCenter}
+              onValueChange={handleCenterChange}
+              disabled={loading && !bills.length}
+            >
+              <SelectTrigger className="h-9 text-xs bg-card border-border/90 shadow-2xs">
+                <div className="flex items-center gap-2 truncate">
+                  <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <SelectValue placeholder="Select Centre" />
+                </div>
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                <SelectItem value="MAIN_LAB">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground">Main Lab</span>
+                    <span className="text-[10px] text-muted-foreground">(Direct In-house)</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="ALL">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground">All Centres</span>
+                    <span className="text-[10px] text-muted-foreground">(All Lab Dues)</span>
+                  </div>
+                </SelectItem>
+
+                {collectionCenters.length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
+                      Collection Centres ({collectionCenters.length})
+                    </div>
+                    {collectionCenters.map((cc) => (
+                      <SelectItem key={cc.id} value={String(cc.id)}>
+                        <div className="flex items-center justify-between gap-2 w-full">
+                          <span className="truncate">{cc.lab_name || cc.labName || cc.name}</span>
+                          {cc.phone && (
+                            <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                              {cc.phone}
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
           <button
             type="button"
             onClick={() => loadDueBills(true)}
             disabled={isRefreshing}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground transition-all cursor-pointer shadow-xs disabled:opacity-60"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground transition-all cursor-pointer shadow-xs disabled:opacity-60 shrink-0"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
             <span>{isRefreshing ? "Refreshing..." : "Refresh"}</span>
