@@ -204,7 +204,7 @@ export default function DueReportsPage() {
       // Cache client-side for rapid reload
       if (datePreset === "30days" && activePage === 1 && !searchQuery) {
         try {
-          localStorage.setItem(`lis_cached_due_report_${activeCenter}`, JSON.stringify({
+          localStorage.setItem(`lis_cached_due_report_v2_${activeCenter}`, JSON.stringify({
             data: rawList,
             total: res?.total ?? rawList.length,
             last_page: res?.last_page ?? 1,
@@ -229,13 +229,15 @@ export default function DueReportsPage() {
     setCurrentPage(1);
 
     // Instant cache switch
+    let foundCache = false;
     try {
-      const cached = localStorage.getItem(`lis_cached_due_report_${newCenter}`);
+      const cached = localStorage.getItem(`lis_cached_due_report_v2_${newCenter}`);
       if (cached) {
         const parsed = JSON.parse(cached);
         const list = Array.isArray(parsed) ? parsed : (parsed?.data || []);
         if (Array.isArray(list)) {
           setBills(list);
+          foundCache = true;
           if (parsed && typeof parsed.total === "number") {
             setPaginationInfo({
               total: parsed.total,
@@ -247,15 +249,21 @@ export default function DueReportsPage() {
       }
     } catch {}
 
-    loadDueBills(false, 1, undefined, newCenter);
+    if (!foundCache) {
+      // Clear previous center data immediately so no incorrect dues flash on screen
+      setBills([]);
+      setPaginationInfo({ total: 0, last_page: 1, current_page: 1 });
+    }
+
+    loadDueBills(true, 1, undefined, newCenter);
   };
 
   // Read cache on mount for instant zero-latency display
   useEffect(() => {
     try {
       const cached =
-        localStorage.getItem("lis_cached_due_report_MAIN_LAB") ||
-        localStorage.getItem("lis_cached_due_report");
+        localStorage.getItem("lis_cached_due_report_v2_MAIN_LAB") ||
+        localStorage.getItem("lis_cached_due_report_MAIN_LAB");
       if (cached) {
         const parsed = JSON.parse(cached);
         const list = Array.isArray(parsed) ? parsed : (parsed?.data || []);
