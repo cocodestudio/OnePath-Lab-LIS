@@ -129,16 +129,16 @@ export default function DoctorPortalManagementPage() {
       });
 
       if (res && res.success) {
-        const waLink = res.whatsapp_link || doc.whatsapp_link;
-        if (waLink) {
-          window.open(waLink, "_blank", "noopener,noreferrer");
-        }
         if (res.api_dispatched) {
           toast.success(
             "WhatsApp Delivered",
             `Doctor Portal link sent directly to Dr. ${doc.name} on WhatsApp (+${doc.phone})!`
           );
         } else {
+          const waLink = res.whatsapp_link || doc.whatsapp_link;
+          if (waLink) {
+            window.open(waLink, "_blank", "noopener,noreferrer");
+          }
           toast.success(
             "Link Prepared",
             res.message || "Opening WhatsApp to share portal link..."
@@ -146,7 +146,12 @@ export default function DoctorPortalManagementPage() {
         }
         await fetchDirectory();
       } else {
-        throw new Error(res?.message || "Failed to dispatch WhatsApp message.");
+        const waLink = res?.whatsapp_link || doc.whatsapp_link;
+        if (waLink) {
+          window.open(waLink, "_blank", "noopener,noreferrer");
+        }
+        toast.error("WhatsApp Notice", res?.message || "Could not dispatch WhatsApp message directly. Opening WhatsApp Web fallback.");
+        await fetchDirectory();
       }
     } catch (err: any) {
       console.error("Send WhatsApp error:", err);

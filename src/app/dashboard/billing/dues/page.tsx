@@ -94,36 +94,6 @@ export default function DueReportsPage() {
   const [collectionCenters, setCollectionCenters] = useState<any[]>([]);
   const [isLoadingCenters, setIsLoadingCenters] = useState<boolean>(false);
 
-  const applyPreset = (preset: string) => {
-    setDatePreset(preset);
-    setCurrentPage(1);
-    const today = new Date();
-    if (preset === "today") {
-      const t = formatDateOnly(today);
-      setStartDate(t);
-      setEndDate(t);
-    } else if (preset === "yesterday") {
-      const y = new Date();
-      y.setDate(y.getDate() - 1);
-      const yStr = formatDateOnly(y);
-      setStartDate(yStr);
-      setEndDate(yStr);
-    } else if (preset === "7days") {
-      const s = new Date();
-      s.setDate(s.getDate() - 7);
-      setStartDate(formatDateOnly(s));
-      setEndDate(formatDateOnly(today));
-    } else if (preset === "30days") {
-      const s = new Date();
-      s.setDate(s.getDate() - 30);
-      setStartDate(formatDateOnly(s));
-      setEndDate(formatDateOnly(today));
-    } else if (preset === "all") {
-      setStartDate("");
-      setEndDate("");
-    }
-  };
-
   const loadCollectionCenters = useCallback(async () => {
     try {
       setIsLoadingCenters(true);
@@ -159,7 +129,9 @@ export default function DueReportsPage() {
     force = false,
     pageToLoad?: number,
     limitToLoad?: number,
-    centerToFilter?: string
+    centerToFilter?: string,
+    overrideStart?: string,
+    overrideEnd?: string
   ) => {
     if (force) {
       setIsRefreshing(true);
@@ -170,6 +142,8 @@ export default function DueReportsPage() {
     const activePage = pageToLoad ?? currentPage;
     const activeLimit = limitToLoad ?? perPage;
     const activeCenter = centerToFilter ?? selectedCenter;
+    const activeStart = overrideStart !== undefined ? overrideStart : startDate;
+    const activeEnd = overrideEnd !== undefined ? overrideEnd : endDate;
 
     try {
       const params = new URLSearchParams();
@@ -179,8 +153,8 @@ export default function DueReportsPage() {
       if (activeCenter) {
         params.append("collection_center_id", activeCenter);
       }
-      if (startDate) params.append("start_date", startDate);
-      if (endDate) params.append("end_date", endDate);
+      if (activeStart) params.append("start_date", activeStart);
+      if (activeEnd) params.append("end_date", activeEnd);
       if (searchQuery.trim()) params.append("search", searchQuery.trim());
 
       const res = await fetchFromLaravel(`/bills?${params.toString()}`, { skipCache: force });
@@ -224,6 +198,39 @@ export default function DueReportsPage() {
     }
   }, [startDate, endDate, datePreset, searchQuery, currentPage, perPage, selectedCenter, toast]);
 
+  const applyPreset = (preset: string) => {
+    setDatePreset(preset);
+    setCurrentPage(1);
+    const today = new Date();
+    let s = "";
+    let e = "";
+    if (preset === "today") {
+      s = formatDateOnly(today);
+      e = formatDateOnly(today);
+    } else if (preset === "yesterday") {
+      const y = new Date();
+      y.setDate(y.getDate() - 1);
+      s = formatDateOnly(y);
+      e = formatDateOnly(y);
+    } else if (preset === "7days") {
+      const d = new Date();
+      d.setDate(d.getDate() - 7);
+      s = formatDateOnly(d);
+      e = formatDateOnly(today);
+    } else if (preset === "30days") {
+      const d = new Date();
+      d.setDate(d.getDate() - 30);
+      s = formatDateOnly(d);
+      e = formatDateOnly(today);
+    } else if (preset === "all") {
+      s = "";
+      e = "";
+    }
+    setStartDate(s);
+    setEndDate(e);
+    loadDueBills(true, 1, undefined, selectedCenter, s, e);
+  };
+
   const handleCenterChange = (newCenter: string) => {
     setSelectedCenter(newCenter);
     setCurrentPage(1);
@@ -258,7 +265,7 @@ export default function DueReportsPage() {
     loadDueBills(true, 1, undefined, newCenter);
   };
 
-  // Read cache on mount for instant zero-latency display
+  // Read cache on mount ONLY for instant zero-latency display of default Main Lab view
   useEffect(() => {
     try {
       const cached =
@@ -290,7 +297,7 @@ export default function DueReportsPage() {
     } catch {}
 
     loadCollectionCenters();
-    loadDueBills();
+    loadDueBills(false, 1, undefined, "MAIN_LAB");
 
     // Background fetch lab profile
     fetchFromLaravel("/lab").then((lab) => {
@@ -301,7 +308,8 @@ export default function DueReportsPage() {
         }
       }
     }).catch(() => {});
-  }, [loadCollectionCenters, loadDueBills]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Compute Dues Data
   const processedBills = useMemo(() => {

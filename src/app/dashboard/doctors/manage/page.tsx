@@ -114,6 +114,7 @@ export default function ManageDoctorsPage() {
     default_commission_percent: "0",
     is_active: true,
   });
+  const [sendWhatsAppInvite, setSendWhatsAppInvite] = useState<boolean>(true);
 
   // Fetch initial data
   const loadInitialData = useCallback(async () => {
@@ -411,6 +412,7 @@ export default function ManageDoctorsPage() {
         default_commission_percent: doc.default_commission_percent.toString(),
         is_active: doc.is_active !== false,
       });
+      setSendWhatsAppInvite(Boolean(doc.phone && doc.phone.trim().length >= 8));
     } else {
       setEditingDoctor(null);
       setDoctorForm({
@@ -424,6 +426,7 @@ export default function ManageDoctorsPage() {
         default_commission_percent: globalDefaultRate > 0 ? globalDefaultRate.toString() : "0",
         is_active: true,
       });
+      setSendWhatsAppInvite(true);
     }
     setIsDoctorModalOpen(true);
   };
@@ -448,6 +451,7 @@ export default function ManageDoctorsPage() {
         address: doctorForm.address.trim() || null,
         default_commission_percent: parseFloat(doctorForm.default_commission_percent) || 0,
         is_active: doctorForm.is_active,
+        send_whatsapp_invite: sendWhatsAppInvite && Boolean(doctorForm.phone.trim()),
       };
 
       if (editingDoctor && editingDoctor.is_registered) {
@@ -456,7 +460,10 @@ export default function ManageDoctorsPage() {
           body: JSON.stringify(payload),
         });
         if (res && res.success) {
-          toast.success("Updated", "Doctor profile updated successfully.");
+          toast.success(
+            res.whatsapp_dispatched ? "WhatsApp Delivered" : "Updated",
+            res.message || "Doctor profile updated successfully."
+          );
           setIsDoctorModalOpen(false);
           loadInitialData();
         } else {
@@ -468,7 +475,10 @@ export default function ManageDoctorsPage() {
           body: JSON.stringify(payload),
         });
         if (res && res.success) {
-          toast.success("Created", "Doctor registered successfully.");
+          toast.success(
+            res.whatsapp_dispatched ? "WhatsApp Delivered" : "Created",
+            res.message || "Doctor registered successfully."
+          );
           setIsDoctorModalOpen(false);
           loadInitialData();
         } else {
@@ -1294,6 +1304,21 @@ export default function ManageDoctorsPage() {
                 Active Doctor <span className="text-[11px] text-muted-foreground font-normal">(Uncheck for temporary doctor — referrals won't count in cases analytics)</span>
               </label>
             </div>
+
+            {doctorForm.phone.trim().length >= 8 && (
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <input
+                  type="checkbox"
+                  id="manage-doc-send-whatsapp"
+                  checked={sendWhatsAppInvite}
+                  onChange={(e) => setSendWhatsAppInvite(e.target.checked)}
+                  className="h-4 w-4 rounded border-border text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                />
+                <label htmlFor="manage-doc-send-whatsapp" className="text-xs font-semibold text-emerald-950 dark:text-emerald-100 cursor-pointer flex-1">
+                  Send Doctor Portal Access Link via WhatsApp <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-normal block sm:inline">(Direct 1-click report view on doctor&apos;s phone)</span>
+                </label>
+              </div>
+            )}
 
             <DialogFooter className="pt-2">
               <Button
