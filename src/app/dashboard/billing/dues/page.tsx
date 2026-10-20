@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   IndianRupee, Calendar, Search, RefreshCw, ChevronDown, ChevronRight, ChevronLeft,
   Printer, Clock, CheckCircle2, User, Stethoscope, AlertCircle,
-  FileText, ArrowLeft, X, Building2
+  FileText, ArrowLeft, X
 } from "lucide-react";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
@@ -18,13 +18,6 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 function formatDisplayDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "—";
@@ -85,47 +78,10 @@ export default function DueReportsPage() {
   const [labData, setLabData] = useState<any>(null);
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
 
-  // Collection Center Filter State (default to Main Lab)
-  const [selectedCenter, setSelectedCenter] = useState<string>("MAIN_LAB");
-  const [collectionCenters, setCollectionCenters] = useState<any[]>([]);
-  const [isLoadingCenters, setIsLoadingCenters] = useState<boolean>(false);
-
-  const loadCollectionCenters = useCallback(async () => {
-    try {
-      setIsLoadingCenters(true);
-      // Instant cache read for zero perceived latency
-      const cached = localStorage.getItem("lis_cached_collection_centers");
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const valid = parsed.filter((c: any) => c && (c.id || c.name));
-            if (valid.length > 0) {
-              setCollectionCenters(valid);
-            }
-          }
-        } catch {}
-      }
-
-      const res = await fetchFromLaravel("/collection-centers");
-      const list = Array.isArray(res) ? res : (res?.data || []);
-      const validCenters = (Array.isArray(list) ? list : []).filter((c: any) => c && (c.id || c.name));
-      setCollectionCenters(validCenters);
-      try {
-        localStorage.setItem("lis_cached_collection_centers", JSON.stringify(validCenters));
-      } catch {}
-    } catch (err) {
-      console.error("Failed to load collection centers for dues filter:", err);
-    } finally {
-      setIsLoadingCenters(false);
-    }
-  }, []);
-
   const loadDueBills = useCallback(async (
     force = false,
     pageToLoad?: number,
     limitToLoad?: number,
-    centerToFilter?: string,
     overrideStart?: string,
     overrideEnd?: string
   ) => {
@@ -137,7 +93,6 @@ export default function DueReportsPage() {
 
     const activePage = pageToLoad ?? currentPage;
     const activeLimit = limitToLoad ?? perPage;
-    const activeCenter = centerToFilter ?? selectedCenter;
     const activeStart = overrideStart !== undefined ? overrideStart : startDate;
     const activeEnd = overrideEnd !== undefined ? overrideEnd : endDate;
 
@@ -147,9 +102,6 @@ export default function DueReportsPage() {
       params.append("include_b2b", "1");
       params.append("page", String(activePage));
       params.append("limit", String(activeLimit));
-      if (activeCenter) {
-        params.append("collection_center_id", activeCenter);
-      }
       if (activeStart) params.append("start_date", activeStart);
       if (activeEnd) params.append("end_date", activeEnd);
       if (searchQuery.trim()) params.append("search", searchQuery.trim());
@@ -175,7 +127,7 @@ export default function DueReportsPage() {
       // Cache client-side for rapid reload
       if (datePreset === "30days" && activePage === 1 && !searchQuery) {
         try {
-          localStorage.setItem(`lis_cached_due_report_v2_${activeCenter}`, JSON.stringify({
+          localStorage.setItem("lis_cached_due_report_v2", JSON.stringify({
             data: rawList,
             total: res?.total ?? rawList.length,
             last_page: res?.last_page ?? 1,
@@ -193,7 +145,7 @@ export default function DueReportsPage() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [startDate, endDate, datePreset, searchQuery, currentPage, perPage, selectedCenter, toast]);
+  }, [startDate, endDate, datePreset, searchQuery, currentPage, perPage, toast]);
 
   const applyPreset = (preset: string) => {
     setDatePreset(preset);
@@ -225,49 +177,16 @@ export default function DueReportsPage() {
     }
     setStartDate(s);
     setEndDate(e);
-    loadDueBills(true, 1, undefined, selectedCenter, s, e);
+    loadDueBills(true, 1, undefined, s, e);
   };
 
-  const handleCenterChange = (newCenter: string) => {
-    setSelectedCenter(newCenter);
-    setCurrentPage(1);
-
-    // Instant cache switch
-    let foundCache = false;
-    try {
-      const cached = localStorage.getItem(`lis_cached_due_report_v2_${newCenter}`);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        const list = Array.isArray(parsed) ? parsed : (parsed?.data || []);
-        if (Array.isArray(list)) {
-          setBills(list);
-          foundCache = true;
-          if (parsed && typeof parsed.total === "number") {
-            setPaginationInfo({
-              total: parsed.total,
-              last_page: parsed.last_page || 1,
-              current_page: 1,
-            });
-          }
-        }
-      }
-    } catch {}
-
-    if (!foundCache) {
-      // Clear previous center data immediately so no incorrect dues flash on screen
-      setBills([]);
-      setPaginationInfo({ total: 0, last_page: 1, current_page: 1 });
-    }
-
-    loadDueBills(true, 1, undefined, newCenter);
-  };
-
-  // Read cache on mount ONLY for instant zero-latency display of default Main Lab view
+  // Read cache on mount ONLY for instant zero-latency display
   useEffect(() => {
     try {
       const cached =
-        localStorage.getItem("lis_cached_due_report_v2_MAIN_LAB") ||
-        localStorage.getItem("lis_cached_due_report_MAIN_LAB");
+        localStorage.getItem("lis_cached_due_report_v2") ||
+        localStorage.getItem("lis_cached_due_report_MAIN_LAB") ||
+        localStorage.getItem("lis_cached_due_report");
       if (cached) {
         const parsed = JSON.parse(cached);
         const list = Array.isArray(parsed) ? parsed : (parsed?.data || []);
@@ -293,8 +212,7 @@ export default function DueReportsPage() {
       }
     } catch {}
 
-    loadCollectionCenters();
-    loadDueBills(false, 1, undefined, "MAIN_LAB");
+    loadDueBills(false, 1);
 
     // Background fetch lab profile
     fetchFromLaravel("/lab").then((lab) => {
@@ -410,66 +328,6 @@ export default function DueReportsPage() {
         </div>
 
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
-          {/* Collection Centre Dropdown Filter */}
-          <div className="min-w-[190px] sm:w-60">
-            <Select
-              value={selectedCenter}
-              onValueChange={handleCenterChange}
-              disabled={loading && !bills.length}
-            >
-              <SelectTrigger className="h-9 text-xs bg-card border-border/90 shadow-2xs">
-                <div className="flex items-center gap-2 truncate">
-                  <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                  <SelectValue placeholder="Select Centre" />
-                </div>
-              </SelectTrigger>
-              <SelectContent className="max-h-72">
-                <SelectItem value="MAIN_LAB">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground">Main Lab</span>
-                    <span className="text-[10px] text-muted-foreground">(Direct In-house)</span>
-                  </div>
-                </SelectItem>
-
-                {collectionCenters.length > 0 && (
-                  <>
-                    <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
-                      Collection Centres & Partners ({collectionCenters.length})
-                    </div>
-                    {collectionCenters.map((cc) => {
-                      const displayName = cc.name || cc.center_name || cc.centerName || cc.lab_name || cc.email || `Centre #${cc.id}`;
-                      const isB2B = String(cc.role || "").toUpperCase() === "B2B";
-                      const isReception = String(cc.role || "").toUpperCase() === "RECEPTIONIST";
-                      return (
-                        <SelectItem key={cc.id} value={String(cc.id)}>
-                          <div className="flex items-center justify-between gap-2 w-full">
-                            <span className="truncate">{displayName}</span>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {isB2B && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                                  B2B
-                                </span>
-                              )}
-                              {isReception && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                                  Reception
-                                </span>
-                              )}
-                              {cc.phone && (
-                                <span className="text-[10px] text-muted-foreground font-mono">
-                                  {cc.phone}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
 
           <button
             type="button"

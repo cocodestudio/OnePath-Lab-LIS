@@ -148,15 +148,27 @@ export default function DoctorPortalManagementPage() {
         }),
       });
 
+      const waLink = res?.whatsapp_link || defaultWaLink;
+      const portalUrl = res?.portal_url || defaultPortalUrl;
+
       if (res && res.success && res.api_dispatched) {
         toast.success(
-          "WhatsApp Delivered",
-          res.message || `Doctor Portal link sent directly to Dr. ${doc.name} on WhatsApp (+${doc.phone})!`
+          "WhatsApp Dispatched",
+          res.message || `Doctor Portal link dispatched to Dr. ${doc.name} (+${doc.phone})!`
         );
+        // Open the Share Modal with 1-click WhatsApp Web/App button & direct portal link
+        // This guarantees delivery even if Meta Cloud API has delivery restrictions on new contacts
+        setFallbackModalData({
+          isOpen: true,
+          doctorName: doc.name,
+          phone: doc.phone || "",
+          waLink: waLink || "",
+          portalUrl: portalUrl || "",
+          message: `Official Meta Cloud API invitation has been queued for +${finalPhone}. To guarantee instant 1-click delivery to Dr. ${doc.name} without Meta carrier spam filters, you can also launch WhatsApp Web / App below.`,
+          notice: res?.message,
+        });
         await fetchDirectory();
       } else {
-        const waLink = res?.whatsapp_link || defaultWaLink;
-        const portalUrl = res?.portal_url || defaultPortalUrl;
         const noticeMessage = res?.message || "Meta Cloud API delivery could not reach this number directly. Click below to send via WhatsApp Web / App.";
 
         setFallbackModalData({
