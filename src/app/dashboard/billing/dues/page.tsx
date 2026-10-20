@@ -148,6 +148,7 @@ export default function DueReportsPage() {
     try {
       const params = new URLSearchParams();
       params.append("with_due", "1");
+      params.append("include_b2b", "1");
       params.append("page", String(activePage));
       params.append("limit", String(activeLimit));
       if (activeCenter) {
