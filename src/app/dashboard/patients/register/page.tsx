@@ -570,6 +570,25 @@ function RegisterPatientPage() {
     );
   }, [collectedAtSelect, collectionCentersList, isB2B, isCollectionCenter, isReceptionist, currentUserRole]);
 
+  // Matches any Collection Center OR B2B Partner from collectionCentersList
+  const selectedMatchedCenter = useMemo(() => {
+    if (isB2B || isCollectionCenter) return null;
+    if (!collectedAtSelect || collectedAtSelect === "Main Lab") return null;
+    const selNorm = collectedAtSelect.trim().toLowerCase();
+    return (
+      collectionCentersList.find((c: any) => {
+        const cName = (c.name || "").trim().toLowerCase();
+        const cLab = (c.lab_name || c.labName || "").trim().toLowerCase();
+        const cCode = (c.center_code || c.centerCode || "").trim().toLowerCase();
+        return (
+          (cName && (cName === selNorm || selNorm.includes(cName) || cName.includes(selNorm))) ||
+          (cLab && (cLab === selNorm || selNorm.includes(cLab) || cLab.includes(selNorm))) ||
+          (cCode && (cCode === selNorm || selNorm.includes(cCode)))
+        );
+      }) || null
+    );
+  }, [collectedAtSelect, collectionCentersList, isB2B, isCollectionCenter]);
+
   const [phlebotomists, setPhlebotomists] = useState<string[]>(defaultPhlebotomists);
   const [collectedBySelect, setCollectedBySelect] = useState("Self / Lab Staff");
   const [isPhleboModalOpen, setIsPhleboModalOpen] = useState(false);
@@ -1059,8 +1078,16 @@ function RegisterPatientPage() {
         collectedBy: collectedBySelect || null,
         b2b_user_id: (!isCollectionCenter && !isReceptionist && selectedB2bCenter) ? selectedB2bCenter.id : undefined,
         b2bUserId: (!isCollectionCenter && !isReceptionist && selectedB2bCenter) ? selectedB2bCenter.id : undefined,
-        collection_center_id: isCollectionCenter && getStoredUser() ? getStoredUser().id : undefined,
-        collectionCenterId: isCollectionCenter && getStoredUser() ? getStoredUser().id : undefined,
+        collection_center_id: (isCollectionCenter && getStoredUser())
+          ? getStoredUser().id
+          : (!isCollectionCenter && !isReceptionist && selectedMatchedCenter && (String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTER") || String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTRE")))
+            ? selectedMatchedCenter.id
+            : undefined,
+        collectionCenterId: (isCollectionCenter && getStoredUser())
+          ? getStoredUser().id
+          : (!isCollectionCenter && !isReceptionist && selectedMatchedCenter && (String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTER") || String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTRE")))
+            ? selectedMatchedCenter.id
+            : undefined,
         meta: {
           ...((!isCollectionCenter && !isReceptionist && selectedB2bCenter) ? {
             b2b_user_id: selectedB2bCenter.id,
@@ -1073,6 +1100,13 @@ function RegisterPatientPage() {
             createdByName: selectedB2bCenter.name,
             created_by_role: "B2B",
             createdByRole: "B2B",
+          } : {}),
+          ...((!isCollectionCenter && !isReceptionist && selectedMatchedCenter && (String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTER") || String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTRE"))) ? {
+            collection_center_id: selectedMatchedCenter.id,
+            collectionCenterId: selectedMatchedCenter.id,
+            collection_center_name: selectedMatchedCenter.lab_name || selectedMatchedCenter.labName || selectedMatchedCenter.name,
+            center_code: selectedMatchedCenter.center_code || selectedMatchedCenter.centerCode || "",
+            centerCode: selectedMatchedCenter.center_code || selectedMatchedCenter.centerCode || "",
           } : {}),
           ...(isCollectionCenter && getStoredUser() ? {
             collection_center_id: getStoredUser().id,
@@ -2156,8 +2190,16 @@ function RegisterPatientPage() {
             collectedBy: collectedBySelect || null,
             b2b_user_id: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             b2bUserId: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
-            collection_center_id: isCollectionCenterUser && storedUser ? storedUser.id : (newPatient?.meta?.collection_center_id || null),
-            collectionCenterId: isCollectionCenterUser && storedUser ? storedUser.id : (newPatient?.meta?.collectionCenterId || null),
+            collection_center_id: (isCollectionCenterUser && storedUser)
+              ? storedUser.id
+              : (!isCollectionCenterUser && !isReceptionistUser && selectedMatchedCenter && (String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTER") || String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTRE")))
+                ? selectedMatchedCenter.id
+                : (newPatient?.meta?.collection_center_id || null),
+            collectionCenterId: (isCollectionCenterUser && storedUser)
+              ? storedUser.id
+              : (!isCollectionCenterUser && !isReceptionistUser && selectedMatchedCenter && (String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTER") || String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTRE")))
+                ? selectedMatchedCenter.id
+                : (newPatient?.meta?.collectionCenterId || null),
             vial_barcode: joinedBarcodes,
             vialBarcode: joinedBarcodes,
             vial_barcodes: effectiveVialBarcodes,
@@ -2176,6 +2218,13 @@ function RegisterPatientPage() {
                 createdByName: selectedB2bCenter.name,
                 created_by_role: "B2B",
                 createdByRole: "B2B",
+              } : {}),
+              ...((!isCollectionCenterUser && !isReceptionistUser && selectedMatchedCenter && (String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTER") || String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTRE"))) ? {
+                collection_center_id: selectedMatchedCenter.id,
+                collectionCenterId: selectedMatchedCenter.id,
+                collection_center_name: selectedMatchedCenter.lab_name || selectedMatchedCenter.labName || selectedMatchedCenter.name,
+                center_code: selectedMatchedCenter.center_code || selectedMatchedCenter.centerCode || "",
+                centerCode: selectedMatchedCenter.center_code || selectedMatchedCenter.centerCode || "",
               } : {}),
               ...(isCollectionCenterUser && storedUser ? {
                 collection_center_id: storedUser.id,
@@ -2257,8 +2306,16 @@ function RegisterPatientPage() {
             collection_date_time: collectionDateTime || new Date().toISOString(),
             b2b_user_id: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             b2bUserId: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
-            collection_center_id: isCollectionCenterUser && storedUser ? storedUser.id : null,
-            collectionCenterId: isCollectionCenterUser && storedUser ? storedUser.id : null,
+            collection_center_id: (isCollectionCenterUser && storedUser)
+              ? storedUser.id
+              : (!isCollectionCenterUser && !isReceptionistUser && selectedMatchedCenter && (String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTER") || String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTRE")))
+                ? selectedMatchedCenter.id
+                : null,
+            collectionCenterId: (isCollectionCenterUser && storedUser)
+              ? storedUser.id
+              : (!isCollectionCenterUser && !isReceptionistUser && selectedMatchedCenter && (String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTER") || String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTRE")))
+                ? selectedMatchedCenter.id
+                : null,
             vialBarcode: joinedBarcodes,
             vial_barcode: joinedBarcodes,
             vial_barcodes: effectiveVialBarcodes,
@@ -2278,6 +2335,13 @@ function RegisterPatientPage() {
                 createdByName: selectedB2bCenter.name,
                 created_by_role: "B2B",
                 createdByRole: "B2B",
+              } : {}),
+              ...((!isCollectionCenterUser && !isReceptionistUser && selectedMatchedCenter && (String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTER") || String(selectedMatchedCenter.role || "").toUpperCase().includes("COLLECTION_CENTRE"))) ? {
+                collection_center_id: selectedMatchedCenter.id,
+                collectionCenterId: selectedMatchedCenter.id,
+                collection_center_name: selectedMatchedCenter.lab_name || selectedMatchedCenter.labName || selectedMatchedCenter.name,
+                center_code: selectedMatchedCenter.center_code || selectedMatchedCenter.centerCode || "",
+                centerCode: selectedMatchedCenter.center_code || selectedMatchedCenter.centerCode || "",
               } : {}),
               ...(isCollectionCenterUser && storedUser ? {
                 collection_center_id: storedUser.id,

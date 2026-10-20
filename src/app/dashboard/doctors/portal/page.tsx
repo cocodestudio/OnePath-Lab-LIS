@@ -6,7 +6,7 @@ import {
   Stethoscope, Smartphone, Send, CheckCircle2,
   AlertCircle, Search, Phone, ShieldCheck, Check,
   X, UserPlus, Building2, GraduationCap, ChevronRight,
-  MessageCircle, Loader2, Edit3, Trash2
+  MessageCircle, Loader2, Edit3, Trash2, ExternalLink, Copy, AlertTriangle
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
@@ -55,6 +55,19 @@ export default function DoctorPortalManagementPage() {
   // Loading state for single doctor generation & WhatsApp dispatch
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [sendingWhatsAppId, setSendingWhatsAppId] = useState<string | null>(null);
+
+  // Fallback WhatsApp Web modal state (avoids popup-blocker on browser)
+  const [fallbackModalData, setFallbackModalData] = useState<{
+    isOpen: boolean;
+    doctorName: string;
+    phone: string;
+    waLink: string;
+    portalUrl: string;
+    message: string;
+    notice?: string;
+  } | null>(null);
+  const [hasCopiedLink, setHasCopiedLink] = useState<boolean>(false);
+  const [hasCopiedMessage, setHasCopiedMessage] = useState<boolean>(false);
 
   const fetchDirectory = useCallback(async () => {
     try {
@@ -110,12 +123,19 @@ export default function DoctorPortalManagementPage() {
     }
   };
 
-  // Direct WhatsApp Send via Meta Official Cloud API
+  // Direct WhatsApp Send via Meta Official Cloud API with WhatsApp Web Fallback Modal
   const handleSendWhatsApp = async (doc: DoctorPortalItem) => {
     if (!doc.phone || doc.phone.trim().length < 8) {
       handleOpenPhoneModal(doc);
       return;
     }
+
+    const cleanP = (doc.phone || "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+    const finalPhone = cleanP.length === 10 ? `91${cleanP}` : cleanP;
+    const docNameClean = doc.name.replace(/^(dr\.?|doctor)\s+/i, "").trim() || "Doctor";
+    const defaultPortalUrl = doc.portal_url || "https://lis.onepathlab.com/doctor-portal";
+    const defaultFallbackMsg = `Dear Dr. ${docNameClean},\n\nYour digital Doctor Portal access link is ready:\n👉 ${defaultPortalUrl}\n\nPlease click the link to view diagnostic reports for all your referred patients online. No password required.\n\nThank you,\nRegards, Diagnostic Lab Team.`;
+    const defaultWaLink = doc.whatsapp_link || (finalPhone ? `https://wa.me/${finalPhone}?text=${encodeURIComponent(defaultFallbackMsg)}` : "");
 
     try {
       setSendingWhatsAppId(doc.id || doc.name);
@@ -128,42 +148,38 @@ export default function DoctorPortalManagementPage() {
         }),
       });
 
-      if (res && res.success) {
-        if (res.api_dispatched) {
-          toast.success(
-            "WhatsApp Delivered",
-            `Doctor Portal link sent directly to Dr. ${doc.name} on WhatsApp (+${doc.phone})!`
-          );
-        } else {
-          const waLink = res.whatsapp_link || doc.whatsapp_link;
-          if (waLink) {
-            window.open(waLink, "_blank", "noopener,noreferrer");
-          }
-          toast.success(
-            "Link Prepared",
-            res.message || "Opening WhatsApp to share portal link..."
-          );
-        }
+      if (res && res.success && res.api_dispatched) {
+        toast.success(
+          "WhatsApp Delivered",
+          res.message || `Doctor Portal link sent directly to Dr. ${doc.name} on WhatsApp (+${doc.phone})!`
+        );
         await fetchDirectory();
       } else {
-        const waLink = res?.whatsapp_link || doc.whatsapp_link;
-        if (waLink) {
-          window.open(waLink, "_blank", "noopener,noreferrer");
-        }
-        toast.error("WhatsApp Notice", res?.message || "Could not dispatch WhatsApp message directly. Opening WhatsApp Web fallback.");
+        const waLink = res?.whatsapp_link || defaultWaLink;
+        const portalUrl = res?.portal_url || defaultPortalUrl;
+        const noticeMessage = res?.message || "Meta Cloud API delivery could not reach this number directly. Click below to send via WhatsApp Web / App.";
+
+        setFallbackModalData({
+          isOpen: true,
+          doctorName: doc.name,
+          phone: doc.phone || "",
+          waLink: waLink || "",
+          portalUrl: portalUrl || "",
+          message: noticeMessage,
+          notice: res?.notice || res?.message,
+        });
         await fetchDirectory();
       }
     } catch (err: any) {
       console.error("Send WhatsApp error:", err);
-      toast.error("WhatsApp Notice", err?.message || "Could not deliver WhatsApp message.");
-      const cleanP = (doc.phone || "").replace(/[^0-9]/g, "").replace(/^0+/, "");
-      const finalPhone = cleanP.length === 10 ? `91${cleanP}` : cleanP;
-      const docNameClean = doc.name.replace(/^(dr\.?|doctor)\s+/i, "").trim() || "Doctor";
-      const fallbackMsg = `Dear Dr. ${docNameClean},\n\nYour digital Doctor Portal access link is ready:\n👉 ${doc.portal_url || "https://lis.onepathlab.com/doctor-portal"}\n\nPlease click the link to view diagnostic reports for all your referred patients online. No password required.\n\nThank you,\nRegards, Diagnostic Lab Team.`;
-      const fallbackLink = doc.whatsapp_link || (finalPhone ? `https://wa.me/${finalPhone}?text=${encodeURIComponent(fallbackMsg)}` : null);
-      if (fallbackLink) {
-        window.open(fallbackLink, "_blank", "noopener,noreferrer");
-      }
+      setFallbackModalData({
+        isOpen: true,
+        doctorName: doc.name,
+        phone: doc.phone || "",
+        waLink: defaultWaLink || "",
+        portalUrl: defaultPortalUrl || "",
+        message: err?.message || "WhatsApp gateway connection notice. Please share via WhatsApp Web below.",
+      });
     } finally {
       setSendingWhatsAppId(null);
     }
@@ -482,20 +498,33 @@ export default function DoctorPortalManagementPage() {
                 <div className="flex flex-wrap sm:flex-nowrap items-center justify-between sm:justify-end gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-border/60 w-full lg:w-auto shrink-0">
                   {/* WhatsApp Direct Action */}
                   {hasPhone ? (
-                    <button
-                      type="button"
-                      onClick={() => handleSendWhatsApp(doc)}
-                      disabled={isSendingWhatsApp || isGenerating}
-                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
-                      title="Send 1-click Portal access link to doctor's WhatsApp"
-                    >
-                      {isSendingWhatsApp ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <MessageCircle className="w-3.5 h-3.5" />
-                      )}
-                      <span>{isSendingWhatsApp ? "Sending..." : "Send WhatsApp"}</span>
-                    </button>
+                    <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
+                      <button
+                        type="button"
+                        onClick={() => handleSendWhatsApp(doc)}
+                        disabled={isSendingWhatsApp || isGenerating}
+                        className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                        title="Send 1-click Portal access link to doctor's WhatsApp"
+                      >
+                        {isSendingWhatsApp ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <MessageCircle className="w-3.5 h-3.5" />
+                        )}
+                        <span>{isSendingWhatsApp ? "Sending..." : "Send WhatsApp"}</span>
+                      </button>
+
+                      {/* Instant WhatsApp Web / App Direct Link */}
+                      <a
+                        href={doc.whatsapp_link || `https://wa.me/91${(doc.phone || "").replace(/\D/g, "").slice(-10)}?text=${encodeURIComponent(`Dear Dr. ${doc.name.replace(/^(dr\.?|doctor)\s+/i, "").trim()},\n\nYour digital Doctor Portal access link is ready:\n👉 ${doc.portal_url || "https://lis.onepathlab.com/doctor-portal"}\n\nPlease click the link to view diagnostic reports online.`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center w-9 h-9 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 transition-all shrink-0"
+                        title="Open directly in WhatsApp Web or Desktop App"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
                   ) : (
                     <button
                       type="button"
@@ -625,6 +654,96 @@ export default function DoctorPortalManagementPage() {
               </button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal Dialog: WhatsApp Web / Direct Link Fallback ── */}
+      <Dialog
+        open={!!fallbackModalData?.isOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setFallbackModalData(null);
+            setHasCopiedLink(false);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-3xl p-6">
+          <DialogHeader>
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center mb-2">
+              <MessageCircle className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-lg font-bold text-foreground">
+              Share Portal on WhatsApp
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Send access link to <span className="font-semibold text-foreground">{fallbackModalData?.doctorName}</span> (+91 {fallbackModalData?.phone}).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            {/* Notice banner if Meta API returned a specific note or self-sender error */}
+            {fallbackModalData?.notice && (
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-300 text-xs">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <div className="space-y-1">
+                  <p className="font-semibold">WhatsApp Delivery Notice:</p>
+                  <p className="text-[11px] leading-relaxed opacity-90">{fallbackModalData.notice}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Direct 1-Click WhatsApp Open Button (Opens in new tab without popup-blocker) */}
+            {fallbackModalData?.waLink ? (
+              <a
+                href={fallbackModalData.waLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  toast.success("WhatsApp Opening", "Launching WhatsApp Web / App...");
+                }}
+                className="w-full inline-flex items-center justify-center gap-2.5 px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all"
+              >
+                <MessageCircle className="w-5 h-5" />
+                <span>Open in WhatsApp Web / App</span>
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            ) : null}
+
+            {/* Direct Link Copy */}
+            <div className="p-3.5 rounded-2xl border border-border bg-muted/30 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-foreground">Direct Doctor Portal URL</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (fallbackModalData?.portalUrl) {
+                      navigator.clipboard.writeText(fallbackModalData.portalUrl);
+                      setHasCopiedLink(true);
+                      toast.success("Copied", "Portal link copied to clipboard.");
+                      setTimeout(() => setHasCopiedLink(false), 2000);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                >
+                  {hasCopiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{hasCopiedLink ? "Copied!" : "Copy Link"}</span>
+                </button>
+              </div>
+              <p className="text-[11px] font-mono text-muted-foreground break-all bg-background p-2 rounded-xl border border-border/60">
+                {fallbackModalData?.portalUrl || "Generating..."}
+              </p>
+            </div>
+
+            <DialogFooter className="pt-2">
+              <button
+                type="button"
+                onClick={() => setFallbackModalData(null)}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

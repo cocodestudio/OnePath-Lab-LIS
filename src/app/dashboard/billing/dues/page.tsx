@@ -55,14 +55,10 @@ function formatDateOnly(d: Date): string {
 export default function DueReportsPage() {
   const toast = useToast();
 
-  // Date range defaults: last 30 days up to today (matching LabSmart Screenshot 1)
-  const [startDate, setStartDate] = useState<string>(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return formatDateOnly(d);
-  });
-  const [endDate, setEndDate] = useState<string>(() => formatDateOnly(new Date()));
-  const [datePreset, setDatePreset] = useState<string>("30days");
+  // Date range defaults: All Time by default so all outstanding dues across centres are immediately visible
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+  const [datePreset, setDatePreset] = useState<string>("all");
 
   const [bills, setBills] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
