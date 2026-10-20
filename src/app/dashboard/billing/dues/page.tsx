@@ -417,12 +417,6 @@ export default function DueReportsPage() {
                     <span className="text-[10px] text-muted-foreground">(Direct In-house)</span>
                   </div>
                 </SelectItem>
-                <SelectItem value="ALL">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground">All Centres</span>
-                    <span className="text-[10px] text-muted-foreground">(All Lab Dues)</span>
-                  </div>
-                </SelectItem>
 
                 {collectionCenters.length > 0 && (
                   <>
@@ -430,16 +424,22 @@ export default function DueReportsPage() {
                       Collection Centres & Partners ({collectionCenters.length})
                     </div>
                     {collectionCenters.map((cc) => {
-                      const displayName = cc.lab_name || cc.labName || cc.name || cc.email || `Centre #${cc.id}`;
+                      const displayName = cc.name || cc.center_name || cc.centerName || cc.lab_name || cc.email || `Centre #${cc.id}`;
                       const isB2B = String(cc.role || "").toUpperCase() === "B2B";
+                      const isReception = String(cc.role || "").toUpperCase() === "RECEPTIONIST";
                       return (
                         <SelectItem key={cc.id} value={String(cc.id)}>
                           <div className="flex items-center justify-between gap-2 w-full">
                             <span className="truncate">{displayName}</span>
                             <div className="flex items-center gap-1.5 shrink-0">
                               {isB2B && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-primary/10 text-primary">
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary">
                                   B2B
+                                </span>
+                              )}
+                              {isReception && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                  Reception
                                 </span>
                               )}
                               {cc.phone && (

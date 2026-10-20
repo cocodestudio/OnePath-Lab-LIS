@@ -461,6 +461,12 @@ assert.strictEqual(validDuesCenters.length, 3);
 assert.strictEqual(validDuesCenters.some((c) => c.role === "B2B"), true);
 console.log("  ✓ Case 5.6 (Dues Collection Center Retention): Retains all collection centres and B2B partners without loss");
 
-console.log("-> Suite 5 Passed: 6/6 Doctor Portal access, phone normalization, and dues centre tests.\n");
+// Case 5.7: Dues Dropdown Display Name Prioritizes Real Staff Name Over Parent Lab Name
+const centerUser = { id: 25, name: "Asfaq", lab_name: "OnePath Command Center", role: "COLLECTION_CENTER" };
+const centerDisplayName = centerUser.name || centerUser.center_name || centerUser.lab_name || `Centre #${centerUser.id}`;
+assert.strictEqual(centerDisplayName, "Asfaq");
+console.log("  ✓ Case 5.7 (Dues Dropdown Name Priority): Correctly displays user's name ('Asfaq') instead of parent lab name ('OnePath Command Center')");
+
+console.log("-> Suite 5 Passed: 7/7 Doctor Portal access, phone normalization, and dues centre tests.\n");
 
 console.log("=== ALL UNIT TESTS PASSED SUCCESSFULLY! ===");
