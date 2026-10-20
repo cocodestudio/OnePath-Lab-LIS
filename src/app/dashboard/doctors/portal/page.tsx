@@ -129,6 +129,10 @@ export default function DoctorPortalManagementPage() {
       });
 
       if (res && res.success) {
+        const waLink = res.whatsapp_link || doc.whatsapp_link;
+        if (waLink) {
+          window.open(waLink, "_blank", "noopener,noreferrer");
+        }
         if (res.api_dispatched) {
           toast.success(
             "WhatsApp Delivered",
@@ -137,11 +141,8 @@ export default function DoctorPortalManagementPage() {
         } else {
           toast.success(
             "Link Prepared",
-            res.message || "WhatsApp message prepared. Opening WhatsApp..."
+            res.message || "Opening WhatsApp to share portal link..."
           );
-          if (res.whatsapp_link) {
-            window.open(res.whatsapp_link, "_blank", "noopener,noreferrer");
-          }
         }
         await fetchDirectory();
       } else {
@@ -150,8 +151,13 @@ export default function DoctorPortalManagementPage() {
     } catch (err: any) {
       console.error("Send WhatsApp error:", err);
       toast.error("WhatsApp Notice", err?.message || "Could not deliver WhatsApp message.");
-      if (doc.whatsapp_link) {
-        window.open(doc.whatsapp_link, "_blank", "noopener,noreferrer");
+      const cleanP = (doc.phone || "").replace(/[^0-9]/g, "").replace(/^0+/, "");
+      const finalPhone = cleanP.length === 10 ? `91${cleanP}` : cleanP;
+      const docNameClean = doc.name.replace(/^(dr\.?|doctor)\s+/i, "").trim() || "Doctor";
+      const fallbackMsg = `Dear Dr. ${docNameClean},\n\nYour digital Doctor Portal access link is ready:\n👉 ${doc.portal_url || "https://lis.onepathlab.com/doctor-portal"}\n\nPlease click the link to view diagnostic reports for all your referred patients online. No password required.\n\nThank you,\nRegards, Diagnostic Lab Team.`;
+      const fallbackLink = doc.whatsapp_link || (finalPhone ? `https://wa.me/${finalPhone}?text=${encodeURIComponent(fallbackMsg)}` : null);
+      if (fallbackLink) {
+        window.open(fallbackLink, "_blank", "noopener,noreferrer");
       }
     } finally {
       setSendingWhatsAppId(null);

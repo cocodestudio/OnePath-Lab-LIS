@@ -133,18 +133,20 @@ export default function DueReportsPage() {
         try {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const filtered = parsed.filter((c: any) => String(c.role || "").toUpperCase().includes("COLLECTION"));
-            setCollectionCenters(filtered);
+            const valid = parsed.filter((c: any) => c && (c.id || c.name));
+            if (valid.length > 0) {
+              setCollectionCenters(valid);
+            }
           }
         } catch {}
       }
 
       const res = await fetchFromLaravel("/collection-centers");
       const list = Array.isArray(res) ? res : (res?.data || []);
-      const filtered = list.filter((c: any) => String(c.role || "").toUpperCase().includes("COLLECTION"));
-      setCollectionCenters(filtered);
+      const validCenters = (Array.isArray(list) ? list : []).filter((c: any) => c && (c.id || c.name));
+      setCollectionCenters(validCenters);
       try {
-        localStorage.setItem("lis_cached_collection_centers", JSON.stringify(list));
+        localStorage.setItem("lis_cached_collection_centers", JSON.stringify(validCenters));
       } catch {}
     } catch (err) {
       console.error("Failed to load collection centers for dues filter:", err);
@@ -425,20 +427,31 @@ export default function DueReportsPage() {
                 {collectionCenters.length > 0 && (
                   <>
                     <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
-                      Collection Centres ({collectionCenters.length})
+                      Collection Centres & Partners ({collectionCenters.length})
                     </div>
-                    {collectionCenters.map((cc) => (
-                      <SelectItem key={cc.id} value={String(cc.id)}>
-                        <div className="flex items-center justify-between gap-2 w-full">
-                          <span className="truncate">{cc.lab_name || cc.labName || cc.name}</span>
-                          {cc.phone && (
-                            <span className="text-[10px] text-muted-foreground font-mono shrink-0">
-                              {cc.phone}
-                            </span>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
+                    {collectionCenters.map((cc) => {
+                      const displayName = cc.lab_name || cc.labName || cc.name || cc.email || `Centre #${cc.id}`;
+                      const isB2B = String(cc.role || "").toUpperCase() === "B2B";
+                      return (
+                        <SelectItem key={cc.id} value={String(cc.id)}>
+                          <div className="flex items-center justify-between gap-2 w-full">
+                            <span className="truncate">{displayName}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {isB2B && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-primary/10 text-primary">
+                                  B2B
+                                </span>
+                              )}
+                              {cc.phone && (
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  {cc.phone}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
                   </>
                 )}
               </SelectContent>

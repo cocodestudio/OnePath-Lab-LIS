@@ -385,7 +385,7 @@ function generateDoctorPortalUrl(baseUrl, token) {
 
 function normalizeDoctorCleanPhone(phone) {
   if (!phone) return null;
-  const digits = String(phone).replace(/[^0-9]/g, "");
+  const digits = String(phone).replace(/[^0-9]/g, "").replace(/^0+/, "");
   if (digits.length === 10) return `91${digits}`;
   if (digits.length === 12 && digits.startsWith("91")) return digits;
   return digits || null;
@@ -417,7 +417,11 @@ const clean10 = normalizeDoctorCleanPhone("9876543210");
 assert.strictEqual(clean10, "919876543210");
 const cleanFormatted = normalizeDoctorCleanPhone("+91 (987) 654-3210");
 assert.strictEqual(cleanFormatted, "919876543210");
-console.log("  ✓ Case 5.2 (Phone Normalization): Correctly formatted 10-digit Indian phone to 91XXXXXXXXXX");
+const cleanLeadingZero = normalizeDoctorCleanPhone("09876543210");
+assert.strictEqual(cleanLeadingZero, "919876543210");
+const cleanDoubleZero = normalizeDoctorCleanPhone("00919876543210");
+assert.strictEqual(cleanDoubleZero, "919876543210");
+console.log("  ✓ Case 5.2 (Phone Normalization): Correctly formatted 10-digit Indian phone with leading zeros to 91XXXXXXXXXX");
 
 // Case 5.3: WhatsApp Invite Formulation
 const waLink = formatDoctorWhatsAppInvite(
@@ -446,6 +450,17 @@ assert.strictEqual(authOther, false);
 assert.strictEqual(authSelfRef, false);
 console.log("  ✓ Case 5.5 (Cross-Doctor Privacy Defense): Successfully rejected access to patients of other doctors");
 
-console.log("-> Suite 5 Passed: 5/5 Doctor Portal access and scoping tests.\n");
+// Case 5.6: Dues Report Collection Centre & B2B Partner Retention
+const rawApiCenters = [
+  { id: 1, name: "City Collection Centre", role: "COLLECTION_CENTER" },
+  { id: 2, name: "Apex Hospital B2B Partner", role: "B2B" },
+  { id: 3, name: "Frontdesk Reception", role: "RECEPTIONIST" },
+];
+const validDuesCenters = rawApiCenters.filter((c) => c && (c.id || c.name));
+assert.strictEqual(validDuesCenters.length, 3);
+assert.strictEqual(validDuesCenters.some((c) => c.role === "B2B"), true);
+console.log("  ✓ Case 5.6 (Dues Collection Center Retention): Retains all collection centres and B2B partners without loss");
+
+console.log("-> Suite 5 Passed: 6/6 Doctor Portal access, phone normalization, and dues centre tests.\n");
 
 console.log("=== ALL UNIT TESTS PASSED SUCCESSFULLY! ===");
