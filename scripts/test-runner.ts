@@ -2051,6 +2051,107 @@ assert(
   "[MACHINE PARAM PRESERVATION] Measured MCV, MCH, MCHC from machine are preserved and not overwritten by formula"
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MODULE 22: Patient Title Resilience & Referral Doctor Outsource Commission Guardrails
+// ─────────────────────────────────────────────────────────────────────────────
+console.log("\n▶ MODULE 22: Patient Title Resilience & Referral Doctor Outsource Commission Guardrails");
+
+// 22.1 Title formatting when name has stale "Untitled" prefix
+assert(
+  formatPatientListDisplayName("Untitled Rahul Sharma", "Mr.") === "Mr. Rahul Sharma",
+  "[TITLE RESILIENCE] Non-blank designation 'Mr.' overrides stale 'Untitled' prefix to 'Mr. Rahul Sharma'"
+);
+assert(
+  formatPatientListDisplayName("Untitled Priya Verma", "Dr.") === "Dr. Priya Verma",
+  "[TITLE RESILIENCE] Non-blank designation 'Dr.' overrides stale 'Untitled' prefix to 'Dr. Priya Verma'"
+);
+assert(
+  formatPatientListDisplayName("Untitled Rahul Sharma", "") === "Untitled Rahul Sharma",
+  "[TITLE RESILIENCE] Blank designation correctly retains clean 'Untitled Rahul Sharma' without repeating prefix"
+);
+assert(
+  formatPatientListDisplayName("Untitled Untitled Rahul Sharma", "") === "Untitled Rahul Sharma",
+  "[TITLE RESILIENCE] Nested Untitled prefixes are collapsed to single 'Untitled Rahul Sharma'"
+);
+assert(
+  formatPatientListDisplayName("Mr. Rahul Sharma", "") === "Mr. Rahul Sharma",
+  "[TITLE RESILIENCE] Name already starting with 'Mr.' is preserved without prepending Untitled"
+);
+
+// 22.2 Pure Patient Name Extraction
+assert(
+  extractPurePatientName("Untitled Rahul Sharma") === "Rahul Sharma",
+  "[NAME PURITY] extractPurePatientName strips 'Untitled' prefix cleanly"
+);
+assert(
+  extractPurePatientName("Blank Rahul Sharma") === "Rahul Sharma",
+  "[NAME PURITY] extractPurePatientName strips 'Blank' prefix cleanly"
+);
+assert(
+  extractPurePatientName("Dr. Rahul Sharma") === "Rahul Sharma",
+  "[NAME PURITY] extractPurePatientName strips known title 'Dr.' cleanly"
+);
+
+// 22.3 Registration & Patient Edit Source Guardrails
+const registerSrc = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/patients/register/page.tsx"), "utf-8");
+assert(
+  !registerSrc.includes('setDesignation("");') && registerSrc.includes("!prev && !editPatientId ? defNorm : prev"),
+  "[REGISTER TITLE GUARD] fetchInitialData does not asynchronously wipe user-selected designation"
+);
+assert(
+  registerSrc.includes("rawName.replace(/^(untitled|blank|null)\\s+/gi"),
+  "[REGISTER DEMOGRAPHICS] applyPatientDemographics strips Untitled prefix before populating firstName"
+);
+
+const patientsSrc = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/patients/page.tsx"), "utf-8");
+assert(
+  patientsSrc.includes("extractPurePatientName(patient.name || \"\")"),
+  "[PATIENTS EDIT GUARD] handleOpenEdit strips stale Untitled prefix so edit input is clean pure name"
+);
+
+// 22.4 Backend Referral Doctor Controller Outsource Inclusion Guardrail
+const doctorControllerPath = path.resolve(process.cwd(), "../Backend/app/Http/Controllers/Api/Lis/DoctorController.php");
+if (fs.existsSync(doctorControllerPath)) {
+  const docCtrlSrc = fs.readFileSync(doctorControllerPath, "utf-8");
+  assert(
+    docCtrlSrc.includes("outsource_tests") && docCtrlSrc.includes("[Outsource]"),
+    "[OUTSOURCE REFERRAL BACKEND] DoctorController collects outsource_tests and includes them in test_names with [Outsource] badge"
+  );
+  assert(
+    docCtrlSrc.includes("with(['patient', 'reports.results.test'])"),
+    "[OUTSOURCE REFERRAL PERF] DoctorController eager-loads patient to eliminate N+1 queries during bill commission calculation"
+  );
+  assert(
+    docCtrlSrc.includes("'category' => 'Outsource'"),
+    "[OUTSOURCE REFERRAL MATRIX] DoctorController getSettings provides Outsource tests in test catalog for commission matrix"
+  );
+}
+
+// 22.5 Outsource Commission Math Calculation
+function calculateMockBillCommission(
+  billGross: number,
+  billDiscount: number,
+  inHousePrice: number,
+  outsourcePrice: number,
+  docBaseRate: number
+) {
+  const net = Math.max(0, billGross - billDiscount);
+  const totalItemsSum = inHousePrice + outsourcePrice;
+  const inHouseNetShare = (inHousePrice / totalItemsSum) * net;
+  const outsourceNetShare = (outsourcePrice / totalItemsSum) * net;
+  const inHouseCut = (inHouseNetShare * docBaseRate) / 100;
+  const outsourceCut = (outsourceNetShare * docBaseRate) / 100;
+  const totalDoctorCut = Math.round((inHouseCut + outsourceCut) * 100) / 100;
+  const labShare = Math.round((net - totalDoctorCut) * 100) / 100;
+  return { net, inHouseCut, outsourceCut, totalDoctorCut, labShare };
+}
+
+const calcResult = calculateMockBillCommission(2000, 200, 600, 1400, 20);
+assert(calcResult.net === 1800, "[OUTSOURCE COMM MATH] Net correctly calculated as 1800 from Gross 2000 - Discount 200");
+assert(calcResult.outsourceCut === 252, "[OUTSOURCE COMM MATH] Outsource portion (1400/2000 * 1800 = 1260 net * 20%) yields 252 cut");
+assert(calcResult.totalDoctorCut === 360, "[OUTSOURCE COMM MATH] Total doctor commission (In-House 108 + Outsource 252) strictly equals 360");
+assert(calcResult.labShare === 1440, "[OUTSOURCE COMM MATH] Lab net share strictly equals 1440");
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

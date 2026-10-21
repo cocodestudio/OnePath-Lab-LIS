@@ -24,7 +24,7 @@ import { ALL_DESIGNATIONS } from "@/lib/report-settings";
 import { BarcodeSVG } from "@/components/barcode-svg";
 import { DateFilterRibbon } from "@/components/date-filter-ribbon";
 import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
-import { formatPatientListDisplayName } from "@/lib/patient-title-helper";
+import { formatPatientListDisplayName, extractPurePatientName, isBlankDesignation } from "@/lib/patient-title-helper";
 
 interface Patient {
   id: string;
@@ -581,8 +581,10 @@ export default function PatientsPage() {
 
   const handleOpenEdit = (patient: any) => {
     setEditPatient(patient);
-    setEditDesignation(patient.designation || "");
-    setEditName(patient.name || "");
+    const des = patient.designation && !isBlankDesignation(patient.designation) ? patient.designation : "";
+    setEditDesignation(des);
+    const pure = extractPurePatientName(patient.name || "");
+    setEditName(pure || patient.name || "");
     setEditAgeYears((patient.age || 0).toString());
     setEditAgeMonths("0");
     setEditAgeDays("0");
@@ -624,11 +626,16 @@ export default function PatientsPage() {
 
     try {
       const calculatedAge = parseInt(editAgeYears) || (parseInt(editAgeMonths) > 0 ? 1 : 0) || 0;
+      const cleanName = extractPurePatientName(editName.trim());
+      const isBlank = !editDesignation || isBlankDesignation(editDesignation);
+      const effectiveDes = isBlank ? null : editDesignation.trim();
+      const finalName = effectiveDes ? `${effectiveDes} ${cleanName}`.trim() : cleanName;
+
       await fetchFromLaravel(`/patients/${editPatient.id}`, {
         method: "PUT",
         body: JSON.stringify({
-          designation: editDesignation && editDesignation.toLowerCase() !== "blank" ? editDesignation : null,
-          name: editName.trim(),
+          designation: effectiveDes,
+          name: finalName,
           age: calculatedAge,
           gender: editGender,
           phone: editPhone.trim(),

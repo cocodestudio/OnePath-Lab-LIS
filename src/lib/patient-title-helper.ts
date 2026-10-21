@@ -28,8 +28,8 @@ export function extractPurePatientName(name?: string | null): string {
   if (!name) return "";
   let clean = name.trim();
 
-  // Strip leading "Untitled" or "Blank"
-  clean = clean.replace(/^(untitled|blank|null)\s+/i, "").trim();
+  // Strip leading "Untitled" or "Blank" (including repeated occurrences)
+  clean = clean.replace(/^((untitled|blank|null)\s+)+/i, "").trim();
 
   // Strip any known title from ALL_DESIGNATIONS if present at start
   for (const d of ALL_DESIGNATIONS) {
@@ -54,18 +54,11 @@ export function formatPatientListDisplayName(name?: string | null, designation?:
 
   const trimmedName = name.trim();
 
-  // Check if name already starts with "Untitled"
-  if (/^untitled\s+/i.test(trimmedName)) {
-    return trimmedName;
-  }
-
-  // If a valid designation was provided and is not blank
+  // If a valid designation was provided and is not blank, it ALWAYS takes precedence
   if (designation && !isBlankDesignation(designation)) {
     const des = designation.trim();
-    if (trimmedName.toLowerCase().startsWith(des.toLowerCase())) {
-      return trimmedName;
-    }
-    return `${des} ${extractPurePatientName(trimmedName) || trimmedName}`.trim();
+    const pure = extractPurePatientName(trimmedName);
+    return `${des} ${pure || trimmedName}`.trim();
   }
 
   // Check if name already starts with a recognized title like "Mr.", "Mrs.", "Dr.", etc.
@@ -79,7 +72,7 @@ export function formatPatientListDisplayName(name?: string | null, designation?:
     return trimmedName;
   }
 
-  // Title is blank -> show "Untitled <Name>"
+  // Title is blank -> show "Untitled <Name>" cleanly without nested "Untitled Untitled"
   const pureName = extractPurePatientName(trimmedName) || trimmedName;
   return `Untitled ${pureName}`.trim();
 }

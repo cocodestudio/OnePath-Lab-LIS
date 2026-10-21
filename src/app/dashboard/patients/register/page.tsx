@@ -1424,9 +1424,8 @@ function RegisterPatientPage() {
             } catch { }
           }
           if (normalized.defaultDesignation && normalized.defaultDesignation.toLowerCase() !== "blank" && normalized.defaultDesignation.toLowerCase() !== "null" && normalized.defaultDesignation.toLowerCase() !== "none") {
-            setDesignation(normalizeDesignation(normalized.defaultDesignation));
-          } else {
-            setDesignation("");
+            const defNorm = normalizeDesignation(normalized.defaultDesignation);
+            setDesignation((prev) => (!prev && !editPatientId ? defNorm : prev));
           }
         }
         const rawBillSettings = lab?.bill_settings || lab?.billSettings;
@@ -1563,27 +1562,30 @@ function RegisterPatientPage() {
 
   const applyPatientDemographics = (patientData: any) => {
     if (!patientData) return;
-    // Parse Name
+    // Clean rawName from leading Untitled, Blank, Null prefixes so it never leaks into firstName
     const rawName = (patientData.name || "").trim();
-    const parts = rawName.split(/\s+/);
+    const cleanRawName = rawName.replace(/^(untitled|blank|null)\s+/gi, "").trim();
+    const parts = cleanRawName.split(/\s+/).filter(Boolean);
     let des = "";
     if (patientData.designation) {
       const norm = normalizeDesignation(patientData.designation);
-      if (norm.toLowerCase() !== "blank" && norm.toLowerCase() !== "null" && norm.toLowerCase() !== "none") {
+      if (norm.toLowerCase() !== "blank" && norm.toLowerCase() !== "null" && norm.toLowerCase() !== "none" && norm.toLowerCase() !== "untitled" && norm.toLowerCase() !== "unselected") {
         des = norm;
       }
     }
     let fn = "";
     let ln = "";
 
-    const isDesignationInName = ALL_DESIGNATIONS.filter(d => d !== "Blank" && d !== "Null").some(
+    const isDesignationInName = parts.length > 0 && ALL_DESIGNATIONS.filter(d => d !== "Blank" && d !== "Null").some(
       (d) =>
         d.toLowerCase() === parts[0].toLowerCase() ||
         d.replace(/\./g, "").toLowerCase() === parts[0].replace(/\./g, "").toLowerCase()
     );
 
     if (isDesignationInName) {
-      des = normalizeDesignation(parts[0]);
+      if (!des) {
+        des = normalizeDesignation(parts[0]);
+      }
       fn = parts[1] || "";
       ln = parts.slice(2).join(" ");
     } else {
@@ -2131,10 +2133,10 @@ function RegisterPatientPage() {
     }
 
     try {
-      let cleanFirst = firstName.trim();
+      let cleanFirst = firstName.trim().replace(/^(untitled|blank|null)\s+/gi, "").trim();
       const cleanLast = lastName.trim();
       const desTrimmed = (designation || "").trim();
-      const isBlankTitle = !desTrimmed || desTrimmed.toLowerCase() === "blank" || desTrimmed.toLowerCase() === "null" || desTrimmed.toLowerCase() === "none" || desTrimmed.toLowerCase() === "untitled";
+      const isBlankTitle = !desTrimmed || desTrimmed.toLowerCase() === "blank" || desTrimmed.toLowerCase() === "null" || desTrimmed.toLowerCase() === "none" || desTrimmed.toLowerCase() === "untitled" || desTrimmed.toLowerCase() === "unselected";
 
       if (!isBlankTitle && cleanFirst.toLowerCase().startsWith(desTrimmed.toLowerCase())) {
         cleanFirst = cleanFirst.substring(desTrimmed.length).trim();
@@ -2777,13 +2779,17 @@ function RegisterPatientPage() {
 
       const isPureOutsource = hasOutsource && !hasInHouse;
 
-      let cleanFirst = firstName.trim();
+      let cleanFirst = firstName.trim().replace(/^(untitled|blank|null)\s+/gi, "").trim();
       const cleanLast = lastName.trim();
       const desTrimmed = (designation || "").trim();
-      if (desTrimmed && cleanFirst.toLowerCase().startsWith(desTrimmed.toLowerCase())) {
+      const isBlankTitle = !desTrimmed || desTrimmed.toLowerCase() === "blank" || desTrimmed.toLowerCase() === "null" || desTrimmed.toLowerCase() === "none" || desTrimmed.toLowerCase() === "untitled" || desTrimmed.toLowerCase() === "unselected";
+
+      if (!isBlankTitle && cleanFirst.toLowerCase().startsWith(desTrimmed.toLowerCase())) {
         cleanFirst = cleanFirst.substring(desTrimmed.length).trim();
       }
-      const fullName = desTrimmed
+
+      const effectiveDesignation = isBlankTitle ? "" : desTrimmed;
+      const fullName = !isBlankTitle
         ? `${desTrimmed} ${cleanFirst}${cleanLast ? ` ${cleanLast}` : ""}`.trim()
         : `${cleanFirst}${cleanLast ? ` ${cleanLast}` : ""}`.trim();
       const calculatedAge = parseInt(ageYears) || (parseInt(ageMonths) > 0 ? 1 : 0) || 0;
@@ -2868,7 +2874,7 @@ function RegisterPatientPage() {
 
         const updatePatientPayload: any = {
           name: fullName || newPatient.name,
-          designation: designation || newPatient.designation,
+          designation: effectiveDesignation || null,
           age: calculatedAge,
           gender: gender || newPatient.gender,
           phone: phone.trim() || newPatient.phone || "N/A",
@@ -2923,7 +2929,7 @@ function RegisterPatientPage() {
           patient: {
             id: newPatient?.id,
             name: fullName || newPatient.name,
-            designation: designation || newPatient.designation,
+            designation: effectiveDesignation || null,
             age: calculatedAge,
             gender: gender || newPatient.gender,
             phone: phone.trim() || newPatient.phone || "N/A",
