@@ -2109,48 +2109,102 @@ assert(
   "[PATIENTS EDIT GUARD] handleOpenEdit strips stale Untitled prefix so edit input is clean pure name"
 );
 
-// 22.4 Backend Referral Doctor Controller Outsource Inclusion Guardrail
+// 22.4 Backend Referral Doctor Controller In-House Test Calculation Guardrail
 const doctorControllerPath = path.resolve(process.cwd(), "../Backend/app/Http/Controllers/Api/Lis/DoctorController.php");
 if (fs.existsSync(doctorControllerPath)) {
   const docCtrlSrc = fs.readFileSync(doctorControllerPath, "utf-8");
   assert(
-    docCtrlSrc.includes("outsource_tests") && docCtrlSrc.includes("[Outsource]"),
-    "[OUTSOURCE REFERRAL BACKEND] DoctorController collects outsource_tests and includes them in test_names with [Outsource] badge"
+    docCtrlSrc.includes("reports.results.test"),
+    "[IN-HOUSE REFERRAL BACKEND] DoctorController collects test items strictly from reports.results.test"
   );
   assert(
-    docCtrlSrc.includes("with(['patient', 'reports.results.test'])"),
-    "[OUTSOURCE REFERRAL PERF] DoctorController eager-loads patient to eliminate N+1 queries during bill commission calculation"
+    docCtrlSrc.includes("calculateBillCommission"),
+    "[REFERRAL COMM GUARD] DoctorController calculates bill commission with defensive zero fallbacks"
   );
   assert(
-    docCtrlSrc.includes("'category' => 'Outsource'"),
-    "[OUTSOURCE REFERRAL MATRIX] DoctorController getSettings provides Outsource tests in test catalog for commission matrix"
+    !docCtrlSrc.includes("'category' => 'Outsource'"),
+    "[REFERRAL EXCLUSION] DoctorController getSettings excludes outsource partner tests from doctor referral catalog"
   );
 }
 
-// 22.5 Outsource Commission Math Calculation
-function calculateMockBillCommission(
+// 22.5 In-House Doctor Commission Math Calculation (Outsource Excluded)
+function calculateMockInHouseBillCommission(
+  billGross: number,
+  billDiscount: number,
+  inHousePrice: number,
+  docBaseRate: number
+) {
+  const net = Math.max(0, billGross - billDiscount);
+  const inHouseCut = Math.round(((inHousePrice / billGross) * net * docBaseRate) / 100 * 100) / 100;
+  const labShare = Math.round((net - inHouseCut) * 100) / 100;
+  return { net, inHouseCut, labShare };
+}
+
+const calcResult = calculateMockInHouseBillCommission(2000, 200, 2000, 20);
+assert(calcResult.net === 1800, "[REFERRAL COMM MATH] Net correctly calculated as 1800 from Gross 2000 - Discount 200");
+assert(calcResult.inHouseCut === 360, "[REFERRAL COMM MATH] In-House commission (1800 net * 20%) yields 360 cut");
+assert(calcResult.labShare === 1440, "[REFERRAL COMM MATH] Lab net share strictly equals 1440");
+assert(calcResult.net - calcResult.inHouseCut === calcResult.labShare, "[REFERRAL COMM MATH] Net commission invariant strictly holds");
+
+// 22.6 Doctors Referral Page & Statement Main Lab vs Outsource Scope Guardrails
+const doctorsPageSrc = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/doctors/page.tsx"), "utf-8");
+assert(
+  doctorsPageSrc.includes('const [caseType, setCaseType] = useState<"main_lab" | "outsource">("main_lab");'),
+  "[DOCTORS SCOPE DROPDOWN] Referral overview defaults to 'main_lab' caseType"
+);
+assert(
+  doctorsPageSrc.includes('value="main_lab"') && doctorsPageSrc.includes('value="outsource"'),
+  "[DOCTORS SCOPE DROPDOWN] Top right selector provides both Main Lab and Outsource scope options"
+);
+assert(
+  doctorsPageSrc.includes('params.append("case_type", caseType)'),
+  "[DOCTORS SCOPE API] Overview passes case_type parameter to backend fetch"
+);
+assert(
+  doctorsPageSrc.includes('params.append("case_type", caseType)') &&
+  doctorsPageSrc.includes('caseType === "outsource" ? "Outsource" : "Main Lab"'),
+  "[DOCTORS SCOPE STATEMENT] Statement download passes selected case_type to ensure scoped statement download"
+);
+
+const doctorStatementSrc = fs.readFileSync(path.join(process.cwd(), "src/lib/download-doctor-statement.ts"), "utf-8");
+assert(
+  doctorStatementSrc.includes('Doctor Statement • Outsource Tests') && doctorStatementSrc.includes('Doctor Statement • Main Lab'),
+  "[DOCTOR STATEMENT SCOPE] Downloaded PDF renders distinct badge for Outsource vs Main Lab"
+);
+
+const doctorPatientsScopePageSrc = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/doctors/patients/page.tsx"), "utf-8");
+assert(
+  doctorPatientsScopePageSrc.includes('searchParams.get("case_type") || "main_lab"') &&
+  doctorPatientsScopePageSrc.includes('params.append("case_type", inheritedCaseType)'),
+  "[DOCTOR PATIENTS SCOPE] Doctor patients drill-down inherits and passes case_type to backend"
+);
+
+// 22.7 Proportional Outsource vs In-House Commission Separation Invariant
+function calculateScopedCommissions(
   billGross: number,
   billDiscount: number,
   inHousePrice: number,
   outsourcePrice: number,
-  docBaseRate: number
+  docRate: number
 ) {
-  const net = Math.max(0, billGross - billDiscount);
-  const totalItemsSum = inHousePrice + outsourcePrice;
-  const inHouseNetShare = (inHousePrice / totalItemsSum) * net;
-  const outsourceNetShare = (outsourcePrice / totalItemsSum) * net;
-  const inHouseCut = (inHouseNetShare * docBaseRate) / 100;
-  const outsourceCut = (outsourceNetShare * docBaseRate) / 100;
-  const totalDoctorCut = Math.round((inHouseCut + outsourceCut) * 100) / 100;
-  const labShare = Math.round((net - totalDoctorCut) * 100) / 100;
-  return { net, inHouseCut, outsourceCut, totalDoctorCut, labShare };
+  const discountRatio = billGross > 0 ? (billGross - billDiscount) / billGross : 1;
+  const inHouseNet = Math.round(inHousePrice * discountRatio * 100) / 100;
+  const inHouseCut = Math.round((inHouseNet * docRate) / 100 * 100) / 100;
+  const outsourceNet = Math.round(outsourcePrice * discountRatio * 100) / 100;
+  const outsourceCut = Math.round((outsourceNet * docRate) / 100 * 100) / 100;
+  return { inHouseNet, inHouseCut, outsourceNet, outsourceCut };
 }
 
-const calcResult = calculateMockBillCommission(2000, 200, 600, 1400, 20);
-assert(calcResult.net === 1800, "[OUTSOURCE COMM MATH] Net correctly calculated as 1800 from Gross 2000 - Discount 200");
-assert(calcResult.outsourceCut === 252, "[OUTSOURCE COMM MATH] Outsource portion (1400/2000 * 1800 = 1260 net * 20%) yields 252 cut");
-assert(calcResult.totalDoctorCut === 360, "[OUTSOURCE COMM MATH] Total doctor commission (In-House 108 + Outsource 252) strictly equals 360");
-assert(calcResult.labShare === 1440, "[OUTSOURCE COMM MATH] Lab net share strictly equals 1440");
+const scopedMath = calculateScopedCommissions(2000, 200, 1500, 500, 20);
+assert(scopedMath.inHouseNet === 1350, "[SCOPED COMM MATH] In-house net share is proportional to 1500 gross (1350)");
+assert(scopedMath.inHouseCut === 270, "[SCOPED COMM MATH] In-house doctor cut at 20% yields 270");
+assert(scopedMath.outsourceNet === 450, "[SCOPED COMM MATH] Outsource net share is proportional to 500 gross (450)");
+assert(scopedMath.outsourceCut === 90, "[SCOPED COMM MATH] Outsource doctor cut at 20% yields 90");
+assert(
+  scopedMath.inHouseCut + scopedMath.outsourceCut === 360,
+  "[SCOPED COMM MATH] Separated doctor commissions strictly sum to total bill commission (270 + 90 = 360)"
+);
+
 
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);

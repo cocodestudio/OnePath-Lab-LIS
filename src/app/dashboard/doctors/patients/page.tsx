@@ -83,6 +83,7 @@ function DoctorPatientsContent() {
   const inheritedFilter = searchParams.get("filter") || "all";
   const customStart = searchParams.get("start_date") || "";
   const customEnd = searchParams.get("end_date") || "";
+  const inheritedCaseType = searchParams.get("case_type") || "main_lab";
 
   // Data states
   const [isLoadingPatients, setIsLoadingPatients] = useState<boolean>(true);
@@ -121,6 +122,7 @@ function DoctorPatientsContent() {
       params.append("page", String(currentPage));
       params.append("per_page", String(perPage));
       params.append("filter", inheritedFilter);
+      params.append("case_type", inheritedCaseType);
       if (inheritedFilter === "custom" && customStart && customEnd) {
         params.append("start_date", customStart);
         params.append("end_date", customEnd);
@@ -166,6 +168,7 @@ function DoctorPatientsContent() {
     currentPage,
     perPage,
     inheritedFilter,
+    inheritedCaseType,
     customStart,
     customEnd,
     toast,
@@ -186,7 +189,7 @@ function DoctorPatientsContent() {
       {/* ── Page Header (Clean back button and title, no switcher/refresh/referrals buttons) ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/70 pb-5">
         <div className="flex items-center gap-3.5">
-          <Link href="/dashboard/doctors">
+          <Link href={`/dashboard/doctors${inheritedCaseType ? `?case_type=${encodeURIComponent(inheritedCaseType)}` : ""}`}>
             <Button
               variant="outline"
               size="sm"
@@ -206,6 +209,15 @@ function DoctorPatientsContent() {
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
                 <Calendar className="h-3 w-3" />
                 <span>Period: {periodLabel}</span>
+              </span>
+              <span
+                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border ${
+                  inheritedCaseType === "outsource"
+                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20"
+                    : "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
+                }`}
+              >
+                <span>{inheritedCaseType === "outsource" ? "📦 Outsource Tests" : "🔬 Main Lab"}</span>
               </span>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">

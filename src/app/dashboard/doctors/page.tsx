@@ -16,6 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { downloadDoctorStatementPdf } from "@/lib/download-doctor-statement";
 
 interface DoctorStat {
@@ -47,6 +54,7 @@ interface DoctorStat {
 export default function DoctorsOverviewPage() {
   const toast = useToast();
   const [filter, setFilter] = useState<string>("this_month");
+  const [caseType, setCaseType] = useState<"main_lab" | "outsource">("main_lab");
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
   const [search, setSearch] = useState<string>("");
@@ -92,6 +100,7 @@ export default function DoctorsOverviewPage() {
     try {
       const params = new URLSearchParams();
       params.append("filter", filter);
+      params.append("case_type", caseType);
       if (filter === "custom" && customStart && customEnd) {
         params.append("start_date", customStart);
         params.append("end_date", customEnd);
@@ -117,7 +126,7 @@ export default function DoctorsOverviewPage() {
       };
 
       await downloadDoctorStatementPdf(res, statementLab);
-      toast.success("Statement Downloaded", `PDF statement for ${doc.name} generated successfully.`);
+      toast.success("Statement Downloaded", `PDF statement for ${doc.name} (${caseType === "outsource" ? "Outsource" : "Main Lab"}) generated successfully.`);
     } catch (err: any) {
       console.error("Statement download failed:", err);
       toast.error("Download Failed", err.message || "Failed to generate doctor statement");
@@ -132,6 +141,7 @@ export default function DoctorsOverviewPage() {
     try {
       const params = new URLSearchParams();
       params.append("filter", filter);
+      params.append("case_type", caseType);
       if (filter === "custom" && customStart && customEnd) {
         params.append("start_date", customStart);
         params.append("end_date", customEnd);
@@ -162,7 +172,7 @@ export default function DoctorsOverviewPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [filter, customStart, customEnd, search, toast]);
+  }, [filter, caseType, customStart, customEnd, search, toast]);
 
   useEffect(() => {
     fetchData();
@@ -198,6 +208,7 @@ export default function DoctorsOverviewPage() {
     params.set("doctor_id", doc.id);
     params.set("doctor_name", doc.name);
     params.set("filter", filter);
+    params.set("case_type", caseType);
     if (filter === "custom" && customStart && customEnd) {
       params.set("start_date", customStart);
       params.set("end_date", customEnd);
@@ -207,47 +218,100 @@ export default function DoctorsOverviewPage() {
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-fade-in pb-16">
-      {/* ── Page Header ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/70 pb-5">
-        <div className="flex items-center gap-3.5">
-          <div className="h-12 w-12 rounded-2xl bg-indigo-500/10 dark:bg-indigo-400/10 border border-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-xs shrink-0">
-            <Stethoscope className="h-6 w-6" />
+      {/* ── Page Header (Clean, Responsive, Beautiful) ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/70 pb-5">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className={`h-11 w-11 sm:h-12 sm:w-12 rounded-2xl border flex items-center justify-center shadow-xs shrink-0 transition-colors ${
+            caseType === "outsource"
+              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+              : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20"
+          }`}>
+            <Stethoscope className="h-5 w-5 sm:h-6 sm:w-6" />
           </div>
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground truncate">
                 Doctor Referrals & Revenue
               </h1>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60">
-                LIS Analytics
+              <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border transition-colors shrink-0 ${
+                caseType === "outsource"
+                  ? "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800"
+                  : "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200/60 dark:border-indigo-800/60"
+              }`}>
+                {caseType === "outsource" ? "Outsource Scope" : "Main Lab Scope"}
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-              Monitor doctor sales performance, commission payouts, and net laboratory revenue
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 line-clamp-1 sm:line-clamp-none">
+              {caseType === "outsource"
+                ? "Monitor outsource cases referral performance, partner lab incentives, and commissions"
+                : "Monitor in-house doctor sales performance, commission payouts, and net laboratory revenue"}
             </p>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        {/* ── Action Toolbar: Dropdown, Refresh & Manage (Aligned & Responsive) ── */}
+        <div className="flex items-center gap-2 sm:gap-2.5 w-full sm:w-auto shrink-0 justify-between sm:justify-end">
+          {/* Main Lab vs Outsource Scope Selector (Select Component) */}
+          <div className="flex-1 sm:flex-initial min-w-[135px] sm:w-[185px]">
+            <Select
+              value={caseType}
+              onValueChange={(val) => {
+                setCaseType(val as "main_lab" | "outsource");
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger
+                className={`h-9 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-xs select-none w-full ${
+                  caseType === "outsource"
+                    ? "bg-amber-500/10 hover:bg-amber-500/15 text-amber-900 dark:text-amber-200 border-amber-400/50 dark:border-amber-600/50"
+                    : "bg-indigo-500/10 hover:bg-indigo-500/15 text-indigo-900 dark:text-indigo-200 border-indigo-400/50 dark:border-indigo-600/50"
+                }`}
+                aria-label="Select Referral Scope: Main Lab or Outsource"
+              >
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className="text-sm shrink-0">{caseType === "outsource" ? "📦" : "🔬"}</span>
+                  <span className="truncate">{caseType === "outsource" ? "Outsource" : "Main Lab"}</span>
+                </div>
+              </SelectTrigger>
+              <SelectContent align="end" className="w-52 p-1 rounded-xl border-border/80 shadow-xl">
+                <SelectItem value="main_lab" className="text-xs font-medium cursor-pointer py-2">
+                  <div className="flex items-center gap-2">
+                    <span>🔬</span>
+                    <span className="font-semibold">Main Lab (In-House)</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="outsource" className="text-xs font-medium cursor-pointer py-2">
+                  <div className="flex items-center gap-2">
+                    <span>📦</span>
+                    <span className="font-semibold">Outsource Tests</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Refresh Button */}
           <Button
             variant="outline"
             size="sm"
             onClick={fetchData}
             disabled={isLoading}
-            className="gap-2 h-9 rounded-xl border-border hover:bg-muted/60 transition-colors cursor-pointer"
+            className="h-9 px-3 rounded-xl border-border/80 hover:bg-accent text-xs font-semibold shrink-0 cursor-pointer transition-all shadow-xs gap-1.5"
+            title="Refresh Doctor Referral Data"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-            <span>Refresh</span>
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin text-primary" : "text-muted-foreground"}`} />
+            <span className="inline">Refresh</span>
           </Button>
 
-          <Link href="/dashboard/doctors/manage">
+          {/* Manage & Discounts Button */}
+          <Link href="/dashboard/doctors/manage" className="shrink-0">
             <Button
               size="sm"
-              className="gap-2 h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs cursor-pointer"
+              className="h-9 px-3 sm:px-3.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs cursor-pointer text-xs gap-1.5 transition-all"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
-              <span>Manage & Discounts</span>
+              <span className="hidden sm:inline">Manage & Discounts</span>
+              <span className="sm:hidden">Manage</span>
             </Button>
           </Link>
         </div>
@@ -355,7 +419,7 @@ export default function DoctorsOverviewPage() {
           </div>
           <div className="mt-2">
             <div className="text-xl sm:text-2xl font-extrabold text-foreground font-mono">
-              ₹{summary.total_sales.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹{(summary.total_sales ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
               Net billed sales from referrals
@@ -375,7 +439,7 @@ export default function DoctorsOverviewPage() {
           </div>
           <div className="mt-2">
             <div className="text-xl sm:text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 font-mono">
-              ₹{summary.total_doctor_commission.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹{(summary.total_doctor_commission ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
               Total clinician commission cut
@@ -396,7 +460,7 @@ export default function DoctorsOverviewPage() {
           <div className="mt-2">
             <div className="flex items-baseline gap-2">
               <div className="text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
-                ₹{summary.total_lab_revenue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₹{(summary.total_lab_revenue ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-950/60 px-1.5 py-0.5 rounded">
                 {labMarginPercent}%
@@ -604,11 +668,11 @@ export default function DoctorsOverviewPage() {
                     {/* Total Sales */}
                     <td className="py-3.5 px-4 text-right">
                       <div className="font-bold text-foreground font-mono">
-                        ₹{doc.net_sales.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹{(doc.net_sales ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
-                      {doc.discount_total > 0 && (
+                      {(doc.discount_total ?? 0) > 0 && (
                         <div className="text-[10px] text-muted-foreground">
-                          Gross: ₹{doc.gross_sales.toFixed(0)} | Disc: ₹{doc.discount_total.toFixed(0)}
+                          Gross: ₹{(doc.gross_sales ?? 0).toFixed(0)} | Disc: ₹{(doc.discount_total ?? 0).toFixed(0)}
                         </div>
                       )}
                     </td>
@@ -617,7 +681,7 @@ export default function DoctorsOverviewPage() {
                     <td className="py-3.5 px-3 text-center">
                       <div className="inline-flex flex-col items-center">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-mono border border-indigo-200/50 dark:border-indigo-800/50">
-                          {doc.commission_percent}%
+                          {doc.commission_percent ?? 0}%
                         </span>
                         {doc.is_using_global_rate && (
                           <span className="text-[9px] text-muted-foreground mt-0.5">Global</span>
@@ -628,14 +692,14 @@ export default function DoctorsOverviewPage() {
                     {/* Doctor Commission */}
                     <td className="py-3.5 px-4 text-right">
                       <div className="font-bold text-indigo-600 dark:text-indigo-400 font-mono">
-                        ₹{doc.doctor_commission.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹{(doc.doctor_commission ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
                     </td>
 
                     {/* Lab Net Revenue */}
                     <td className="py-3.5 px-4 text-right">
                       <div className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                        ₹{doc.lab_net_share.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        ₹{(doc.lab_net_share ?? Math.max(0, (doc.net_sales ?? 0) - (doc.doctor_commission ?? 0))).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
                     </td>
 
