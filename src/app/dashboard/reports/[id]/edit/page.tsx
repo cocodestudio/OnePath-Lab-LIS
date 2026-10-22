@@ -1518,6 +1518,7 @@ function ResultEntryContent() {
   const reportRef = React.useRef<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState<"APPROVE" | "FINAL" | "IN_PROGRESS" | "APPROVE_NEXT" | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const valuesRef = React.useRef<Record<string, string>>({});
   useEffect(() => {
@@ -2814,6 +2815,17 @@ function ResultEntryContent() {
 
   const handleSaveResults = async (targetStatus?: "IN_PROGRESS" | "FINAL" | "APPROVED", andNext: boolean = false) => {
     setSaving(true);
+    if (andNext && targetStatus === "APPROVED") {
+      setSavingAction("APPROVE_NEXT");
+    } else if (targetStatus === "APPROVED") {
+      setSavingAction("APPROVE");
+    } else if (targetStatus === "FINAL") {
+      setSavingAction("FINAL");
+    } else if (targetStatus === "IN_PROGRESS") {
+      setSavingAction("IN_PROGRESS");
+    } else {
+      setSavingAction("APPROVE");
+    }
     setError(null);
     setSuccess(null);
 
@@ -2915,6 +2927,7 @@ function ResultEntryContent() {
     } catch (err: any) {
       setError(err.message || "Failed to update results.");
       setSaving(false);
+      setSavingAction(null);
     }
   };
 
@@ -4170,33 +4183,48 @@ function ResultEntryContent() {
 
               <Button
                 type="button"
+                onClick={() => handleSaveResults("APPROVED", false)}
+                disabled={saving || printingAndApproving}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 sm:px-4 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs"
+                title="Approve Report"
+              >
+                {savingAction === "APPROVE" ? (
+                  <Loader2 className="h-3.5 sm:h-4 w-3.5 sm:w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
+                )}
+                <span>Approve</span>
+              </Button>
+
+              <Button
+                type="button"
                 onClick={() => handleSaveResults("FINAL")}
-                disabled={saving}
+                disabled={saving || printingAndApproving}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs"
               >
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
+                {savingAction === "FINAL" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
                 <span>Final</span>
               </Button>
 
               <Button
                 type="button"
                 onClick={() => handleSaveResults("IN_PROGRESS")}
-                disabled={saving}
+                disabled={saving || printingAndApproving}
                 className="bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs"
               >
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
+                {savingAction === "IN_PROGRESS" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
                 <span>In Progress</span>
               </Button>
 
               <Button
                 type="button"
                 onClick={() => handleSaveResults("APPROVED", true)}
-                disabled={saving}
+                disabled={saving || printingAndApproving}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 sm:px-5 h-9 sm:h-10 gap-1.5 cursor-pointer shadow-sm rounded-xl text-xs hover:opacity-95 transition-opacity"
               >
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
-                <span>{saving ? "Approving…" : "Approve & Next"}</span>
-                {!saving && <ChevronRight className="h-3.5 sm:h-4 w-3.5 sm:w-4 ml-0.5 opacity-80" />}
+                {savingAction === "APPROVE_NEXT" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
+                <span>{savingAction === "APPROVE_NEXT" ? "Approving…" : "Approve & Next"}</span>
+                {savingAction !== "APPROVE_NEXT" && <ChevronRight className="h-3.5 sm:h-4 w-3.5 sm:w-4 ml-0.5 opacity-80" />}
               </Button>
             </div>
           </div>

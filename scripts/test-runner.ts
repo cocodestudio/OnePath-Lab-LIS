@@ -2205,6 +2205,77 @@ assert(
   "[SCOPED COMM MATH] Separated doctor commissions strictly sum to total bill commission (270 + 90 = 360)"
 );
 
+// ============================================================================
+// MODULE 23: Reports List Table Layout Optimization & Test Hover Popover
+// ============================================================================
+console.log("\n▶ MODULE 23: Reports List Table Layout Optimization & Test Hover Popover");
+
+const reportsPageContent = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/reports/page.tsx"), "utf-8");
+
+assert(
+  reportsPageContent.includes("getReportTestName") &&
+  reportsPageContent.includes("hoveredTestsPopover") &&
+  reportsPageContent.includes("handleOpenPopover"),
+  "[REPORTS TESTS POPOVER] Reports page implements interactive hover popover for test catalog"
+);
+
+assert(
+  reportsPageContent.includes("px-3.5 py-2.5 sm:py-3 font-mono text-xs font-bold text-primary whitespace-nowrap") &&
+  reportsPageContent.includes("{repId}"),
+  "[REPORTS ID PURITY] Report ID column renders clean, bold primary ID without unnecessary clutter"
+);
+
+assert(
+  reportsPageContent.includes("{patName}") &&
+  !reportsPageContent.includes("{patId} · {patAge}y/{patGender}"),
+  "[REPORTS PATIENT PURITY] Patient column renders pure patient name without subordinate ID/age/gender clutter"
+);
+
+assert(
+  reportsPageContent.includes("+{resultsList.length - 1} more"),
+  "[REPORTS COMPACT TESTS] Multi-test reports render short primary test pill with '+X more' popover trigger"
+);
+
+assert(
+  reportsPageContent.includes("flex items-center justify-end gap-1.5 whitespace-nowrap") &&
+  reportsPageContent.includes("flex items-center gap-1.5"),
+  "[REPORTS COMPACT ROWS] Action and payment columns use single-line horizontal alignment to minimize cell height"
+);
+
+// 23.2 Result Entry Direct Single-Click Approve Button
+const editPageSrc = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/reports/[id]/edit/page.tsx"), "utf-8");
+assert(
+  editPageSrc.includes('handleSaveResults("APPROVED", false)') && editPageSrc.includes("<span>Approve</span>"),
+  "[REPORT APPROVE BUTTON] Enter results footer provides dedicated single-click Approve button"
+);
+assert(
+  editPageSrc.includes("onClick={handlePrintReport}") && editPageSrc.includes('handleSaveResults("APPROVED", true)'),
+  "[REPORT PRESERVE ACTIONS] Result entry footer retains Print Report and Approve & Next buttons without removal"
+);
+
+// 23.3 Isolated Button Loader State & Action Scoping
+assert(
+  editPageSrc.includes("savingAction") &&
+  editPageSrc.includes('savingAction === "APPROVE"') &&
+  editPageSrc.includes('savingAction === "FINAL"') &&
+  editPageSrc.includes('savingAction === "IN_PROGRESS"') &&
+  editPageSrc.includes('savingAction === "APPROVE_NEXT"'),
+  "[RESULT ENTRY LOADER SCOPING] Enter results footer isolates spinner strictly to clicked button while locking others"
+);
+
+// 23.4 Reports Date Filter Persistence & Session Storage
+assert(
+  reportsPageContent.includes("lis_reports_filter_date") &&
+  reportsPageContent.includes("sessionStorage.setItem(\"lis_reports_filter_date\""),
+  "[REPORTS DATE PERSISTENCE] Reports page preserves user-selected previous date in sessionStorage across navigation and saves"
+);
+
+// 23.5 Column Order, Header Names & Hover Popover Dismissal
+assert(
+  reportsPageContent.includes('["Report ID", "Patient", "Tests", "Status", "Payment", "Received", "Actions"]') &&
+  reportsPageContent.includes('handleDismissPopover'),
+  "[REPORTS COLUMNS & POPOVER] Columns reordered with Received before Actions, Actions header assigned, and popover auto-dismisses on scroll"
+);
 
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);

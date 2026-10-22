@@ -167,8 +167,12 @@ export default function DoctorsOverviewPage() {
         toast.error("Error", res?.message || "Failed to load doctor analytics");
       }
     } catch (err: any) {
+      if (err?.name === "AbortError") return;
       console.error("Failed to load doctor referral data:", err);
-      toast.error("Network Error", err.message || "Could not connect to server");
+      const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      if (!isOffline) {
+        toast.error("Error", err.message || "Failed to load doctor referral data");
+      }
     } finally {
       setIsLoading(false);
     }

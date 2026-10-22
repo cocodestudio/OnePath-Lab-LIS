@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useReactToPrint } from "react-to-print";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,14 @@ interface Report {
   abdmCareContextId?: string;
 }
 
+function getReportTestName(r: any): string {
+  const testObj = r?.test || {};
+  if (testObj.fieldType === "Custom Editor" && testObj.name === "Report Template" && testObj.parent) {
+    return testObj.parent.name || "Test";
+  }
+  return testObj.name || "Test";
+}
+
 const DEFAULT_LAB = { name: "OnePath Lab Main", email: "info@onepathlab.com", address: "123 Healthcare Blvd, Medical District, Delhi", logoUrl: "/onepath-logo.png" };
 
 export default function ReportsListPage() {
@@ -71,15 +80,60 @@ export default function ReportsListPage() {
     outstandingBalance: number;
     message?: string;
   } | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [sourceFilter, setSourceFilter] = useState<"ALL" | "MAIN_LAB" | "B2B" | "COLLECTION_CENTER">("ALL");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [dateMode, setDateMode] = useState<"single" | "range">("single");
-  const [filterDate, setFilterDate] = useState(() => getTodayStr());
-  const [startDate, setStartDate] = useState(() => getDaysAgoStr(6));
-  const [endDate, setEndDate] = useState(() => getTodayStr());
+  const [dateMode, setDateMode] = useState<"single" | "range">(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = sessionStorage.getItem("lis_reports_date_mode");
+        if (stored === "single" || stored === "range") return stored;
+      } catch {}
+    }
+    return "single";
+  });
+  const [filterDate, setFilterDate] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = sessionStorage.getItem("lis_reports_filter_date");
+        if (stored !== null && stored !== undefined) return stored;
+      } catch {}
+    }
+    return getTodayStr();
+  });
+  const [startDate, setStartDate] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = sessionStorage.getItem("lis_reports_start_date");
+        if (stored) return stored;
+      } catch {}
+    }
+    return getDaysAgoStr(6);
+  });
+  const [endDate, setEndDate] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = sessionStorage.getItem("lis_reports_end_date");
+        if (stored) return stored;
+      } catch {}
+    }
+    return getTodayStr();
+  });
   const [sortOrder, setSortOrder] = useState<"oldest" | "recent">("recent");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.setItem("lis_reports_date_mode", dateMode);
+        sessionStorage.setItem("lis_reports_filter_date", filterDate);
+        sessionStorage.setItem("lis_reports_start_date", startDate);
+        sessionStorage.setItem("lis_reports_end_date", endDate);
+      } catch {}
+    }
+  }, [dateMode, filterDate, startDate, endDate]);
 
   const isB2B = currentUser?.role === "B2B";
   const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER" || currentUser?.role === "COLLECTION_CENTRE";
@@ -93,9 +147,26 @@ export default function ReportsListPage() {
 
   const setPreset = (preset: "today" | "yesterday" | "all") => {
     setCurrentPage(1);
-    if (preset === "all") { setFilterDate(""); return; }
-    if (preset === "yesterday") { setFilterDate(getYesterdayStr()); return; }
-    setFilterDate(getTodayStr());
+    if (preset === "all") {
+      setFilterDate("");
+      if (typeof window !== "undefined") {
+        try { sessionStorage.setItem("lis_reports_filter_date", ""); } catch {}
+      }
+      return;
+    }
+    if (preset === "yesterday") {
+      const yDate = getYesterdayStr();
+      setFilterDate(yDate);
+      if (typeof window !== "undefined") {
+        try { sessionStorage.setItem("lis_reports_filter_date", yDate); } catch {}
+      }
+      return;
+    }
+    const tDate = getTodayStr();
+    setFilterDate(tDate);
+    if (typeof window !== "undefined") {
+      try { sessionStorage.setItem("lis_reports_filter_date", tDate); } catch {}
+    }
   };
 
   const [printReport, setPrintReport] = useState<any | null>(null);
@@ -112,6 +183,66 @@ export default function ReportsListPage() {
     repCode?: string;
   } | null>(null);
   const [updatingReportBillId, setUpdatingReportBillId] = useState<string | null>(null);
+
+  const [hoveredTestsPopover, setHoveredTestsPopover] = useState<{
+    repCode: string;
+    tests: any[];
+    x: number;
+    y: number;
+  } | null>(null);
+  const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleOpenPopover = (e: React.MouseEvent, repCode: string, tests: any[]) => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    const targetEl = (e.target as HTMLElement) || (e.currentTarget as HTMLElement);
+    const rect = targetEl.getBoundingClientRect();
+    const windowW = typeof window !== "undefined" ? window.innerWidth : 1200;
+    const windowH = typeof window !== "undefined" ? window.innerHeight : 800;
+
+    // Horizontal wide card dimensions (accommodates tests horizontally without vertical stack)
+    const popoverWidth = Math.min(580, windowW - 32);
+    const popoverHeight = 170;
+
+    const fitsBelow = rect.bottom + popoverHeight + 12 < windowH;
+    const y = fitsBelow
+      ? Math.max(10, rect.bottom + 6)
+      : Math.max(10, rect.top - popoverHeight - 6);
+
+    let x = rect.left;
+    if (x + popoverWidth > windowW - 16) {
+      x = Math.max(16, windowW - popoverWidth - 16);
+    }
+    if (x < 16) x = 16;
+
+    setHoveredTestsPopover({
+      repCode,
+      tests,
+      x,
+      y,
+    });
+  };
+
+  const handleScheduleClosePopover = () => {
+    hoverTimerRef.current = setTimeout(() => {
+      setHoveredTestsPopover(null);
+    }, 180);
+  };
+
+  const handleCancelClosePopover = () => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+  };
+
+  useEffect(() => {
+    const handleDismissPopover = () => {
+      setHoveredTestsPopover(null);
+    };
+    window.addEventListener("scroll", handleDismissPopover, { passive: true, capture: true });
+    window.addEventListener("resize", handleDismissPopover, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleDismissPopover, { capture: true });
+      window.removeEventListener("resize", handleDismissPopover);
+    };
+  }, []);
 
   const [loading, setLoading] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -784,6 +915,11 @@ export default function ReportsListPage() {
     setStartDate("");
     setEndDate("");
     setSortOrder("oldest");
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.setItem("lis_reports_filter_date", "");
+      } catch {}
+    }
   };
   const hasFilters = search || statusFilter !== "ALL" || sourceFilter !== "ALL" || (dateMode === "range" ? Boolean(startDate || endDate) : Boolean(filterDate)) || sortOrder !== "oldest";
 
@@ -1072,31 +1208,28 @@ export default function ReportsListPage() {
 
         <div className={`table-responsive-container transition-opacity duration-200 ${isFetching && safeReports.length > 0 ? "opacity-60 pointer-events-none" : ""}`}>
           {(loading && safeReports.length === 0) || (isFetching && safeReports.length === 0) ? (
-            <table className="w-full min-w-[640px] text-left">
+            <table className="w-full text-left">
               <thead>
                 <tr className="bg-muted/30 border-b border-border/60">
-                  <th className="w-12 px-4 py-3.5 text-center">
+                  <th className="w-10 px-2 py-2.5 sm:py-3 text-center">
                     <div className="h-4 w-4 rounded bg-muted/60 mx-auto" />
                   </th>
-                  {["Report ID", "Patient", "Received", "Tests", "Status", "Payment", ""].map((h, i) => (
-                    <th key={h + i} className={`px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${i === 2 || i === 3 ? "hidden lg:table-cell" : ""} ${i === 6 ? "text-right" : ""}`}>{h}</th>
+                  {["Report ID", "Patient", "Tests", "Status", "Payment", "Received", "Actions"].map((h, i) => (
+                    <th key={h + i} className={`px-3.5 py-2.5 sm:py-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${h === "Tests" ? "hidden lg:table-cell" : h === "Received" ? "hidden xl:table-cell" : ""} ${h === "Actions" ? "text-right" : ""}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/30">
                 {Array.from({ length: 8 }).map((_, idx) => (
                   <tr key={idx} className="animate-fade-in">
-                    <td className="w-12 px-4 py-4 text-center"><div className="h-4 w-4 rounded shimmer-gradient mx-auto" /></td>
-                    <td className="px-6 py-4"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
-                    <td className="px-6 py-4 space-y-1.5">
-                      <div className="h-4 w-36 rounded shimmer-gradient" />
-                      <div className="h-3 w-20 rounded shimmer-gradient" />
-                    </td>
-                    <td className="px-6 py-4 hidden lg:table-cell"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
-                    <td className="px-6 py-4 hidden lg:table-cell"><div className="h-4 w-36 rounded shimmer-gradient" /></td>
-                    <td className="px-6 py-4"><div className="h-6 w-20 rounded-full shimmer-gradient" /></td>
-                    <td className="px-6 py-4"><div className="h-6 w-20 rounded-full shimmer-gradient" /></td>
-                    <td className="px-6 py-4 text-right"><div className="h-7 w-24 rounded-lg shimmer-gradient ml-auto" /></td>
+                    <td className="w-10 px-2 py-2.5 sm:py-3 text-center"><div className="h-4 w-4 rounded shimmer-gradient mx-auto" /></td>
+                    <td className="px-3.5 py-2.5 sm:py-3"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
+                    <td className="px-3.5 py-2.5 sm:py-3"><div className="h-4 w-28 rounded shimmer-gradient" /></td>
+                    <td className="px-3.5 py-2.5 sm:py-3 hidden lg:table-cell"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
+                    <td className="px-3.5 py-2.5 sm:py-3"><div className="h-5 w-18 rounded-full shimmer-gradient" /></td>
+                    <td className="px-3.5 py-2.5 sm:py-3"><div className="h-5 w-16 rounded-full shimmer-gradient" /></td>
+                    <td className="px-3.5 py-2.5 sm:py-3 hidden xl:table-cell"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
+                    <td className="px-3.5 py-2.5 sm:py-3 text-right"><div className="h-7 w-24 rounded-lg shimmer-gradient ml-auto" /></td>
                   </tr>
                 ))}
               </tbody>
@@ -1134,18 +1267,18 @@ export default function ReportsListPage() {
               )}
             </div>
           ) : (
-            <table className="w-full min-w-[640px] text-left">
+            <table className="w-full text-left">
               <thead>
                 <tr className="bg-muted/30 border-b border-border/60">
-                  <th className="w-12 px-4 py-3.5 text-center">
+                  <th className="w-10 px-2 py-2.5 sm:py-3 text-center">
                     <Checkbox
                       checked={isAllCurrentPageSelected}
                       onCheckedChange={toggleSelectAllCurrentPage}
                       aria-label="Select all reports on this page"
                     />
                   </th>
-                  {["Report ID", "Patient", "Received", "Tests", "Status", "Payment", ""].map((h, i) => (
-                    <th key={h + i} className={`px-6 py-3.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${i === 2 || i === 3 ? "hidden lg:table-cell" : ""} ${i === 6 ? "text-right" : ""}`}>{h}</th>
+                  {["Report ID", "Patient", "Tests", "Status", "Payment", "Received", "Actions"].map((h, i) => (
+                    <th key={h + i} className={`px-3.5 py-2.5 sm:py-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${h === "Tests" ? "hidden lg:table-cell" : h === "Received" ? "hidden xl:table-cell" : ""} ${h === "Actions" ? "text-right" : ""}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -1155,9 +1288,6 @@ export default function ReportsListPage() {
                   const resultsList = Array.isArray(rep.results) ? rep.results : [];
                   const abnormalCount = resultsList.filter((r: any) => r.isAbnormal || r.is_abnormal).length;
                   const patName = formatPatientListDisplayName(rep.patient?.name, rep.patient?.designation);
-                  const patId = rep.patient?.custom_id || rep.patient?.customId || "N/A";
-                  const patAge = rep.patient?.age || "N/A";
-                  const patGender = rep.patient?.gender || "N/A";
                   const repId = rep.custom_id || rep.customId || "REP";
                   const repDate = rep.created_at || rep.createdAt;
 
@@ -1168,62 +1298,48 @@ export default function ReportsListPage() {
                         isSelected ? "bg-primary/5 dark:bg-primary/10" : ""
                       }`}
                     >
-                      <td className="w-12 px-4 py-4 text-center">
+                      <td className="w-10 px-2 py-2.5 sm:py-3 text-center">
                         <Checkbox
                           checked={isSelected}
                           onCheckedChange={() => toggleSelectReport(rep.id)}
                           aria-label={`Select report ${repId}`}
                         />
                       </td>
-                      <td className="px-6 py-4 font-mono text-xs font-semibold text-primary">{repId}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-3.5 py-2.5 sm:py-3 font-mono text-xs font-bold text-primary whitespace-nowrap">
+                        {repId}
+                      </td>
+                      <td className="px-3 py-2.5 sm:py-3">
+                        <p className="font-semibold text-foreground text-xs sm:text-sm tracking-tight truncate max-w-[140px] lg:max-w-[170px] xl:max-w-[200px]" title={patName}>
+                          {patName}
+                        </p>
+                      </td>
+                      <td className="px-3.5 py-2.5 sm:py-3 hidden lg:table-cell whitespace-nowrap">
+                        {resultsList.length === 0 ? (
+                          <span className="text-[11px] text-muted-foreground/70 italic">No tests</span>
+                        ) : (
+                          <div
+                            className="flex items-center gap-1.5 cursor-pointer"
+                            onMouseEnter={(e) => handleOpenPopover(e, repId, resultsList)}
+                            onMouseLeave={handleScheduleClosePopover}
+                          >
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-muted/70 text-foreground border border-border/50 max-w-[110px] truncate hover:border-primary/50 transition-colors"
+                              title={getReportTestName(resultsList[0])}
+                            >
+                              {getReportTestName(resultsList[0])}
+                            </span>
+                            {resultsList.length > 1 && (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors cursor-pointer select-none"
+                              >
+                                +{resultsList.length - 1} more
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 sm:py-3 whitespace-nowrap">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="font-semibold text-foreground text-sm">{patName}</p>
-                          {!isB2B && !isCollectionCenter && (
-                            (() => {
-                              const src = getReportSource(rep);
-                              if (src === "B2B") {
-                                return (
-                                  <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                                    B2B
-                                  </span>
-                                );
-                              }
-                              if (src === "COLLECTION_CENTER") {
-                                return (
-                                  <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
-                                    CC
-                                  </span>
-                                );
-                              }
-                              return (
-                                <span className="inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                                  Main Lab
-                                </span>
-                              );
-                            })()
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{patId} · {patAge}y/{patGender}</p>
-                      </td>
-                      <td className="px-6 py-4 text-muted-foreground text-xs hidden lg:table-cell whitespace-nowrap">
-                        {repDate ? new Date(repDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "N/A"}
-                      </td>
-                      <td className="px-6 py-4 hidden lg:table-cell">
-                        <div className="flex flex-wrap gap-1.5 max-w-[260px]">
-                          {resultsList.slice(0, 4).map((r: any) => {
-                            const testObj = r.test || {};
-                            const name = testObj.fieldType === "Custom Editor" && testObj.name === "Report Template" && testObj.parent ? testObj.parent.name : (testObj.name || "Test");
-                            const isAbn = r.isAbnormal || r.is_abnormal;
-                            return (
-                              <span key={r.id} className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-semibold border ${isAbn ? "bg-destructive/8 text-destructive border-destructive/20" : "bg-accent text-accent-foreground border-transparent"}`}>{name}</span>
-                            );
-                          })}
-                          {resultsList.length > 4 && <span className="text-[10px] text-muted-foreground font-medium px-1 py-0.5">+{resultsList.length - 4}</span>}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col gap-1 items-start">
                           {(() => {
                             const isRejected = rep.status === "REJECTED" || rep.meta?.sample_status === "REJECTED" || rep.patient?.meta?.sample_status === "REJECTED";
                             const rejectionReason = rep.meta?.rejection_reason || rep.patient?.meta?.rejection_reason || "Sample Rejected";
@@ -1306,7 +1422,7 @@ export default function ReportsListPage() {
                       </td>
 
                       {/* Payment Status Column */}
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 py-2.5 sm:py-3 whitespace-nowrap">
                         {(() => {
                           const isB2BReport = rep.is_b2b_paid || rep.isB2bPaid;
                           const bill = rep.bill;
@@ -1340,105 +1456,61 @@ export default function ReportsListPage() {
 
                           if (isPaid) {
                             return (
-                              <div className="flex flex-col items-start gap-1">
-                                <button
-                                  type="button"
-                                  onClick={(e) => canToggle && handleToggleReportPayment(rep, e)}
-                                  disabled={isUpdating || !canToggle}
-                                  title={canToggle ? "Click to toggle to UNPAID" : "Payment received"}
-                                  className={`group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shadow-xs transition-all ${
-                                    canToggle ? "cursor-pointer hover:bg-emerald-500/25 hover:scale-105 active:scale-95" : "cursor-default"
-                                  } ${isUpdating ? "opacity-70 cursor-wait" : ""}`}
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 cursor-default select-none shadow-xs"
+                                  title="Payment received in full"
                                 >
-                                  {isUpdating ? (
-                                    <Loader2 className="h-3 w-3 animate-spin text-current" />
-                                  ) : (
-                                    <>
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
-                                      <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                                    </>
-                                  )}
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                                  <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                                   <span>PAID</span>
-                                  {canToggle && <span className="text-[9px] opacity-60 group-hover:opacity-100 transition-opacity ml-0.5">⇄</span>}
-                                </button>
-                                {billTotal > 0 && (
-                                  <span className="text-[10px] font-mono text-muted-foreground pl-1 font-semibold">
-                                    ₹{billTotal.toFixed(2)}
-                                  </span>
-                                )}
+                                </span>
                               </div>
                             );
                           }
 
                           if (isPartial) {
                             return (
-                              <div className="flex flex-col items-start gap-1">
-                                <button
-                                  type="button"
-                                  onClick={(e) => canToggle && handleToggleReportPayment(rep, e)}
-                                  disabled={isUpdating || !canToggle}
-                                  title={canToggle ? "Click to mark as PAID" : "Partial payment received"}
-                                  className={`group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shadow-xs transition-all ${
-                                    canToggle ? "cursor-pointer hover:bg-amber-500/25 hover:scale-105 active:scale-95" : "cursor-default"
-                                  } ${isUpdating ? "opacity-70 cursor-wait" : ""}`}
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 cursor-default select-none shadow-xs"
+                                  title="Partial payment received"
                                 >
-                                  {isUpdating ? (
-                                    <Loader2 className="h-3 w-3 animate-spin text-current" />
-                                  ) : (
-                                    <>
-                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                      <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                                    </>
-                                  )}
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                  <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
                                   <span>PARTIAL</span>
-                                  {canToggle && <span className="text-[9px] opacity-60 group-hover:opacity-100 transition-opacity ml-0.5">⇄</span>}
-                                </button>
-                                <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 pl-1 font-semibold">
-                                  Due: ₹{(billTotal - billPaid).toFixed(2)}
                                 </span>
                               </div>
                             );
                           }
 
                           return (
-                            <div className="flex flex-col items-start gap-1">
-                              <button
-                                type="button"
-                                onClick={(e) => canToggle && handleToggleReportPayment(rep, e)}
-                                disabled={isUpdating || !canToggle}
-                                title={canToggle ? "Click to mark as PAID" : "Unpaid report"}
-                                className={`group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wide bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 shadow-xs transition-all animate-pulse ${
-                                  canToggle ? "cursor-pointer hover:bg-rose-500/25 hover:scale-105 active:scale-95" : "cursor-default"
-                                } ${isUpdating ? "opacity-70 cursor-wait" : ""}`}
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 cursor-default select-none shadow-xs"
+                                title="Payment pending"
                               >
-                                {isUpdating ? (
-                                  <Loader2 className="h-3 w-3 animate-spin text-current" />
-                                ) : (
-                                  <>
-                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
-                                    <AlertCircle className="h-3 w-3 text-rose-600 dark:text-rose-400" />
-                                  </>
-                                )}
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
+                                <AlertCircle className="h-3 w-3 text-rose-600 dark:text-rose-400" />
                                 <span>UNPAID</span>
-                                {canToggle && <span className="text-[9px] opacity-60 group-hover:opacity-100 transition-opacity ml-0.5">⇄</span>}
-                              </button>
-                              {billTotal > 0 && (
-                                <span className="text-[10px] font-mono text-rose-600 dark:text-rose-400 pl-1 font-semibold">
-                                  Due: ₹{billTotal.toFixed(2)}
-                                </span>
-                              )}
+                              </span>
                             </div>
                           );
                         })()}
                       </td>
 
-                      <td className="px-6 py-3.5 text-right">
+                      {/* Received Date Column */}
+                      <td className="px-3.5 py-2.5 sm:py-3 text-muted-foreground text-xs hidden xl:table-cell whitespace-nowrap">
+                        {repDate ? new Date(repDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "N/A"}
+                      </td>
+
+                      <td className="px-3 py-2.5 sm:py-3 text-right">
                         {(() => {
                           const isRejected = rep.status === "REJECTED" || rep.meta?.sample_status === "REJECTED" || rep.patient?.meta?.sample_status === "REJECTED";
                           if (isRejected) {
                             return (
-                              <div className="flex flex-col items-end gap-1 min-w-[125px]">
-                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-500/10 px-2.5 py-1.5 rounded-lg border border-rose-500/20 w-full justify-center">
+                              <div className="flex items-center justify-end">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-500/10 px-2.5 py-1 rounded-lg border border-rose-500/20 whitespace-nowrap">
                                   <Ban className="h-3.5 w-3.5" /> Sample Rejected
                                 </span>
                               </div>
@@ -1446,11 +1518,12 @@ export default function ReportsListPage() {
                           }
 
                           return (
-                            <div className="flex flex-col items-end gap-1.5 min-w-[125px]">
+                            <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
                               {!isPartnerOrCC && (
-                                <Link href={`/dashboard/reports/${rep.id}/edit`} className="w-full">
-                                  <Button size="sm" className="h-8 gap-1.5 w-full font-bold text-xs">
-                                    <Edit3 className="h-3.5 w-3.5" /> Enter Results
+                                <Link href={`/dashboard/reports/${rep.id}/edit`}>
+                                  <Button size="sm" className="h-8 px-2 xl:px-2.5 gap-1 sm:gap-1.5 font-bold text-xs cursor-pointer shadow-xs rounded-xl" title="Enter Results">
+                                    <Edit3 className="h-3.5 w-3.5" />
+                                    <span className="hidden xl:inline">Results</span>
                                   </Button>
                                 </Link>
                               )}
@@ -1460,8 +1533,8 @@ export default function ReportsListPage() {
                                 size="sm" 
                                 onClick={() => triggerPrint(rep)} 
                                 disabled={printingId === rep.id}
-                                className={`h-8 gap-1.5 w-full font-bold text-xs rounded-xl cursor-pointer ${
-                                  isPartnerOrCC ? "gradient-primary text-primary-foreground shadow-xs ring-inset-top" : "border border-border/80 hover:bg-muted text-foreground"
+                                className={`h-8 px-2 xl:px-2.5 gap-1 font-bold text-xs rounded-xl cursor-pointer shadow-xs ${
+                                  isPartnerOrCC ? "gradient-primary text-primary-foreground ring-inset-top" : "border border-border/80 hover:bg-muted text-foreground"
                                 }`}
                                 title={isPartnerOrCC && !(rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED") ? "Report is awaiting final approval from central lab" : "Print report"}
                               >
@@ -1470,18 +1543,18 @@ export default function ReportsListPage() {
                                 ) : (
                                   <Printer className="h-3.5 w-3.5" />
                                 )}
-                                <span>
+                                <span className="hidden xl:inline">
                                   {isB2B
                                     ? rep.is_b2b_paid || rep.isB2bPaid
-                                      ? "Print Report"
+                                      ? "Print"
                                       : (rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED")
-                                      ? `Print (₹${Number(rep.b2b_price ?? rep.b2bPrice ?? 0).toLocaleString("en-IN")})`
-                                      : "Awaiting Approval"
+                                      ? `₹${Number(rep.b2b_price ?? rep.b2bPrice ?? 0).toLocaleString("en-IN")}`
+                                      : "Awaiting"
                                     : isCollectionCenter
                                     ? (rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED")
-                                      ? "Print Report"
-                                      : "Awaiting Approval"
-                                    : "Print Report"}
+                                      ? "Print"
+                                      : "Awaiting"
+                                    : "Print"}
                                 </span>
                               </Button>
 
@@ -1491,18 +1564,18 @@ export default function ReportsListPage() {
                                 size="sm"
                                 onClick={() => triggerWhatsApp(rep)}
                                 disabled={sendingWhatsAppId === rep.id}
-                                className="h-8 gap-1.5 w-full font-bold text-xs rounded-xl cursor-pointer border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-xs"
+                                className="h-8 px-2 xl:px-2.5 gap-1 font-bold text-xs rounded-xl cursor-pointer border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-xs"
                                 title="Send report directly to patient's WhatsApp"
                               >
                                 {sendingWhatsAppId === rep.id ? (
                                   <>
                                     <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                    <span>Sending...</span>
+                                    <span className="hidden xl:inline">Sending...</span>
                                   </>
                                 ) : (
                                   <>
                                     <MessageCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                    <span>Send WhatsApp</span>
+                                    <span className="hidden xl:inline">WhatsApp</span>
                                   </>
                                 )}
                               </Button>
@@ -1638,6 +1711,68 @@ export default function ReportsListPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Interactive Horizontal Hover Popover for Report Tests (Portaled to document.body to prevent parent CSS transform distortion) */}
+      {mounted && hoveredTestsPopover && typeof document !== "undefined" && createPortal(
+        <div
+          style={{
+            position: "fixed",
+            top: hoveredTestsPopover.y,
+            left: hoveredTestsPopover.x,
+            zIndex: 999999,
+          }}
+          onMouseEnter={handleCancelClosePopover}
+          onMouseLeave={handleScheduleClosePopover}
+          className="w-auto max-w-[580px] min-w-[320px] rounded-2xl bg-popover/98 border border-border shadow-2xl backdrop-blur-xl p-3.5 animate-in fade-in zoom-in-95 text-popover-foreground transition-all duration-150 pointer-events-auto"
+        >
+          <div className="flex items-center justify-between border-b border-border/60 pb-2 mb-2.5 gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-primary" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                All Tests ({hoveredTestsPopover.tests.length})
+              </span>
+            </div>
+            <span className="font-mono text-[11px] font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md">
+              {hoveredTestsPopover.repCode}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5 max-h-72 overflow-y-auto">
+            {hoveredTestsPopover.tests.map((r: any, idx: number) => {
+              const name = getReportTestName(r);
+              const isAbn = r.isAbnormal || r.is_abnormal;
+              return (
+                <div
+                  key={r.id || idx}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                    isAbn
+                      ? "bg-destructive/10 border-destructive/30 text-destructive font-bold"
+                      : "bg-muted/60 border-border/60 text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isAbn ? "bg-destructive animate-pulse" : "bg-emerald-500"}`} />
+                  <span className="truncate max-w-[170px]" title={name}>
+                    {name}
+                  </span>
+                  {isAbn ? (
+                    <span className="text-[9px] font-extrabold uppercase px-1 py-0.2 rounded bg-destructive/20 text-destructive shrink-0">
+                      Abnormal
+                    </span>
+                  ) : r.resultValue ? (
+                    <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[70px] shrink-0" title={r.resultValue}>
+                      {r.resultValue}
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-muted-foreground/70 shrink-0">
+                      Normal
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

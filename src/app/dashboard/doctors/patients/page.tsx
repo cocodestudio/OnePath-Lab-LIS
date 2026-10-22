@@ -157,8 +157,12 @@ function DoctorPatientsContent() {
         toast.error("Error", res?.message || "Failed to load doctor's patients");
       }
     } catch (err: any) {
+      if (err?.name === "AbortError") return;
       console.error("Failed to fetch doctor patients:", err);
-      toast.error("Network Error", err.message || "Failed to load patients data");
+      const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+      if (!isOffline) {
+        toast.error("Error", err.message || "Failed to load patients data");
+      }
     } finally {
       setIsLoadingPatients(false);
     }
