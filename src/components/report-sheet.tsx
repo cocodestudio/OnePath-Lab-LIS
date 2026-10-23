@@ -3,7 +3,7 @@ import { FileText } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { getCleanLetterheadUrl } from "@/lib/api-client";
 import { BarcodeSVG } from "@/components/barcode-svg";
-import { normalizeReportSettings, type ReportLayoutSettings, defaultReportLayoutSettings, resolveSignatureUrl, type DoctorSignatureConfig } from "@/lib/report-settings";
+import { normalizeReportSettings, type ReportLayoutSettings, defaultReportLayoutSettings, resolveSignatureUrl, type DoctorSignatureConfig, getReportFontStack } from "@/lib/report-settings";
 import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 import { getReportPackage } from "@/lib/packages";
 import { compareClinicalTests, compareClinicalParameters, getClinicalTestPriority } from "@/lib/clinical-order";
@@ -304,7 +304,7 @@ export function PatientInfoBlock({ report }: { report: ReportSheetData }) {
   return (
     <div 
       className="border border-zinc-300 rounded-xs px-2 py-1 mb-1.5 text-[11px] leading-[1.25] text-zinc-900 bg-white"
-      style={{ fontFamily: 'Arial, "Segoe UI", Roboto, sans-serif' }}
+      style={{ fontFamily: getReportFontStack(reportSettings.typography?.fontFamily) }}
     >
       <div className="flex items-start justify-between gap-3">
         {/* Dynamic 2-Column Info Grid based on Custom Sequence Ordering */}
@@ -764,7 +764,7 @@ export function buildReportBlocks(
               isSeparateTest ? "mt-1.5" : ""
             }`}
             style={{ 
-              fontFamily: 'Arial, Helvetica, sans-serif',
+              fontFamily: 'inherit',
               fontSize: `${Math.min(12, typo.departmentFontSize || 12)}px`,
               paddingTop: `${Math.min(2, sp.department || 2)}px`,
             }}
@@ -879,7 +879,7 @@ export function buildReportBlocks(
               isTestNameCenter ? "justify-center relative" : "justify-between"
             }`}
             style={{ 
-              fontFamily: 'Arial, Helvetica, sans-serif',
+              fontFamily: 'inherit',
               marginTop: `${Math.min(4, sp.testName || 4)}px`,
               marginBottom: `${Math.min(3, typo.spacingBetweenTests || 3)}px`,
             }}
@@ -959,7 +959,7 @@ export function buildReportBlocks(
                   <div 
                     className="my-1 text-zinc-900 report-custom-editor-content"
                     style={{ 
-                      fontFamily: 'Arial, Helvetica, sans-serif',
+                      fontFamily: 'inherit',
                       fontSize: `${typo.testParameterFontSize || 10.5}px`,
                       textAlign: "left",
                       lineHeight: 1.35,
@@ -1011,7 +1011,7 @@ export function buildReportBlocks(
                   <div 
                     className="my-1.5 p-1 text-zinc-900 report-custom-editor-content"
                     style={{ 
-                      fontFamily: 'Arial, Helvetica, sans-serif',
+                      fontFamily: 'inherit',
                       fontSize: `${typo.testParameterFontSize || 10.5}px`,
                       textAlign: "left",
                     }}
@@ -1027,7 +1027,7 @@ export function buildReportBlocks(
                 <div 
                   className="my-1.5 p-1 bg-white rounded leading-relaxed text-zinc-900 report-custom-editor-content"
                   style={{ 
-                    fontFamily: 'Arial, Helvetica, sans-serif',
+                    fontFamily: 'inherit',
                     fontSize: `${typo.testParameterFontSize || 11}px`,
                     textAlign: "left",
                   }}
@@ -1054,7 +1054,7 @@ export function buildReportBlocks(
                 borderCollapse: "collapse",
                 borderSpacing: 0,
                 margin: 0,
-                fontFamily: 'Arial, Helvetica, sans-serif',
+                fontFamily: 'inherit',
                 fontSize: `${typo.columnHeadingFontSize || 10}px`,
                 fontWeight: "bold",
                 backgroundColor: "#f4f4f5",
@@ -1173,7 +1173,7 @@ export function buildReportBlocks(
                 borderCollapse: "collapse",
                 borderSpacing: 0,
                 margin: 0,
-                fontFamily: 'Arial, Helvetica, sans-serif',
+                fontFamily: 'inherit',
                 borderBottom: typo.lineBelowEachParameterRow ? "1px solid #e4e4e7" : "none",
               }}
             >
@@ -1314,7 +1314,7 @@ export function buildReportBlocks(
               node: (
                 <div 
                   className="pt-0.5 pb-0.5 font-bold text-[10px] text-zinc-900 uppercase tracking-wide border-b border-zinc-200 mt-0.5 mb-0.5"
-                  style={{ fontFamily: 'Arial, Helvetica, sans-serif', pageBreakInside: 'avoid' }}
+                  style={{ fontFamily: 'inherit', pageBreakInside: 'avoid' }}
                 >
                   {unit.title}
                 </div>
@@ -1341,7 +1341,7 @@ export function buildReportBlocks(
           node: (
             <div 
               className="mt-1.5 p-1.5 bg-zinc-50 border border-zinc-200 rounded text-[9.5px] space-y-0.5"
-              style={{ fontFamily: 'Arial, Helvetica, sans-serif', pageBreakInside: 'avoid' }}
+              style={{ fontFamily: 'inherit', pageBreakInside: 'avoid' }}
             >
               {activeTestNotes.notes && (
                 <div>
@@ -1388,7 +1388,7 @@ export function buildReportBlocks(
           node: (
             <div 
               className="mt-2 pt-1.5 border-t border-dashed border-zinc-400 text-zinc-700 leading-snug"
-              style={{ fontFamily: 'Arial, Helvetica, sans-serif', pageBreakInside: 'avoid', fontSize: `${interpConf.contentFontSize || 9.5}px` }}
+              style={{ fontFamily: 'inherit', pageBreakInside: 'avoid', fontSize: `${interpConf.contentFontSize || 9.5}px` }}
             >
               <p className={`text-zinc-900 uppercase tracking-wider mb-1 ${interpConf.boldHeading ? "font-bold" : "font-semibold"}`} style={{ fontSize: `${interpConf.headingFontSize || 9.5}px` }}>
                 Clinical Notes & Interpretation ({mainTestName}):
@@ -1471,7 +1471,7 @@ export function buildReportBlocks(
         <div 
           className="mt-4 pt-2 text-zinc-700 select-none"
           style={{ 
-            fontFamily: 'Arial, "Segoe UI", Roboto, sans-serif',
+            fontFamily: 'inherit',
             pageBreakInside: 'avoid' 
           }}
         >
@@ -1668,6 +1668,10 @@ export const PaginatedReportPreview = React.forwardRef<
       lab.report_settings || lab.reportSettings || (report as any).report_settings || (report as any).reportSettings
     );
   }, [report]);
+
+  const activeFontFamily = React.useMemo(() => {
+    return getReportFontStack(reportSettings.typography?.fontFamily);
+  }, [reportSettings]);
 
   const enabledSignaturesList = React.useMemo(() => {
     const sigs = Array.isArray(reportSettings.doctorSignatures) && reportSettings.doctorSignatures.length > 0
@@ -1926,7 +1930,7 @@ export const PaginatedReportPreview = React.forwardRef<
           opacity: 0,
           zIndex: -100,
           pointerEvents: "none",
-          fontFamily: 'Arial, "Helvetica Neue", Helvetica, "Segoe UI", Roboto, sans-serif',
+          fontFamily: activeFontFamily,
         }}
         aria-hidden
       >
@@ -2008,7 +2012,7 @@ export const PaginatedReportPreview = React.forwardRef<
                   maxHeight: contentAreaHeight,
                   overflow: "hidden",
                   zIndex: 1,
-                  fontFamily: 'Arial, "Helvetica Neue", Helvetica, "Segoe UI", Roboto, sans-serif',
+                  fontFamily: activeFontFamily,
                 }}
               >
                 <div className="flex-1 min-h-0">

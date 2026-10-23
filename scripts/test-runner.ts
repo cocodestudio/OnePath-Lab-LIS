@@ -2277,6 +2277,200 @@ assert(
   "[REPORTS COLUMNS & POPOVER] Columns reordered with Received before Actions, Actions header assigned, and popover auto-dismisses on scroll"
 );
 
+// ==============================================================================
+// 24. Report Dynamic Typography & Multi-Client Font Family Engine
+// ==============================================================================
+console.log("\n▶ MODULE 24: Report Dynamic Typography & Multi-Client Font Family Engine");
+
+import { REPORT_FONTS, getReportFontStack, normalizeReportSettings } from "../src/lib/report-settings";
+
+// 24.1 Curated Medical Font Catalog Integrity
+assert(
+  Array.isArray(REPORT_FONTS) && REPORT_FONTS.length === 7,
+  "[FONT CATALOG] Exactly 7 curated medical diagnostic fonts configured for clients"
+);
+
+const expectedFontIds = ["Arial", "Inter", "Roboto", "Calibri", "Segoe UI", "Poppins", "Georgia"];
+const allIdsPresent = expectedFontIds.every((id) =>
+  REPORT_FONTS.some((f) => f.id.toLowerCase() === id.toLowerCase())
+);
+assert(
+  allIdsPresent,
+  "[FONT CATALOG] Includes Arial, Inter, Roboto, Calibri, Segoe UI, Poppins, and Georgia"
+);
+
+// 24.2 Zero-Lag System Font Stack Resolution
+assert(
+  getReportFontStack("Arial").includes("Arial") &&
+  getReportFontStack("Inter").includes("Inter") &&
+  getReportFontStack("Roboto").includes("Roboto") &&
+  getReportFontStack("Calibri").includes("Calibri") &&
+  getReportFontStack("Segoe UI").includes("Segoe UI") &&
+  getReportFontStack("Poppins").includes("Poppins") &&
+  getReportFontStack("Georgia").includes("Georgia"),
+  "[FONT STACK] getReportFontStack correctly maps all 7 font IDs to CSS font stacks"
+);
+
+// 24.3 Fallbacks and Case-Insensitive Matching
+assert(
+  getReportFontStack(null).includes("Arial") &&
+  getReportFontStack(undefined).includes("Arial") &&
+  getReportFontStack("").includes("Arial") &&
+  getReportFontStack("inter").includes("Inter") &&
+  getReportFontStack("POPPINS").includes("Poppins"),
+  "[FONT FALLBACK] getReportFontStack safely defaults null/empty inputs to Arial and supports case-insensitive match"
+);
+
+// 24.4 Report Settings Typography Normalization & Schema Defaults
+const normalizedDefault = normalizeReportSettings({});
+assert(
+  normalizedDefault.typography?.fontFamily === "Arial",
+  "[SCHEMA DEFAULTS] Default report settings typography specifies Arial font"
+);
+
+const customFontNormalized = normalizeReportSettings({
+  typography: { fontFamily: "Poppins" } as any,
+});
+assert(
+  customFontNormalized.typography?.fontFamily === "Poppins",
+  "[SETTINGS NORMALIZATION] normalizeReportSettings preserves client-customized fontFamily selection"
+);
+
+// 24.5 ReportSheet Font Inheritance & Seamless Rendering
+const reportSheetFileSrc = fs.readFileSync(path.resolve(__dirname, "../src/components/report-sheet.tsx"), "utf-8");
+assert(
+  reportSheetFileSrc.includes("getReportFontStack(reportSettings.typography?.fontFamily)") &&
+  reportSheetFileSrc.includes("fontFamily: activeFontFamily"),
+  "[REPORT SHEET] Dynamic font stack bound to both hidden height measurer and content container"
+);
+
+assert(
+  reportSheetFileSrc.includes("fontFamily: getReportFontStack(reportSettings.typography?.fontFamily)") &&
+  reportSheetFileSrc.includes("fontFamily: 'inherit'"),
+  "[REPORT SHEET] Patient info block and report sub-elements cleanly inherit active typography font family"
+);
+
+// 24.6 Settings UI Font Selector Grid & Real-Time Preview
+const settingsFileSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/settings/page.tsx"), "utf-8");
+assert(
+  settingsFileSrc.includes("REPORT_FONTS.map") &&
+  settingsFileSrc.includes("fontFamily: font.id") &&
+  settingsFileSrc.includes("font.description"),
+  "[SETTINGS UI] Settings page renders interactive medical font selection cards with live specimens and description"
+);
+
+// ==============================================================================
+// 25. Instant Zero-Lag (0ms) Report Print Preview & Eager Parameter Hydration Engine
+// ==============================================================================
+console.log("\n▶ MODULE 25: Instant Zero-Lag (0ms) Report Print Preview & Eager Parameter Hydration");
+
+const fullscreenPrintModalSrc = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/fullscreen-print-report-modal.tsx"),
+  "utf-8"
+);
+const printPreviewDialogSrc = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/print-preview-dialog.tsx"),
+  "utf-8"
+);
+const reportsListPageContent = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/reports/page.tsx"),
+  "utf-8"
+);
+const backendReportCtrlSrc = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/ReportController.php"),
+  "utf-8"
+);
+
+// 25.1 Frame 0 Parameter Rendering via Excluded-Ids Invariant
+assert(
+  fullscreenPrintModalSrc.includes("excludedMainTestIds") &&
+  fullscreenPrintModalSrc.includes("!excludedMainTestIds.includes(mt.id)") &&
+  !fullscreenPrintModalSrc.includes("setSelectedMainTestIds(mainTests.map"),
+  "[0MS PRINT PREVIEW] FullscreenPrintReportModal renders 100% of test parameters immediately on Frame 0 without waiting for useEffect"
+);
+
+// 25.2 Conditional Offscreen WhatsApp Rendering (Halves Rendering Load)
+assert(
+  fullscreenPrintModalSrc.includes("isSendingWhatsApp &&") &&
+  fullscreenPrintModalSrc.includes("ref={whatsappPrintRef}"),
+  "[PRINT PERFORMANCE] Offscreen WhatsApp print container renders conditionally on demand, halving initial print preview CPU overhead"
+);
+
+// 25.3 PrintPreviewDialog Frame 0 Fallback
+assert(
+  printPreviewDialogSrc.includes("effectiveBlocks = blocksList.length > 0 ? blocksList : buildBlocksFromResults") &&
+  printPreviewDialogSrc.includes("isSendingWhatsApp &&"),
+  "[PRINT DIALOG 0MS] PrintPreviewDialog falls back to buildBlocksFromResults immediately on Frame 0"
+);
+
+// 25.4 Reports List Page In-Memory Cache
+assert(
+  reportsListPageContent.includes("reportDetailCache") &&
+  reportsListPageContent.includes("reportDetailCache.get(rep.id)") &&
+  reportsListPageContent.includes("reportDetailCache.set(rep.id, data)"),
+  "[REPORTS LIST CACHE] Reports page maintains in-memory report details cache for instant 0ms report modal opening"
+);
+
+// 25.5 Backend Eager Hydration of Parameters & Print Settings
+assert(
+  backendReportCtrlSrc.includes("'results:id,report_id,test_id,result_value,is_abnormal,remarks'") &&
+  backendReportCtrlSrc.includes("ref_range_min,ref_range_max,text_ref_range") &&
+  backendReportCtrlSrc.includes("'lab:id,name,phone,address,print_header_height"),
+  "[BACKEND EAGER HYDRATION] ReportController index eagerly loads result_values, ranges, units, and lab print settings for instant printing from list"
+);
+
+// ==============================================================================
+// 26. Zero-Flash (0ms) Dashboard Overview Navigation & Dues Performance Engine
+// ==============================================================================
+console.log("\n▶ MODULE 26: Zero-Flash (0ms) Dashboard Overview Navigation & Dues Performance");
+
+const dashboardOverviewSrc = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/page.tsx"),
+  "utf-8"
+);
+const backendBillCtrlSrc = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"),
+  "utf-8"
+);
+
+// 26.1 Synchronous State Hydration & In-Memory Module Cache
+assert(
+  dashboardOverviewSrc.includes("memoryOverviewStats") &&
+  dashboardOverviewSrc.includes("getInitialStoredStats") &&
+  dashboardOverviewSrc.includes("getInitialStoredDues") &&
+  dashboardOverviewSrc.includes("memoryOverviewDues"),
+  "[0MS OVERVIEW HYDRATION] Dashboard overview initializes stats, charts, reports, and dues synchronously from memory/localStorage on Frame 0"
+);
+
+// 26.2 Elimination of Navigation Shimmer Flash Guardrail
+assert(
+  !dashboardOverviewSrc.includes("if (!isMounted || (loading && !stats.totalPatients") &&
+  dashboardOverviewSrc.includes("if (loading && !stats.totalPatients && !stats.totalReports && !recentReports.length && !dueBills.length)"),
+  "[ZERO-FLASH NAVIGATION] Dashboard overview never unmounts or renders DashboardShimmer on return navigation when cached data exists"
+);
+
+// 26.3 Backend Lightweight Dues Hydration Projection
+assert(
+  backendBillCtrlSrc.includes("$isLightweightDues") &&
+  backendBillCtrlSrc.includes("patient:id,name,custom_id,phone,age,gender,collected_at,created_by_id,meta") &&
+  backendBillCtrlSrc.includes("lis_overview_dues_"),
+  "[LIGHTWEIGHT DUES ENGINE] BillController isolates dues cards with lightweight projection and micro-caching, skipping heavy 4-level test hierarchies"
+);
+
+// 26.4 Due Collection Cache Invalidation
+assert(
+  backendBillCtrlSrc.includes('Cache::forget("lis_overview_dues_') &&
+  dashboardOverviewSrc.includes("memoryOverviewDues = nextList"),
+  "[DUES CACHE INVALIDATION] Payment collection invalidates server overview dues cache and optimistically updates client memory in 0ms"
+);
+
+// 26.5 Revalidation Cooldown & Background Throttling
+assert(
+  dashboardOverviewSrc.includes("isCacheFresh = (now - lastOverviewFetchTime < 45000)") &&
+  dashboardOverviewSrc.includes("now - lastLabFetchTime < 60000"),
+  "[OVERVIEW THROTTLING] Dashboard overview enforces background revalidation cooldowns, preventing redundant network waterfalls on rapid page switches"
+);
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

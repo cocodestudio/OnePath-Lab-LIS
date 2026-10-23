@@ -35,6 +35,8 @@ import {
   type DoctorSignatureConfig,
   defaultReportLayoutSettings,
   normalizeReportSettings,
+  REPORT_FONTS,
+  getReportFontStack,
 } from "@/lib/report-settings";
 import {
   ALL_BILL_ORDERING_FIELDS,
@@ -2335,6 +2337,97 @@ function SettingsContent() {
               <p className="text-xs text-muted-foreground mt-0.5">
                 Customize font sizes, spacing, lines, and alignments for investigation headers and parameter rows.
               </p>
+            </div>
+
+            {/* Report Primary Font Family & Typography Style */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-muted/30 border border-border/80 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Palette className="h-4 w-4 text-primary" />
+                    <h3 className="text-sm font-bold text-foreground">
+                      Report Typography &amp; Font Family
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary border border-primary/20">
+                      Zero-Latency Fast Print
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Select the font style for all printed patient reports and PDF downloads. Uses pre-bundled zero-download system font stacks so reports load instantly with zero lag.
+                  </p>
+                </div>
+                <div className="text-left sm:text-right shrink-0">
+                  <span className="text-[10px] font-mono text-muted-foreground">Active Font: </span>
+                  <span className="text-xs font-bold text-primary font-mono bg-primary/10 border border-primary/20 px-2 py-1 rounded-lg">
+                    {layoutSettings.typography.fontFamily || "Arial"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Grid of 7 Curated Medical Fonts */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {REPORT_FONTS.map((font) => {
+                  const currentFontId = layoutSettings.typography.fontFamily || "Arial";
+                  const isSelected = currentFontId.toLowerCase() === font.id.toLowerCase() || currentFontId.toLowerCase() === font.name.toLowerCase();
+
+                  return (
+                    <button
+                      key={font.id}
+                      type="button"
+                      onClick={() => {
+                        setLayoutSettings((prev) => ({
+                          ...prev,
+                          typography: {
+                            ...prev.typography,
+                            fontFamily: font.id,
+                          },
+                        }));
+                      }}
+                      className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer relative group flex flex-col justify-between ${
+                        isSelected
+                          ? "bg-primary/8 border-primary shadow-sm ring-2 ring-primary/20"
+                          : "bg-card border-border/80 hover:border-border hover:bg-muted/40 shadow-2xs"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <span
+                            className="text-xs font-bold text-foreground"
+                            style={{ fontFamily: font.fontFamily }}
+                          >
+                            {font.name}
+                          </span>
+                          <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md ${
+                            isSelected
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted text-muted-foreground"
+                          }`}>
+                            {font.category}
+                          </span>
+                        </div>
+                        <p className="text-[10.5px] text-muted-foreground leading-snug line-clamp-2">
+                          {font.description}
+                        </p>
+                      </div>
+
+                      {/* Live typography specimen */}
+                      <div
+                        className="mt-3 pt-2 border-t border-border/50 text-[11px] font-medium text-foreground/90 truncate"
+                        style={{ fontFamily: font.fontFamily }}
+                        title="Sample: Hemoglobin: 14.2 g/dL (13.0 - 17.0)"
+                      >
+                        Hb: 14.2 g/dL <span className="text-[10px] text-muted-foreground">(13.0 - 17.0)</span>
+                      </div>
+
+                      {isSelected && (
+                        <div className="absolute top-2.5 right-2.5 h-4 w-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xs">
+                          <Check className="h-2.5 w-2.5 stroke-[3]" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">

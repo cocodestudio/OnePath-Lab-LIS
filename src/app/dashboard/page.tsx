@@ -75,6 +75,162 @@ const getTodayDateStr = () => {
   }
 };
 
+// Module-level in-memory cache for instant 0ms route transitions
+let memoryOverviewLabId: string | null = null;
+let memoryOverviewStats: Stats | null = null;
+let memoryOverviewCharts: ChartItem[] | null = null;
+let memoryOverviewReports: RecentReport[] | null = null;
+let memoryOverviewDues: any[] | null = null;
+let memoryOverviewLab: any | null = null;
+let lastOverviewFetchTime = 0;
+let lastLabFetchTime = 0;
+
+function syncMemoryLabTenant(currentLabId?: string | null) {
+  if (currentLabId && memoryOverviewLabId && memoryOverviewLabId !== currentLabId) {
+    memoryOverviewStats = null;
+    memoryOverviewCharts = null;
+    memoryOverviewReports = null;
+    memoryOverviewDues = null;
+    memoryOverviewLab = null;
+    lastOverviewFetchTime = 0;
+    lastLabFetchTime = 0;
+  }
+  if (currentLabId) {
+    memoryOverviewLabId = currentLabId;
+  }
+}
+
+function getInitialStoredStats(): Stats {
+  const u = typeof window !== "undefined" ? getStoredUser() : null;
+  const currentLabId = u?.lab_id || u?.labId;
+  syncMemoryLabTenant(currentLabId);
+
+  if (memoryOverviewStats) return memoryOverviewStats;
+  if (typeof window !== "undefined") {
+    try {
+      const cached = localStorage.getItem("lis_cached_dashboard_stats");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (currentLabId && parsed.labId === currentLabId) {
+          const todayStr = getTodayDateStr();
+          if (parsed.cachedDate === todayStr) {
+            memoryOverviewStats = parsed;
+            return parsed;
+          } else {
+            const preserved = {
+              ...parsed,
+              patientsToday: 0,
+              todayReports: 0,
+              todayPendingReports: 0,
+              todayCompletedReports: 0,
+              revenue: 0,
+            };
+            memoryOverviewStats = preserved;
+            return preserved;
+          }
+        }
+      }
+    } catch {}
+  }
+  return {
+    patientsToday: 0,
+    totalPatients: 0,
+    todayReports: 0,
+    totalReports: 0,
+    todayPendingReports: 0,
+    pendingReports: 0,
+    todayCompletedReports: 0,
+    completedReports: 0,
+    revenue: 0,
+    totalRevenue: 0,
+  };
+}
+
+function getInitialStoredCharts(): ChartItem[] {
+  if (memoryOverviewCharts) return memoryOverviewCharts;
+  if (typeof window !== "undefined") {
+    try {
+      const u = getStoredUser();
+      const currentLabId = u?.lab_id || u?.labId;
+      const cached = localStorage.getItem("lis_cached_dashboard_charts");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.labId === currentLabId && Array.isArray(parsed.data)) {
+          memoryOverviewCharts = parsed.data;
+          return parsed.data;
+        } else if (Array.isArray(parsed)) {
+          memoryOverviewCharts = parsed;
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+  return [];
+}
+
+function getInitialStoredReports(): RecentReport[] {
+  if (memoryOverviewReports) return memoryOverviewReports;
+  if (typeof window !== "undefined") {
+    try {
+      const u = getStoredUser();
+      const currentLabId = u?.lab_id || u?.labId;
+      const cached = localStorage.getItem("lis_cached_dashboard_recent_reports");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.labId === currentLabId && Array.isArray(parsed.data)) {
+          memoryOverviewReports = parsed.data;
+          return parsed.data;
+        } else if (Array.isArray(parsed)) {
+          memoryOverviewReports = parsed;
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+  return [];
+}
+
+function getInitialStoredDues(): any[] {
+  if (memoryOverviewDues) return memoryOverviewDues;
+  if (typeof window !== "undefined") {
+    try {
+      const u = getStoredUser();
+      const currentLabId = u?.lab_id || u?.labId;
+      const cached = localStorage.getItem("lis_cached_dashboard_due_bills");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.labId === currentLabId && Array.isArray(parsed.data)) {
+          memoryOverviewDues = parsed.data;
+          return parsed.data;
+        } else if (Array.isArray(parsed)) {
+          memoryOverviewDues = parsed;
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+  return [];
+}
+
+function getInitialStoredLab(): any {
+  if (memoryOverviewLab) return memoryOverviewLab;
+  if (typeof window !== "undefined") {
+    try {
+      const u = getStoredUser();
+      const currentLabId = u?.lab_id || u?.labId;
+      const cached = localStorage.getItem("lis_cached_lab");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (!currentLabId || parsed.id === currentLabId) {
+          memoryOverviewLab = parsed;
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
 export default function DashboardOverviewPage() {
   const toast = useToast();
   const [isMounted, setIsMounted] = useState(false);
@@ -88,107 +244,36 @@ export default function DashboardOverviewPage() {
     }
     return null;
   });
-  const [stats, setStats] = useState<Stats>({
-    patientsToday: 0,
-    totalPatients: 0,
-    todayReports: 0,
-    totalReports: 0,
-    todayPendingReports: 0,
-    pendingReports: 0,
-    todayCompletedReports: 0,
-    completedReports: 0,
-    revenue: 0,
-    totalRevenue: 0,
-  });
-  const [chartData, setChartData] = useState<ChartItem[]>([]);
-  const [recentReports, setRecentReports] = useState<RecentReport[]>([]);
-  const [dueBills, setDueBills] = useState<any[]>([]);
+  const [stats, setStats] = useState<Stats>(getInitialStoredStats);
+  const [chartData, setChartData] = useState<ChartItem[]>(getInitialStoredCharts);
+  const [recentReports, setRecentReports] = useState<RecentReport[]>(getInitialStoredReports);
+  const [dueBills, setDueBills] = useState<any[]>(getInitialStoredDues);
   const [selectedBillForDue, setSelectedBillForDue] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [labInfo, setLabInfo] = useState<any>(null);
+  const [labInfo, setLabInfo] = useState<any>(getInitialStoredLab);
+  const [loading, setLoading] = useState<boolean>(() => {
+    const s = getInitialStoredStats();
+    const r = getInitialStoredReports();
+    const d = getInitialStoredDues();
+    return !(s.totalPatients > 0 || s.totalReports > 0 || r.length > 0 || d.length > 0);
+  });
 
   useEffect(() => {
     setIsMounted(true);
     const u = getStoredUser();
     setUser(u);
+    const currentLabId = u?.lab_id || u?.labId;
+    syncMemoryLabTenant(currentLabId);
 
-    // Read client-side cached data on mount safely with date and lab tenant matching
-    try {
-      const todayStr = getTodayDateStr();
-      const currentLabId = u?.lab_id || u?.labId;
-      const cachedStats = localStorage.getItem("lis_cached_dashboard_stats");
-      if (cachedStats) {
-        const parsed = JSON.parse(cachedStats);
-        const isMatchingLab = Boolean(currentLabId && parsed.labId && parsed.labId === currentLabId);
-        if (isMatchingLab) {
-          if (parsed.cachedDate === todayStr) {
-            setStats(parsed);
-            setLoading(false);
-          } else {
-            // If from previous day, preserve lifetime totals but zero-out today's metrics
-            setStats({
-              ...parsed,
-              patientsToday: 0,
-              todayReports: 0,
-              todayPendingReports: 0,
-              todayCompletedReports: 0,
-              revenue: 0,
-            });
-          }
-          const cachedCharts = localStorage.getItem("lis_cached_dashboard_charts");
-          if (cachedCharts) {
-            try {
-              const parsedCharts = JSON.parse(cachedCharts);
-              if (parsedCharts.labId === currentLabId && Array.isArray(parsedCharts.data)) {
-                setChartData(parsedCharts.data);
-              } else if (Array.isArray(parsedCharts)) {
-                setChartData(parsedCharts);
-              }
-            } catch {}
-          }
-          const cachedReports = localStorage.getItem("lis_cached_dashboard_recent_reports");
-          if (cachedReports) {
-            try {
-              const parsedReports = JSON.parse(cachedReports);
-              if (parsedReports.labId === currentLabId && Array.isArray(parsedReports.data)) {
-                setRecentReports(parsedReports.data);
-              } else if (Array.isArray(parsedReports)) {
-                setRecentReports(parsedReports);
-              }
-            } catch {}
-          }
-          const cachedDueBills = localStorage.getItem("lis_cached_dashboard_due_bills");
-          if (cachedDueBills) {
-            try {
-              const parsedDues = JSON.parse(cachedDueBills);
-              if (parsedDues.labId === currentLabId && Array.isArray(parsedDues.data)) {
-                setDueBills(parsedDues.data);
-              } else if (Array.isArray(parsedDues)) {
-                setDueBills(parsedDues);
-              }
-            } catch {}
-          }
-          const cachedLab = localStorage.getItem("lis_cached_lab");
-          if (cachedLab) {
-            try {
-              const parsedLab = JSON.parse(cachedLab);
-              if (!currentLabId || parsedLab.id === currentLabId) setLabInfo(parsedLab);
-            } catch {}
-          }
-        } else {
-          // Stale or different lab cache: remove immediately to prevent cross-account bleed
-          localStorage.removeItem("lis_cached_dashboard_stats");
-          localStorage.removeItem("lis_cached_dashboard_charts");
-          localStorage.removeItem("lis_cached_dashboard_recent_reports");
-          localStorage.removeItem("lis_cached_dashboard_due_bills");
-        }
+    const refreshLabInfo = (force = false) => {
+      const now = Date.now();
+      if (!force && now - lastLabFetchTime < 60000 && memoryOverviewLab) {
+        return;
       }
-    } catch {}
-
-    const refreshLabInfo = () => {
+      lastLabFetchTime = now;
       fetchFromLaravel("/lab").then((res) => {
         if (res) {
           setLabInfo(res);
+          memoryOverviewLab = res;
           try {
             localStorage.setItem("lis_cached_lab", JSON.stringify(res));
           } catch {}
@@ -201,36 +286,46 @@ export default function DashboardOverviewPage() {
     const handleProfileUpdate = (e: any) => {
       if (e?.detail) {
         setLabInfo(e.detail);
+        memoryOverviewLab = e.detail;
         try {
           localStorage.setItem("lis_cached_lab", JSON.stringify(e.detail));
         } catch {}
       } else {
-        refreshLabInfo();
+        refreshLabInfo(true);
       }
     };
 
     const handleOnlineSync = () => {
-      refreshLabInfo();
+      refreshLabInfo(true);
       loadDashboardData(true);
     };
 
+    const handleFocus = () => {
+      refreshLabInfo(false);
+    };
+
     window.addEventListener("centre-profile-updated", handleProfileUpdate);
-    window.addEventListener("focus", refreshLabInfo);
+    window.addEventListener("focus", handleFocus);
     window.addEventListener("lis_online_sync", handleOnlineSync);
 
     if (u?.role === "COLLECTION_CENTER" || u?.role === "B2B") {
       setLoading(false);
       return () => {
         window.removeEventListener("centre-profile-updated", handleProfileUpdate);
-        window.removeEventListener("focus", refreshLabInfo);
+        window.removeEventListener("focus", handleFocus);
         window.removeEventListener("lis_online_sync", handleOnlineSync);
       };
     }
-    loadDashboardData();
+
+    const now = Date.now();
+    const isCacheFresh = (now - lastOverviewFetchTime < 45000) && (stats.totalPatients > 0 || recentReports.length > 0 || dueBills.length > 0);
+    if (!isCacheFresh) {
+      loadDashboardData(false);
+    }
 
     return () => {
       window.removeEventListener("centre-profile-updated", handleProfileUpdate);
-      window.removeEventListener("focus", refreshLabInfo);
+      window.removeEventListener("focus", handleFocus);
       window.removeEventListener("lis_online_sync", handleOnlineSync);
     };
   }, []);
@@ -241,6 +336,11 @@ export default function DashboardOverviewPage() {
       clearApiCache("/analytics");
       clearApiCache("/reports");
       clearApiCache("/bills");
+      memoryOverviewStats = null;
+      memoryOverviewCharts = null;
+      memoryOverviewReports = null;
+      memoryOverviewDues = null;
+      lastOverviewFetchTime = 0;
       try {
         localStorage.removeItem("lis_cached_dashboard_stats");
         localStorage.removeItem("lis_cached_dashboard_charts");
@@ -249,7 +349,10 @@ export default function DashboardOverviewPage() {
       } catch {}
       try {
         fetchFromLaravel("/lab", { skipCache: true }).then((res) => {
-          if (res) setLabInfo(res);
+          if (res) {
+            setLabInfo(res);
+            memoryOverviewLab = res;
+          }
         }).catch(() => {});
       } catch {}
     }
@@ -285,8 +388,12 @@ export default function DashboardOverviewPage() {
       };
 
       setStats(newStats);
+      memoryOverviewStats = newStats;
+      lastOverviewFetchTime = Date.now();
+
       const activeUser = user || getStoredUser();
       const currentLabId = activeUser?.lab_id || activeUser?.labId;
+      memoryOverviewLabId = currentLabId;
       try {
         localStorage.setItem(
           "lis_cached_dashboard_stats",
@@ -296,6 +403,7 @@ export default function DashboardOverviewPage() {
 
       if (Array.isArray(analytics?.reportsOverTime)) {
         setChartData(analytics.reportsOverTime);
+        memoryOverviewCharts = analytics.reportsOverTime;
         try {
           localStorage.setItem("lis_cached_dashboard_charts", JSON.stringify({ labId: currentLabId, data: analytics.reportsOverTime }));
         } catch {}
@@ -304,6 +412,7 @@ export default function DashboardOverviewPage() {
       const reportsList = Array.isArray(reports) ? reports : reports?.data ?? [];
       const slicedReports = reportsList.slice(0, 6);
       setRecentReports(slicedReports);
+      memoryOverviewReports = slicedReports;
       try {
         localStorage.setItem("lis_cached_dashboard_recent_reports", JSON.stringify({ labId: currentLabId, data: slicedReports }));
       } catch {}
@@ -311,6 +420,7 @@ export default function DashboardOverviewPage() {
       const duesList = Array.isArray(duesRes) ? duesRes : (duesRes?.data ?? []);
       const slicedDues = duesList.slice(0, 6);
       setDueBills(slicedDues);
+      memoryOverviewDues = slicedDues;
       try {
         localStorage.setItem("lis_cached_dashboard_due_bills", JSON.stringify({ labId: currentLabId, data: slicedDues }));
       } catch {}
@@ -340,6 +450,7 @@ export default function DashboardOverviewPage() {
       } else {
         nextList = prev.map((b) => (b.id === updatedBill.id ? { ...b, ...updatedBill } : b));
       }
+      memoryOverviewDues = nextList;
       const activeUser = user || getStoredUser();
       const currentLabId = activeUser?.lab_id || activeUser?.labId;
       try {
@@ -353,7 +464,7 @@ export default function DashboardOverviewPage() {
     loadDashboardData(false);
   };
 
-  if (!isMounted || (loading && !stats.totalPatients && !stats.totalReports && !recentReports.length)) {
+  if (loading && !stats.totalPatients && !stats.totalReports && !recentReports.length && !dueBills.length) {
     return <DashboardShimmer />;
   }
 

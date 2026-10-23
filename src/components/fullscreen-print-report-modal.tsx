@@ -61,7 +61,8 @@ export function FullscreenPrintReportModal({
   const whatsappPrintRef = useRef<HTMLDivElement>(null);
 
   // ── State ─────────────────────────────────────────────
-  const [selectedMainTestIds, setSelectedMainTestIds] = useState<string[]>([]);
+  // Track excluded main tests so initially (when empty) ALL tests are rendered on Frame 0 (0ms)
+  const [excludedMainTestIds, setExcludedMainTestIds] = useState<string[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isManualDate, setIsManualDate] = useState<boolean>(false);
   const [printWithHeaderFooter, setPrintWithHeaderFooter] = useState(false);
@@ -125,7 +126,20 @@ export function FullscreenPrintReportModal({
       fetchFromLaravel("/lab?include_letterhead=1")
         .then((fresh) => {
           if (fresh) {
-            setLiveLab(fresh);
+            setLiveLab((prev: any) => {
+              if (
+                prev &&
+                prev.print_header_height === fresh.print_header_height &&
+                prev.print_footer_height === fresh.print_footer_height &&
+                prev.print_margin_left === fresh.print_margin_left &&
+                prev.print_margin_right === fresh.print_margin_right &&
+                prev.print_bg_image === fresh.print_bg_image &&
+                JSON.stringify(prev.report_settings || {}) === JSON.stringify(fresh.report_settings || {})
+              ) {
+                return prev;
+              }
+              return fresh;
+            });
             try { localStorage.setItem("lis_cached_lab", JSON.stringify(fresh)); } catch (_) {}
             const freshRaw = fresh.reportSettings ?? fresh.report_settings;
             const raw = typeof freshRaw === 'string' ? JSON.parse(freshRaw || '{}') : freshRaw;
@@ -139,12 +153,12 @@ export function FullscreenPrintReportModal({
   }, [open, report]);
 
   useEffect(() => {
-    if (open && report) {
-      setSelectedMainTestIds(mainTests.map((m) => m.id));
+    if (open) {
+      setExcludedMainTestIds([]);
       setIsManualDate(false);
       setSelectedDate(new Date());
     }
-  }, [open, report, mainTests]);
+  }, [open, report?.id]);
 
 
   // ── Print Settings ────────────────────────────────────
@@ -189,7 +203,7 @@ export function FullscreenPrintReportModal({
       .filter((item: any) => {
         const t = item.test;
         const mt = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
-        return selectedMainTestIds.includes(mt.id);
+        return !excludedMainTestIds.includes(mt.id);
       })
       .map((item: any) => ({
         ...item,
@@ -257,7 +271,7 @@ export function FullscreenPrintReportModal({
       testNotes: testNotes || report.testNotes || report.test_notes,
       test_notes: testNotes || report.test_notes || report.testNotes,
     };
-  }, [report, liveLab, selectedMainTestIds, enteredValues, abnormalOverrides, paramRemarks, testNotes, printedInterpretations, selectedDate, separatePagePerTest]);
+  }, [report, liveLab, excludedMainTestIds, enteredValues, abnormalOverrides, paramRemarks, testNotes, printedInterpretations, selectedDate, separatePagePerTest]);
 
   // ── Date & Time Helpers ───────────────────────────────
   const adj = (fn: (d: Date) => void) =>
@@ -433,7 +447,7 @@ export function FullscreenPrintReportModal({
                   : "text-muted-foreground hover:text-foreground bg-muted/40"
               }`}
             >
-              Tests ({selectedMainTestIds.length})
+              Tests ({Math.max(0, mainTests.length - excludedMainTestIds.length)})
             </button>
             <button
               type="button"
@@ -470,7 +484,7 @@ export function FullscreenPrintReportModal({
                 <h3 className="font-bold text-sm text-foreground">Tests List</h3>
               </div>
               <span className="text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                {selectedMainTestIds.length}/{mainTests.length}
+                {Math.max(0, mainTests.length - excludedMainTestIds.length)}/{mainTests.length}
               </span>
             </div>
 
@@ -478,10 +492,10 @@ export function FullscreenPrintReportModal({
               <div className="pb-2 border-b border-border/60">
                 <label className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-muted/40 transition-colors cursor-pointer select-none">
                   <Checkbox
-                    checked={selectedMainTestIds.length === mainTests.length && mainTests.length > 0}
+                    checked={excludedMainTestIds.length === 0 && mainTests.length > 0}
                     onCheckedChange={() =>
-                      setSelectedMainTestIds(
-                        selectedMainTestIds.length === mainTests.length ? [] : mainTests.map((m) => m.id)
+                      setExcludedMainTestIds(
+                        excludedMainTestIds.length === 0 ? mainTests.map((m) => m.id) : []
                       )
                     }
                   />
@@ -491,7 +505,7 @@ export function FullscreenPrintReportModal({
 
               <div className="space-y-1.5">
                 {mainTests.map((mt) => {
-                  const isSelected = selectedMainTestIds.includes(mt.id);
+                  const isSelected = !excludedMainTestIds.includes(mt.id);
                   return (
                     <label
                       key={mt.id}
@@ -504,7 +518,7 @@ export function FullscreenPrintReportModal({
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={() =>
-                          setSelectedMainTestIds((prev) =>
+                          setExcludedMainTestIds((prev) =>
                             prev.includes(mt.id) ? prev.filter((id) => id !== mt.id) : [...prev, mt.id]
                           )
                         }
@@ -831,18 +845,20 @@ export function FullscreenPrintReportModal({
 
         </div>
 
-        {/* ── Always-With-Letterhead Print Target for WhatsApp Delivery ── */}
-        <div style={{ position: "absolute", left: "-9999px", top: "-9999px", opacity: 0, pointerEvents: "none" }} aria-hidden>
-          <div ref={whatsappPrintRef}>
-            <PaginatedReportPreview
-              report={activeReportData}
-              settings={whatsappPrintSettings}
-              scale={1}
-              hideInterpretation={!showClinicalInterpretation}
-              autoFitToFooter={autoFitToFooter}
-            />
+        {/* ── Always-With-Letterhead Print Target for WhatsApp Delivery (rendered on-demand) ── */}
+        {isSendingWhatsApp && (
+          <div style={{ position: "absolute", left: "-9999px", top: "-9999px", opacity: 0, pointerEvents: "none" }} aria-hidden>
+            <div ref={whatsappPrintRef}>
+              <PaginatedReportPreview
+                report={activeReportData}
+                settings={whatsappPrintSettings}
+                scale={1}
+                hideInterpretation={!showClinicalInterpretation}
+                autoFitToFooter={autoFitToFooter}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* WhatsApp QR Pairing Dialog Modal */}
         <WhatsAppQrDialog

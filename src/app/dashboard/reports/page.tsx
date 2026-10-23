@@ -58,6 +58,7 @@ function getReportTestName(r: any): string {
 }
 
 const DEFAULT_LAB = { name: "OnePath Lab Main", email: "info@onepathlab.com", address: "123 Healthcare Blvd, Medical District, Delhi", logoUrl: "/onepath-logo.png" };
+const reportDetailCache = new Map<string, any>();
 
 export default function ReportsListPage() {
   const { toast } = useToast();
@@ -422,14 +423,16 @@ export default function ReportsListPage() {
         }
       }
 
-      // Optimistic instant modal open (0ms) using existing row metadata
-      setPrintReport({ ...rep, lab: rep.lab || DEFAULT_LAB });
+      // Instant modal open (0ms) using in-memory cached report or eager-loaded row metadata
+      const cached = reportDetailCache.get(rep.id);
+      setPrintReport(cached || { ...rep, lab: rep.lab || DEFAULT_LAB });
       setShowPrintOptions(true);
 
       // Asynchronously hydrate detailed clinical results and interpretations in background
       fetchFromLaravel(`/reports/${rep.id}`)
         .then((data) => {
           if (data) {
+            reportDetailCache.set(rep.id, data);
             setPrintReport((prev: any) => ({
               ...(prev || {}),
               ...data,

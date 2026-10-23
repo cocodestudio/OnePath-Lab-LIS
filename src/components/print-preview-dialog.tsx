@@ -382,9 +382,12 @@ export function PrintPreviewDialog({
   const activeReport = useMemo(() => {
     if (!report) return null;
 
+    // Use blocksList if initialized, or fallback to buildBlocksFromResults immediately on Frame 0
+    const effectiveBlocks = blocksList.length > 0 ? blocksList : buildBlocksFromResults(report.results || []);
+
     // Flatten blocksList into results array in exact sequential order with updated sort_order
     const orderedResults: ReportTest[] = [];
-    blocksList.forEach((block, blockIdx) => {
+    effectiveBlocks.forEach((block, blockIdx) => {
       if (hiddenBlockIds.includes(block.id)) return;
       const blockOrder = (blockIdx + 1) * 100;
       block.items.forEach((item, itemIdx) => {
@@ -605,12 +608,14 @@ export function PrintPreviewDialog({
           </div>
         </div>
 
-        {/* ── Dedicated WhatsApp Print Target (Always with full Letterhead) ── */}
-        <div style={{ position: "absolute", left: "-9999px", top: "-9999px", opacity: 0, pointerEvents: "none" }} aria-hidden>
-          <div ref={whatsappPrintRef}>
-            <ReportSheet report={activeReport} settings={whatsappPrintSettings} hideInterpretation={!showInterpretation} />
+        {/* ── Dedicated WhatsApp Print Target (Always with full Letterhead, rendered on-demand) ── */}
+        {isSendingWhatsApp && (
+          <div style={{ position: "absolute", left: "-9999px", top: "-9999px", opacity: 0, pointerEvents: "none" }} aria-hidden>
+            <div ref={whatsappPrintRef}>
+              <ReportSheet report={activeReport} settings={whatsappPrintSettings} hideInterpretation={!showInterpretation} />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ── Top Bar ── */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-6 py-3.5 bg-background border-b border-border shadow-xs z-10 shrink-0 gap-3 sm:gap-4">

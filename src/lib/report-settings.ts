@@ -239,6 +239,75 @@ export const defaultSmartReportSettings: SmartReportSettings = {
 • Always consult a registered medical practitioner.`,
 };
 
+export interface ReportFontOption {
+  id: string;
+  name: string;
+  category: "Standard" | "Modern" | "Corporate" | "Classic" | "Soft";
+  fontFamily: string;
+  description: string;
+  sampleText?: string;
+}
+
+export const REPORT_FONTS: ReportFontOption[] = [
+  {
+    id: "Arial",
+    name: "Arial / Helvetica",
+    category: "Standard",
+    fontFamily: 'Arial, "Helvetica Neue", Helvetica, sans-serif',
+    description: "Universal laboratory standard. Clean, crisp medical numbers with perfect high-speed print reliability.",
+  },
+  {
+    id: "Inter",
+    name: "Inter",
+    category: "Modern",
+    fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    description: "Modern clinical tech. Outstanding legibility for small parameter ranges and microscopic findings.",
+  },
+  {
+    id: "Roboto",
+    name: "Roboto",
+    category: "Modern",
+    fontFamily: '"Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif',
+    description: "Clean hospital diagnostic standard. Balanced geometric numbers used by premier diagnostic chains.",
+  },
+  {
+    id: "Calibri",
+    name: "Calibri / Carlito",
+    category: "Corporate",
+    fontFamily: 'Calibri, Carlito, "Segoe UI", Arial, sans-serif',
+    description: "Compact corporate typography. Space-saving proportions allow fitting more clinical parameters on a single page.",
+  },
+  {
+    id: "Segoe UI",
+    name: "Segoe UI",
+    category: "Corporate",
+    fontFamily: '"Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif',
+    description: "Crisp and professional. Sharp letterforms with prominent diagnostic test headers.",
+  },
+  {
+    id: "Poppins",
+    name: "Poppins",
+    category: "Soft",
+    fontFamily: '"Poppins", "Segoe UI", Roboto, -apple-system, sans-serif',
+    description: "Premium boutique laboratory look. Friendly rounded geometry ideal for private wellness clinics.",
+  },
+  {
+    id: "Georgia",
+    name: "Georgia / Times",
+    category: "Classic",
+    fontFamily: 'Georgia, "Times New Roman", Times, serif',
+    description: "Traditional formal medical serif. Preferred by senior consulting pathologists and government hospital panels.",
+  },
+];
+
+export function getReportFontStack(fontId?: string | null): string {
+  if (!fontId) return 'Arial, "Helvetica Neue", Helvetica, sans-serif';
+  const match = REPORT_FONTS.find(
+    (f) => f.id.toLowerCase() === fontId.trim().toLowerCase() || f.name.toLowerCase() === fontId.trim().toLowerCase()
+  );
+  return match ? match.fontFamily : (fontId.includes(",") ? fontId : `${fontId}, Arial, sans-serif`);
+}
+
 export interface ReportLayoutSettings {
   defaultDesignation: string;
   flags: {
@@ -257,6 +326,7 @@ export interface ReportLayoutSettings {
   patientDetailsOrder: string[];
   intakeFields?: IntakeFieldConfig[];
   typography: {
+    fontFamily?: string;
     departmentFontSize: number;
     columnHeadingFontSize: number;
     testNameFontSize: number;
@@ -372,6 +442,7 @@ export const defaultReportLayoutSettings: ReportLayoutSettings = {
   intakeFields: DEFAULT_INTAKE_FIELDS,
   smartReport: { ...defaultSmartReportSettings },
   typography: {
+    fontFamily: "Arial",
     departmentFontSize: 13,
     columnHeadingFontSize: 10,
     testNameFontSize: 12,
