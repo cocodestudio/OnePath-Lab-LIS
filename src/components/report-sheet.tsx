@@ -548,8 +548,15 @@ export function buildReportBlocks(
   };
 
   // Only include parameters with entered results (blank ones are hidden from the final report)
+  // and exclude any parameters hidden in the test catalog layout
   const activeResults = (report.results || []).filter((item) => {
     if (!item || !item.test) return false;
+    const isParamHidden = Boolean(
+      item.test.is_hidden || item.test.isHidden || 
+      item.test.parent?.is_hidden || item.test.parent?.isHidden ||
+      item.test.parent?.parent?.is_hidden || item.test.parent?.parent?.isHidden
+    );
+    if (isParamHidden) return false;
     if (isSampleOrTemplate) return true;
     const val = item.resultValue ?? (item as any).result_value;
     return !isBlankValue(val);

@@ -82,6 +82,10 @@ interface Test {
   custom_options?: string | string[] | any;
   sortOrder?: number;
   sort_order?: number;
+  isHidden?: boolean;
+  is_hidden?: boolean;
+  isJsonOverride?: boolean;
+  is_json_override?: boolean;
   subTests?: Test[];
   sub_tests?: Test[];
   parentId?: string | null;
@@ -2073,7 +2077,7 @@ function ResultEntryContent() {
   const fetchReport = async () => {
     try {
       setLoading(true);
-      const data: any = await fetchFromLaravel(`/reports/${reportId}`);
+      const data: any = await fetchFromLaravel(`/reports/${reportId}`, { skipCache: true });
       const reportData: Report = {
         ...data,
         lab: data.lab ? {
@@ -3075,17 +3079,18 @@ function ResultEntryContent() {
       mainTestName: string;
       mainTestId: string;
       hasInterpretation: boolean;
-      sectionsMap: Map<string, { parentOrder: number; items: ReportTest[] }>;
+      sectionsMap: Map<string, { sectionKey: string; sectionName: string; parentOrder: number; items: ReportTest[] }>;
     }>();
 
     const seenParamKeys = new Set<string>();
 
-    // Prioritize results that already have entered values
+    // 1. Maintain strict catalog sort_order sequence (never disrupt with entered values)
     const sortedResults = [...report.results].filter(Boolean).sort((a, b) => {
-      const hasValA = Boolean((values[a?.id] || a?.result_value || '').trim());
-      const hasValB = Boolean((values[b?.id] || b?.result_value || '').trim());
-      if (hasValA && !hasValB) return -1;
-      if (!hasValA && hasValB) return 1;
+      const orderA = a?.test?.sort_order ?? (a?.test as any)?.sortOrder ?? 0;
+      const orderB = b?.test?.sort_order ?? (b?.test as any)?.sortOrder ?? 0;
+      if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;
+      if (orderA !== 0 && orderB === 0) return -1;
+      if (orderA === 0 && orderB !== 0) return 1;
       return 0;
     });
 
@@ -3093,6 +3098,17 @@ function ResultEntryContent() {
       if (!item) return;
       const t = item.test;
       if (!t) return;
+
+      // Filter out hidden parameters according to catalog layout preferences
+      const isParamHidden = Boolean(
+        t.is_hidden || t.isHidden ||
+        t.parent?.is_hidden || t.parent?.isHidden ||
+        t.parent?.parent?.is_hidden || t.parent?.parent?.isHidden
+      );
+      if (isParamHidden) {
+        return; // Strictly hide parameter from Enter Results
+      }
+
       const mt = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
       if (!mt) return;
       const mtId = mt.id || t.id || `test-${item.id}`;
@@ -3121,17 +3137,22 @@ function ResultEntryContent() {
 
       const group = map.get(mtId)!;
 
-      let sectionName = "_default";
-      let parentOrder = 0;
-      if (t.parent && t.parent.id !== mt.id) {
-        sectionName = t.parent.name || "Parameters";
-        parentOrder = t.parent.sort_order ?? (t.parent as any)?.sortOrder ?? 0;
-      }
+      const isSubgroup = Boolean(t.parent && t.parent.id !== mt.id && (t.parent.name || "").trim().toLowerCase() !== mtName.trim().toLowerCase());
+      const sectionKey = isSubgroup 
+        ? `group-${t.parent?.id || t.parent?.name || 'sub'}`
+        : `item-${t.id || item.id}`;
+      const sectionName = isSubgroup 
+        ? (t.parent?.name || "Parameters") 
+        : "_default";
+      const itemSortOrder = t.sort_order ?? (t as any)?.sortOrder ?? 0;
+      const parentOrder = isSubgroup 
+        ? (t.parent?.sort_order ?? (t.parent as any)?.sortOrder ?? itemSortOrder)
+        : itemSortOrder;
 
-      if (!group.sectionsMap.has(sectionName)) {
-        group.sectionsMap.set(sectionName, { parentOrder, items: [] });
+      if (!group.sectionsMap.has(sectionKey)) {
+        group.sectionsMap.set(sectionKey, { sectionKey, sectionName, parentOrder, items: [] });
       }
-      group.sectionsMap.get(sectionName)!.items.push(item);
+      group.sectionsMap.get(sectionKey)!.items.push(item);
     });
 
     return Array.from(map.values())
@@ -3139,9 +3160,10 @@ function ResultEntryContent() {
         mainTestName: g.mainTestName,
         mainTestId: g.mainTestId,
         hasInterpretation: g.hasInterpretation,
-        sections: Array.from(g.sectionsMap.entries())
-          .map(([secName, secData]) => ({
-            sectionName: secName,
+        sections: Array.from(g.sectionsMap.values())
+          .map((secData) => ({
+            sectionKey: secData.sectionKey,
+            sectionName: secData.sectionName,
             parentOrder: secData.parentOrder,
             items: secData.items.slice().sort((a, b) => {
               const orderA = a?.test?.sort_order ?? (a?.test as any)?.sortOrder ?? 0;
@@ -3160,8 +3182,8 @@ function ResultEntryContent() {
               ? secB.parentOrder
               : (secB.items[0]?.test?.sort_order ?? (secB.items[0]?.test as any)?.sortOrder ?? 0);
             if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;
-            if (secA.sectionName === "_default") return -1;
-            if (secB.sectionName === "_default") return 1;
+            if (orderA !== 0 && orderB === 0) return -1;
+            if (orderA === 0 && orderB !== 0) return 1;
             return (secA.sectionName || "").localeCompare(secB.sectionName || "");
           }),
       }))
@@ -3582,7 +3604,7 @@ function ResultEntryContent() {
                             }
 
                             return (
-                              <React.Fragment key={section.sectionName}>
+                              <React.Fragment key={section.sectionKey || section.sectionName}>
 
                                 {/* Subgroup Header Banner (e.g. Differential Leukocyte Count) */}
                                 {section.sectionName !== "_default" && section.sectionName !== "Report Template" && (

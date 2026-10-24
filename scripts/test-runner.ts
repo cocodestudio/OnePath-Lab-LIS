@@ -2589,6 +2589,198 @@ assert(
   "[BACKEND LAYOUT PERSISTENCE] TestController saves layout with standalone fallback, sets is_json_override, and invalidates lab cache"
 );
 
+console.log("\n▶ MODULE 28: Enter Results Layout & Order Consistency Engine (Catalog Sync, Hidden Filter, Approved Report Reflection)");
+
+const enterResultsEditSrc = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/reports/[id]/edit/page.tsx"),
+  "utf-8"
+);
+const fullscreenPrintSrc = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/fullscreen-print-report-modal.tsx"),
+  "utf-8"
+);
+const reportSheetSrc = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/report-sheet.tsx"),
+  "utf-8"
+);
+const backendReportControllerSrc = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/ReportController.php"),
+  "utf-8"
+);
+
+// 28.1 Enter Results Fresh Report Fetching (Zero Stale Cache)
+assert(
+  enterResultsEditSrc.includes("fetchFromLaravel(`/reports/${reportId}`, { skipCache: true })"),
+  "[ENTER RESULTS FRESH FETCH] fetchReport strictly uses skipCache: true to guarantee latest catalog layout"
+);
+
+// 28.2 Enter Results mainGroups Filters Hidden Parameters
+assert(
+  enterResultsEditSrc.includes("const isParamHidden = Boolean(") &&
+  enterResultsEditSrc.includes("t.is_hidden || t.isHidden ||") &&
+  enterResultsEditSrc.includes("t.parent?.is_hidden || t.parent?.isHidden") &&
+  enterResultsEditSrc.includes("if (isParamHidden) {") &&
+  enterResultsEditSrc.includes("return; // Strictly hide parameter from Enter Results"),
+  "[ENTER RESULTS HIDDEN FILTER] mainGroups strictly omits hidden parameters from result entry interface"
+);
+
+// 28.3 Enter Results Strict sort_order Sequence (No Result-Value Scrambling)
+assert(
+  enterResultsEditSrc.includes("// 1. Maintain strict catalog sort_order sequence (never disrupt with entered values)") &&
+  enterResultsEditSrc.includes("const orderA = a?.test?.sort_order ?? (a?.test as any)?.sortOrder ?? 0;") &&
+  enterResultsEditSrc.includes("const orderB = b?.test?.sort_order ?? (b?.test as any)?.sortOrder ?? 0;") &&
+  enterResultsEditSrc.includes("if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;"),
+  "[ENTER RESULTS SORT ORDER] mainGroups sorts strictly by catalog sort_order instead of entered values"
+);
+
+// 28.4 Section Subgroup Keying & Ordering Isolation
+assert(
+  enterResultsEditSrc.includes("const sectionKey = isSubgroup") &&
+  enterResultsEditSrc.includes("`group-${t.parent?.id || t.parent?.name || 'sub'}`") &&
+  enterResultsEditSrc.includes("`item-${t.id || item.id}`") &&
+  enterResultsEditSrc.includes("sectionsMap: Map<string, { sectionKey: string; sectionName: string; parentOrder: number; items: ReportTest[] }>"),
+  "[SECTION ISOLATION] Standalone items and subgroups preserve dedicated parentOrder without clump distortion"
+);
+
+// 28.5 Print Preview & PDF Modal Exclude Hidden Parameters
+assert(
+  fullscreenPrintSrc.includes("t.is_hidden || t.isHidden || t.parent?.is_hidden || t.parent?.isHidden") &&
+  reportSheetSrc.includes("item.test.is_hidden || item.test.isHidden ||") &&
+  reportSheetSrc.includes("item.test.parent?.is_hidden || item.test.parent?.isHidden"),
+  "[PRINT & PDF HIDDEN EXCLUSION] FullscreenPrintReportModal and report-sheet strictly exclude hidden parameters"
+);
+
+// 28.6 Backend Report Controller Consistency & Active Catalog Synchronization
+assert(
+  backendReportControllerSrc.includes("'results.test:id,name,category,field_type,unit,ref_range_min,ref_range_max,text_ref_range,range_type,gender_ref_type,parent_id,sort_order,is_hidden'") &&
+  backendReportControllerSrc.includes("// Consistency & Catalog Sync: Synchronize report tests with the lab's active catalog definitions") &&
+  backendReportControllerSrc.includes("// Sort results according to the active catalog sort_order sequence") &&
+  backendReportControllerSrc.includes("if (!empty($test->is_hidden))") &&
+  backendReportControllerSrc.includes("if (!empty($subTest->is_hidden))"),
+  "[BACKEND CATALOG SYNC & SORT] ReportController eagerly selects is_hidden, synchronizes lab definitions, and sorts results"
+);
+
+// 28.7 Backend Test Controller Report Remapping on Catalog Clone
+assert(
+  backendTestCtrlSrc.includes("Automatically remap existing patient reports in this lab to the new customized tests") &&
+  backendTestCtrlSrc.includes("cloneSubTestsForLab(string $sourceParentId, string $newParentId, string $labId): array") &&
+  backendTestCtrlSrc.includes("$idMap[$child->id] = $newChild->id;"),
+  "[BACKEND CLONE REMAP] TestController automatically updates existing report tests when a catalog test is customized"
+);
+
+// 28.8 Functional Simulation of mainGroups Algorithm with Mixed Values & Hidden Parameters
+function simulateMainGroups(results: any[]) {
+  const map = new Map<string, any>();
+  const seenParamKeys = new Set<string>();
+
+  const sortedResults = [...results].filter(Boolean).sort((a, b) => {
+    const orderA = a?.test?.sort_order ?? a?.test?.sortOrder ?? 0;
+    const orderB = b?.test?.sort_order ?? b?.test?.sortOrder ?? 0;
+    if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;
+    if (orderA !== 0 && orderB === 0) return -1;
+    if (orderA === 0 && orderB !== 0) return 1;
+    return 0;
+  });
+
+  sortedResults.forEach((item) => {
+    if (!item) return;
+    const t = item.test;
+    if (!t) return;
+
+    const isParamHidden = Boolean(
+      t.is_hidden || t.isHidden ||
+      t.parent?.is_hidden || t.parent?.isHidden ||
+      t.parent?.parent?.is_hidden || t.parent?.parent?.isHidden
+    );
+    if (isParamHidden) return;
+
+    const mt = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
+    const mtId = mt.id || t.id;
+    const mtName = mt.name || t.name;
+
+    const parentKeyId = t.parent_id || t.parentId || t.parent?.id || 'root';
+    const paramKey = `${mtId}:${parentKeyId}:${(t.name || '').trim().toLowerCase()}`;
+    if (seenParamKeys.has(paramKey)) return;
+    seenParamKeys.add(paramKey);
+
+    if (!map.has(mtId)) {
+      map.set(mtId, {
+        mainTestName: mtName,
+        mainTestId: mtId,
+        sectionsMap: new Map(),
+      });
+    }
+
+    const group = map.get(mtId)!;
+    const isSubgroup = Boolean(t.parent && t.parent.id !== mt.id && (t.parent.name || "").trim().toLowerCase() !== mtName.trim().toLowerCase());
+    const sectionKey = isSubgroup ? `group-${t.parent?.id || t.parent?.name}` : `item-${t.id || item.id}`;
+    const sectionName = isSubgroup ? (t.parent?.name || "Parameters") : "_default";
+    const itemSortOrder = t.sort_order ?? t.sortOrder ?? 0;
+    const parentOrder = isSubgroup ? (t.parent?.sort_order ?? t.parent?.sortOrder ?? itemSortOrder) : itemSortOrder;
+
+    if (!group.sectionsMap.has(sectionKey)) {
+      group.sectionsMap.set(sectionKey, { sectionKey, sectionName, parentOrder, items: [] });
+    }
+    group.sectionsMap.get(sectionKey)!.items.push(item);
+  });
+
+  return Array.from(map.values()).map(g => ({
+    mainTestName: g.mainTestName,
+    sections: Array.from(g.sectionsMap.values())
+      .map((sec: any) => ({
+        ...sec,
+        items: sec.items.slice().sort((a: any, b: any) => {
+          const orderA = a?.test?.sort_order ?? a?.test?.sortOrder ?? 0;
+          const orderB = b?.test?.sort_order ?? b?.test?.sortOrder ?? 0;
+          if (orderA !== orderB && orderA !== 0 && orderB !== 0) return orderA - orderB;
+          return 0;
+        })
+      }))
+      .sort((a: any, b: any) => a.parentOrder - b.parentOrder)
+  }));
+}
+
+const mockCbcMain = { id: "cbc-root-id", name: "Complete Blood Count (CBC)" };
+const mockDlcParent = { id: "dlc-group-id", name: "Differential Leukocyte Count", sort_order: 200, parent: mockCbcMain };
+
+const mockReportResults = [
+  // 1. Hb: sort_order 101, empty result value
+  { id: "res-hb", result_value: "", test: { id: "t-hb", name: "Hemoglobin", sort_order: 101, parent: mockCbcMain } },
+  // 2. TLC: sort_order 102, empty result value
+  { id: "res-tlc", result_value: "", test: { id: "t-tlc", name: "Total Leucocyte Count", sort_order: 102, parent: mockCbcMain } },
+  // 3. DLC subtest Polymorphs: sort_order 201, filled value
+  { id: "res-poly", result_value: "65", test: { id: "t-poly", name: "Polymorphs", sort_order: 201, parent: mockDlcParent } },
+  // 4. DLC subtest Basophils: sort_order 205, HIDDEN in catalog, filled value from prior approval
+  { id: "res-baso", result_value: "1", test: { id: "t-baso", name: "Basophils", sort_order: 205, is_hidden: true, parent: mockDlcParent } },
+  // 5. Platelet Count: sort_order 301, filled value
+  { id: "res-plt", result_value: "250000", test: { id: "t-plt", name: "Platelet Count", sort_order: 301, parent: mockCbcMain } },
+  // 6. ESR: sort_order 401, filled value
+  { id: "res-esr", result_value: "15", test: { id: "t-esr", name: "ESR", sort_order: 401, parent: mockCbcMain } },
+  // 7. MCV: sort_order 501, HIDDEN in catalog, filled value from prior approval
+  { id: "res-mcv", result_value: "88", test: { id: "t-mcv", name: "MCV", sort_order: 501, is_hidden: true, parent: mockCbcMain } },
+];
+
+const processedGroups = simulateMainGroups(mockReportResults);
+const cbcGroup = processedGroups[0];
+const allRenderedItems = cbcGroup.sections.flatMap((s: any) => s.items);
+
+assert(
+  !allRenderedItems.some((it: any) => it.test.name === "MCV"),
+  "[SIMULATION HIDDEN STANDALONE] Hidden standalone MCV is strictly omitted despite having previously approved value"
+);
+assert(
+  !allRenderedItems.some((it: any) => it.test.name === "Basophils"),
+  "[SIMULATION HIDDEN SUBPARAM] Hidden sub-parameter Basophils is strictly omitted despite having previously approved value"
+);
+assert(
+  allRenderedItems.map((it: any) => it.test.name).join(" -> ") === "Hemoglobin -> Total Leucocyte Count -> Polymorphs -> Platelet Count -> ESR",
+  "[SIMULATION STRICT SEQUENCE] Parameters render in exact catalog sequence (101 -> 102 -> 201 -> 301 -> 401) without value-entry disruption"
+);
+assert(
+  cbcGroup.sections[0].items[0].test.name === "Hemoglobin" && cbcGroup.sections[1].items[0].test.name === "Total Leucocyte Count",
+  "[SIMULATION UNFILLED PRECEDENCE] Unfilled Hemoglobin & TLC correctly precede filled Platelet Count according to catalog sort_order"
+);
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

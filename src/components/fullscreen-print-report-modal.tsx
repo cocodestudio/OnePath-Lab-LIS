@@ -202,6 +202,10 @@ export function FullscreenPrintReportModal({
     const filteredResults = (report.results || [])
       .filter((item: any) => {
         const t = item.test;
+        if (!t) return false;
+        if (t.is_hidden || t.isHidden || t.parent?.is_hidden || t.parent?.isHidden || t.parent?.parent?.is_hidden || t.parent?.parent?.isHidden) {
+          return false;
+        }
         const mt = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
         return !excludedMainTestIds.includes(mt.id);
       })
