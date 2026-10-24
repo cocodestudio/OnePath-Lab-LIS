@@ -163,6 +163,13 @@ export interface Test {
   valueType?: string;
   customOptions?: string;
   subTests?: Test[];
+  sort_order?: number | null;
+  sortOrder?: number | null;
+  is_hidden?: boolean | null;
+  isHidden?: boolean | null;
+  is_json_override?: boolean | null;
+  isJsonOverride?: boolean | null;
+  [key: string]: any;
 }
 
 export interface SubTestState {
@@ -513,12 +520,20 @@ export default function TestMasterPage() {
         if (hasNested) {
           nestedList.forEach((nested: any) => {
             const { value, isAbnormal } = generateSampleValue(nested);
+            const isSubHidden = Boolean(sub.isHidden ?? sub.is_hidden);
+            const isNestedHidden = Boolean(nested.isHidden ?? nested.is_hidden ?? isSubHidden);
             results.push({
               id: `res-${nested.id || nested.testCode || nested.test_code || Math.random()}`,
               resultValue: value,
               isAbnormal,
               test: {
                 ...nested,
+                id: nested.id,
+                name: nested.name,
+                isHidden: isNestedHidden,
+                is_hidden: isNestedHidden,
+                sort_order: nested.sort_order ?? nested.sortOrder ?? 0,
+                sortOrder: nested.sort_order ?? nested.sortOrder ?? 0,
                 unit: nested.unit || "",
                 category: nested.category || sub.category || test.category,
                 parent: {
@@ -528,6 +543,10 @@ export default function TestMasterPage() {
                   interpretation: sub.interpretation,
                   comment: sub.comment,
                   notes: sub.notes,
+                  isHidden: isSubHidden,
+                  is_hidden: isSubHidden,
+                  sort_order: sub.sort_order ?? sub.sortOrder ?? 0,
+                  sortOrder: sub.sort_order ?? sub.sortOrder ?? 0,
                   parent: {
                     id: test.id || test.testCode || (test as any).test_code,
                     name: test.name,
@@ -535,6 +554,8 @@ export default function TestMasterPage() {
                     interpretation: test.interpretation,
                     comment: test.comment,
                     notes: test.notes,
+                    isHidden: Boolean(test.isHidden ?? (test as any).is_hidden),
+                    is_hidden: Boolean(test.isHidden ?? (test as any).is_hidden),
                   }
                 }
               } as any
@@ -542,12 +563,19 @@ export default function TestMasterPage() {
           });
         } else {
           const { value, isAbnormal } = generateSampleValue(sub);
+          const isSubHidden = Boolean(sub.isHidden ?? sub.is_hidden);
           results.push({
             id: `res-${sub.id || sub.testCode || sub.test_code || Math.random()}`,
             resultValue: value,
             isAbnormal,
             test: {
               ...sub,
+              id: sub.id,
+              name: sub.name,
+              isHidden: isSubHidden,
+              is_hidden: isSubHidden,
+              sort_order: sub.sort_order ?? sub.sortOrder ?? 0,
+              sortOrder: sub.sort_order ?? sub.sortOrder ?? 0,
               unit: sub.unit || "",
               category: sub.category || test.category,
               parent: {
@@ -557,6 +585,8 @@ export default function TestMasterPage() {
                 interpretation: test.interpretation,
                 comment: test.comment,
                 notes: test.notes,
+                isHidden: Boolean(test.isHidden ?? (test as any).is_hidden),
+                is_hidden: Boolean(test.isHidden ?? (test as any).is_hidden),
               }
             } as any
           });
@@ -564,6 +594,7 @@ export default function TestMasterPage() {
       });
     } else {
       const { value, isAbnormal } = generateSampleValue(test);
+      const isTestHidden = Boolean(test.isHidden ?? (test as any).is_hidden);
       results.push({
         id: `res-${test.id || test.testCode || (test as any).test_code || Math.random()}`,
         resultValue: (!isStandardAnalyteTest(test.name || "") && isGenuineCustomEditorTest(test))
@@ -572,6 +603,12 @@ export default function TestMasterPage() {
         isAbnormal,
         test: {
           ...test,
+          id: test.id,
+          name: test.name,
+          isHidden: isTestHidden,
+          is_hidden: isTestHidden,
+          sort_order: test.sort_order ?? (test as any).sortOrder ?? 0,
+          sortOrder: test.sort_order ?? (test as any).sortOrder ?? 0,
           unit: test.unit || "",
           category: test.category,
           parent: undefined

@@ -2471,6 +2471,124 @@ assert(
   "[OVERVIEW THROTTLING] Dashboard overview enforces background revalidation cooldowns, preventing redundant network waterfalls on rapid page switches"
 );
 
+console.log("\n▶ MODULE 27: Test Catalog Layout Customization, Parameter Visibility Persistence & Atomic Save UX");
+
+const printPreviewLayoutSrc = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/print-preview-dialog.tsx"),
+  "utf-8"
+);
+const testCatalogPageSrc = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/tests/page.tsx"),
+  "utf-8"
+);
+const backendTestCtrlSrc = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/TestController.php"),
+  "utf-8"
+);
+
+// 27.1 Initial Hidden Parameter Hydration Logic Verification
+function simulateGetInitialHidden(results: any[], blocks: any[]): string[] {
+  const hidden = new Set<string>();
+  blocks.forEach((block) => {
+    if (block.isGroup) {
+      const parentTest = block.items[0]?.test?.parent;
+      const isParentHidden = Boolean(parentTest?.isHidden ?? parentTest?.is_hidden);
+      const allSubsHidden = block.items.length > 0 && block.items.every((it: any) => Boolean(it.test?.isHidden ?? it.test?.is_hidden));
+
+      if (isParentHidden || allSubsHidden) {
+        hidden.add(block.id);
+        if (parentTest?.id) hidden.add(String(parentTest.id));
+      }
+
+      block.items.forEach((it: any) => {
+        if (Boolean(it.test?.isHidden ?? it.test?.is_hidden)) {
+          if (it.test?.id) hidden.add(String(it.test.id));
+          if (it.id) hidden.add(String(it.id));
+        }
+      });
+    } else {
+      const it = block.items[0];
+      const isHidden = Boolean(it?.test?.isHidden ?? it?.test?.is_hidden);
+      if (isHidden) {
+        hidden.add(block.id);
+        if (it?.test?.id) hidden.add(String(it.test.id));
+        if (it?.id) hidden.add(String(it.id));
+      }
+    }
+  });
+  return Array.from(hidden);
+}
+
+const mockCbcBlocks = [
+  {
+    id: "res-hb",
+    name: "Hemoglobin",
+    isGroup: false,
+    items: [{ id: "res-hb", test: { id: "test-hb-uuid", name: "Hemoglobin", isHidden: true } }]
+  },
+  {
+    id: "group-dlc",
+    name: "Differential Leukocyte Count",
+    isGroup: true,
+    items: [
+      { id: "res-neu", test: { id: "test-neu-uuid", name: "Neutrophils", isHidden: false, parent: { id: "parent-dlc-uuid" } } },
+      { id: "res-baso", test: { id: "test-baso-uuid", name: "Basophils", isHidden: true, parent: { id: "parent-dlc-uuid" } } },
+    ]
+  }
+];
+
+const hydratedHidden = simulateGetInitialHidden([], mockCbcBlocks);
+assert(
+  hydratedHidden.includes("res-hb") && hydratedHidden.includes("test-hb-uuid"),
+  "[HIDDEN HYDRATION] Standalone hidden parameter (e.g. Hemoglobin) is extracted on test reopen"
+);
+assert(
+  hydratedHidden.includes("test-baso-uuid") && hydratedHidden.includes("res-baso"),
+  "[HIDDEN HYDRATION] Sub-parameter inside group (e.g. Basophils) is extracted on test reopen"
+);
+
+// 27.2 Elimination of Blind Hidden State Wipe
+assert(
+  printPreviewLayoutSrc.includes("getInitialHiddenIdsFromResults") &&
+  printPreviewLayoutSrc.includes("const isFreshOpen = !prevOpenRef.current && open;") &&
+  printPreviewLayoutSrc.includes("const isDifferentReport = prevReportIdRef.current !== currentReportId;"),
+  "[REOPEN PERSISTENCE] PrintPreviewDialog hydrates hidden IDs from DB and does not blindly reset hiddenBlockIds to empty"
+);
+
+// 27.3 Atomic Save UX: Loader Stops Before Toast Displays
+assert(
+  printPreviewLayoutSrc.includes("setIsSavingLayout(false);") &&
+  printPreviewLayoutSrc.indexOf("setIsSavingLayout(false);") < printPreviewLayoutSrc.indexOf('toast.success("Layout Saved"') &&
+  printPreviewLayoutSrc.indexOf('toast.success("Layout Saved"') < printPreviewLayoutSrc.indexOf('setTimeout(() => setLayoutSavedSuccess(false), 3000)'),
+  "[SAVE UX ATOMICITY] handleSaveLayout stops button loader BEFORE firing success toast, eliminating stuck spinner"
+);
+
+// 27.4 Sub-Parameter Visibility Toggling Support
+assert(
+  printPreviewLayoutSrc.includes("toggleSubItemVisibility = (blockId: string, itemId: string)") &&
+  printPreviewLayoutSrc.includes("isItemEffectivelyHidden(block, sub)") &&
+  printPreviewLayoutSrc.includes("toggleSubItemVisibility(block.id, subId)"),
+  "[SUB-PARAM TOGGLE] Group blocks provide dedicated per-item visibility toggle for sub-parameters"
+);
+
+// 27.5 Test Catalog Sample Report Data Projection Invariant
+assert(
+  testCatalogPageSrc.includes("isHidden: isNestedHidden") &&
+  testCatalogPageSrc.includes("is_hidden: isNestedHidden") &&
+  testCatalogPageSrc.includes("isHidden: isSubHidden") &&
+  testCatalogPageSrc.includes("is_hidden: isSubHidden"),
+  "[CATALOG DATA PROJECTION] handleOpenSampleReport projects isHidden, is_hidden, and sort_order onto test and parent models"
+);
+
+// 27.6 Backend Tenant Layout Persistence & Priority F Standalone Fallback
+assert(
+  backendTestCtrlSrc.includes("// Priority F: Standalone test itself") &&
+  backendTestCtrlSrc.includes("$sub->is_hidden = $isHiddenVal;") &&
+  backendTestCtrlSrc.includes("$test->is_json_override = true;") &&
+  backendTestCtrlSrc.includes('Cache::forget("lis_tests_{$labId}");'),
+  "[BACKEND LAYOUT PERSISTENCE] TestController saves layout with standalone fallback, sets is_json_override, and invalidates lab cache"
+);
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

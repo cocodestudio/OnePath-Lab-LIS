@@ -172,23 +172,97 @@ export function PrintPreviewDialog({
     return blocks;
   };
 
+  /* ── Helper to extract initial hidden parameter & group IDs from results ── */
+  const getInitialHiddenIdsFromResults = (results: ReportTest[], blocks: TopLevelBlock[]): string[] => {
+    const hidden = new Set<string>();
+
+    blocks.forEach((block) => {
+      if (block.isGroup) {
+        const parentTest = block.items[0]?.test?.parent;
+        const isParentHidden = Boolean(parentTest?.isHidden ?? parentTest?.is_hidden);
+        const allSubsHidden = block.items.length > 0 && block.items.every(it => Boolean(it.test?.isHidden ?? it.test?.is_hidden));
+
+        if (isParentHidden || allSubsHidden) {
+          hidden.add(block.id);
+          if (parentTest?.id) hidden.add(String(parentTest.id));
+        }
+
+        block.items.forEach(it => {
+          if (Boolean(it.test?.isHidden ?? it.test?.is_hidden)) {
+            if (it.test?.id) hidden.add(String(it.test.id));
+            if (it.id) hidden.add(String(it.id));
+          }
+        });
+      } else {
+        const it = block.items[0];
+        const isHidden = Boolean(it?.test?.isHidden ?? it?.test?.is_hidden);
+        if (isHidden) {
+          hidden.add(block.id);
+          if (it?.test?.id) hidden.add(String(it.test.id));
+          if (it?.id) hidden.add(String(it.id));
+        }
+      }
+    });
+
+    return Array.from(hidden);
+  };
+
   /* ── reset & sync on open ─────────────────────────────────── */
+  const prevOpenRef = useRef(false);
+  const prevReportIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (open && report) {
+    if (!open || !report) {
+      prevOpenRef.current = open;
+      return;
+    }
+
+    const currentReportId = String(report.id || report.testId || (report as any).mainTestId || "");
+    const isFreshOpen = !prevOpenRef.current && open;
+    const isDifferentReport = prevReportIdRef.current !== currentReportId;
+
+    prevOpenRef.current = open;
+    prevReportIdRef.current = currentReportId;
+
+    if (isFreshOpen || isDifferentReport) {
       const rs = report.lab?.report_settings || report.lab?.reportSettings;
       setUseCustomLetterpad(false);
       setShowInterpretation(true);
       setSeparatePagePerTest(Boolean(rs?.separatePagePerTest));
       setExcludedMainTests([]);
-      setHiddenBlockIds([]);
       setLayoutSavedSuccess(false);
 
       if (Array.isArray(report.results)) {
         const initialBlocks = buildBlocksFromResults(report.results);
         setBlocksList(initialBlocks);
+        const initialHidden = getInitialHiddenIdsFromResults(report.results, initialBlocks);
+        setHiddenBlockIds(initialHidden);
       }
     }
   }, [open, report]);
+
+  /* ── Check if block or item is effectively hidden ───────────── */
+  const isBlockEffectivelyHidden = (block: TopLevelBlock): boolean => {
+    if (hiddenBlockIds.includes(block.id)) return true;
+    if (block.isGroup) {
+      const parentId = block.items[0]?.test?.parent?.id;
+      if (parentId && hiddenBlockIds.includes(String(parentId))) return true;
+      return block.items.length > 0 && block.items.every(it => {
+        const itId = it.test?.id ? String(it.test.id) : it.id;
+        return hiddenBlockIds.includes(itId) || hiddenBlockIds.includes(it.id);
+      });
+    } else {
+      const it = block.items[0];
+      const itId = it?.test?.id ? String(it.test.id) : it?.id;
+      return Boolean(itId && (hiddenBlockIds.includes(itId) || hiddenBlockIds.includes(it?.id || "")));
+    }
+  };
+
+  const isItemEffectivelyHidden = (block: TopLevelBlock, item: ReportTest): boolean => {
+    if (isBlockEffectivelyHidden(block)) return true;
+    const itId = item.test?.id ? String(item.test.id) : item.id;
+    return hiddenBlockIds.includes(itId) || hiddenBlockIds.includes(item.id);
+  };
 
   /* ── scale to fit preview pane width ───────────────── */
   useEffect(() => {
@@ -272,9 +346,69 @@ export function PrintPreviewDialog({
   };
 
   const toggleBlockVisibility = (blockId: string) => {
-    setHiddenBlockIds(prev =>
-      prev.includes(blockId) ? prev.filter(id => id !== blockId) : [...prev, blockId]
-    );
+    const block = blocksList.find(b => b.id === blockId);
+    const currentlyHidden = block ? isBlockEffectivelyHidden(block) : hiddenBlockIds.includes(blockId);
+
+    setHiddenBlockIds(prev => {
+      const set = new Set(prev);
+      if (currentlyHidden) {
+        set.delete(blockId);
+        if (block) {
+          const parentId = block.items[0]?.test?.parent?.id;
+          if (parentId) set.delete(String(parentId));
+          if (block.isGroup) {
+            block.items.forEach(it => {
+              if (it.test?.id) set.delete(String(it.test.id));
+              if (it.id) set.delete(String(it.id));
+            });
+          } else {
+            const it = block.items[0];
+            if (it?.test?.id) set.delete(String(it.test.id));
+            if (it?.id) set.delete(String(it.id));
+          }
+        }
+      } else {
+        set.add(blockId);
+        if (block) {
+          const parentId = block.items[0]?.test?.parent?.id;
+          if (parentId) set.add(String(parentId));
+          if (block.isGroup) {
+            block.items.forEach(it => {
+              if (it.test?.id) set.add(String(it.test.id));
+              if (it.id) set.add(String(it.id));
+            });
+          } else {
+            const it = block.items[0];
+            if (it?.test?.id) set.add(String(it.test.id));
+            if (it?.id) set.add(String(it.id));
+          }
+        }
+      }
+      return Array.from(set);
+    });
+  };
+
+  const toggleSubItemVisibility = (blockId: string, itemId: string) => {
+    setHiddenBlockIds(prev => {
+      const set = new Set(prev);
+      if (set.has(itemId)) {
+        set.delete(itemId);
+        set.delete(blockId);
+      } else {
+        set.add(itemId);
+        const block = blocksList.find(b => b.id === blockId);
+        if (block && block.items.length > 0) {
+          const allHidden = block.items.every(it => {
+            const itId = it.test?.id ? String(it.test.id) : it.id;
+            return itId === itemId || set.has(itId) || set.has(it.id);
+          });
+          if (allHidden) {
+            set.add(blockId);
+          }
+        }
+      }
+      return Array.from(set);
+    });
   };
 
   const toggleGroupExpand = (groupId: string) => {
@@ -298,7 +432,7 @@ export function PrintPreviewDialog({
       const testParamMap = new Map<string, any[]>();
 
       blocksList.forEach((block, blockIdx) => {
-        const isBlockHidden = hiddenBlockIds.includes(block.id);
+        const isBlockHidden = isBlockEffectivelyHidden(block);
         const blockOrder = (blockIdx + 1) * 100;
 
         const firstItem = block.items[0];
@@ -324,23 +458,25 @@ export function PrintPreviewDialog({
           });
 
           block.items.forEach((item, itemIdx) => {
+            const isItemHidden = isItemEffectivelyHidden(block, item);
             targetList.push({
               id: item.test?.id,
               name: item.test?.name,
               test_code: item.test?.testCode || (item.test as any)?.test_code,
               sort_order: blockOrder + itemIdx + 1,
-              is_hidden: isBlockHidden,
+              is_hidden: isItemHidden,
             });
           });
         } else {
           const item = block.items[0];
           if (item?.test) {
+            const isItemHidden = isItemEffectivelyHidden(block, item);
             targetList.push({
               id: item.test.id,
               name: item.test.name || block.name,
               test_code: item.test.testCode || (item.test as any)?.test_code,
               sort_order: blockOrder + 1,
-              is_hidden: isBlockHidden,
+              is_hidden: isItemHidden,
             });
           }
         }
@@ -364,17 +500,24 @@ export function PrintPreviewDialog({
       clearApiCache("/tests");
       clearApiCache("/reports");
 
+      // Notify parent to revalidate tests
+      if (onLayoutSaved) {
+        try {
+          await onLayoutSaved();
+        } catch (cbErr) {
+          console.warn("onLayoutSaved callback notice:", cbErr);
+        }
+      }
+
+      // Turn off loading state FIRST before showing success
+      setIsSavingLayout(false);
       setLayoutSavedSuccess(true);
       toast.success("Layout Saved", "Parameter sequence & report preferences saved permanently for this lab!");
-      if (onLayoutSaved) {
-        await onLayoutSaved();
-      }
       setTimeout(() => setLayoutSavedSuccess(false), 3000);
     } catch (err: any) {
       console.error("Failed to save layout:", err);
-      toast.error("Save Failed", err.message || "Could not save custom layout.");
-    } finally {
       setIsSavingLayout(false);
+      toast.error("Save Failed", err.message || "Could not save custom layout.");
     }
   };
 
@@ -388,9 +531,11 @@ export function PrintPreviewDialog({
     // Flatten blocksList into results array in exact sequential order with updated sort_order
     const orderedResults: ReportTest[] = [];
     effectiveBlocks.forEach((block, blockIdx) => {
-      if (hiddenBlockIds.includes(block.id)) return;
+      if (isBlockEffectivelyHidden(block)) return;
       const blockOrder = (blockIdx + 1) * 100;
       block.items.forEach((item, itemIdx) => {
+        if (isItemEffectivelyHidden(block, item)) return;
+
         let n = item.test.name;
         if (item.test.parent?.parent) n = item.test.parent.parent.name;
         else if (item.test.parent) n = item.test.parent.name;
@@ -787,7 +932,7 @@ export function PrintPreviewDialog({
                     <span>Parameters & Blocks ({blocksList.length})</span>
                   </h3>
                   <span className="text-[10px] text-muted-foreground font-semibold">
-                    {blocksList.length - hiddenBlockIds.length} active
+                    {blocksList.filter(b => !isBlockEffectivelyHidden(b)).length} active
                   </span>
                 </div>
 
@@ -796,7 +941,7 @@ export function PrintPreviewDialog({
                   className="space-y-2 border border-border rounded-xl bg-background p-2 shadow-xs max-h-[380px] overflow-y-auto custom-scrollbar"
                 >
                   {blocksList.map((block, idx) => {
-                    const isHidden = hiddenBlockIds.includes(block.id);
+                    const isHidden = isBlockEffectivelyHidden(block);
                     const isExpanded = expandedGroupIds.includes(block.id);
 
                     return (
@@ -911,12 +1056,33 @@ export function PrintPreviewDialog({
                         {/* Expanded Group Items Preview */}
                         {block.isGroup && isExpanded && (
                           <div className="px-3 pb-2 pt-1 border-t border-primary/20 bg-background/50 space-y-1">
-                            {block.items.map((sub, sIdx) => (
-                              <div key={sub.id || sIdx} className="flex items-center justify-between text-[10.5px] text-muted-foreground pl-3 border-l-2 border-primary/30 py-0.5">
-                                <span className="truncate">{sub.test.name}</span>
-                                {sub.test.unit && <span className="font-mono text-[9px] text-muted-foreground/80">{sub.test.unit}</span>}
-                              </div>
-                            ))}
+                            {block.items.map((sub, sIdx) => {
+                              const subId = sub.test?.id ? String(sub.test.id) : (sub.id || `sub-${sIdx}`);
+                              const isSubHidden = isItemEffectivelyHidden(block, sub);
+                              return (
+                                <div key={sub.id || sIdx} className="flex items-center justify-between text-[10.5px] pl-3 border-l-2 border-primary/30 py-1 hover:bg-accent/30 rounded transition-colors">
+                                  <span className={`truncate ${isSubHidden ? "line-through text-muted-foreground/60" : "text-foreground font-medium"}`}>
+                                    {sub.test.name}
+                                  </span>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {sub.test.unit && <span className="font-mono text-[9px] text-muted-foreground/80">{sub.test.unit}</span>}
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleSubItemVisibility(block.id, subId)}
+                                      disabled={isHidden}
+                                      className={`p-1 rounded cursor-pointer transition-colors ${
+                                        isSubHidden
+                                          ? "text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-950/40"
+                                          : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                      }`}
+                                      title={isSubHidden ? "Include parameter" : "Hide parameter"}
+                                    >
+                                      {isSubHidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
