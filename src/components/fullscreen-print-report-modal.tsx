@@ -100,9 +100,12 @@ export function FullscreenPrintReportModal({
     if (!report?.results || !Array.isArray(report.results)) return [];
     const map = new Map<string, { id: string; name: string; category?: string }>();
     report.results.forEach((item: any) => {
-      const t = item.test;
+      const t = item?.test;
+      if (!t) return;
       const mt = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
-      if (!map.has(mt.id)) map.set(mt.id, { id: mt.id, name: mt.name, category: t.category });
+      if (mt && mt.id && !map.has(mt.id)) {
+        map.set(mt.id, { id: mt.id, name: mt.name, category: t.category });
+      }
     });
     return Array.from(map.values()).sort((a, b) => {
       return compareClinicalTests(
@@ -201,20 +204,27 @@ export function FullscreenPrintReportModal({
     const currentLab = liveLab || report.lab;
     const filteredResults = (report.results || [])
       .filter((item: any) => {
-        const t = item.test;
+        const t = item?.test;
         if (!t) return false;
         if (t.is_hidden || t.isHidden || t.parent?.is_hidden || t.parent?.isHidden || t.parent?.parent?.is_hidden || t.parent?.parent?.isHidden) {
           return false;
         }
         const mt = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
-        return !excludedMainTestIds.includes(mt.id);
+        return !mt?.id || !excludedMainTestIds.includes(mt.id);
       })
-      .map((item: any) => ({
-        ...item,
-        resultValue: enteredValues?.[item.id] ?? item.resultValue,
-        isAbnormal: abnormalOverrides?.[item.id] ?? item.isAbnormal,
-        remarks: paramRemarks?.[item.id] ?? item.remarks,
-      }));
+      .map((item: any) => {
+        const val = enteredValues?.[item.id] ?? item.resultValue ?? item.result_value ?? null;
+        const isAbn = abnormalOverrides?.[item.id] ?? item.isAbnormal ?? item.is_abnormal ?? false;
+        const rem = paramRemarks?.[item.id] ?? item.remarks ?? null;
+        return {
+          ...item,
+          resultValue: val,
+          result_value: val,
+          isAbnormal: isAbn,
+          is_abnormal: isAbn,
+          remarks: rem,
+        };
+      });
 
     const resolvedPackageName =
       report.packageName ||

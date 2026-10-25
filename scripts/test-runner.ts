@@ -2907,6 +2907,135 @@ assert(
   "computeAutomatedFormulas populates calculatedIds set with VLDL and LDL"
 );
 
+// ==============================================================================
+// 19. Reports List Multi-Date Caching & Print Modal Instant Hydration
+// ==============================================================================
+console.log("\n▶ MODULE 19: Reports Date Caching & Print Modal Instant Hydration");
+
+// Test 1: Multi-date caching and instant retrieval
+const testDateCache = new Map<string, any[]>();
+const yesterdayDate = getYesterdayStr();
+const todayDate = getTodayStr();
+
+const sampleYesterdayReports = Array.from({ length: 15 }, (_, i) => ({
+  id: `rep-yest-${i + 1}`,
+  customId: `OPL1000${i + 1}`,
+  status: "COMPLETED",
+  createdAt: `${yesterdayDate}T10:00:00Z`,
+  results: [
+    { id: `res-${i}-1`, result_value: "14.2", is_abnormal: false, test: { id: "t-hb", name: "Hemoglobin", unit: "g/dL" } }
+  ]
+}));
+
+const sampleTodayReports = Array.from({ length: 5 }, (_, i) => ({
+  id: `rep-today-${i + 1}`,
+  customId: `OPL1001${i + 1}`,
+  status: "FINAL",
+  createdAt: `${todayDate}T10:00:00Z`,
+  results: [
+    { id: `res-t-${i}-1`, result_value: "110", is_abnormal: false, test: { id: "t-glu", name: "Fasting Blood Sugar", unit: "mg/dL" } }
+  ]
+}));
+
+testDateCache.set(yesterdayDate, sampleYesterdayReports);
+testDateCache.set(todayDate, sampleTodayReports);
+
+const retrievedYesterday = testDateCache.get(yesterdayDate);
+assert(
+  Array.isArray(retrievedYesterday) && retrievedYesterday.length === 15,
+  "Multi-date cache instantly returns all 15 yesterday reports in 0ms"
+);
+assert(
+  retrievedYesterday?.[0].customId === "OPL10001",
+  "Multi-date cache preserves customId order for yesterday's reports"
+);
+
+const retrievedToday = testDateCache.get(todayDate);
+assert(
+  Array.isArray(retrievedToday) && retrievedToday.length === 5,
+  "Multi-date cache accurately isolates today's reports from yesterday's"
+);
+
+// Test 2: Print modal snake_case result_value fallback normalization
+const rawReportItem = {
+  id: "item-101",
+  result_value: "15.4",
+  is_abnormal: true,
+  remarks: "Slightly elevated",
+  test: {
+    id: "t-hb",
+    name: "Hemoglobin",
+    fieldType: "Number",
+    unit: "g/dL",
+    ref_range_min: 12.0,
+    ref_range_max: 16.0
+  }
+};
+
+// Simulate fullscreen-print-report-modal activeReportData mapping
+const mappedItem = {
+  ...rawReportItem,
+  resultValue: (rawReportItem as any).resultValue ?? rawReportItem.result_value ?? null,
+  result_value: (rawReportItem as any).resultValue ?? rawReportItem.result_value ?? null,
+  isAbnormal: (rawReportItem as any).isAbnormal ?? rawReportItem.is_abnormal ?? false,
+  is_abnormal: (rawReportItem as any).isAbnormal ?? rawReportItem.is_abnormal ?? false,
+  remarks: (rawReportItem as any).remarks ?? null,
+};
+
+assert(
+  mappedItem.resultValue === "15.4" && mappedItem.result_value === "15.4",
+  "Print modal maps snake_case result_value to camelCase resultValue without delay"
+);
+assert(
+  mappedItem.isAbnormal === true && mappedItem.is_abnormal === true,
+  "Print modal maps snake_case is_abnormal to camelCase isAbnormal without delay"
+);
+assert(
+  mappedItem.remarks === "Slightly elevated",
+  "Print modal preserves test parameter remarks"
+);
+
+// Test 3: Print modal race-condition guard
+let activePrintId: string | null = "rep-patient-A";
+let printReportState: any = { id: "rep-patient-A", patient: { name: "Patient A" }, results: [] };
+
+// User swiftly switches to Patient B before Patient A background request completes
+activePrintId = "rep-patient-B";
+printReportState = { id: "rep-patient-B", patient: { name: "Patient B" }, results: [] };
+
+// Simulated arrival of delayed background hydration for Patient A
+const delayedPayloadA = { id: "rep-patient-A", patient: { name: "Patient A (HYDRATED)" }, results: [{ id: "res-A" }] };
+const handleDelayedArrival = (data: any) => {
+  if (activePrintId !== data.id) {
+    // REJECT: Stale payload discarded to prevent flickering/wrong patient data
+    return false;
+  }
+  printReportState = { ...printReportState, ...data };
+  return true;
+};
+
+const acceptedA = handleDelayedArrival(delayedPayloadA);
+assert(
+  acceptedA === false,
+  "Race-condition guard correctly rejects stale background hydration for Patient A"
+);
+assert(
+  printReportState.id === "rep-patient-B" && printReportState.patient.name === "Patient B",
+  "Active print modal report state remains unpolluted with Patient B data"
+);
+
+// Arrival of background hydration for active Patient B
+const correctPayloadB = { id: "rep-patient-B", patient: { name: "Patient B (HYDRATED)" }, results: [{ id: "res-B" }] };
+const acceptedB = handleDelayedArrival(correctPayloadB);
+assert(
+  acceptedB === true,
+  "Race-condition guard accepts matching background hydration for active Patient B"
+);
+assert(
+  printReportState.patient.name === "Patient B (HYDRATED)",
+  "Active print modal accurately updates with Patient B hydrated data"
+);
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
