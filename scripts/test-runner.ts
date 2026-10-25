@@ -19,6 +19,13 @@ import {
 } from "../src/lib/clinical-test-helper";
 import { clearApiCache } from "../src/lib/api-client";
 import { getTodayStr, getYesterdayStr, getDaysAgoStr, getStartOfMonthStr, getRecordLocalDate } from "../src/lib/date-utils";
+import {
+  isParamFormulaCalculated,
+  canParamBeCalculatedInReport,
+  computeAutomatedFormulas,
+  hasReportParam,
+  getTestPriority,
+} from "../src/lib/clinical-formulas/formula-engine";
 
 let totalTests = 0;
 let passedTests = 0;
@@ -2779,6 +2786,125 @@ assert(
 assert(
   cbcGroup.sections[0].items[0].test.name === "Hemoglobin" && cbcGroup.sections[1].items[0].test.name === "Total Leucocyte Count",
   "[SIMULATION UNFILLED PRECEDENCE] Unfilled Hemoglobin & TLC correctly precede filled Platelet Count according to catalog sort_order"
+);
+
+// ==============================================================================
+// Formula Engine Export & Parameter Calculation Integrity (Zero Regression Guard)
+// ==============================================================================
+console.log("\n▶ MODULE: Clinical Formula Engine Exports & Runtime Calculations");
+
+// Test: isParamFormulaCalculated correctly detects CBC calculated parameters
+assert(
+  typeof isParamFormulaCalculated === "function",
+  "isParamFormulaCalculated is exported as a function"
+);
+assert(
+  isParamFormulaCalculated({ id: "t1", name: "MCV" }) === true,
+  "isParamFormulaCalculated detects MCV as calculated"
+);
+assert(
+  isParamFormulaCalculated({ id: "t2", name: "MCH" }) === true,
+  "isParamFormulaCalculated detects MCH as calculated"
+);
+assert(
+  isParamFormulaCalculated({ id: "t3", name: "MCHC" }) === true,
+  "isParamFormulaCalculated detects MCHC as calculated"
+);
+assert(
+  isParamFormulaCalculated({ id: "t4", name: "NLR" }) === true,
+  "isParamFormulaCalculated detects NLR as calculated"
+);
+assert(
+  isParamFormulaCalculated({ id: "t5", name: "Absolute Eosinophil Count", testCode: "AEC" }) === true,
+  "isParamFormulaCalculated detects AEC as calculated"
+);
+
+// Test: isParamFormulaCalculated correctly detects Biochemistry / LFT / KFT / Lipid
+assert(
+  isParamFormulaCalculated({ id: "t6", name: "Indirect Bilirubin", testCode: "IBILI" }) === true,
+  "isParamFormulaCalculated detects Indirect Bilirubin as calculated"
+);
+assert(
+  isParamFormulaCalculated({ id: "t7", name: "Globulin" }) === true,
+  "isParamFormulaCalculated detects Globulin as calculated"
+);
+assert(
+  isParamFormulaCalculated({ id: "t8", name: "A:G Ratio" }) === true,
+  "isParamFormulaCalculated detects A:G Ratio as calculated"
+);
+assert(
+  isParamFormulaCalculated({ id: "t9", name: "BUN" }) === true,
+  "isParamFormulaCalculated detects BUN as calculated"
+);
+assert(
+  isParamFormulaCalculated({ id: "t10", name: "eGFR" }) === true,
+  "isParamFormulaCalculated detects eGFR as calculated"
+);
+assert(
+  isParamFormulaCalculated({ id: "t11", name: "LDL Cholesterol" }) === true,
+  "isParamFormulaCalculated detects LDL Cholesterol as calculated"
+);
+assert(
+  isParamFormulaCalculated({ id: "t12", name: "INR" }) === true,
+  "isParamFormulaCalculated detects INR as calculated"
+);
+
+// Test: isParamFormulaCalculated excludes minerals and non-calculated parameters
+assert(
+  isParamFormulaCalculated({ id: "t13", name: "Calcium", testCode: "CALCIUM" }) === false,
+  "isParamFormulaCalculated strictly excludes Calcium from auto-calculation"
+);
+assert(
+  isParamFormulaCalculated({ id: "t14", name: "Sodium", testCode: "SODIUM" }) === false,
+  "isParamFormulaCalculated strictly excludes Sodium from auto-calculation"
+);
+assert(
+  isParamFormulaCalculated({ id: "t15", name: "Potassium", testCode: "POTASSIUM" }) === false,
+  "isParamFormulaCalculated strictly excludes Potassium from auto-calculation"
+);
+assert(
+  isParamFormulaCalculated({ id: "t16", name: "Hemoglobin", testCode: "HAEM_HB" }) === false,
+  "isParamFormulaCalculated strictly excludes Hemoglobin analyte input from auto-calculation"
+);
+
+// Test: computeAutomatedFormulas executes safely without exceptions
+const simResult = computeAutomatedFormulas(
+  {
+    "p-tc": "200",
+    "p-hdl": "50",
+    "p-tg": "150",
+  },
+  {
+    id: "rep-sim-1",
+    customId: "REP-001",
+    status: "IN_PROGRESS",
+    createdAt: "2026-10-25T00:00:00Z",
+    patientId: "pat-1",
+    patient: { name: "Test Patient", age: 35, gender: "MALE", phone: "9876543210", customId: "PAT-001" },
+    results: [
+      { id: "p-tc", resultValue: "200", isAbnormal: false, test: { id: "t-tc", name: "Total Cholesterol", testCode: "CHOL" } },
+      { id: "p-hdl", resultValue: "50", isAbnormal: false, test: { id: "t-hdl", name: "HDL Cholesterol", testCode: "HDL" } },
+      { id: "p-tg", resultValue: "150", isAbnormal: false, test: { id: "t-tg", name: "Triglycerides", testCode: "TRIG" } },
+      { id: "p-vldl", resultValue: null, isAbnormal: false, test: { id: "t-vldl", name: "VLDL Cholesterol", testCode: "VLDL" } },
+      { id: "p-ldl", resultValue: null, isAbnormal: false, test: { id: "t-ldl", name: "LDL Cholesterol", testCode: "LDL" } },
+    ]
+  }
+);
+assert(
+  simResult && typeof simResult.calculatedValues === "object",
+  "computeAutomatedFormulas returns valid calculatedValues object"
+);
+assert(
+  simResult.calculatedValues["p-vldl"] === "30.0",
+  "computeAutomatedFormulas correctly calculates VLDL = 30.0 (TG / 5)"
+);
+assert(
+  simResult.calculatedValues["p-ldl"] === "120.0",
+  "computeAutomatedFormulas correctly calculates LDL = 120.0 (TC - HDL - VLDL)"
+);
+assert(
+  simResult.calculatedIds.has("p-vldl") && simResult.calculatedIds.has("p-ldl"),
+  "computeAutomatedFormulas populates calculatedIds set with VLDL and LDL"
 );
 
 console.log("\n===============================================================================");

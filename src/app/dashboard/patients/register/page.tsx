@@ -1545,9 +1545,9 @@ function RegisterPatientPage() {
     };
   }, []);
 
-  // When switching to OUTSOURCE tab, instantly fetch latest rates
+  // When switching to OUTSOURCE tab, fetch latest rates if not already loaded
   useEffect(() => {
-    if (catalogMode === "OUTSOURCE") {
+    if (catalogMode === "OUTSOURCE" && outsourcePartnerLabsList.length === 0) {
       fetchFromLaravel("/outsource/partner-labs")
         .then((opRes) => {
           const labsData = Array.isArray(opRes) ? opRes : (opRes?.data || []);
@@ -1558,7 +1558,7 @@ function RegisterPatientPage() {
         })
         .catch(() => {});
     }
-  }, [catalogMode]);
+  }, [catalogMode, outsourcePartnerLabsList.length]);
 
   const applyPatientDemographics = (patientData: any) => {
     if (!patientData) return;

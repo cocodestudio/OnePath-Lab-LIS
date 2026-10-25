@@ -117,6 +117,7 @@ export function logout(reason?: string) {
 interface CacheEntry {
   data: any;
   timestamp: number;
+  isStale?: boolean;
 }
 
 const apiMemoryCache = new Map<string, CacheEntry>();
@@ -224,13 +225,18 @@ if (typeof window !== "undefined") {
 }
 
 export function markApiCacheStale(prefix?: string) {
+  const staleTimestamp = Date.now() - 65000;
   if (!prefix) {
-    apiMemoryCache.forEach((entry) => { entry.timestamp = 0; });
+    apiMemoryCache.forEach((entry) => {
+      entry.isStale = true;
+      entry.timestamp = staleTimestamp;
+    });
   } else {
     const cleanPrefix = prefix.startsWith("/") ? prefix : `/${prefix}`;
     apiMemoryCache.forEach((entry, key) => {
       if (key.startsWith(cleanPrefix) || key.includes(cleanPrefix)) {
-        entry.timestamp = 0;
+        entry.isStale = true;
+        entry.timestamp = staleTimestamp;
       }
     });
   }
@@ -250,10 +256,12 @@ export function prependToApiCache(prefix: string, item: any, localStorageKey?: s
         const filtered = entry.data.filter((x: any) => (x?.id || x?.customId || x?.custom_id) !== id);
         entry.data = [item, ...filtered];
         entry.timestamp = Date.now();
+        entry.isStale = false;
       } else if (entry.data && Array.isArray(entry.data.data)) {
         const filtered = entry.data.data.filter((x: any) => (x?.id || x?.customId || x?.custom_id) !== id);
         entry.data.data = [item, ...filtered];
         entry.timestamp = Date.now();
+        entry.isStale = false;
       }
     }
   });
@@ -342,10 +350,11 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
     const cached = apiMemoryCache.get(cleanEndpoint);
     if (cached) {
       const age = Date.now() - cached.timestamp;
-      if (age < defaultTtl) {
+      const isExplicitlyStale = Boolean(cached.isStale || cached.timestamp === 0);
+      if (!isExplicitlyStale && age < defaultTtl) {
         // Cache is fresh, return immediately without network call
         return cloneData(cached.data);
-      } else if (age < maxStaleTtl) {
+      } else if (isExplicitlyStale || age < maxStaleTtl) {
         // Cache is stale: return immediately for 0ms transition, revalidate in background
         if (!inFlightRequests.has(cleanEndpoint)) {
           setTimeout(() => {
@@ -468,6 +477,7 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
         apiMemoryCache.set(cleanEndpoint, {
           data,
           timestamp: Date.now(),
+          isStale: false,
         });
       } else {
         // Auto-invalidate matching caches on mutations

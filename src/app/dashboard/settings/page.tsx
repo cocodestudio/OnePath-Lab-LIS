@@ -337,10 +337,54 @@ function SettingsContent() {
       ? "report-layout"
       : "letterhead"
   );
-  const [settings, setSettings] = useState<ExtendedPrintSettings>(defaultPrintSettings);
-  const [layoutSettings, setLayoutSettings] = useState<ReportLayoutSettings>(defaultReportLayoutSettings);
-  const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
-  const [isLoading, setIsLoading] = useState(true);
+  const [settings, setSettings] = useState<ExtendedPrintSettings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cachedPrint = localStorage.getItem("lis_cached_print_settings");
+        const cachedLetterhead = localStorage.getItem("lis_cached_letterhead");
+        if (cachedPrint) {
+          const parsed = JSON.parse(cachedPrint);
+          if (cachedLetterhead && !parsed.bgImage) parsed.bgImage = cachedLetterhead;
+          return parsed;
+        } else if (cachedLetterhead) {
+          return { ...defaultPrintSettings, bgImage: cachedLetterhead, printWithLetterhead: true };
+        }
+      } catch {}
+    }
+    return defaultPrintSettings;
+  });
+
+  const [layoutSettings, setLayoutSettings] = useState<ReportLayoutSettings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cachedReport = localStorage.getItem("lis_cached_report_settings");
+        if (cachedReport) return normalizeReportSettings(JSON.parse(cachedReport));
+      } catch {}
+    }
+    return defaultReportLayoutSettings;
+  });
+
+  const [billSettings, setBillSettings] = useState<BillLayoutSettings>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cachedBill = localStorage.getItem("lis_cached_bill_settings");
+        if (cachedBill) return normalizeBillSettings(JSON.parse(cachedBill));
+      } catch {}
+    }
+    return defaultBillLayoutSettings;
+  });
+
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cachedPrint = localStorage.getItem("lis_cached_print_settings");
+        const cachedReport = localStorage.getItem("lis_cached_report_settings");
+        const cachedBill = localStorage.getItem("lis_cached_bill_settings");
+        if (cachedPrint || cachedReport || cachedBill) return false;
+      } catch {}
+    }
+    return true;
+  });
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {

@@ -786,3 +786,40 @@ export async function getNativePdfBase64({ printContainer, filename }: GenerateP
   });
 }
 
+/**
+ * Zero-server-overhead instant vector printing via isolated native browser iframe.
+ * Generates 100% crisp vector graphics with true vector text/fonts and zero CPU usage on the server.
+ */
+export async function printVectorPdfInIframe(printContainer: HTMLElement): Promise<void> {
+  const html = await prepareReportHtmlAsync(printContainer);
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "none";
+  iframe.style.zIndex = "-99999";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow?.document || iframe.contentDocument;
+  if (!doc) {
+    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    throw new Error("Unable to access iframe document for printing.");
+  }
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  if (iframe.contentWindow) {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  }
+
+  setTimeout(() => {
+    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+  }, 4000);
+}
+
