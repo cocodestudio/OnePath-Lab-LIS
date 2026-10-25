@@ -210,6 +210,7 @@ export default function ReportsListPage() {
   const [printReport, setPrintReport] = useState<any | null>(null);
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const [isHydratingDetail, setIsHydratingDetail] = useState<boolean>(false);
   const [sendingWhatsAppId, setSendingWhatsAppId] = useState<string | null>(null);
   const [whatsAppReportData, setWhatsAppReportData] = useState<ReportSheetData | null>(null);
   const whatsAppOffscreenRef = useRef<HTMLDivElement>(null);
@@ -474,8 +475,17 @@ export default function ReportsListPage() {
       // Instant modal open (0ms) using in-memory cached report or eager-loaded row metadata
       activePrintIdRef.current = rep.id;
       const cached = reportDetailCache.get(rep.id);
+      const isComplete = Boolean(
+        cached?.results &&
+        cached.results.length > 0 &&
+        (cached.results[0]?.test?.ref_range_min !== undefined || cached.results[0]?.test?.refRangeMin !== undefined || cached.results[0]?.test?.ref_range_min_male !== undefined)
+      );
+
       setPrintReport(cached || { ...rep, lab: rep.lab || DEFAULT_LAB });
       setShowPrintOptions(true);
+      if (!isComplete) {
+        setIsHydratingDetail(true);
+      }
 
       // Asynchronously hydrate detailed clinical results and interpretations in background
       fetchFromLaravel(`/reports/${rep.id}`)
@@ -496,6 +506,9 @@ export default function ReportsListPage() {
         })
         .catch((err) => {
           console.warn("Background report hydration note:", err);
+        })
+        .finally(() => {
+          setIsHydratingDetail(false);
         });
     } catch (err: any) {
       toast({
@@ -1696,10 +1709,12 @@ export default function ReportsListPage() {
           if (!open) {
             activePrintIdRef.current = null;
             setPrintReport(null);
+            setIsHydratingDetail(false);
             fetchReports();
           }
         }} 
-        report={printReport} 
+        report={printReport}
+        isLoading={isHydratingDetail && (!printReport?.results || printReport.results.length === 0)}
       />
 
       {/* Offscreen Target for Instant WhatsApp Vector PDF Rendering */}

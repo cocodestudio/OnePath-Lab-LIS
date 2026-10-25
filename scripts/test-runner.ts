@@ -2426,6 +2426,19 @@ assert(
   "[BACKEND EAGER HYDRATION] ReportController index eagerly loads result_values, ranges, units, and lab print settings for instant printing from list"
 );
 
+// 25.6 Clinical Parameter Shimmer Placeholders
+const sheetComponentSrc = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/report-sheet.tsx"),
+  "utf-8"
+);
+assert(
+  sheetComponentSrc.includes('key: "loading-shimmer-block"') &&
+  sheetComponentSrc.includes("Loading clinical parameters & reference ranges") &&
+  fullscreenPrintModalSrc.includes("isLoading") &&
+  fullscreenPrintModalSrc.includes("Loading diagnostic parameters & reference ranges"),
+  "[PRINT SHIMMER ENGINE] FullscreenPrintReportModal and report-sheet render authentic clinical shimmer placeholders and status badges while parameters hydrate"
+);
+
 // ==============================================================================
 // 26. Zero-Flash (0ms) Dashboard Overview Navigation & Dues Performance Engine
 // ==============================================================================

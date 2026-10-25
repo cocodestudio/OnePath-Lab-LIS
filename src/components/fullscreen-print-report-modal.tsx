@@ -36,6 +36,7 @@ interface FullscreenPrintReportModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   report: any;
+  isLoading?: boolean;
   enteredValues?: Record<string, string>;
   abnormalOverrides?: Record<string, boolean>;
   paramRemarks?: Record<string, string>;
@@ -49,6 +50,7 @@ export function FullscreenPrintReportModal({
   open,
   onOpenChange,
   report,
+  isLoading = false,
   enteredValues,
   abnormalOverrides,
   paramRemarks,
@@ -276,6 +278,7 @@ export function FullscreenPrintReportModal({
 
     return {
       ...report,
+      _isLoading: Boolean(isLoading || (!filteredResults.length && (!report?.results || report.results.length === 0))),
       packageName: resolvedPackageName,
       package_name: resolvedPackageName,
       lab: updatedLab,
@@ -285,7 +288,7 @@ export function FullscreenPrintReportModal({
       testNotes: testNotes || report.testNotes || report.test_notes,
       test_notes: testNotes || report.test_notes || report.testNotes,
     };
-  }, [report, liveLab, excludedMainTestIds, enteredValues, abnormalOverrides, paramRemarks, testNotes, printedInterpretations, selectedDate, separatePagePerTest]);
+  }, [report, liveLab, excludedMainTestIds, enteredValues, abnormalOverrides, paramRemarks, testNotes, printedInterpretations, selectedDate, separatePagePerTest, isLoading]);
 
   // ── Date & Time Helpers ───────────────────────────────
   const adj = (fn: (d: Date) => void) =>
@@ -497,8 +500,15 @@ export function FullscreenPrintReportModal({
                 <FileText className="h-4 w-4 text-primary" />
                 <h3 className="font-bold text-sm text-foreground">Tests List</h3>
               </div>
-              <span className="text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                {Math.max(0, mainTests.length - excludedMainTestIds.length)}/{mainTests.length}
+              <span className="text-[10px] font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                {mainTests.length === 0 && (isLoading || !report?.results?.length) ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                    <span>Loading...</span>
+                  </>
+                ) : (
+                  `${Math.max(0, mainTests.length - excludedMainTestIds.length)}/${mainTests.length}`
+                )}
               </span>
             </div>
 
@@ -518,29 +528,38 @@ export function FullscreenPrintReportModal({
               </div>
 
               <div className="space-y-1.5">
-                {mainTests.map((mt) => {
-                  const isSelected = !excludedMainTestIds.includes(mt.id);
-                  return (
-                    <label
-                      key={mt.id}
-                      className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
-                        isSelected
-                          ? "bg-accent/70 border-primary/40 text-foreground font-semibold shadow-2xs"
-                          : "bg-card border-border/70 text-muted-foreground hover:bg-muted/30"
-                      }`}
-                    >
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() =>
-                          setExcludedMainTestIds((prev) =>
-                            prev.includes(mt.id) ? prev.filter((id) => id !== mt.id) : [...prev, mt.id]
-                          )
-                        }
-                      />
-                      <span className="text-xs truncate">{mt.name}</span>
-                    </label>
-                  );
-                })}
+                {mainTests.length === 0 && (isLoading || !report?.results?.length) ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-2.5 p-2.5 rounded-xl border border-border/50 bg-card animate-pulse">
+                      <div className="h-4 w-4 rounded bg-muted/80 shrink-0" />
+                      <div className="h-3.5 w-3/4 rounded bg-muted/80" />
+                    </div>
+                  ))
+                ) : (
+                  mainTests.map((mt) => {
+                    const isSelected = !excludedMainTestIds.includes(mt.id);
+                    return (
+                      <label
+                        key={mt.id}
+                        className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
+                          isSelected
+                            ? "bg-accent/70 border-primary/40 text-foreground font-semibold shadow-2xs"
+                            : "bg-card border-border/70 text-muted-foreground hover:bg-muted/30"
+                        }`}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() =>
+                            setExcludedMainTestIds((prev) =>
+                              prev.includes(mt.id) ? prev.filter((id) => id !== mt.id) : [...prev, mt.id]
+                            )
+                          }
+                        />
+                        <span className="text-xs truncate">{mt.name}</span>
+                      </label>
+                    );
+                  })
+                )}
               </div>
             </div>
 
@@ -641,7 +660,13 @@ export function FullscreenPrintReportModal({
             </div>
 
             {/* Live Center Sheet Viewport (Rendered with forwarded printRef!) */}
-            <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 flex justify-center items-start custom-scrollbar">
+            <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 flex flex-col justify-start items-center custom-scrollbar relative">
+              {Boolean(isLoading || (!activeReportData?.results || activeReportData.results.length === 0)) && (
+                <div className="sticky top-2 z-20 mb-3 px-3.5 py-1.5 rounded-full bg-zinc-900/90 text-primary border border-primary/30 text-xs font-semibold shadow-lg backdrop-blur-md flex items-center gap-2 animate-pulse">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Loading diagnostic parameters & reference ranges...</span>
+                </div>
+              )}
               <div className="rounded-xl overflow-hidden shadow-2xl">
                 <PaginatedReportPreview
                   ref={printRef}
