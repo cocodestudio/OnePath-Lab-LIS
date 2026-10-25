@@ -253,15 +253,23 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
         if (cols.length > 0) {
           tbl.querySelectorAll("tr").forEach((row) => {
             const cells = Array.from(row.children) as HTMLElement[];
-            cells.forEach((cell, idx) => {
-              if (cols[idx] && cols[idx].style.width) {
-                cell.style.width = cols[idx].style.width;
-                cell.style.maxWidth = cols[idx].style.width;
-                cell.style.boxSizing = "border-box";
-              }
-            });
+            // Only apply explicit col widths when cell count equals column count (never crush colSpan rows)
+            if (cells.length === cols.length) {
+              cells.forEach((cell, idx) => {
+                if (cols[idx] && cols[idx].style.width) {
+                  cell.style.width = cols[idx].style.width;
+                  cell.style.boxSizing = "border-box";
+                }
+              });
+            }
           });
         }
+      });
+
+      // Ensure any nested report containers are strictly unscaled
+      clone.querySelectorAll<HTMLElement>(".report-print-page, .report-preview-page-card").forEach((rp) => {
+        rp.style.transform = "none";
+        rp.style.webkitTransform = "none";
       });
 
       // Inline all images as data URLs asynchronously
@@ -295,7 +303,6 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
       background-color: #ffffff !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
-      font-family: Arial, "Helvetica Neue", Helvetica, "Segoe UI", Roboto, sans-serif !important;
     }
     table {
       border-collapse: collapse !important;
@@ -304,7 +311,7 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
     }
     th, td {
       box-sizing: border-box !important;
-      word-break: break-word !important;
+      overflow-wrap: break-word !important;
     }
     .report-print-page {
       width: 794px !important;
@@ -672,15 +679,22 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
         if (cols.length > 0) {
           tbl.querySelectorAll("tr").forEach((row) => {
             const cells = Array.from(row.children) as HTMLElement[];
-            cells.forEach((cell, idx) => {
-              if (cols[idx] && cols[idx].style.width) {
-                cell.style.width = cols[idx].style.width;
-                cell.style.maxWidth = cols[idx].style.width;
-                cell.style.boxSizing = "border-box";
-              }
-            });
+            if (cells.length === cols.length) {
+              cells.forEach((cell, idx) => {
+                if (cols[idx] && cols[idx].style.width) {
+                  cell.style.width = cols[idx].style.width;
+                  cell.style.boxSizing = "border-box";
+                }
+              });
+            }
           });
         }
+      });
+
+      // Ensure any nested report containers are strictly unscaled
+      clone.querySelectorAll<HTMLElement>(".report-print-page, .report-preview-page-card").forEach((rp) => {
+        rp.style.transform = "none";
+        rp.style.webkitTransform = "none";
       });
 
       sandbox.innerHTML = "";
@@ -701,7 +715,7 @@ export async function generatePristineClientPdf(printContainer: HTMLElement, fil
         y: 0,
         scrollX: 0,
         scrollY: 0,
-        windowWidth: 1200,
+        windowWidth: 794,
         windowHeight: 1123,
       });
 
