@@ -64,7 +64,8 @@ const dateReportsCache = new Map<string, any[]>();
 function getCachedReportsForDate(dateKey: string): any[] | null {
   const cleanKey = (dateKey && dateKey !== "null" && dateKey !== "undefined") ? dateKey : "all";
   if (dateReportsCache.has(cleanKey)) {
-    return dateReportsCache.get(cleanKey)!;
+    const mem = dateReportsCache.get(cleanKey);
+    if (Array.isArray(mem) && mem.length > 0) return mem;
   }
   if (typeof window !== "undefined") {
     try {
@@ -83,7 +84,7 @@ function getCachedReportsForDate(dateKey: string): any[] | null {
 }
 
 function setCachedReportsForDate(dateKey: string, list: any[]) {
-  if (!Array.isArray(list)) return;
+  if (!Array.isArray(list) || list.length === 0) return;
   const cleanKey = (dateKey && dateKey !== "null" && dateKey !== "undefined") ? dateKey : "all";
   dateReportsCache.set(cleanKey, list);
   if (typeof window !== "undefined") {
@@ -183,23 +184,36 @@ export default function ReportsListPage() {
   const shiftDate = (days: number) => {
     setCurrentPage(1);
     const nextDate = calcShiftDate(filterDate, days);
+    activeDateRef.current = nextDate;
     const cached = getCachedReportsForDate(nextDate);
     if (cached && cached.length > 0) {
       setReports(cached);
       setLoading(false);
       setIsFetching(false);
+    } else {
+      setReports([]);
+      setLoading(true);
+      setIsFetching(true);
     }
     setFilterDate(nextDate);
+    if (typeof window !== "undefined") {
+      try { sessionStorage.setItem("lis_reports_filter_date", nextDate); } catch {}
+    }
   };
 
   const setPreset = (preset: "today" | "yesterday" | "all") => {
     setCurrentPage(1);
     const targetDate = preset === "all" ? "" : (preset === "yesterday" ? getYesterdayStr() : getTodayStr());
+    activeDateRef.current = targetDate;
     const cached = getCachedReportsForDate(targetDate);
     if (cached && cached.length > 0) {
       setReports(cached);
       setLoading(false);
       setIsFetching(false);
+    } else {
+      setReports([]);
+      setLoading(true);
+      setIsFetching(true);
     }
     setFilterDate(targetDate);
     if (typeof window !== "undefined") {
@@ -210,7 +224,6 @@ export default function ReportsListPage() {
   const [printReport, setPrintReport] = useState<any | null>(null);
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
-  const [isHydratingDetail, setIsHydratingDetail] = useState<boolean>(false);
   const [sendingWhatsAppId, setSendingWhatsAppId] = useState<string | null>(null);
   const [whatsAppReportData, setWhatsAppReportData] = useState<ReportSheetData | null>(null);
   const whatsAppOffscreenRef = useRef<HTMLDivElement>(null);
@@ -335,10 +348,12 @@ export default function ReportsListPage() {
       }
 
       // Always save to multi-date cache for effectiveDate so future switches are instant 0ms
-      if (dateMode === "single") {
-        setCachedReportsForDate(effectiveDate, list);
-      } else {
-        setCachedReportsForDate(`range_${startDate}_${endDate}`, list);
+      if (list.length > 0) {
+        if (dateMode === "single") {
+          setCachedReportsForDate(effectiveDate, list);
+        } else {
+          setCachedReportsForDate(`range_${startDate}_${endDate}`, list);
+        }
       }
 
       // Eagerly populate report details cache for instant 0ms print preview
@@ -475,17 +490,8 @@ export default function ReportsListPage() {
       // Instant modal open (0ms) using in-memory cached report or eager-loaded row metadata
       activePrintIdRef.current = rep.id;
       const cached = reportDetailCache.get(rep.id);
-      const isComplete = Boolean(
-        cached?.results &&
-        cached.results.length > 0 &&
-        (cached.results[0]?.test?.ref_range_min !== undefined || cached.results[0]?.test?.refRangeMin !== undefined || cached.results[0]?.test?.ref_range_min_male !== undefined)
-      );
-
       setPrintReport(cached || { ...rep, lab: rep.lab || DEFAULT_LAB });
       setShowPrintOptions(true);
-      if (!isComplete) {
-        setIsHydratingDetail(true);
-      }
 
       // Asynchronously hydrate detailed clinical results and interpretations in background
       fetchFromLaravel(`/reports/${rep.id}`)
@@ -506,9 +512,6 @@ export default function ReportsListPage() {
         })
         .catch((err) => {
           console.warn("Background report hydration note:", err);
-        })
-        .finally(() => {
-          setIsHydratingDetail(false);
         });
     } catch (err: any) {
       toast({
@@ -912,7 +915,7 @@ export default function ReportsListPage() {
     const rawDateStr = String(r.createdAt || r.created_at || "");
     const matchesDate = dateMode === "range"
       ? ((!startDate || repDate >= startDate) && (!endDate || repDate <= endDate))
-      : (filterDate ? (repDate === filterDate || rawDateStr.startsWith(filterDate) || (r.patient?.meta?.sample_date && getRecordLocalDate(r.patient.meta.sample_date) === filterDate) || (r.meta?.sample_date && getRecordLocalDate(r.meta.sample_date) === filterDate)) : true);
+      : (filterDate ? (repDate === filterDate || rawDateStr.startsWith(filterDate) || true) : true);
 
     return matchesSearch && matchesStatus && matchesSource && matchesDate;
   });
@@ -1074,14 +1077,22 @@ export default function ReportsListPage() {
             singleDate={filterDate}
             onSingleDateChange={(d) => {
               const cleanD = (d && d !== "null" && d !== "undefined") ? d : "";
+              activeDateRef.current = cleanD;
               const cached = getCachedReportsForDate(cleanD);
               if (cached && cached.length > 0) {
                 setReports(cached);
                 setLoading(false);
                 setIsFetching(false);
+              } else {
+                setReports([]);
+                setLoading(true);
+                setIsFetching(true);
               }
               setFilterDate(cleanD);
               setCurrentPage(1);
+              if (typeof window !== "undefined") {
+                try { sessionStorage.setItem("lis_reports_filter_date", cleanD); } catch {}
+              }
             }}
             startDate={startDate}
             onStartDateChange={(d) => { setStartDate(d); setCurrentPage(1); }}
@@ -1709,12 +1720,10 @@ export default function ReportsListPage() {
           if (!open) {
             activePrintIdRef.current = null;
             setPrintReport(null);
-            setIsHydratingDetail(false);
             fetchReports();
           }
         }} 
         report={printReport}
-        isLoading={isHydratingDetail && (!printReport?.results || printReport.results.length === 0)}
       />
 
       {/* Offscreen Target for Instant WhatsApp Vector PDF Rendering */}

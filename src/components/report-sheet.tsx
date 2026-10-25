@@ -690,66 +690,6 @@ export function buildReportBlocks(
   };
 
   if (!activeResults || activeResults.length === 0) {
-    if (Boolean((report as any)?._isLoading || (report as any)?.isLoading)) {
-      blocks.push({
-        key: "loading-shimmer-block",
-        node: (
-          <div className="py-4 space-y-3 select-none" style={{ fontFamily: "inherit" }}>
-            {/* Category title shimmer */}
-            <div className="flex items-center justify-between pb-1.5 border-b border-zinc-200">
-              <div className="h-3.5 w-44 bg-zinc-200/90 rounded animate-pulse" />
-              <div className="h-3 w-24 bg-zinc-200/70 rounded animate-pulse" />
-            </div>
-
-            {/* Table header skeleton */}
-            <div className="grid grid-cols-12 gap-2 py-1 bg-zinc-100/80 px-2 rounded text-[10px] text-zinc-400 font-bold uppercase">
-              <span className="col-span-5">Investigation</span>
-              <span className="col-span-2 text-center">Result</span>
-              <span className="col-span-1 text-center">Flag</span>
-              <span className="col-span-2">Ref. Range</span>
-              <span className="col-span-2">Unit</span>
-            </div>
-
-            {/* Parameter rows shimmer */}
-            <div className="space-y-2 pt-0.5">
-              {[
-                { nameW: "w-36", valW: "w-14", rngW: "w-20", unitW: "w-10" },
-                { nameW: "w-44", valW: "w-12", rngW: "w-24", unitW: "w-12" },
-                { nameW: "w-32", valW: "w-16", rngW: "w-16", unitW: "w-8" },
-                { nameW: "w-48", valW: "w-14", rngW: "w-28", unitW: "w-12" },
-                { nameW: "w-40", valW: "w-12", rngW: "w-20", unitW: "w-10" },
-              ].map((row, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 py-1.5 px-2 items-center border-b border-zinc-100 animate-pulse">
-                  <div className="col-span-5">
-                    <div className={`h-3 bg-zinc-200/80 rounded ${row.nameW}`} />
-                  </div>
-                  <div className="col-span-2 flex justify-center">
-                    <div className={`h-3 bg-zinc-200/80 rounded ${row.valW}`} />
-                  </div>
-                  <div className="col-span-1 flex justify-center">
-                    <div className="h-3 w-4 bg-zinc-200/60 rounded" />
-                  </div>
-                  <div className="col-span-2">
-                    <div className={`h-3 bg-zinc-200/70 rounded ${row.rngW}`} />
-                  </div>
-                  <div className="col-span-2">
-                    <div className={`h-3 bg-zinc-200/70 rounded ${row.unitW}`} />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Subtle clinical status indicator */}
-            <div className="mt-3 p-2.5 bg-zinc-50 border border-zinc-200/80 rounded-lg flex items-center justify-center gap-2 text-zinc-600">
-              <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
-              <span className="text-[11px] font-semibold tracking-tight">Loading clinical parameters & reference ranges...</span>
-            </div>
-          </div>
-        ),
-      });
-      return blocks;
-    }
-
     blocks.push({
       key: "pending-status-block",
       node: (

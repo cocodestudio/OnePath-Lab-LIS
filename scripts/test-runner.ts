@@ -2426,17 +2426,13 @@ assert(
   "[BACKEND EAGER HYDRATION] ReportController index eagerly loads result_values, ranges, units, and lab print settings for instant printing from list"
 );
 
-// 25.6 Clinical Parameter Shimmer Placeholders
-const sheetComponentSrc = fs.readFileSync(
-  path.resolve(__dirname, "../src/components/report-sheet.tsx"),
-  "utf-8"
-);
+// 25.6 Print Report Modal Natural Scroll & Single-Date Trust Invariants
 assert(
-  sheetComponentSrc.includes('key: "loading-shimmer-block"') &&
-  sheetComponentSrc.includes("Loading clinical parameters & reference ranges") &&
-  fullscreenPrintModalSrc.includes("isLoading") &&
-  fullscreenPrintModalSrc.includes("Loading diagnostic parameters & reference ranges"),
-  "[PRINT SHIMMER ENGINE] FullscreenPrintReportModal and report-sheet render authentic clinical shimmer placeholders and status badges while parameters hydrate"
+  fullscreenPrintModalSrc.includes('className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 flex justify-center items-start custom-scrollbar"') &&
+  !fullscreenPrintModalSrc.includes("sticky top-2 z-20") &&
+  reportsListPageContent.includes("matchesDate = dateMode === \"range\"") &&
+  reportsListPageContent.includes("if (!Array.isArray(list) || list.length === 0) return;"),
+  "[PRINT SCROLL & DATE INTEGRITY] FullscreenPrintReportModal preserves natural scrolling with overflow-auto, and reports page never drops single-date server results or poisons cache"
 );
 
 // ==============================================================================

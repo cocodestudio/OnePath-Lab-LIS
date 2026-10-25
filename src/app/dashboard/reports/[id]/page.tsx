@@ -180,68 +180,11 @@ export default function ReportDetailPage() {
     }
   };
 
-  if (loading && !report) {
+  if (loading) {
     return (
-      <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-12 p-4 sm:p-6">
-        {/* Top Control Bar Shimmer */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border/70">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-muted animate-pulse" />
-            <div className="space-y-1.5">
-              <div className="h-4 w-40 bg-muted rounded animate-pulse" />
-              <div className="h-3 w-28 bg-muted/60 rounded animate-pulse" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="h-9 w-28 rounded-lg bg-muted animate-pulse" />
-            <div className="h-9 w-24 rounded-lg bg-muted animate-pulse" />
-          </div>
-        </div>
-
-        {/* Realistic A4 Sheet Shimmer */}
-        <div className="bg-white dark:bg-zinc-950 border border-border/70 rounded-xl shadow-card p-6 sm:p-10 flex flex-col items-center">
-          <div className="w-full max-w-[794px] bg-white text-zinc-900 border border-zinc-200/80 rounded shadow-sm p-8 space-y-6 animate-pulse">
-            {/* Header shimmer */}
-            <div className="flex justify-between items-start pb-4 border-b border-zinc-200">
-              <div className="space-y-2">
-                <div className="h-6 w-52 bg-zinc-200 rounded" />
-                <div className="h-3.5 w-64 bg-zinc-100 rounded" />
-              </div>
-              <div className="h-14 w-28 bg-zinc-200 rounded" />
-            </div>
-
-            {/* Patient banner shimmer */}
-            <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-lg grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="space-y-1">
-                  <div className="h-2.5 w-16 bg-zinc-200 rounded" />
-                  <div className="h-3.5 w-24 bg-zinc-300/80 rounded" />
-                </div>
-              ))}
-            </div>
-
-            {/* Parameter rows shimmer */}
-            <div className="space-y-3 pt-2">
-              <div className="h-4 w-40 bg-zinc-300 rounded" />
-              <div className="space-y-2">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="flex justify-between py-2 border-b border-zinc-100">
-                    <div className="h-3.5 w-44 bg-zinc-200 rounded" />
-                    <div className="h-3.5 w-16 bg-zinc-200 rounded" />
-                    <div className="h-3.5 w-24 bg-zinc-200 rounded" />
-                    <div className="h-3.5 w-14 bg-zinc-200 rounded" />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Status indicator */}
-            <div className="pt-4 flex items-center justify-center gap-2 text-zinc-500 text-xs">
-              <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              <span className="font-semibold">Loading patient report & clinical parameters...</span>
-            </div>
-          </div>
-        </div>
+      <div className="flex flex-col gap-6 w-full animate-fade-in p-6">
+        <Skeleton className="h-[200px] w-full rounded-xl" />
+        <Skeleton className="h-[600px] w-full max-w-4xl mx-auto rounded-xl" />
       </div>
     );
   }
