@@ -62,17 +62,18 @@ const reportDetailCache = new Map<string, any>();
 const dateReportsCache = new Map<string, any[]>();
 
 function getCachedReportsForDate(dateKey: string): any[] | null {
-  if (dateReportsCache.has(dateKey)) {
-    return dateReportsCache.get(dateKey)!;
+  const cleanKey = (dateKey && dateKey !== "null" && dateKey !== "undefined") ? dateKey : "all";
+  if (dateReportsCache.has(cleanKey)) {
+    return dateReportsCache.get(cleanKey)!;
   }
   if (typeof window !== "undefined") {
     try {
-      const storageKey = dateKey ? `lis_cached_reports_${dateKey}` : "lis_cached_reports_all";
-      const raw = sessionStorage.getItem(storageKey) || (dateKey === getTodayStr() ? localStorage.getItem("lis_cached_reports") : null);
+      const storageKey = `lis_cached_reports_${cleanKey}`;
+      const raw = sessionStorage.getItem(storageKey) || (cleanKey === getTodayStr() || cleanKey === "all" ? localStorage.getItem("lis_cached_reports") : null);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          dateReportsCache.set(dateKey, parsed);
+          dateReportsCache.set(cleanKey, parsed);
           return parsed;
         }
       }
@@ -83,12 +84,13 @@ function getCachedReportsForDate(dateKey: string): any[] | null {
 
 function setCachedReportsForDate(dateKey: string, list: any[]) {
   if (!Array.isArray(list)) return;
-  dateReportsCache.set(dateKey, list);
+  const cleanKey = (dateKey && dateKey !== "null" && dateKey !== "undefined") ? dateKey : "all";
+  dateReportsCache.set(cleanKey, list);
   if (typeof window !== "undefined") {
     try {
-      const storageKey = dateKey ? `lis_cached_reports_${dateKey}` : "lis_cached_reports_all";
+      const storageKey = `lis_cached_reports_${cleanKey}`;
       sessionStorage.setItem(storageKey, JSON.stringify(list));
-      if (dateKey === getTodayStr()) {
+      if (cleanKey === getTodayStr() || cleanKey === "all") {
         localStorage.setItem("lis_cached_reports", JSON.stringify(list));
       }
     } catch {}
@@ -103,7 +105,9 @@ export default function ReportsListPage() {
     if (typeof window !== "undefined") {
       try {
         const stored = sessionStorage.getItem("lis_reports_filter_date");
-        if (stored !== null && stored !== undefined) return stored;
+        if (stored && stored !== "null" && stored !== "undefined" && stored !== '""') {
+          return stored;
+        }
       } catch {}
     }
     return getTodayStr();
@@ -178,57 +182,28 @@ export default function ReportsListPage() {
 
   const shiftDate = (days: number) => {
     setCurrentPage(1);
-    setFilterDate((prev) => {
-      const nextDate = calcShiftDate(prev, days);
-      const cached = getCachedReportsForDate(nextDate);
-      if (cached && cached.length > 0) {
-        setReports(cached);
-        setLoading(false);
-        setIsFetching(false);
-      }
-      return nextDate;
-    });
-  };
-
-  const setPreset = (preset: "today" | "yesterday" | "all") => {
-    setCurrentPage(1);
-    if (preset === "all") {
-      const cached = getCachedReportsForDate("");
-      if (cached && cached.length > 0) {
-        setReports(cached);
-        setLoading(false);
-        setIsFetching(false);
-      }
-      setFilterDate("");
-      if (typeof window !== "undefined") {
-        try { sessionStorage.setItem("lis_reports_filter_date", ""); } catch {}
-      }
-      return;
-    }
-    if (preset === "yesterday") {
-      const yDate = getYesterdayStr();
-      const cached = getCachedReportsForDate(yDate);
-      if (cached && cached.length > 0) {
-        setReports(cached);
-        setLoading(false);
-        setIsFetching(false);
-      }
-      setFilterDate(yDate);
-      if (typeof window !== "undefined") {
-        try { sessionStorage.setItem("lis_reports_filter_date", yDate); } catch {}
-      }
-      return;
-    }
-    const tDate = getTodayStr();
-    const cached = getCachedReportsForDate(tDate);
+    const nextDate = calcShiftDate(filterDate, days);
+    const cached = getCachedReportsForDate(nextDate);
     if (cached && cached.length > 0) {
       setReports(cached);
       setLoading(false);
       setIsFetching(false);
     }
-    setFilterDate(tDate);
+    setFilterDate(nextDate);
+  };
+
+  const setPreset = (preset: "today" | "yesterday" | "all") => {
+    setCurrentPage(1);
+    const targetDate = preset === "all" ? "" : (preset === "yesterday" ? getYesterdayStr() : getTodayStr());
+    const cached = getCachedReportsForDate(targetDate);
+    if (cached && cached.length > 0) {
+      setReports(cached);
+      setLoading(false);
+      setIsFetching(false);
+    }
+    setFilterDate(targetDate);
     if (typeof window !== "undefined") {
-      try { sessionStorage.setItem("lis_reports_filter_date", tDate); } catch {}
+      try { sessionStorage.setItem("lis_reports_filter_date", targetDate); } catch {}
     }
   };
 
@@ -311,10 +286,11 @@ export default function ReportsListPage() {
     const initialDate = typeof window !== "undefined"
       ? (sessionStorage.getItem("lis_reports_filter_date") ?? getTodayStr())
       : getTodayStr();
-    const initialCached = getCachedReportsForDate(initialDate);
+    const cleanDate = (initialDate && initialDate !== "null" && initialDate !== "undefined") ? initialDate : getTodayStr();
+    const initialCached = getCachedReportsForDate(cleanDate);
     return !initialCached || initialCached.length === 0;
   });
-  const [isFetching, setIsFetching] = useState<boolean>(true);
+  const [isFetching, setIsFetching] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
@@ -342,14 +318,35 @@ export default function ReportsListPage() {
       }
       params.append("sort", sortOrder);
 
-      const data = await fetchFromLaravel(`/reports?${params.toString()}`, { skipCache: isForce });
+      const data = await fetchFromLaravel(`/reports?${params.toString()}`, { 
+        skipCache: isForce,
+        timeoutMs: 10000,
+      });
 
-      // Discard stale responses if user switched dates while request was pending
-      if (dateMode === "single" && effectiveDate !== activeDateRef.current) {
-        return;
+      // Defensive list extraction from all possible payload shapes
+      let list: any[] = [];
+      if (Array.isArray(data)) {
+        list = data;
+      } else if (Array.isArray(data?.data)) {
+        list = data.data;
+      } else if (Array.isArray(data?.reports)) {
+        list = data.reports;
       }
 
-      const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+      // Always save to multi-date cache for effectiveDate so future switches are instant 0ms
+      if (dateMode === "single") {
+        setCachedReportsForDate(effectiveDate, list);
+      } else {
+        setCachedReportsForDate(`range_${startDate}_${endDate}`, list);
+      }
+
+      // Eagerly populate report details cache for instant 0ms print preview
+      list.forEach((item: any) => {
+        if (item?.id && !reportDetailCache.has(item.id)) {
+          reportDetailCache.set(item.id, item);
+        }
+      });
+
       if (data?.is_outstanding_locked) {
         setOutstandingLock({
           isLocked: true,
@@ -360,15 +357,10 @@ export default function ReportsListPage() {
         setOutstandingLock(null);
       }
 
-      setReports(list);
-      if (dateMode === "single") {
-        setCachedReportsForDate(effectiveDate, list);
+      // Only update displayed state if user hasn't switched to another single date while in flight
+      if (dateMode !== "single" || effectiveDate === activeDateRef.current) {
+        setReports(list);
       }
-      list.forEach((item: any) => {
-        if (item?.id && !reportDetailCache.has(item.id)) {
-          reportDetailCache.set(item.id, item);
-        }
-      });
     } catch (err) {
       console.error("Error fetching reports:", err);
       if (reportsRef.current.length === 0) setReports([]);
@@ -904,9 +896,10 @@ export default function ReportsListPage() {
       ));
     const repSource = getReportSource(r);
     const matchesSource = sourceFilter === "ALL" || repSource === sourceFilter;
+    const rawDateStr = String(r.createdAt || r.created_at || "");
     const matchesDate = dateMode === "range"
       ? ((!startDate || repDate >= startDate) && (!endDate || repDate <= endDate))
-      : (filterDate ? repDate === filterDate : true);
+      : (filterDate ? (repDate === filterDate || rawDateStr.startsWith(filterDate) || (r.patient?.meta?.sample_date && getRecordLocalDate(r.patient.meta.sample_date) === filterDate) || (r.meta?.sample_date && getRecordLocalDate(r.meta.sample_date) === filterDate)) : true);
 
     return matchesSearch && matchesStatus && matchesSource && matchesDate;
   });
@@ -1067,13 +1060,14 @@ export default function ReportsListPage() {
             onDateModeChange={(m) => { setDateMode(m); setCurrentPage(1); }}
             singleDate={filterDate}
             onSingleDateChange={(d) => {
-              const cached = getCachedReportsForDate(d);
+              const cleanD = (d && d !== "null" && d !== "undefined") ? d : "";
+              const cached = getCachedReportsForDate(cleanD);
               if (cached && cached.length > 0) {
                 setReports(cached);
                 setLoading(false);
                 setIsFetching(false);
               }
-              setFilterDate(d);
+              setFilterDate(cleanD);
               setCurrentPage(1);
             }}
             startDate={startDate}
@@ -1281,7 +1275,7 @@ export default function ReportsListPage() {
         )}
 
         <div className={`table-responsive-container transition-opacity duration-200 ${isFetching && safeReports.length > 0 ? "opacity-60 pointer-events-none" : ""}`}>
-          {(loading && safeReports.length === 0) || (isFetching && safeReports.length === 0) ? (
+          {loading && safeReports.length === 0 ? (
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-muted/30 border-b border-border/60">

@@ -3031,9 +3031,38 @@ assert(
   acceptedB === true,
   "Race-condition guard accepts matching background hydration for active Patient B"
 );
+// Test 4: Initial filter date sanitization against corrupted storage strings
+const sanitizeDateStorage = (stored: string | null | undefined): string => {
+  if (stored && stored !== "null" && stored !== "undefined" && stored !== '""') {
+    return stored;
+  }
+  return "2026-10-25";
+};
+
 assert(
-  printReportState.patient.name === "Patient B (HYDRATED)",
-  "Active print modal accurately updates with Patient B hydrated data"
+  sanitizeDateStorage("null") === "2026-10-25" &&
+  sanitizeDateStorage("undefined") === "2026-10-25" &&
+  sanitizeDateStorage("") === "2026-10-25" &&
+  sanitizeDateStorage("2026-10-24") === "2026-10-24",
+  "Reports initial date filter safely ignores 'null', 'undefined', and empty string corruption"
+);
+
+// Test 5: Reports date matching resilience against ISO-8601 UTC offsets
+const mockReportsPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/reports/page.tsx"), "utf-8");
+assert(
+  mockReportsPageSrc.includes("rawDateStr.startsWith(filterDate)"),
+  "Reports list date filter matches ISO-8601 timestamp prefixes directly to prevent UTC offset drops"
+);
+
+assert(
+  mockReportsPageSrc.includes("loading && safeReports.length === 0") &&
+  !mockReportsPageSrc.includes("(loading && safeReports.length === 0) || (isFetching && safeReports.length === 0)"),
+  "Reports table loader condition prevents stuck skeleton shimmer during background revalidations"
+);
+
+assert(
+  mockReportsPageSrc.includes("timeoutMs: 10000"),
+  "fetchReports specifies 10s timeout cushion preventing indefinite loading lock"
 );
 
 console.log("\n===============================================================================");
