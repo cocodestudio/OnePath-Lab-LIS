@@ -111,7 +111,6 @@ class ConcurrencySemaphore {
     }
 
     return new Promise<() => void>((resolve, reject) => {
-      let timer: NodeJS.Timeout;
       const callback = () => {
         clearTimeout(timer);
         let released = false;
@@ -128,7 +127,7 @@ class ConcurrencySemaphore {
         });
       };
 
-      timer = setTimeout(() => {
+      const timer: NodeJS.Timeout = setTimeout(() => {
         const idx = this.queue.indexOf(callback);
         if (idx !== -1) this.queue.splice(idx, 1);
         reject(new Error("PDF generation queue busy. Falling back to high-speed client engine."));
