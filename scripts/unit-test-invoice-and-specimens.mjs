@@ -469,4 +469,180 @@ console.log("  ✓ Case 5.7 (Dues Dropdown Name Priority): Correctly displays us
 
 console.log("-> Suite 5 Passed: 7/7 Doctor Portal access, phone normalization, and dues centre tests.\n");
 
+// ==========================================
+// SUITE 6: INVOICE TEST ITEMS RESOLUTION (ONLY MAIN TESTS & PRICES, ZERO PARAMETERS)
+// ==========================================
+console.log("=== Running Suite 6: Invoice Main Test Resolution (No Parameters) ===");
+
+function testGetMainBillItems(bill, allTestsMap) {
+  if (!bill) return [];
+  const itemsMap = new Map();
+  const billBarcode = bill.patient?.vial_barcode || "";
+
+  // 1. Check booked_test_ids in report meta
+  if (bill.reports && bill.reports.length > 0) {
+    bill.reports.forEach((r) => {
+      const bookedIds = r.meta?.booked_test_ids || r.meta?.bookedTestIds;
+      if (Array.isArray(bookedIds) && bookedIds.length > 0) {
+        bookedIds.forEach((tId) => {
+          const testObj = allTestsMap?.get(String(tId));
+          if (testObj) {
+            const root = testObj.rootParent || testObj;
+            const panelKey = root.id || root.name;
+            if (!itemsMap.has(panelKey)) {
+              itemsMap.set(panelKey, {
+                id: root.id,
+                name: root.name,
+                price: Number(root.price || 0),
+                barcode: billBarcode,
+              });
+            }
+          }
+        });
+      }
+    });
+  }
+
+  // 2. Resolve from reports.results climbing up parent hierarchy
+  if (itemsMap.size === 0 && bill.reports && bill.reports.length > 0) {
+    bill.reports.forEach((r) => {
+      if (r.results && r.results.length > 0) {
+        r.results.forEach((res) => {
+          if (res.test) {
+            let testObj = (res.test.id && allTestsMap?.get(String(res.test.id))) || res.test;
+            if (testObj.rootParent) {
+              testObj = testObj.rootParent;
+            } else {
+              let depth = 0;
+              while (testObj && depth < 10) {
+                depth++;
+                const parentId = testObj.parentId || testObj.parent_id || testObj.parent?.id;
+                const parentObj = testObj.parent || (parentId && allTestsMap?.get(String(parentId)));
+                if (!parentObj) break;
+                testObj = parentObj.rootParent || parentObj;
+              }
+            }
+
+            const isChild = Boolean(testObj.parentId || testObj.parent_id);
+            if (isChild) {
+              const pId = testObj.parentId || testObj.parent_id;
+              const parentFromMap = pId && allTestsMap?.get(String(pId));
+              if (parentFromMap) {
+                testObj = parentFromMap.rootParent || parentFromMap;
+              }
+            }
+
+            const panelKey = testObj.id || testObj.name;
+            if (testObj && !itemsMap.has(panelKey)) {
+              itemsMap.set(panelKey, {
+                id: testObj.id,
+                name: testObj.name,
+                price: Number(testObj.price || 0),
+                barcode: billBarcode,
+              });
+            }
+          }
+        });
+      }
+    });
+  }
+
+  const list = Array.from(itemsMap.values());
+  const grandTotal = Number(bill.total || 0) + Number(bill.discount || 0);
+
+  if (list.length === 1 && list[0].price === 0 && grandTotal > 0) {
+    list[0].price = grandTotal;
+  }
+
+  return list;
+}
+
+// Build map with recursive rootParent linkage
+const mockCbcRoot = { id: "cbc-01", name: "Complete Blood Count (CBC) with DLC & ESR", price: 350 };
+const mockDlcGroup = { id: "dlc-grp", name: "Differential Leukocyte Count (DLC)", parentId: "cbc-01", price: 0 };
+const mockHb = { id: "hb-01", name: "Hemoglobin", parentId: "cbc-01", price: 0 };
+const mockRbc = { id: "rbc-01", name: "RBC Count", parentId: "cbc-01", price: 0 };
+const mockNeu = { id: "neu-01", name: "Neutrophils", parentId: "dlc-grp", price: 0 };
+const mockLym = { id: "lym-01", name: "Lymphocytes", parentId: "dlc-grp", price: 0 };
+const mockPlt = { id: "plt-01", name: "Platelet Count", parentId: "cbc-01", price: 0 };
+const mockGlucose = { id: "glu-01", name: "Fasting Blood Sugar (FBS)", price: 60 };
+
+const allTestsMap = new Map();
+allTestsMap.set("cbc-01", { ...mockCbcRoot, rootParent: mockCbcRoot });
+allTestsMap.set("dlc-grp", { ...mockDlcGroup, rootParent: mockCbcRoot });
+allTestsMap.set("hb-01", { ...mockHb, rootParent: mockCbcRoot });
+allTestsMap.set("rbc-01", { ...mockRbc, rootParent: mockCbcRoot });
+allTestsMap.set("neu-01", { ...mockNeu, rootParent: mockCbcRoot });
+allTestsMap.set("lym-01", { ...mockLym, rootParent: mockCbcRoot });
+allTestsMap.set("plt-01", { ...mockPlt, rootParent: mockCbcRoot });
+allTestsMap.set("glu-01", { ...mockGlucose, rootParent: mockGlucose });
+
+// Case 6.1: CBC bill with 6 leaf parameters must resolve to 1 single CBC test item (ZERO parameters shown)
+const cbcBill = {
+  id: "b-01",
+  total: 350,
+  reports: [
+    {
+      id: "r-01",
+      results: [
+        { test: mockHb },
+        { test: mockRbc },
+        { test: { ...mockNeu, parent: mockDlcGroup } },
+        { test: { ...mockLym, parent: mockDlcGroup } },
+        { test: mockPlt },
+      ],
+    },
+  ],
+};
+
+const cbcItems = testGetMainBillItems(cbcBill, allTestsMap);
+assert.strictEqual(cbcItems.length, 1, "Must contain exactly 1 test row, not individual parameters");
+assert.strictEqual(cbcItems[0].name, "Complete Blood Count (CBC) with DLC & ESR");
+assert.strictEqual(cbcItems[0].price, 350);
+console.log("  ✓ Case 6.1 (CBC Parameter Grouping): Resolved 5 leaf parameters to 1 single 'Complete Blood Count (CBC) with DLC & ESR' item at ₹350");
+
+// Case 6.2: Multi-panel bill (CBC + Glucose) resolves to exactly 2 items with distinct prices
+const multiBill = {
+  id: "b-02",
+  total: 410,
+  reports: [
+    {
+      id: "r-02",
+      results: [
+        { test: mockHb },
+        { test: mockRbc },
+        { test: mockPlt },
+        { test: mockGlucose },
+      ],
+    },
+  ],
+};
+
+const multiItems = testGetMainBillItems(multiBill, allTestsMap);
+assert.strictEqual(multiItems.length, 2, "Must contain exactly 2 test rows");
+assert.strictEqual(multiItems[0].name, "Complete Blood Count (CBC) with DLC & ESR");
+assert.strictEqual(multiItems[0].price, 350);
+assert.strictEqual(multiItems[1].name, "Fasting Blood Sugar (FBS)");
+assert.strictEqual(multiItems[1].price, 60);
+console.log("  ✓ Case 6.2 (Multi-Test Invoice): Correctly extracted CBC (₹350) and FBS (₹60) without printing parameters");
+
+// Case 6.3: Booked test IDs in meta takes priority and produces zero sub-parameters
+const bookedBill = {
+  id: "b-03",
+  total: 350,
+  reports: [
+    {
+      id: "r-03",
+      meta: { booked_test_ids: ["cbc-01"] },
+      results: [{ test: mockHb }, { test: mockNeu }],
+    },
+  ],
+};
+const bookedItems = testGetMainBillItems(bookedBill, allTestsMap);
+assert.strictEqual(bookedItems.length, 1);
+assert.strictEqual(bookedItems[0].name, "Complete Blood Count (CBC) with DLC & ESR");
+console.log("  ✓ Case 6.3 (Booked Test IDs Priority): Directly mapped booked_test_ids without exposing any leaf parameters");
+
+console.log("-> Suite 6 Passed: 3/3 Invoice Main Test Resolution tests.\n");
+
 console.log("=== ALL UNIT TESTS PASSED SUCCESSFULLY! ===");

@@ -379,7 +379,12 @@ export default function ReportsListPage() {
       }
     } catch (err) {
       console.error("Error fetching reports:", err);
-      if (reportsRef.current.length === 0) setReports([]);
+      const fallbackCached = getCachedReportsForDate(effectiveDate);
+      if (fallbackCached && fallbackCached.length > 0) {
+        setReports(fallbackCached);
+      } else if (reportsRef.current.length === 0) {
+        setReports([]);
+      }
     } finally {
       setIsFetching(false);
       setLoading(false);
@@ -388,6 +393,12 @@ export default function ReportsListPage() {
 
   // Reactive date & sort order fetching: ensures reports for any past date or date range are loaded immediately
   useEffect(() => {
+    if (dateMode === "single" && filterDate) {
+      const cached = getCachedReportsForDate(filterDate);
+      if (cached && cached.length > 0) {
+        setReports(cached);
+      }
+    }
     fetchReports(false, filterDate);
   }, [dateMode, filterDate, startDate, endDate, sortOrder, fetchReports]);
 

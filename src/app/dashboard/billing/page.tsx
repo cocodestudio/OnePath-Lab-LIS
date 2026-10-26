@@ -119,26 +119,65 @@ function getMainBillItems(
   if (!bill) return [];
 
   const itemsMap = new Map<string, { id?: string; name: string; code?: string; category?: string; sampleType?: string; price: number; barcode?: string }>();
-
   const billBarcode = (bill.patient as any)?.vial_barcode || (bill.patient as any)?.vialBarcode || (bill.patient as any)?.meta?.vial_barcode || (bill.patient as any)?.meta?.vialBarcode || "";
 
+  // 1. First, check if report has booked_test_ids in its meta
   if (bill.reports && bill.reports.length > 0) {
+    bill.reports.forEach((r) => {
+      const bookedIds = (r.meta as any)?.booked_test_ids || (r.meta as any)?.bookedTestIds;
+      if (Array.isArray(bookedIds) && bookedIds.length > 0) {
+        bookedIds.forEach((tId: any) => {
+          const testObj = allTestsMap?.get(String(tId));
+          if (testObj) {
+            const root = testObj.rootParent || testObj;
+            const panelKey = root.id || root.name;
+            if (!itemsMap.has(panelKey)) {
+              itemsMap.set(panelKey, {
+                id: root.id,
+                name: root.name,
+                code: root.code || root.testCode || root.test_code || `T-${(root.name || "").substring(0, 3).toUpperCase()}`,
+                category: root.category,
+                sampleType: (root as any).sampleType || (root as any).sample_type || undefined,
+                price: Number(root.price || 0),
+                barcode: billBarcode,
+              });
+            }
+          }
+        });
+      }
+    });
+  }
+
+  // 2. Resolve tests from reports.results (resolving each parameter back to its top root panel)
+  if (itemsMap.size === 0 && bill.reports && bill.reports.length > 0) {
     bill.reports.forEach((r) => {
       if (r.results && r.results.length > 0) {
         r.results.forEach((res) => {
           if (res.test) {
-            // Resolve top-level parent test
-            let testObj = (res.test.id && allTestsMap?.get(res.test.id)) || res.test;
+            // Find root parent: first try allTestsMap recursive map
+            let testObj = (res.test.id && allTestsMap?.get(String(res.test.id))) || res.test;
+            if (testObj.rootParent) {
+              testObj = testObj.rootParent;
+            } else {
+              // Climb up parent hierarchy
+              let depth = 0;
+              while (testObj && depth < 10) {
+                depth++;
+                const parentId = testObj.parentId || testObj.parent_id || testObj.parent?.id;
+                const parentObj = testObj.parent || (parentId && allTestsMap?.get(String(parentId)));
+                if (!parentObj) break;
+                testObj = parentObj.rootParent || parentObj;
+              }
+            }
 
-            // Climb up parent hierarchy until top-level main panel is reached
-            let depth = 0;
-            while (testObj && depth < 10) {
-              depth++;
-              const parentId = testObj.parentId || testObj.parent_id || testObj.parent?.id;
-              if (!parentId && !testObj.parent) break;
-              const parentObj = (parentId && allTestsMap?.get(parentId)) || testObj.parent;
-              if (!parentObj) break;
-              testObj = parentObj;
+            // Exclude anything that is still an unlinked sub-parameter (has parentId)
+            const isChild = Boolean(testObj.parentId || testObj.parent_id);
+            if (isChild) {
+              const pId = testObj.parentId || testObj.parent_id;
+              const parentFromMap = pId && allTestsMap?.get(String(pId));
+              if (parentFromMap) {
+                testObj = parentFromMap.rootParent || parentFromMap;
+              }
             }
 
             const panelKey = testObj.id || testObj.name;
@@ -497,6 +536,7 @@ export default function BillingPage() {
 
   useEffect(() => {
     fetchBills(false);
+    fetchAvailableTests(false);
   }, [dateMode, filterDate, startDate, endDate, fetchBills]);
 
   const fetchStaffUsers = async () => {
@@ -527,11 +567,26 @@ export default function BillingPage() {
     }
   };
 
-  // Map of all tests for rapid hierarchy resolution
+  // Map of all tests for rapid hierarchy resolution (recursively mapping all sub-parameters to their root test)
   const allTestsMap = useMemo(() => {
-    const map = new Map<string, Test>();
+    const map = new Map<string, any>();
+    const indexTestRecursive = (test: any, rootParent: any) => {
+      if (!test) return;
+      if (test.id) {
+        map.set(String(test.id), { ...test, rootParent });
+      }
+      if (test.code || test.testCode || test.test_code) {
+        const c = String(test.code || test.testCode || test.test_code).toLowerCase().trim();
+        if (c) map.set(c, { ...test, rootParent });
+      }
+      const subs = test.subTests || test.sub_tests || [];
+      if (Array.isArray(subs)) {
+        subs.forEach((sub: any) => indexTestRecursive(sub, rootParent));
+      }
+    };
+
     allRawTests.forEach((t) => {
-      map.set(t.id, t);
+      indexTestRecursive(t, t);
     });
     return map;
   }, [allRawTests]);
