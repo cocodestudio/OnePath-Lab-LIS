@@ -123,8 +123,8 @@ function getMainBillItems(
 
   // 1. First, check if report has booked_test_ids in its meta
   if (bill.reports && bill.reports.length > 0) {
-    bill.reports.forEach((r) => {
-      const bookedIds = (r.meta as any)?.booked_test_ids || (r.meta as any)?.bookedTestIds;
+    bill.reports.forEach((r: any) => {
+      const bookedIds = r?.meta?.booked_test_ids || r?.meta?.bookedTestIds;
       if (Array.isArray(bookedIds) && bookedIds.length > 0) {
         bookedIds.forEach((tId: any) => {
           const testObj = allTestsMap?.get(String(tId));
@@ -150,12 +150,12 @@ function getMainBillItems(
 
   // 2. Resolve tests from reports.results (resolving each parameter back to its top root panel)
   if (itemsMap.size === 0 && bill.reports && bill.reports.length > 0) {
-    bill.reports.forEach((r) => {
+    bill.reports.forEach((r: any) => {
       if (r.results && r.results.length > 0) {
-        r.results.forEach((res) => {
+        r.results.forEach((res: any) => {
           if (res.test) {
             // Find root parent: first try allTestsMap recursive map
-            let testObj = (res.test.id && allTestsMap?.get(String(res.test.id))) || res.test;
+            let testObj: any = (res.test.id && allTestsMap?.get(String(res.test.id))) || res.test;
             if (testObj.rootParent) {
               testObj = testObj.rootParent;
             } else {
