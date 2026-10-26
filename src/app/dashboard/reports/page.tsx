@@ -323,12 +323,12 @@ export default function ReportsListPage() {
       if (dateMode === "range") {
         if (startDate) params.append("start_date", startDate);
         if (endDate) params.append("end_date", endDate);
-        params.append("limit", "250");
+        params.append("limit", "100");
       } else if (effectiveDate) {
         params.append("date", effectiveDate);
-        params.append("limit", "200");
+        params.append("limit", "50");
       } else {
-        params.append("limit", "150");
+        params.append("limit", "50");
       }
       params.append("sort", sortOrder);
 
@@ -1011,7 +1011,7 @@ export default function ReportsListPage() {
   const selectClass = "w-full h-10 bg-background border border-border rounded-lg px-3 text-sm focus:border-primary/60 focus:ring-2 focus:ring-primary/20 outline-none transition-all";
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="w-full max-w-full overflow-x-hidden space-y-6 animate-fade-in" suppressHydrationWarning>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -1295,7 +1295,7 @@ export default function ReportsListPage() {
       )}
 
       {/* Table */}
-      <div className="bg-card border border-border/70 rounded-xl shadow-card overflow-hidden relative">
+      <div className="w-full max-w-full bg-card border border-border/70 rounded-xl shadow-card overflow-hidden relative">
         {/* Top Micro-Progress Bar for Date Switch / Revalidation Feedback */}
         {isFetching && (
           <div className="w-full h-1 bg-muted/60 overflow-hidden relative shrink-0">
@@ -1309,7 +1309,7 @@ export default function ReportsListPage() {
           </div>
         )}
 
-        <div className={`table-responsive-container transition-opacity duration-200 ${isFetching && safeReports.length > 0 ? "opacity-60 pointer-events-none" : ""}`}>
+        <div className={`w-full max-w-full overflow-x-auto table-responsive-container transition-opacity duration-200 ${isFetching && safeReports.length > 0 ? "opacity-60 pointer-events-none" : ""}`}>
           {loading && safeReports.length === 0 ? (
             <table className="w-full text-left">
               <thead>

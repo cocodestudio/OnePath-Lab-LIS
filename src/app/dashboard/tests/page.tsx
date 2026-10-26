@@ -374,7 +374,7 @@ export default function TestMasterPage() {
     } catch {}
 
     // 2. Silent revalidation from server in background (no Ctrl+F5 needed)
-    fetchTests(true); 
+    fetchTests(false); 
 
     fetchFromLaravel("/lab")
       .then(data => setLabProfile(data))
@@ -387,7 +387,7 @@ export default function TestMasterPage() {
       if (isForce && tests.length === 0) {
         setLoading(true);
       }
-      const data = await fetchFromLaravel("/tests", { skipCache: true });
+      const data = await fetchFromLaravel("/tests", { skipCache: isForce, timeoutMs: 30000 });
       const testList = Array.isArray(data)
         ? data
         : (Array.isArray(data?.data) ? data.data : (Array.isArray(data?.tests) ? data.tests : null));
@@ -1449,7 +1449,7 @@ export default function TestMasterPage() {
   }, [filteredTests, currentPage, pageSize]);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-fade-in">
+    <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-fade-in" suppressHydrationWarning>
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
         <div>

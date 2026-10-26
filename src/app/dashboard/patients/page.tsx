@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,19 +10,24 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   Search, UserPlus, User, Eye, Edit2, Ban, AlertOctagon, Loader2, AlertCircle, Users, X,
   MapPin, Phone, Stethoscope, Building, UserCheck, CheckCircle2, RefreshCw,
   ChevronLeft, ChevronRight, Calendar, Tag, Lock, Barcode, Copy, Check, TestTube2,
-  ShieldCheck, Mail, Activity, Scale, Ruler, Printer, Sparkles, Layers
+  ShieldCheck, Mail, Activity, Scale, Ruler, Printer, Sparkles, Layers,
+  MoreVertical, FileText, Edit3
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getStoredToken, getAuthBaseUrl, updateStoredUser } from "@/lib/api-client";
 import { ALL_DESIGNATIONS } from "@/lib/report-settings";
 import { BarcodeSVG } from "@/components/barcode-svg";
+import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
 import { DateFilterRibbon } from "@/components/date-filter-ribbon";
 import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
 import { formatPatientListDisplayName, extractPurePatientName, isBlankDesignation } from "@/lib/patient-title-helper";
@@ -295,6 +301,7 @@ function getPatientVialList(patient: any): TubeDisplayInfo[] {
 }
 
 export default function PatientsPage() {
+  const router = useRouter();
   const toast = useToast();
   const [patients, setPatients] = useState<Patient[]>(() => {
     if (typeof window !== "undefined") {
@@ -463,6 +470,44 @@ export default function PatientsPage() {
   const [rejectReason, setRejectReason] = useState<string>("Hemolyzed / Hemolytic Sample");
   const [customRejectReason, setCustomRejectReason] = useState<string>("");
   const [rejecting, setRejecting] = useState(false);
+
+  // Print report modal state
+  const [printReport, setPrintReport] = useState<any | null>(null);
+  const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
+  const [loadingPrintId, setLoadingPrintId] = useState<string | null>(null);
+
+  const handlePrintPatientReport = async (patient: Patient) => {
+    let reportId = patient.reports?.[0]?.id || (patient as any).report_id || (patient as any).reportId;
+
+    setLoadingPrintId(patient.id);
+    try {
+      if (!reportId) {
+        const res = await fetchFromLaravel(`/reports?patient_id=${patient.id}&limit=1`);
+        const list = Array.isArray(res) ? res : res?.data;
+        if (list && list.length > 0 && list[0]?.id) {
+          reportId = list[0].id;
+        }
+      }
+
+      if (!reportId) {
+        toast.error("No Report Found", `No generated test report found for ${formatPatientListDisplayName(patient.name, patient.designation)}.`);
+        return;
+      }
+
+      const reportData = await fetchFromLaravel(`/reports/${reportId}`);
+      if (!reportData) {
+        toast.error("Error", "Could not fetch report details for printing.");
+        return;
+      }
+
+      setPrintReport(reportData);
+      setShowPrintModal(true);
+    } catch (err: any) {
+      toast.error("Print Error", err?.message || "Failed to load report for printing.");
+    } finally {
+      setLoadingPrintId(null);
+    }
+  };
 
   const activePatientDateRef = useRef({ dateMode, filterDate, startDate, endDate });
   activePatientDateRef.current = { dateMode, filterDate, startDate, endDate };
@@ -694,7 +739,7 @@ export default function PatientsPage() {
   const currentRows = sortedFilteredPatients.slice(indexOfFirstRow, indexOfLastRow);
 
   return (
-    <div className="space-y-6 animate-fade-in pb-12">
+    <div className="w-full max-w-full overflow-x-hidden space-y-6 animate-fade-in pb-12">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -912,15 +957,53 @@ export default function PatientsPage() {
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer"
-                            onClick={() => setViewPatient(patient)}
-                            title="View Patient Details"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer data-[state=open]:bg-muted"
+                                title="Patient Options"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44 p-1">
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                onClick={() => setViewPatient(patient)}
+                              >
+                                <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span>View Details</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                onClick={() => handlePrintPatientReport(patient)}
+                                disabled={loadingPrintId === patient.id}
+                              >
+                                {loadingPrintId === patient.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                ) : (
+                                  <Printer className="h-3.5 w-3.5 text-muted-foreground" />
+                                )}
+                                <span>{loadingPrintId === patient.id ? "Loading..." : "Print Report"}</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                onClick={() => {
+                                  const reportId = patient.reports?.[0]?.id || patient.report_id || patient.reportId;
+                                  if (reportId) {
+                                    router.push(`/dashboard/reports/${reportId}/edit`);
+                                  } else {
+                                    router.push(`/dashboard/reports?search=${encodeURIComponent(patient.custom_id || patient.customId || patient.name)}`);
+                                  }
+                                }}
+                              >
+                                <Edit3 className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span>Enter Result</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           {(() => {
                             if (currentUser?.role === 'TECHNICIAN' || currentUser?.role === 'DOCTOR') {
                               return null;
@@ -1725,6 +1808,18 @@ export default function PatientsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Fullscreen Print Report Modal */}
+      {printReport && (
+        <FullscreenPrintReportModal
+          open={showPrintModal}
+          onOpenChange={(open) => {
+            setShowPrintModal(open);
+            if (!open) setPrintReport(null);
+          }}
+          report={printReport}
+        />
+      )}
 
     </div>
   );

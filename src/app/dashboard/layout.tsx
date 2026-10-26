@@ -7,10 +7,10 @@ import { DashboardAuthGuard } from "@/components/dashboard-auth-guard";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen h-[100dvh] max-h-[100dvh] w-full overflow-hidden bg-background fixed inset-0 md:static md:h-screen md:max-h-none">
+    <div className="flex h-screen h-[100dvh] max-h-[100dvh] w-full overflow-hidden bg-background fixed inset-0 md:static md:h-screen md:max-h-none" suppressHydrationWarning>
       <DashboardAuthGuard />
       <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden h-full min-w-0">
+      <div className="flex flex-1 flex-col overflow-hidden h-full min-w-0" suppressHydrationWarning>
         <Navbar />
         <DashboardScroller>
           {children}

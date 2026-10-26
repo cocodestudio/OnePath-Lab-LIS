@@ -1080,7 +1080,7 @@ export default function BillingPage() {
   const isTableLoading = (loading && bills.length === 0) || (isFetching && bills.length === 0);
 
   return (
-    <div className="w-full space-y-7 pb-12 animate-fade-in text-foreground">
+    <div className="w-full max-w-full overflow-x-hidden space-y-7 pb-12 animate-fade-in text-foreground">
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-5">
@@ -1400,7 +1400,7 @@ export default function BillingPage() {
       </div>
 
       {/* Invoices List Table */}
-      <div className="bg-card border border-border/80 rounded-xl overflow-hidden shadow-sm relative">
+      <div className="w-full max-w-full bg-card border border-border/80 rounded-xl overflow-hidden shadow-sm relative">
         {/* Top Micro-Progress Bar for Date Switch / SWR Revalidation */}
         {isFetching && (
           <div className="w-full h-1 bg-muted/60 overflow-hidden relative shrink-0">
@@ -1414,7 +1414,7 @@ export default function BillingPage() {
           </div>
         )}
 
-        <div className={`table-responsive-container transition-opacity duration-200 ${isFetching && bills.length > 0 ? "opacity-60 pointer-events-none" : ""}`}>
+        <div className={`w-full max-w-full overflow-x-auto table-responsive-container transition-opacity duration-200 ${isFetching && bills.length > 0 ? "opacity-60 pointer-events-none" : ""}`}>
           <table className="w-full min-w-[890px] text-xs text-left border-collapse">
             <thead>
               <tr className="border-b border-border/80 bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">

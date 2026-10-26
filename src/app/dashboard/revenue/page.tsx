@@ -110,7 +110,7 @@ export default function B2BRevenuePage() {
       if (reports.length === 0) setLoading(true);
 
       const [reportsRes, labRes, testsRes, myRateListRes] = await Promise.all([
-        fetchFromLaravel("/reports", { skipCache: true }).catch(() => []),
+        fetchFromLaravel("/reports?limit=100", { skipCache: true, timeoutMs: 25000 }).catch(() => []),
         fetchFromLaravel("/lab").catch(() => null),
         fetchFromLaravel("/tests").catch(() => []),
         fetchFromLaravel("/rate-lists/my-rate-list").catch(() => null),

@@ -47,10 +47,10 @@ export function extractPurePatientName(name?: string | null): string {
 
 /**
  * Format patient name for dashboard views: Reports Tab, Patients Tab, Billing Tab.
- * If title is blank, displays "Untitled <Name>" (e.g. "Untitled Rahul Sharma").
+ * If title is blank, displays clean patient name without any "Untitled" prefix.
  */
 export function formatPatientListDisplayName(name?: string | null, designation?: string | null): string {
-  if (!name || !name.trim()) return "Untitled Patient";
+  if (!name || !name.trim()) return "—";
 
   const trimmedName = name.trim();
 
@@ -72,9 +72,9 @@ export function formatPatientListDisplayName(name?: string | null, designation?:
     return trimmedName;
   }
 
-  // Title is blank -> show "Untitled <Name>" cleanly without nested "Untitled Untitled"
-  const pureName = extractPurePatientName(trimmedName) || trimmedName;
-  return `Untitled ${pureName}`.trim();
+  // Title is blank -> show clean pure name directly without "Untitled" prefix
+  const pureName = extractPurePatientName(trimmedName);
+  return pureName || trimmedName;
 }
 
 /**

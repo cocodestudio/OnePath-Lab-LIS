@@ -60,7 +60,7 @@ function StatCard({
       </div>
       <div className="mt-5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
-        <p className="font-display text-[2rem] font-semibold tracking-tight text-foreground mt-1 leading-none tnum">{value}</p>
+        <p suppressHydrationWarning className="font-display text-[2rem] font-semibold tracking-tight text-foreground mt-1 leading-none tnum">{value}</p>
       </div>
     </div>
   );
@@ -501,7 +501,7 @@ export default function DashboardOverviewPage() {
     "Diagnostic Laboratory";
 
   return (
-    <div className="space-y-7 animate-fade-in">
+    <div className="space-y-7 animate-fade-in" suppressHydrationWarning>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>

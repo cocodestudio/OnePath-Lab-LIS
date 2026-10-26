@@ -623,18 +623,18 @@ assert(
   "[SETTINGS] defaultReportLayoutSettings defaultDesignation is Blank"
 );
 
-// 11.2 Dashboard views (Reports, Patients, Billing) display Untitled when title is blank
+// 11.2 Dashboard views (Reports, Patients, Billing) display pure name directly when title is blank
 assert(
-  formatPatientListDisplayName("Rahul Sharma", "") === "Untitled Rahul Sharma",
-  "[DASHBOARD] Blank designation displays 'Untitled <Name>' in list views"
+  formatPatientListDisplayName("Rahul Sharma", "") === "Rahul Sharma",
+  "[DASHBOARD] Blank designation displays clean pure name without Untitled prefix in list views"
 );
 assert(
-  formatPatientListDisplayName("Rahul Sharma", "Blank") === "Untitled Rahul Sharma",
-  "[DASHBOARD] 'Blank' designation displays 'Untitled <Name>' in list views"
+  formatPatientListDisplayName("Rahul Sharma", "Blank") === "Rahul Sharma",
+  "[DASHBOARD] 'Blank' designation displays clean pure name in list views"
 );
 assert(
-  formatPatientListDisplayName("Rahul Sharma", "None") === "Untitled Rahul Sharma",
-  "[DASHBOARD] 'None' designation displays 'Untitled <Name>' in list views"
+  formatPatientListDisplayName("Rahul Sharma", "None") === "Rahul Sharma",
+  "[DASHBOARD] 'None' designation displays clean pure name in list views"
 );
 assert(
   formatPatientListDisplayName("Mr. Rahul Sharma", "Mr.") === "Mr. Rahul Sharma",
@@ -645,8 +645,8 @@ assert(
   "[DASHBOARD] Selected title 'Dr.' is prefixed to patient name in list views"
 );
 assert(
-  formatPatientListDisplayName("Untitled Rahul Sharma", "") === "Untitled Rahul Sharma",
-  "[DASHBOARD] Existing 'Untitled' does not get duplicate 'Untitled Untitled'"
+  formatPatientListDisplayName("Untitled Rahul Sharma", "") === "Rahul Sharma",
+  "[DASHBOARD] Existing 'Untitled' prefix is cleanly stripped"
 );
 
 // 11.3 Report print & download views NEVER print title when title is blank
@@ -2073,12 +2073,12 @@ assert(
   "[TITLE RESILIENCE] Non-blank designation 'Dr.' overrides stale 'Untitled' prefix to 'Dr. Priya Verma'"
 );
 assert(
-  formatPatientListDisplayName("Untitled Rahul Sharma", "") === "Untitled Rahul Sharma",
-  "[TITLE RESILIENCE] Blank designation correctly retains clean 'Untitled Rahul Sharma' without repeating prefix"
+  formatPatientListDisplayName("Untitled Rahul Sharma", "") === "Rahul Sharma",
+  "[TITLE RESILIENCE] Blank designation cleanly strips stale 'Untitled' prefix to 'Rahul Sharma'"
 );
 assert(
-  formatPatientListDisplayName("Untitled Untitled Rahul Sharma", "") === "Untitled Rahul Sharma",
-  "[TITLE RESILIENCE] Nested Untitled prefixes are collapsed to single 'Untitled Rahul Sharma'"
+  formatPatientListDisplayName("Untitled Untitled Rahul Sharma", "") === "Rahul Sharma",
+  "[TITLE RESILIENCE] Nested Untitled prefixes are collapsed and stripped to 'Rahul Sharma'"
 );
 assert(
   formatPatientListDisplayName("Mr. Rahul Sharma", "") === "Mr. Rahul Sharma",
