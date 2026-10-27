@@ -3074,6 +3074,47 @@ assert(
   "fetchReports specifies 10s timeout cushion preventing indefinite loading lock"
 );
 
+console.log("\n▶ MODULE 29: Automated Reagent & Consumable Inventory Consumption & AI Forecast Engine");
+const inventoryModalSrc = fs.readFileSync(path.resolve(__dirname, "../src/components/inventory-test-mapping-modal.tsx"), "utf-8");
+assert(
+  inventoryModalSrc.includes("ai-suggest-recipe"),
+  "InventoryTestMappingModal integrates AI Auto-Suggest Recipe endpoint"
+);
+assert(
+  inventoryModalSrc.includes("trigger_stage: sug.trigger_stage === \"booking\" ? \"booking\" : \"verification\""),
+  "InventoryTestMappingModal accurately differentiates booking vs verification trigger stages"
+);
+assert(
+  inventoryModalSrc.includes("/inventory/test-mappings"),
+  "InventoryTestMappingModal saves recipe mappings to backend test-mappings endpoint"
+);
+
+const inventoryForecastSrc = fs.readFileSync(path.resolve(__dirname, "../src/components/inventory-ai-forecast-card.tsx"), "utf-8");
+assert(
+  inventoryForecastSrc.includes("/inventory/ai-predictive-insights"),
+  "InventoryAiForecastCard fetches real-time predictive insights and burn rate analysis"
+);
+assert(
+  inventoryForecastSrc.includes("Stockout Depletion"),
+  "InventoryAiForecastCard displays depletion timeline and days remaining"
+);
+assert(
+  inventoryForecastSrc.includes("Expiry & Waste Risk"),
+  "InventoryAiForecastCard displays FEFO expiry risks and projected wastage"
+);
+
+const invPageIntegrationsSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/inventory/page.tsx"), "utf-8");
+assert(
+  invPageIntegrationsSrc.includes("InventoryAiForecastCard") && invPageIntegrationsSrc.includes("InventoryTestMappingModal"),
+  "Inventory dashboard integrates both AI forecast card and test recipe modal"
+);
+
+const testCountPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/tests/count/page.tsx"), "utf-8");
+assert(
+  testCountPageSrc.includes("InventoryTestMappingModal") && testCountPageSrc.includes("Inventory Recipe"),
+  "Tests Count page links each test to its reagent auto-consumption recipe modal"
+);
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

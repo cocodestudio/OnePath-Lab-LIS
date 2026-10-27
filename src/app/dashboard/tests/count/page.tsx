@@ -17,11 +17,13 @@ import {
   SlidersHorizontal,
   Flame,
   Activity,
-  Layers
+  Layers,
+  Boxes
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InventoryTestMappingModal } from "@/components/inventory-test-mapping-modal";
 
 interface TestUsageItem {
   test_id: string;
@@ -56,6 +58,10 @@ export default function TestsCountPage() {
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Reagent Recipe Modal State
+  const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
+  const [selectedTestIdForRecipe, setSelectedTestIdForRecipe] = useState<string | null>(null);
 
   const [summary, setSummary] = useState<UsageSummary>({
     period: "this_month",
@@ -412,6 +418,7 @@ export default function TestsCountPage() {
                   <th className="py-3 px-3 sm:px-4">Test Name</th>
                   <th className="py-3 px-4 hidden sm:table-cell">Code &amp; Category</th>
                   <th className="py-3 px-4 w-44 hidden md:table-cell">Usage Frequency</th>
+                  <th className="py-3 px-3 sm:px-4 text-center">Inventory Recipe</th>
                   <th className="py-3 px-3 sm:px-4 text-right">Count</th>
                 </tr>
               </thead>
@@ -495,6 +502,23 @@ export default function TestsCountPage() {
                         </div>
                       </td>
 
+                      {/* Reagent Recipe Action */}
+                      <td className="py-3 px-3 sm:px-4 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedTestIdForRecipe(item.test_id);
+                            setIsRecipeModalOpen(true);
+                          }}
+                          className="h-7 px-2 text-[10.5px] gap-1 font-semibold border border-primary/20 hover:bg-primary/10 text-primary transition-colors"
+                          title="Configure Auto Reagent Consumption Recipe"
+                        >
+                          <Layers className="h-3 w-3" />
+                          <span>Recipe</span>
+                        </Button>
+                      </td>
+
                       {/* Count Value */}
                       <td className="py-3 px-3 sm:px-4 text-right">
                         <div className="inline-flex items-center gap-1 font-mono font-extrabold text-xs sm:text-sm text-foreground bg-muted/50 px-2 sm:px-2.5 py-1 rounded-lg border border-border/80">
@@ -554,6 +578,13 @@ export default function TestsCountPage() {
           </div>
         )}
       </div>
+
+      {/* Test Reagent Recipe Modal */}
+      <InventoryTestMappingModal
+        open={isRecipeModalOpen}
+        onOpenChange={setIsRecipeModalOpen}
+        initialTestId={selectedTestIdForRecipe}
+      />
     </div>
   );
 }

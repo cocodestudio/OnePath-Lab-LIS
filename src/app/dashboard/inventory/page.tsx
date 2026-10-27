@@ -8,7 +8,7 @@ import {
   ShieldCheck, ShieldAlert, Sparkles, ChevronRight, X,
   Layers, Package, CheckCircle2, Clock, IndianRupee,
   MinusCircle, PlusCircle, Warehouse, Truck,
-  FileSpreadsheet, ExternalLink, Info, AlertCircle, ArrowLeft
+  FileSpreadsheet, ExternalLink, Info, AlertCircle, ArrowLeft, FlaskConical
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { InventoryAiForecastCard } from "@/components/inventory-ai-forecast-card";
+import { InventoryTestMappingModal } from "@/components/inventory-test-mapping-modal";
 
 interface InventoryBatch {
   id: string;
@@ -106,6 +108,9 @@ export default function ViewInventoryPage() {
   const [quickReason, setQuickReason] = useState(CONSUMPTION_REASONS[0]);
   const [quickCustomReason, setQuickCustomReason] = useState("");
   const [submittingAction, setSubmittingAction] = useState(false);
+
+  // Test Recipe Mapping Modal
+  const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
 
   useEffect(() => {
     loadInventoryData();
@@ -345,6 +350,16 @@ export default function ViewInventoryPage() {
             <span>Export CSV</span>
           </Button>
 
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsRecipeModalOpen(true)}
+            className="h-9 sm:h-10 text-xs font-semibold gap-1.5 border-indigo-500/30 text-indigo-600 dark:text-indigo-400 bg-indigo-500/5 hover:bg-indigo-500/10 shadow-2xs"
+          >
+            <FlaskConical className="h-4 w-4 text-indigo-500" />
+            <span>Test Recipes (Auto-Deduction)</span>
+          </Button>
+
           <Link href="/dashboard/inventory/manage">
             <Button size="sm" className="h-9 sm:h-10 text-xs font-bold gap-1.5 gradient-primary shadow-xs">
               <Plus className="h-4 w-4" />
@@ -353,6 +368,9 @@ export default function ViewInventoryPage() {
           </Link>
         </div>
       </div>
+
+      {/* AI Reagent Forecast & Expiry Intelligence Banner */}
+      <InventoryAiForecastCard onOpenRecipeModal={() => setIsRecipeModalOpen(true)} />
 
       {/* 4 KPI Metric Cards (Full Width Edge-to-Edge Responsive Grid) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
@@ -1345,6 +1363,13 @@ export default function ViewInventoryPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Test-to-Inventory Recipe Mapping Modal */}
+      <InventoryTestMappingModal
+        open={isRecipeModalOpen}
+        onOpenChange={setIsRecipeModalOpen}
+        onSaved={() => loadInventoryData(true)}
+      />
     </div>
   );
 }
