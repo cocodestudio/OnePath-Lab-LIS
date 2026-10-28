@@ -427,7 +427,7 @@ export function renderDoctorSignature(
           <img
             src={resolvedUrl}
             alt={sig.name || "Doctor Signature"}
-            crossOrigin="anonymous"
+            loading="eager"
             style={{
               width: "100%",
               height: "auto",
@@ -1747,6 +1747,10 @@ export const PaginatedReportPreview = React.forwardRef<
         return Math.ceil(totalH);
       });
       setHeights(prev => {
+        // Guard against zero-height measurement frames (e.g. while container is temporarily hidden or detached)
+        if (next.length > 0 && !next.some(h => h > 0) && prev.some(h => h > 0)) {
+          return prev;
+        }
         if (prev.length === next.length && prev.every((v, idx) => Math.abs(v - next[idx]) < 1)) {
           return prev;
         }
@@ -1991,7 +1995,8 @@ export const PaginatedReportPreview = React.forwardRef<
                   src={effectiveSettings.bgImage}
                   alt="Letterhead Background"
                   aria-hidden
-                  crossOrigin="anonymous"
+                  loading="eager"
+                  decoding="sync"
                   className="letterhead-bg-img"
                   style={{
                     position: "absolute",

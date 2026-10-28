@@ -9,7 +9,7 @@ export default function MonthlyExpensesPage() {
       {/* ── Top Header ── */}
       <div className="border-b border-border/80 pb-4">
         <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-          Monthly Expenses
+          Monthly Business Report
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">
           Select month and year to view daily breakdown of UPI, Cash, Dues, and Grand Totals.

@@ -1,6 +1,10 @@
 export function getApiBaseUrl(): string {
-  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  let envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (!envUrl) return "https://api.onepathlab.com/api/lis";
+  // Dynamically map localhost/127.0.0.1 to actual host IP when accessed on mobile/LAN devices
+  if (typeof window !== "undefined" && window.location?.hostname && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+    envUrl = envUrl.replace(/\/\/(localhost|127\.0\.0\.1)(:\d+)?/, `//${window.location.hostname}$2`);
+  }
   const clean = envUrl.replace(/\/+$/, "");
   if (clean.endsWith("/api/lis")) return clean;
   if (clean.endsWith("/api")) return `${clean}/lis`;
@@ -8,8 +12,12 @@ export function getApiBaseUrl(): string {
 }
 
 export function getAuthBaseUrl(): string {
-  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  let envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (!envUrl) return "https://api.onepathlab.com/api/auth";
+  // Dynamically map localhost/127.0.0.1 to actual host IP when accessed on mobile/LAN devices
+  if (typeof window !== "undefined" && window.location?.hostname && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+    envUrl = envUrl.replace(/\/\/(localhost|127\.0\.0\.1)(:\d+)?/, `//${window.location.hostname}$2`);
+  }
   const clean = envUrl.replace(/\/+$/, "");
   const withoutLis = clean.replace(/\/lis$/, "").replace(/\/api$/, "");
   return `${withoutLis}/api/auth`;
@@ -524,12 +532,15 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
 
 export function getCleanLetterheadUrl(url?: string | null): string | null {
   if (!url || typeof url !== "string") return null;
-  const trimmed = url.trim();
+  let trimmed = url.trim();
   if (!trimmed || trimmed === "null" || trimmed === "undefined" || trimmed === "none") {
     return null;
   }
   if (trimmed.startsWith("blob:")) {
     return null;
+  }
+  if (trimmed.startsWith("data:image/")) {
+    return trimmed;
   }
 
   const authBase = getAuthBaseUrl();
@@ -544,6 +555,11 @@ export function getCleanLetterheadUrl(url?: string | null): string | null {
   if (trimmed.includes("/storage/")) {
     const storagePath = trimmed.substring(trimmed.indexOf("/storage/"));
     return `${origin}${storagePath}`;
+  }
+
+  // Ensure remote LAN clients (e.g. mobile testing on 192.168.x.x) rewrite localhost URLs
+  if (typeof window !== "undefined" && window.location?.hostname && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+    trimmed = trimmed.replace(/\/\/(localhost|127\.0\.0\.1)(:\d+)?/, `//${window.location.hostname}$2`);
   }
 
   return trimmed;

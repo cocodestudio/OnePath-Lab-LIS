@@ -3158,8 +3158,9 @@ console.log("\n▶ MODULE 32: Monthly Expenses & Sales Collections Register Engi
 const sidebarSrcMod32 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/sidebar-client.tsx"), "utf-8");
 assert(
   sidebarSrcMod32.includes("Financial Analytics") &&
-  sidebarSrcMod32.includes('{ name: "Monthly Expenses", href: "/dashboard/billing/monthly-expenses" }'),
-  "[SIDEBAR FINANCIAL ANALYTICS] Financial Analytics menu includes 'Monthly Expenses' option"
+  (sidebarSrcMod32.includes('{ name: "Monthly Expenses", href: "/dashboard/billing/monthly-expenses" }') ||
+   sidebarSrcMod32.includes('{ name: "Monthly Business Report", href: "/dashboard/billing/monthly-expenses" }')),
+  "[SIDEBAR FINANCIAL ANALYTICS] Financial Analytics menu includes 'Monthly Business Report' / 'Monthly Expenses' option"
 );
 
 const monthlyExpensesPageSrcMod32 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/billing/monthly-expenses/page.tsx"), "utf-8");
@@ -3353,6 +3354,121 @@ assert(
   toastCode.includes("break-words") &&
   toastCode.includes("pr-6 sm:pr-7"),
   "[TOAST TEXT WRAPPING] Text has word breaks and guarantees clear separation from close button"
+);
+
+// 5. Chrome-like Horizontal-Only Drag Swipe & Zero Vertical Drag
+assert(
+  toastCode.includes("translate3d(${dragX}px, 0, 0)") &&
+  !toastCode.includes("dragOffset.y"),
+  "[TOAST HORIZONTAL-ONLY DRAG] Toast strictly drags horizontally along X-axis with zero vertical movement"
+);
+assert(
+  toastCode.includes('touchAction: "pan-y"') &&
+  toastCode.includes("translate3d(-120%, 0, 0)") &&
+  toastCode.includes("translate3d(120%, 0, 0)"),
+  "[TOAST CHROME SWIPE UX] Supports pan-y page scrolling and clean off-screen swipe dismissal in either direction"
+);
+
+// ==============================================================================
+// 35. Mobile Letterhead Display & Multi-Source Synchronization Engine
+// ==============================================================================
+console.log("\n▶ MODULE 35: Mobile Letterhead Display & Multi-Source Synchronization Engine");
+
+import { getCleanLetterheadUrl } from "../src/lib/api-client";
+
+// 1. Data URLs must return directly without alteration
+const sampleDataUrl = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+assert(
+  getCleanLetterheadUrl(sampleDataUrl) === sampleDataUrl,
+  "[LETTERHEAD DATA URL] Data URLs return intact without mangling or path prepending"
+);
+
+// 2. Storage relative paths cleanly resolved
+const sampleStoragePath = "/storage/letterheads/lab_101_bg.jpg";
+const resolvedCleanUrl = getCleanLetterheadUrl(sampleStoragePath);
+assert(
+  Boolean(resolvedCleanUrl && resolvedCleanUrl.endsWith("/storage/letterheads/lab_101_bg.jpg") && resolvedCleanUrl.startsWith("http")),
+  "[LETTERHEAD STORAGE URL] Storage relative paths resolve to clean absolute URLs"
+);
+
+// 3. Blob URLs and empty strings cleanly rejected
+assert(
+  getCleanLetterheadUrl("blob:http://localhost:3000/1234") === null &&
+  getCleanLetterheadUrl("") === null &&
+  getCleanLetterheadUrl(null) === null &&
+  getCleanLetterheadUrl("none") === null,
+  "[LETTERHEAD SAFETY] Blob URLs, empty strings, null, and 'none' safely evaluate to null"
+);
+
+// 4. FullscreenPrintReportModal Mobile Layout & Multi-Source Fallbacks
+const fullscreenModalCode = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/fullscreen-print-report-modal.tsx"),
+  "utf-8"
+);
+
+assert(
+  fullscreenModalCode.includes("max-lg:fixed max-lg:inset-0 max-lg:opacity-0 max-lg:pointer-events-none max-lg:-z-50 lg:flex"),
+  "[MODAL MOBILE LAYOUT] Center canvas panel maintains non-zero dimensions across mobile tab switches via fixed invisible overlay"
+);
+
+assert(
+  fullscreenModalCode.includes("lis_cached_letterhead") &&
+  fullscreenModalCode.includes("report?.lab?.printBgImage") &&
+  fullscreenModalCode.includes("report?.lab?.print_bg_image"),
+  "[MODAL MULTI-SOURCE FALLBACK] printSettings falls back to report.lab and lis_cached_letterhead if liveLab is unhydrated"
+);
+
+assert(
+  fullscreenModalCode.includes("preloadImg.src = cleanUrl") || fullscreenModalCode.includes("new Image()"),
+  "[MODAL PRELOAD CACHE] Eagerly preloads letterhead image in background for instant 0ms checkbox activation"
+);
+
+assert(
+  fullscreenModalCode.includes("onClick={() => setPrintWithHeaderFooter((prev) => !prev)}") &&
+  fullscreenModalCode.includes("Layers"),
+  "[MODAL CANVAS QUICK TOGGLE] Top canvas toolbar features one-click Letterhead Header & Footer toggle on mobile"
+);
+
+assert(
+  fullscreenModalCode.includes("prevBg === freshBg") &&
+  (fullscreenModalCode.includes("fresh?.printBgImage") || fullscreenModalCode.includes("fresh.printBgImage")),
+  "[MODAL CAMELCASE SYNC] setLiveLab safely compares both camelCase and snake_case properties without dropping letterheads"
+);
+
+// 5. PrintPreviewDialog Mobile Layout & Multi-Source Fallbacks
+const printPreviewDialogCode = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/print-preview-dialog.tsx"),
+  "utf-8"
+);
+
+assert(
+  printPreviewDialogCode.includes("max-md:fixed max-md:inset-0 max-md:opacity-0 max-md:pointer-events-none max-md:-z-50 md:flex"),
+  "[PREVIEW DIALOG MOBILE LAYOUT] Preview pane stays active in layout across mobile tab switches to prevent measurement collapses"
+);
+
+assert(
+  printPreviewDialogCode.includes("lis_cached_letterhead") &&
+  printPreviewDialogCode.includes("report?.lab?.printBgImage") &&
+  printPreviewDialogCode.includes("report?.lab?.print_bg_image"),
+  "[PREVIEW DIALOG MULTI-SOURCE] Uses robust multi-source letterhead fallback"
+);
+
+// 6. ReportSheet Rendering & Measurement Integrity
+const reportSheetCode = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/report-sheet.tsx"),
+  "utf-8"
+);
+
+assert(
+  !reportSheetCode.includes('alt="Letterhead Background"\n                  aria-hidden\n                  crossOrigin="anonymous"') &&
+  reportSheetCode.includes('loading="eager"') &&
+  reportSheetCode.includes('decoding="sync"'),
+  "[REPORT SHEET IMAGE CORS] Letterhead img omits crossOrigin to prevent mobile CORS dropping and uses eager sync decoding"
+);
+
+assert(
+  reportSheetCode.includes("next.length > 0 && !next.some(h => h > 0) && prev.some(h => h > 0)"),
+  "[REPORT SHEET MEASUREMENT GUARD] Block heights are protected from being wiped to zero by temporary detached/hidden frames"
 );
 
 console.log("\n===============================================================================");

@@ -17,7 +17,7 @@ import {
   X, Calendar, Printer, Download,
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
   ZoomIn, ZoomOut, RotateCcw, FileText, Loader2, Phone, Send,
-  Sparkles,
+  Sparkles, Layers,
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import {
@@ -130,19 +130,34 @@ export function FullscreenPrintReportModal({
         .then((fresh) => {
           if (fresh) {
             setLiveLab((prev: any) => {
+              const prevBg = prev?.printBgImage || prev?.print_bg_image || null;
+              const freshBg = fresh?.printBgImage || fresh?.print_bg_image || null;
+              const prevH = prev?.printHeaderHeight ?? prev?.print_header_height;
+              const freshH = fresh?.printHeaderHeight ?? fresh?.print_header_height;
+              const prevF = prev?.printFooterHeight ?? prev?.print_footer_height;
+              const freshF = fresh?.printFooterHeight ?? fresh?.print_footer_height;
+              const prevML = prev?.printMarginLeft ?? prev?.print_margin_left;
+              const freshML = fresh?.printMarginLeft ?? fresh?.print_margin_left;
+              const prevMR = prev?.printMarginRight ?? prev?.print_margin_right;
+              const freshMR = fresh?.printMarginRight ?? fresh?.print_margin_right;
+
               if (
                 prev &&
-                prev.print_header_height === fresh.print_header_height &&
-                prev.print_footer_height === fresh.print_footer_height &&
-                prev.print_margin_left === fresh.print_margin_left &&
-                prev.print_margin_right === fresh.print_margin_right &&
-                prev.print_bg_image === fresh.print_bg_image &&
-                JSON.stringify(prev.report_settings || {}) === JSON.stringify(fresh.report_settings || {})
+                prevH === freshH &&
+                prevF === freshF &&
+                prevML === freshML &&
+                prevMR === freshMR &&
+                prevBg === freshBg &&
+                JSON.stringify(prev.report_settings || prev.reportSettings || {}) === JSON.stringify(fresh.report_settings || fresh.reportSettings || {})
               ) {
                 return prev;
               }
               return fresh;
             });
+            const freshBg = fresh.printBgImage || fresh.print_bg_image;
+            if (freshBg) {
+              try { localStorage.setItem("lis_cached_letterhead", freshBg); } catch (_) {}
+            }
             try { localStorage.setItem("lis_cached_lab", JSON.stringify(fresh)); } catch (_) {}
             const freshRaw = fresh.reportSettings ?? fresh.report_settings;
             const raw = typeof freshRaw === 'string' ? JSON.parse(freshRaw || '{}') : freshRaw;
@@ -154,6 +169,23 @@ export function FullscreenPrintReportModal({
         .catch(() => {});
     }
   }, [open, report]);
+
+  // Preload letterhead image to ensure instant 0ms rendering when user ticks checkbox
+  useEffect(() => {
+    const rawBg =
+      liveLab?.printBgImage ||
+      liveLab?.print_bg_image ||
+      report?.lab?.printBgImage ||
+      report?.lab?.print_bg_image ||
+      (typeof window !== "undefined" ? localStorage.getItem("lis_cached_letterhead") : null);
+    if (rawBg && typeof window !== "undefined") {
+      const cleanUrl = getCleanLetterheadUrl(rawBg);
+      if (cleanUrl) {
+        const img = new Image();
+        img.src = cleanUrl;
+      }
+    }
+  }, [liveLab, report?.lab]);
 
   useEffect(() => {
     if (open) {
@@ -169,32 +201,58 @@ export function FullscreenPrintReportModal({
   // Only bgImage toggles on/off based on printWithHeaderFooter.
   const printSettings: PrintSettings = useMemo(() => {
     const lab = (liveLab || report?.lab || {}) as any;
-    const rawBg = lab.printBgImage || lab.print_bg_image || null;
+    // Robust multi-source letterhead fallback (liveLab -> report.lab -> localStorage)
+    const rawBg =
+      lab.printBgImage ||
+      lab.print_bg_image ||
+      report?.lab?.printBgImage ||
+      report?.lab?.print_bg_image ||
+      (typeof window !== "undefined" ? localStorage.getItem("lis_cached_letterhead") : null) ||
+      (() => {
+        if (typeof window !== "undefined") {
+          try {
+            const cached = localStorage.getItem("lis_cached_lab");
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              return parsed?.printBgImage || parsed?.print_bg_image || null;
+            }
+          } catch {}
+        }
+        return null;
+      })() ||
+      null;
+
     const hasBg = Boolean(rawBg && rawBg !== "null" && rawBg !== "undefined" && rawBg !== "none");
     const bgImage = printWithHeaderFooter && hasBg ? getCleanLetterheadUrl(rawBg) : null;
 
     return {
       bgImage,
-      headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? 185,
-      footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? 95,
-      marginLeft:   lab.printMarginLeft  ?? lab.print_margin_left  ?? 32,
-      marginRight:  lab.printMarginRight ?? lab.print_margin_right ?? 32,
+      headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? report?.lab?.printHeaderHeight ?? report?.lab?.print_header_height ?? 185,
+      footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? report?.lab?.printFooterHeight ?? report?.lab?.print_footer_height ?? 95,
+      marginLeft:   lab.printMarginLeft  ?? lab.print_margin_left  ?? report?.lab?.printMarginLeft  ?? report?.lab?.print_margin_left  ?? 32,
+      marginRight:  lab.printMarginRight ?? lab.print_margin_right ?? report?.lab?.printMarginRight ?? report?.lab?.print_margin_right ?? 32,
     };
   }, [report, liveLab, printWithHeaderFooter]);
 
   // ── Dedicated WhatsApp Settings (ALWAYS with full letterhead, header & footer) ──
   const whatsappPrintSettings: PrintSettings = useMemo(() => {
     const lab = (liveLab || report?.lab || {}) as any;
-    const rawBg = lab.printBgImage || lab.print_bg_image || null;
+    const rawBg =
+      lab.printBgImage ||
+      lab.print_bg_image ||
+      report?.lab?.printBgImage ||
+      report?.lab?.print_bg_image ||
+      (typeof window !== "undefined" ? localStorage.getItem("lis_cached_letterhead") : null) ||
+      null;
     const hasBg = Boolean(rawBg && rawBg !== "null" && rawBg !== "undefined" && rawBg !== "none");
     const bgImage = hasBg ? getCleanLetterheadUrl(rawBg) : null;
 
     return {
       bgImage,
-      headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? 185,
-      footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? 95,
-      marginLeft:   lab.printMarginLeft  ?? lab.print_margin_left  ?? 32,
-      marginRight:  lab.printMarginRight ?? lab.print_margin_right ?? 32,
+      headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? report?.lab?.printHeaderHeight ?? report?.lab?.print_header_height ?? 185,
+      footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? report?.lab?.printFooterHeight ?? report?.lab?.print_footer_height ?? 95,
+      marginLeft:   lab.printMarginLeft  ?? lab.print_margin_left  ?? report?.lab?.printMarginLeft  ?? report?.lab?.print_margin_left  ?? 32,
+      marginRight:  lab.printMarginRight ?? lab.print_margin_right ?? report?.lab?.printMarginRight ?? report?.lab?.print_margin_right ?? 32,
     };
   }, [report, liveLab]);
 
@@ -571,7 +629,13 @@ export function FullscreenPrintReportModal({
           {/* ═══════════════════════════════════════════════════════════════
               2. CENTER PANEL: Live Canvas Viewport
           ═══════════════════════════════════════════════════════════════ */}
-          <div className={`flex-1 flex-col bg-zinc-900/95 dark:bg-zinc-950 overflow-hidden relative print:bg-white print:overflow-visible print:p-0 ${mobileTab === "preview" ? "flex" : "hidden lg:flex"}`}>
+          <div
+            className={`flex-1 flex-col bg-zinc-900/95 dark:bg-zinc-950 overflow-hidden relative print:bg-white print:overflow-visible print:p-0 ${
+              mobileTab === "preview"
+                ? "flex z-10"
+                : "max-lg:fixed max-lg:inset-0 max-lg:opacity-0 max-lg:pointer-events-none max-lg:-z-50 lg:flex"
+            }`}
+          >
             {/* Top Toolbar */}
             <div className="h-12 bg-zinc-800/90 border-b border-zinc-700/80 px-4 flex items-center justify-between text-zinc-200 shrink-0 print:hidden">
               <div className="flex items-center gap-3">
@@ -616,6 +680,22 @@ export function FullscreenPrintReportModal({
                   title="Reset Zoom"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
+                </button>
+
+                {/* Mobile / Desktop Quick Toggle for Letterhead Header & Footer */}
+                <button
+                  type="button"
+                  onClick={() => setPrintWithHeaderFooter((prev) => !prev)}
+                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ml-1 ${
+                    printWithHeaderFooter
+                      ? "bg-primary text-primary-foreground shadow-xs ring-1 ring-primary/40"
+                      : "bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 border border-zinc-700"
+                  }`}
+                  title={printWithHeaderFooter ? "Header & Footer Active (Click to Hide)" : "Click to Show Header & Footer"}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Letterhead</span>
+                  <span className="sm:hidden">{printWithHeaderFooter ? "LH On" : "LH Off"}</span>
                 </button>
 
                 <div className="h-4 w-px bg-zinc-700 mx-2" />

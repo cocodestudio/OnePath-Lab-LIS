@@ -36,7 +36,7 @@ const navigation: NavItem[] = [
     children: [
       { name: "Due Reports", href: "/dashboard/billing/dues" },
       { name: "Billing", href: "/dashboard/billing" },
-      { name: "Monthly Expenses", href: "/dashboard/billing/monthly-expenses" },
+      { name: "Monthly Business Report", href: "/dashboard/billing/monthly-expenses" },
     ],
   },
   {
@@ -93,7 +93,7 @@ const receptionistNav: NavItem[] = [
     children: [
       { name: "Due Reports", href: "/dashboard/billing/dues" },
       { name: "Billing", href: "/dashboard/billing" },
-      { name: "Monthly Expenses", href: "/dashboard/billing/monthly-expenses" },
+      { name: "Monthly Business Report", href: "/dashboard/billing/monthly-expenses" },
     ],
   },
   {
@@ -120,7 +120,7 @@ const collectionNav: NavItem[] = [
     children: [
       { name: "Due Reports", href: "/dashboard/billing/dues" },
       { name: "Billing", href: "/dashboard/billing" },
-      { name: "Monthly Expenses", href: "/dashboard/billing/monthly-expenses" },
+      { name: "Monthly Business Report", href: "/dashboard/billing/monthly-expenses" },
     ],
   },
   { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
@@ -138,7 +138,7 @@ const b2bNav: NavItem[] = [
     children: [
       { name: "Due Reports", href: "/dashboard/billing/dues" },
       { name: "Billing", href: "/dashboard/billing" },
-      { name: "Monthly Expenses", href: "/dashboard/billing/monthly-expenses" },
+      { name: "Monthly Business Report", href: "/dashboard/billing/monthly-expenses" },
       { name: "Revenue & Ledger", href: "/dashboard/revenue" },
       { name: "Rate List", href: "/dashboard/ratelist" },
     ],
@@ -229,7 +229,7 @@ export default function Sidebar() {
           sessionStorage.removeItem("lis_subscription_locked");
         }
       }
-    } catch {}
+    } catch { }
   }, []);
 
   useEffect(() => {
@@ -249,7 +249,7 @@ export default function Sidebar() {
       const uRole = (u?.role || "").toUpperCase().trim();
       if (uRole === "B2B" || uRole === "COLLECTION_CENTER" || uRole === "COLLECTION_CENTRE" || uRole === "RECEPTIONIST") {
         setIsLocked(false);
-        try { sessionStorage.removeItem("lis_subscription_locked"); } catch {}
+        try { sessionStorage.removeItem("lis_subscription_locked"); } catch { }
         return;
       }
       try {
@@ -419,10 +419,10 @@ export default function Sidebar() {
   const visibleNav = isB2B
     ? b2bNav
     : isCollectionCenter
-    ? collectionNav
-    : isReceptionist
-    ? receptionistNav
-    : navigation;
+      ? collectionNav
+      : isReceptionist
+        ? receptionistNav
+        : navigation;
 
   useEffect(() => {
     const activeParent = visibleNav.find(
@@ -471,8 +471,8 @@ export default function Sidebar() {
               {isB2B
                 ? "New Requisition"
                 : isCollectionCenter
-                ? "Sample Entry"
-                : "Add Patient"}
+                  ? "Sample Entry"
+                  : "Add Patient"}
             </span>
           </Link>
         )}
@@ -508,14 +508,14 @@ export default function Sidebar() {
           {!isRoleResolved
             ? "Portal"
             : isB2B
-            ? "B2B Partner Portal"
-            : isCollectionCenter
-            ? "Terminal Portal"
-            : isReceptionist
-            ? "Front Desk Portal"
-            : effectiveLocked
-            ? "Locked Navigation"
-            : "Navigation"}
+              ? "B2B Partner Portal"
+              : isCollectionCenter
+                ? "Terminal Portal"
+                : isReceptionist
+                  ? "Front Desk Portal"
+                  : effectiveLocked
+                    ? "Locked Navigation"
+                    : "Navigation"}
         </p>
 
         {effectiveLocked && (
@@ -543,135 +543,127 @@ export default function Sidebar() {
           </div>
         ) : (
           visibleNav.map((item) => {
-          if (item.children) {
-            const isChildActive = !effectiveLocked && item.children.some((c) => isActive(c.href));
-            const isExpanded = !effectiveLocked && expandedItem === item.name;
+            if (item.children) {
+              const isChildActive = !effectiveLocked && item.children.some((c) => isActive(c.href));
+              const isExpanded = !effectiveLocked && expandedItem === item.name;
 
-            return (
-              <div
-                key={item.name}
-                className="space-y-1"
-                onMouseEnter={() => handleMouseEnter(item.name)}
-                onMouseLeave={() => handleMouseLeave(item.name)}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleToggle(item.name)}
-                  onTouchStart={() => {
-                    lastTouchTimeRef.current = Date.now();
-                  }}
-                  aria-expanded={isExpanded}
-                  className={`group w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-200 cursor-pointer touch-manipulation select-none active:scale-[0.99] ${
-                    effectiveLocked
+              return (
+                <div
+                  key={item.name}
+                  className="space-y-1"
+                  onMouseEnter={() => handleMouseEnter(item.name)}
+                  onMouseLeave={() => handleMouseLeave(item.name)}
+                >
+                  <button
+                    type="button"
+                    onClick={() => handleToggle(item.name)}
+                    onTouchStart={() => {
+                      lastTouchTimeRef.current = Date.now();
+                    }}
+                    aria-expanded={isExpanded}
+                    className={`group w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-200 cursor-pointer touch-manipulation select-none active:scale-[0.99] ${effectiveLocked
                       ? "opacity-50 hover:opacity-80 text-muted-foreground hover:bg-muted/40 cursor-not-allowed"
                       : isChildActive
-                      ? "text-foreground font-semibold hover:bg-muted/40"
-                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <item.icon
-                      className={`h-[18px] w-[18px] transition-transform duration-200 ${
-                        isChildActive ? "text-primary" : ""
+                        ? "text-foreground font-semibold hover:bg-muted/40"
+                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                       }`}
-                    />
-                    <span>{item.name}</span>
-                  </div>
-                  {effectiveLocked ? (
-                    <Lock className="h-3.5 w-3.5 text-rose-500/70" />
-                  ) : (
-                    <ChevronDown
-                      className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ease-in-out ${
-                        isExpanded ? "rotate-180 text-foreground" : "rotate-0"
-                      }`}
-                    />
-                  )}
-                </button>
+                  >
+                    <div className="flex items-center gap-3">
+                      <item.icon
+                        className={`h-[18px] w-[18px] transition-transform duration-200 ${isChildActive ? "text-primary" : ""
+                          }`}
+                      />
+                      <span>{item.name}</span>
+                    </div>
+                    {effectiveLocked ? (
+                      <Lock className="h-3.5 w-3.5 text-rose-500/70" />
+                    ) : (
+                      <ChevronDown
+                        className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ease-in-out ${isExpanded ? "rotate-180 text-foreground" : "rotate-0"
+                          }`}
+                      />
+                    )}
+                  </button>
 
-                <div
-                  className={`grid transition-all duration-300 ease-in-out ${
-                    isExpanded
+                  <div
+                    className={`grid transition-all duration-300 ease-in-out ${isExpanded
                       ? "grid-rows-[1fr] opacity-100"
                       : "grid-rows-[0fr] opacity-0 pointer-events-none"
-                  }`}
-                >
-                  <div className="overflow-hidden">
-                    <div className="pl-4 pr-1 space-y-1 border-l-2 border-border/70 ml-5 py-1">
-                      {item.children.map((child) => {
-                        const childActive = !effectiveLocked && isActive(child.href);
-                        return (
-                          <Link
-                            key={child.name}
-                            href={effectiveLocked ? "/dashboard/account/lab?tab=subscription" : child.href}
-                            onClick={(e) => {
-                              if (effectiveLocked) handleLockedNavClick(e);
-                              setIsOpen(false);
-                            }}
-                            className={`flex items-center justify-between px-3 py-2 rounded-lg text-[12.5px] font-medium transition-colors touch-manipulation ${
-                              effectiveLocked
+                      }`}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="pl-4 pr-1 space-y-1 border-l-2 border-border/70 ml-5 py-1">
+                        {item.children.map((child) => {
+                          const childActive = !effectiveLocked && isActive(child.href);
+                          return (
+                            <Link
+                              key={child.name}
+                              href={effectiveLocked ? "/dashboard/account/lab?tab=subscription" : child.href}
+                              onClick={(e) => {
+                                if (effectiveLocked) handleLockedNavClick(e);
+                                setIsOpen(false);
+                              }}
+                              className={`flex items-center justify-between px-3 py-2 rounded-lg text-[12.5px] font-medium transition-colors touch-manipulation ${effectiveLocked
                                 ? "opacity-50 text-muted-foreground hover:opacity-80"
                                 : childActive
-                                ? "bg-primary/10 text-primary font-bold"
-                                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <span
-                                className={`h-1.5 w-1.5 rounded-full transition-colors ${
-                                  childActive ? "bg-primary" : "bg-muted-foreground/40"
+                                  ? "bg-primary/10 text-primary font-bold"
+                                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                                 }`}
-                              />
-                              <span>{child.name}</span>
-                            </div>
-                            {effectiveLocked && <Lock className="h-3 w-3 text-rose-500/70" />}
-                          </Link>
-                        );
-                      })}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <span
+                                  className={`h-1.5 w-1.5 rounded-full transition-colors ${childActive ? "bg-primary" : "bg-muted-foreground/40"
+                                    }`}
+                                />
+                                <span>{child.name}</span>
+                              </div>
+                              {effectiveLocked && <Lock className="h-3 w-3 text-rose-500/70" />}
+                            </Link>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          }
+              );
+            }
 
-          const active = !effectiveLocked && isActive(item.href);
-          return (
-            <Link
-              key={item.name}
-              href={effectiveLocked ? "/dashboard/account/lab?tab=subscription" : item.href!}
-              onMouseEnter={handleNonExpandableMouseEnter}
-              onClick={(e) => {
-                if (effectiveLocked) handleLockedNavClick(e);
-                setIsOpen(false);
-              }}
-              className={`group relative flex items-center justify-between px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-200 touch-manipulation select-none active:scale-[0.99] ${
-                effectiveLocked
+            const active = !effectiveLocked && isActive(item.href);
+            return (
+              <Link
+                key={item.name}
+                href={effectiveLocked ? "/dashboard/account/lab?tab=subscription" : item.href!}
+                onMouseEnter={handleNonExpandableMouseEnter}
+                onClick={(e) => {
+                  if (effectiveLocked) handleLockedNavClick(e);
+                  setIsOpen(false);
+                }}
+                className={`group relative flex items-center justify-between px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-all duration-200 touch-manipulation select-none active:scale-[0.99] ${effectiveLocked
                   ? "opacity-50 hover:opacity-80 text-muted-foreground hover:bg-muted/40 cursor-not-allowed"
                   : active
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                {active && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full gradient-primary" />
-                )}
-                <item.icon
-                  className={`h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110 ${
-                    active ? "text-primary" : ""
+                    ? "bg-accent text-accent-foreground"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                   }`}
-                />
-                <span className="flex-1">{item.name}</span>
-                {item.badge && (
-                  <span className="px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide bg-emerald-600 text-white shadow-2xs">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-              {effectiveLocked && <Lock className="h-3.5 w-3.5 text-rose-500/70" />}
-            </Link>
-          );
-        }))}
+              >
+                <div className="flex items-center gap-3">
+                  {active && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full gradient-primary" />
+                  )}
+                  <item.icon
+                    className={`h-[18px] w-[18px] transition-transform duration-200 group-hover:scale-110 ${active ? "text-primary" : ""
+                      }`}
+                  />
+                  <span className="flex-1">{item.name}</span>
+                  {item.badge && (
+                    <span className="px-1.5 py-0.5 rounded-md text-[9px] font-extrabold uppercase tracking-wide bg-emerald-600 text-white shadow-2xs">
+                      {item.badge}
+                    </span>
+                  )}
+                </div>
+                {effectiveLocked && <Lock className="h-3.5 w-3.5 text-rose-500/70" />}
+              </Link>
+            );
+          }))}
       </nav>
 
       {/* Footer */}
@@ -685,40 +677,36 @@ export default function Sidebar() {
               setIsOpen(false);
             }
           }}
-          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs group active:scale-[0.98] ${
-            isAiGuideOpen
-              ? "bg-primary text-primary-foreground border-primary shadow-sm"
-              : "bg-emerald-500/10 hover:bg-emerald-500/15 border-emerald-500/25 dark:border-emerald-500/35 text-foreground"
-          }`}
+          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs group active:scale-[0.98] ${isAiGuideOpen
+            ? "bg-primary text-primary-foreground border-primary shadow-sm"
+            : "bg-emerald-500/10 hover:bg-emerald-500/15 border-emerald-500/25 dark:border-emerald-500/35 text-foreground"
+            }`}
           title="OnePath LIS AI Assistant & Guide"
         >
           <div className="flex items-center gap-2.5 min-w-0">
             <div
-              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-xs transition-transform group-hover:scale-105 ${
-                isAiGuideOpen
-                  ? "bg-white/20 text-white"
-                  : "bg-emerald-600 text-white"
-              }`}
+              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-xs transition-transform group-hover:scale-105 ${isAiGuideOpen
+                ? "bg-white/20 text-white"
+                : "bg-emerald-600 text-white"
+                }`}
             >
               <Sparkles className="h-3.5 w-3.5" />
             </div>
             <div className="flex flex-col text-left leading-tight min-w-0">
               <span className="text-[12.5px] font-bold truncate">LIS AI Assistant</span>
               <span
-                className={`text-[10px] font-medium truncate ${
-                  isAiGuideOpen ? "text-primary-foreground/85" : "text-muted-foreground"
-                }`}
+                className={`text-[10px] font-medium truncate ${isAiGuideOpen ? "text-primary-foreground/85" : "text-muted-foreground"
+                  }`}
               >
                 {isAiGuideOpen ? "Click to Close" : "Interactive Lab Guide"}
               </span>
             </div>
           </div>
           <span
-            className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 transition-colors ${
-              isAiGuideOpen
-                ? "bg-white/20 text-white"
-                : "bg-emerald-600 text-white shadow-2xs group-hover:bg-emerald-700"
-            }`}
+            className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 transition-colors ${isAiGuideOpen
+              ? "bg-white/20 text-white"
+              : "bg-emerald-600 text-white shadow-2xs group-hover:bg-emerald-700"
+              }`}
           >
             {isAiGuideOpen ? "Active" : "Ask AI"}
           </span>
@@ -731,9 +719,8 @@ export default function Sidebar() {
     <>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`fixed top-3.5 left-3.5 z-50 h-10 w-10 flex items-center justify-center rounded-xl bg-card/95 backdrop-blur-md border border-border/90 text-foreground md:hidden shadow-elevated transition-all active:scale-95 cursor-pointer touch-manipulation ${
-          isOpen ? "opacity-0 pointer-events-none" : "opacity-100"
-        }`}
+        className={`fixed top-3.5 left-3.5 z-50 h-10 w-10 flex items-center justify-center rounded-xl bg-card/95 backdrop-blur-md border border-border/90 text-foreground md:hidden shadow-elevated transition-all active:scale-95 cursor-pointer touch-manipulation ${isOpen ? "opacity-0 pointer-events-none" : "opacity-100"
+          }`}
         aria-label="Toggle Menu"
       >
         <Menu className="h-5 w-5" />
@@ -753,9 +740,8 @@ export default function Sidebar() {
       <div className="hidden md:flex h-full">{content}</div>
 
       <div
-        className={`fixed inset-y-0 left-0 z-40 flex md:hidden transition-transform duration-300 ease-out overscroll-contain ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed inset-y-0 left-0 z-40 flex md:hidden transition-transform duration-300 ease-out overscroll-contain ${isOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
         onTouchMove={(e) => {
           const target = e.target as HTMLElement | null;
           if (!target?.closest?.("nav")) {

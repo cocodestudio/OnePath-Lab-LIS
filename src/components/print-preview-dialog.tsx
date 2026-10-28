@@ -620,7 +620,25 @@ export function PrintPreviewDialog({
   const printSettings: PrintSettings | undefined = useMemo(() => {
     if (!report) return undefined;
     const lab = (report.lab || {}) as any;
-    const rawBg = lab.printBgImage || lab.print_bg_image || null;
+    const rawBg =
+      lab.printBgImage ||
+      lab.print_bg_image ||
+      report?.lab?.printBgImage ||
+      report?.lab?.print_bg_image ||
+      (typeof window !== "undefined" ? localStorage.getItem("lis_cached_letterhead") : null) ||
+      (() => {
+        if (typeof window !== "undefined") {
+          try {
+            const cached = localStorage.getItem("lis_cached_lab");
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              return parsed?.printBgImage || parsed?.print_bg_image || null;
+            }
+          } catch {}
+        }
+        return null;
+      })() ||
+      null;
     const hasBg = Boolean(rawBg && rawBg !== "null" && rawBg !== "undefined" && rawBg !== "none");
     // Only letterhead image toggles — margins & heights ALWAYS from saved settings
     const bgImage = useCustomLetterpad && hasBg ? getCleanLetterheadUrl(rawBg) : null;
@@ -638,7 +656,25 @@ export function PrintPreviewDialog({
   const whatsappPrintSettings: PrintSettings | undefined = useMemo(() => {
     if (!report) return undefined;
     const lab = (report.lab || {}) as any;
-    const rawBg = lab.printBgImage || lab.print_bg_image || null;
+    const rawBg =
+      lab.printBgImage ||
+      lab.print_bg_image ||
+      report?.lab?.printBgImage ||
+      report?.lab?.print_bg_image ||
+      (typeof window !== "undefined" ? localStorage.getItem("lis_cached_letterhead") : null) ||
+      (() => {
+        if (typeof window !== "undefined") {
+          try {
+            const cached = localStorage.getItem("lis_cached_lab");
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              return parsed?.printBgImage || parsed?.print_bg_image || null;
+            }
+          } catch {}
+        }
+        return null;
+      })() ||
+      null;
     const hasBg = Boolean(rawBg && rawBg !== "null" && rawBg !== "undefined" && rawBg !== "none");
     const bgImage = hasBg ? getCleanLetterheadUrl(rawBg) : null;
 
@@ -1156,7 +1192,11 @@ export function PrintPreviewDialog({
           {/* ── Preview Pane ── */}
           <div
             ref={containerRef}
-            className={`flex-1 overflow-auto sheet-pan-canvas bg-zinc-200 dark:bg-zinc-900/90 justify-center items-start py-4 sm:py-8 px-2 sm:px-4 custom-scrollbar shadow-inner ${mobileTab === "preview" ? "flex" : "hidden md:flex"}`}
+            className={`flex-1 overflow-auto sheet-pan-canvas bg-zinc-200 dark:bg-zinc-900/90 justify-center items-start py-4 sm:py-8 px-2 sm:px-4 custom-scrollbar shadow-inner ${
+              mobileTab === "preview"
+                ? "flex z-10"
+                : "max-md:fixed max-md:inset-0 max-md:opacity-0 max-md:pointer-events-none max-md:-z-50 md:flex"
+            }`}
           >
             {printSettings && (
               <PaginatedReportPreview

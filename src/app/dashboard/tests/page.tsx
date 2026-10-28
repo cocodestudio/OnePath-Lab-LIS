@@ -408,7 +408,8 @@ export default function TestMasterPage() {
       if (isForce && tests.length === 0) {
         setLoading(true);
       }
-      const data = await fetchFromLaravel("/tests", { skipCache: isForce, timeoutMs: 30000 });
+      const endpoint = isForce ? "/tests?fresh=1" : "/tests";
+      const data = await fetchFromLaravel(endpoint, { skipCache: isForce, timeoutMs: 30000 });
       const testList = Array.isArray(data)
         ? data
         : (Array.isArray(data?.data) ? data.data : (Array.isArray(data?.tests) ? data.tests : null));

@@ -98,11 +98,13 @@ function ToastCard({
 }: ToastItem & { onClose: () => void }) {
   const [mounted, setMounted] = React.useState(false);
   const [isDismissing, setIsDismissing] = React.useState(false);
+  const [dismissDirection, setDismissDirection] = React.useState<"left" | "right" | "none">("none");
   const [isPaused, setIsPaused] = React.useState(false);
-  const [dragOffset, setDragOffset] = React.useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [dragX, setDragX] = React.useState<number>(0);
   const [isDragging, setIsDragging] = React.useState(false);
 
-  const touchStartRef = React.useRef<{ x: number; y: number } | null>(null);
+  const touchStartRef = React.useRef<{ x: number; y: number; time: number } | null>(null);
+  const dragDirectionLockedRef = React.useRef<"horizontal" | "vertical" | null>(null);
   const timerRef = React.useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = React.useRef<number>(Date.now());
   const remainingTimeRef = React.useRef<number>(duration);
@@ -112,6 +114,7 @@ function ToastCard({
 
   const triggerClose = React.useCallback(() => {
     setIsDismissing(true);
+    setDismissDirection("none");
     setTimeout(() => {
       onClose();
     }, 240);
@@ -150,14 +153,15 @@ function ToastCard({
     setIsPaused(false);
   };
 
-  // Mobile Touch Swipe Handling (Swipe down or swipe sideways like Chrome/Android)
+  // Mobile Touch Swipe Handling (Strictly horizontal swipe-to-dismiss like Chrome browser notifications)
   const handleTouchStart = (e: React.TouchEvent) => {
     setIsPaused(true);
-    setIsDragging(true);
     touchStartRef.current = {
       x: e.touches[0].clientX,
       y: e.touches[0].clientY,
+      time: Date.now(),
     };
+    dragDirectionLockedRef.current = null;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -168,49 +172,81 @@ function ToastCard({
     const deltaX = currentX - touchStartRef.current.x;
     const deltaY = currentY - touchStartRef.current.y;
 
-    // Resistance when pulling down past limits (toast sits at the top on mobile)
-    const effectiveY = deltaY > 0 ? deltaY * 0.35 : deltaY;
+    // Detect gesture intent: if user starts scrolling vertically, don't hijack as horizontal drag
+    if (!dragDirectionLockedRef.current) {
+      if (Math.abs(deltaY) > 8 && Math.abs(deltaY) > Math.abs(deltaX)) {
+        dragDirectionLockedRef.current = "vertical";
+        return;
+      }
+      if (Math.abs(deltaX) > 8 && Math.abs(deltaX) >= Math.abs(deltaY)) {
+        dragDirectionLockedRef.current = "horizontal";
+        setIsDragging(true);
+      }
+    }
 
-    setDragOffset({
-      x: deltaX,
-      y: effectiveY,
-    });
+    // Strictly horizontal dragging only (NO vertical dragging)
+    if (dragDirectionLockedRef.current === "horizontal") {
+      setDragX(deltaX);
+    }
   };
 
   const handleTouchEnd = () => {
+    if (!touchStartRef.current) {
+      setIsDragging(false);
+      setIsPaused(false);
+      return;
+    }
+
+    const elapsed = Math.max(1, Date.now() - touchStartRef.current.time);
+    const velocityX = Math.abs(dragX) / elapsed; // px per ms
+
     setIsDragging(false);
     setIsPaused(false);
 
-    // If swiped up (towards top), or sideways, or pulled down sufficiently, dismiss
-    if (dragOffset.y < -30 || Math.abs(dragOffset.x) > 55 || dragOffset.y > 65) {
+    // Chrome-like swipe-to-dismiss: either swiped > 65px or high-velocity flick (> 0.35px/ms with > 25px travel)
+    const isFlick = velocityX > 0.35 && Math.abs(dragX) > 25;
+    const isDistancePast = Math.abs(dragX) > 65;
+
+    if (isDistancePast || isFlick) {
+      const direction = dragX > 0 ? "right" : "left";
+      setDismissDirection(direction);
       setIsDismissing(true);
       setTimeout(() => {
         onClose();
-      }, 200);
+      }, 220);
     } else {
-      // Spring back to neutral
-      setDragOffset({ x: 0, y: 0 });
+      // Smooth spring back to neutral position
+      setDragX(0);
+      setDismissDirection("none");
     }
+
     touchStartRef.current = null;
+    dragDirectionLockedRef.current = null;
   };
 
-  // Compute transform & opacity for drag gestures
+  // Compute transform & opacity for Chrome-like horizontal drag gestures
   const dragStyle: React.CSSProperties = {
     transform: isDismissing
-      ? "translate3d(0, -35px, 0) scale(0.95)"
+      ? dismissDirection === "left"
+        ? "translate3d(-120%, 0, 0)"
+        : dismissDirection === "right"
+        ? "translate3d(120%, 0, 0)"
+        : "translate3d(0, -35px, 0) scale(0.95)"
       : isDragging
-      ? `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)`
+      ? `translate3d(${dragX}px, 0, 0)`
       : "translate3d(0, 0, 0)",
     opacity: isDismissing
       ? 0
       : isDragging
-      ? Math.max(0.2, 1 - (Math.abs(dragOffset.y) * 1.5 + Math.abs(dragOffset.x)) / 220)
+      ? Math.max(0.15, 1 - Math.abs(dragX) / 220)
       : mounted
       ? 1
       : 0,
     transition: isDragging
       ? "none"
-      : "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease-out",
+      : "transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease-out",
+    touchAction: "pan-y",
+    willChange: "transform, opacity",
   };
 
   return (
@@ -223,9 +259,9 @@ function ToastCard({
       style={dragStyle}
       role="alert"
       aria-live="assertive"
-      className={`pointer-events-auto relative overflow-hidden rounded-xl sm:rounded-2xl border bg-card/95 backdrop-blur-xl p-3 sm:p-4 text-card-foreground shadow-xl sm:shadow-2xl transition-all duration-300 ease-out select-none sm:select-auto w-full ${
-        config.cardBorder
-      } ${config.glow} ${
+      className={`pointer-events-auto relative overflow-hidden rounded-xl sm:rounded-2xl border bg-card/95 backdrop-blur-xl p-3 sm:p-4 text-card-foreground shadow-xl sm:shadow-2xl select-none sm:select-auto w-full ${
+        isDragging ? "" : "transition-all duration-300 ease-out"
+      } ${config.cardBorder} ${config.glow} ${
         mounted && !isDismissing
           ? "translate-y-0 sm:translate-x-0 scale-100 opacity-100"
           : "-translate-y-6 sm:translate-y-0 sm:translate-x-8 scale-95 opacity-0"
