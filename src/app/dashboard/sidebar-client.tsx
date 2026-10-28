@@ -36,6 +36,7 @@ const navigation: NavItem[] = [
     children: [
       { name: "Due Reports", href: "/dashboard/billing/dues" },
       { name: "Billing", href: "/dashboard/billing" },
+      { name: "Monthly Expenses", href: "/dashboard/billing/monthly-expenses" },
     ],
   },
   {
@@ -92,6 +93,7 @@ const receptionistNav: NavItem[] = [
     children: [
       { name: "Due Reports", href: "/dashboard/billing/dues" },
       { name: "Billing", href: "/dashboard/billing" },
+      { name: "Monthly Expenses", href: "/dashboard/billing/monthly-expenses" },
     ],
   },
   {
@@ -118,6 +120,7 @@ const collectionNav: NavItem[] = [
     children: [
       { name: "Due Reports", href: "/dashboard/billing/dues" },
       { name: "Billing", href: "/dashboard/billing" },
+      { name: "Monthly Expenses", href: "/dashboard/billing/monthly-expenses" },
     ],
   },
   { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
@@ -135,6 +138,7 @@ const b2bNav: NavItem[] = [
     children: [
       { name: "Due Reports", href: "/dashboard/billing/dues" },
       { name: "Billing", href: "/dashboard/billing" },
+      { name: "Monthly Expenses", href: "/dashboard/billing/monthly-expenses" },
       { name: "Revenue & Ledger", href: "/dashboard/revenue" },
       { name: "Rate List", href: "/dashboard/ratelist" },
     ],
@@ -387,6 +391,8 @@ export default function Sidebar() {
     if (
       href === "/dashboard" ||
       href === "/dashboard/billing" ||
+      href === "/dashboard/billing/dues" ||
+      href === "/dashboard/billing/monthly-expenses" ||
       href === "/dashboard/tests" ||
       href === "/dashboard/doctors" ||
       href === "/dashboard/inventory" ||

@@ -51,10 +51,56 @@ interface Report {
 
 function getReportTestName(r: any): string {
   const testObj = r?.test || {};
-  if (testObj.fieldType === "Custom Editor" && testObj.name === "Report Template" && testObj.parent) {
-    return testObj.parent.name || "Test";
+  let curr = testObj;
+  while (curr?.parent) {
+    curr = curr.parent;
   }
-  return testObj.name || "Test";
+  return curr?.name || testObj.name || "Test";
+}
+
+interface DistinctReportTest {
+  id: string;
+  name: string;
+  category: string;
+  hasAbnormal: boolean;
+}
+
+function getDistinctReportTests(rep: any): DistinctReportTest[] {
+  const results = Array.isArray(rep?.results) ? rep.results : [];
+  if (results.length === 0) {
+    if (rep?.package_name) {
+      return [{ id: "pkg", name: rep.package_name, category: "Package", hasAbnormal: false }];
+    }
+    return [];
+  }
+
+  const map = new Map<string, DistinctReportTest>();
+
+  for (const r of results) {
+    const testObj = r?.test;
+    let curr = testObj;
+    while (curr?.parent) {
+      curr = curr.parent;
+    }
+    const name = curr?.name || testObj?.name || getReportTestName(r);
+    const id = curr?.id || testObj?.id || name;
+    const category = curr?.category || testObj?.category || "General";
+    const isAbn = !!(r.isAbnormal || r.is_abnormal);
+
+    const existing = map.get(id);
+    if (!existing) {
+      map.set(id, {
+        id,
+        name,
+        category,
+        hasAbnormal: isAbn,
+      });
+    } else if (isAbn) {
+      existing.hasAbnormal = true;
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 const DEFAULT_LAB = { name: "OnePath Lab Main", email: "info@onepathlab.com", address: "123 Healthcare Blvd, Medical District, Delhi", logoUrl: "/onepath-logo.png" };
@@ -1388,8 +1434,10 @@ export default function ReportsListPage() {
               <tbody>
                 {currentRows.map((rep: any) => {
                   const isSelected = selectedIds.includes(rep.id);
-                  const resultsList = Array.isArray(rep.results) ? rep.results : [];
-                  const abnormalCount = resultsList.filter((r: any) => r.isAbnormal || r.is_abnormal).length;
+                  const distinctTests = getDistinctReportTests(rep);
+                  const resultsList = distinctTests;
+                  const rawResults = Array.isArray(rep.results) ? rep.results : [];
+                  const abnormalCount = rawResults.filter((r: any) => r.isAbnormal || r.is_abnormal).length;
                   const patName = formatPatientListDisplayName(rep.patient?.name, rep.patient?.designation);
                   const repId = rep.custom_id || rep.customId || "REP";
                   const repDate = rep.created_at || rep.createdAt;
@@ -1426,10 +1474,10 @@ export default function ReportsListPage() {
                             onMouseLeave={handleScheduleClosePopover}
                           >
                             <span
-                              className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-muted/70 text-foreground border border-border/50 max-w-[110px] truncate hover:border-primary/50 transition-colors"
-                              title={getReportTestName(resultsList[0])}
+                              className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-muted/70 text-foreground border border-border/50 max-w-[130px] truncate hover:border-primary/50 transition-colors"
+                              title={resultsList[0].name}
                             >
-                              {getReportTestName(resultsList[0])}
+                              {resultsList[0].name}
                             </span>
                             {resultsList.length > 1 && (
                               <span
@@ -1837,7 +1885,7 @@ export default function ReportsListPage() {
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-primary" />
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                All Tests ({hoveredTestsPopover.tests.length})
+                Tests ({hoveredTestsPopover.tests.length})
               </span>
             </div>
             <span className="font-mono text-[11px] font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md">
@@ -1845,33 +1893,30 @@ export default function ReportsListPage() {
             </span>
           </div>
           <div className="flex flex-wrap gap-1.5 max-h-72 overflow-y-auto">
-            {hoveredTestsPopover.tests.map((r: any, idx: number) => {
-              const name = getReportTestName(r);
-              const isAbn = r.isAbnormal || r.is_abnormal;
+            {hoveredTestsPopover.tests.map((t: any, idx: number) => {
+              const name = t.name || getReportTestName(t);
+              const isAbn = t.hasAbnormal || t.isAbnormal || t.is_abnormal;
               return (
                 <div
-                  key={r.id || idx}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                  key={t.id || idx}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                     isAbn
                       ? "bg-destructive/10 border-destructive/30 text-destructive font-bold"
                       : "bg-muted/60 border-border/60 text-foreground hover:bg-muted"
                   }`}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isAbn ? "bg-destructive animate-pulse" : "bg-emerald-500"}`} />
-                  <span className="truncate max-w-[170px]" title={name}>
+                  <span className="truncate max-w-[240px]" title={name}>
                     {name}
                   </span>
-                  {isAbn ? (
+                  {t.category && (
+                    <span className="text-[9px] font-medium text-muted-foreground/80 px-1 py-0.2 rounded bg-background/60 border border-border/40 shrink-0">
+                      {t.category}
+                    </span>
+                  )}
+                  {isAbn && (
                     <span className="text-[9px] font-extrabold uppercase px-1 py-0.2 rounded bg-destructive/20 text-destructive shrink-0">
                       Abnormal
-                    </span>
-                  ) : r.resultValue ? (
-                    <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[70px] shrink-0" title={r.resultValue}>
-                      {r.resultValue}
-                    </span>
-                  ) : (
-                    <span className="text-[9px] text-muted-foreground/70 shrink-0">
-                      Normal
                     </span>
                   )}
                 </div>

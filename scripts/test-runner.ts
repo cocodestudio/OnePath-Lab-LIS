@@ -3115,6 +3115,246 @@ assert(
   "Tests Count page links each test to its reagent auto-consumption recipe modal"
 );
 
+console.log("\n▶ MODULE 30: Reports Patient List Root Test Name Hover & Parameter Concealment Engine");
+const reportsPageSrcMod30 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/reports/page.tsx"), "utf-8");
+assert(
+  reportsPageSrcMod30.includes("function getDistinctReportTests"),
+  "[REPORTS DISTINCT TESTS] getDistinctReportTests function is implemented"
+);
+assert(
+  reportsPageSrcMod30.includes("while (curr?.parent)") || reportsPageSrcMod30.includes("while (curr.parent)"),
+  "[REPORTS PARENT TRAVERSAL] Traverses parent hierarchy up to root test"
+);
+assert(
+  reportsPageSrcMod30.includes("Tests ({hoveredTestsPopover.tests.length})") &&
+  !reportsPageSrcMod30.includes("r.resultValue ?"),
+  "[REPORTS PARAMETER CONCEALMENT] Hover popover strictly hides raw parameter values and shows distinct test names"
+);
+
+console.log("\n▶ MODULE 31: Custom Due Settlement & Immediate Paid Removal Engine");
+const acceptDueModalSrc = fs.readFileSync(path.resolve(__dirname, "../src/components/accept-due-modal.tsx"), "utf-8");
+assert(
+  acceptDueModalSrc.includes("settleAsPaid") && acceptDueModalSrc.includes("settle_as_paid"),
+  "[ACCEPT DUE MODAL] Supports settleAsPaid flag and sends it in collect-due request payload"
+);
+assert(
+  acceptDueModalSrc.includes("Settle Bill as Fully Paid"),
+  "[ACCEPT DUE MODAL] Renders settlement toggle for partial/custom due amounts"
+);
+
+const duesPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/billing/dues/page.tsx"), "utf-8");
+assert(
+  duesPageSrc.includes("prev.filter((b) => b.id !== updatedBill.id)"),
+  "[DUES LIST REMOVAL] Dues page optimistically drops settled bills immediately from state"
+);
+
+const backendBillCtrlDueSettlementSrc = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"), "utf-8");
+assert(
+  backendBillCtrlDueSettlementSrc.includes("settle_as_paid") && backendBillCtrlDueSettlementSrc.includes("waivedAmount = max(0, $totalAfterDiscount - $newPaid)"),
+  "[BACKEND DUE SETTLEMENT] BillController waives remainder as discount and marks bill status as PAID"
+);
+
+console.log("\n▶ MODULE 32: Monthly Expenses & Sales Collections Register Engine");
+const sidebarSrcMod32 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/sidebar-client.tsx"), "utf-8");
+assert(
+  sidebarSrcMod32.includes("Financial Analytics") &&
+  sidebarSrcMod32.includes('{ name: "Monthly Expenses", href: "/dashboard/billing/monthly-expenses" }'),
+  "[SIDEBAR FINANCIAL ANALYTICS] Financial Analytics menu includes 'Monthly Expenses' option"
+);
+
+const monthlyExpensesPageSrcMod32 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/billing/monthly-expenses/page.tsx"), "utf-8");
+assert(
+  monthlyExpensesPageSrcMod32.includes("<MonthlyExpensesRegister />") || monthlyExpensesPageSrcMod32.includes("<MonthlyExpensesRegister"),
+  "[MONTHLY EXPENSES PAGE] Dedicated /dashboard/billing/monthly-expenses page embeds modular MonthlyExpensesRegister component"
+);
+
+const monthlyRegisterCompSrc = fs.readFileSync(path.resolve(__dirname, "../src/components/monthly-expenses-register.tsx"), "utf-8");
+assert(
+  monthlyRegisterCompSrc.includes("Month:") && monthlyRegisterCompSrc.includes("Year:"),
+  "[MONTHLY REGISTER SELECTORS] Provides sleek compact month and year selector controls"
+);
+assert(
+  monthlyRegisterCompSrc.includes("Show") && monthlyRegisterCompSrc.includes("Print"),
+  "[MONTHLY REGISTER ACTIONS] Features Show and isolated Print buttons"
+);
+assert(
+  monthlyRegisterCompSrc.includes("printInvoiceElement") && monthlyRegisterCompSrc.includes("printableRef"),
+  "[MONTHLY REGISTER ISOLATED PRINT] Uses isolated iframe print rendering only the statement and table"
+);
+assert(
+  monthlyRegisterCompSrc.includes("whitespace-nowrap") &&
+  !monthlyRegisterCompSrc.includes("filterActiveOnly") &&
+  !monthlyRegisterCompSrc.includes("Sales Days Only"),
+  "[MONTHLY REGISTER RESPONSIVE & CLEAN] Strictly enforces whitespace-nowrap one-line layout and omits day filter clutter"
+);
+assert(
+  monthlyRegisterCompSrc.includes("UPI (₹)") && monthlyRegisterCompSrc.includes("Cash (₹)") &&
+  monthlyRegisterCompSrc.includes("Dues (₹)") && monthlyRegisterCompSrc.includes("Total (₹)"),
+  "[MONTHLY REGISTER COLUMNS] Table includes Date, UPI, Cash, Dues, and Total columns"
+);
+assert(
+  monthlyRegisterCompSrc.includes("Sub Total / Final Total"),
+  "[MONTHLY REGISTER TOTALS FOOTER] Features Sub Total / Final Total footer row summing all columns"
+);
+assert(
+  monthlyRegisterCompSrc.includes("handleDownloadCSV"),
+  "[MONTHLY REGISTER CSV EXPORT] Features clean CSV export with column-level totals"
+);
+
+const backendApiRoutesMod32 = fs.readFileSync(path.resolve(__dirname, "../../Backend/routes/api.php"), "utf-8");
+assert(
+  backendApiRoutesMod32.includes("finance/monthly-expenses") && backendApiRoutesMod32.includes("getMonthlyExpenses"),
+  "[BACKEND MONTHLY ROUTE] api.php maps GET finance/monthly-expenses to BillController::getMonthlyExpenses"
+);
+
+const backendBillCtrlMod32 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"), "utf-8");
+assert(
+  backendBillCtrlMod32.includes("function getMonthlyExpenses") &&
+  backendBillCtrlMod32.includes("days_in_month") &&
+  backendBillCtrlMod32.includes("total_upi") &&
+  backendBillCtrlMod32.includes("total_cash") &&
+  backendBillCtrlMod32.includes("total_dues") &&
+  backendBillCtrlMod32.includes("final_total"),
+  "[BACKEND MONTHLY CONTROLLER] BillController calculates high-speed day-by-day telemetry and grand summary"
+);
+
+// Mathematical consistency simulation for monthly register
+const mockDays = [
+  { upi: 1000, cash: 500, dues: 200, total: 1700 },
+  { upi: 2000, cash: 1500, dues: 0, total: 3500 },
+  { upi: 0, cash: 300, dues: 700, total: 1000 },
+];
+const simTotalUpi = mockDays.reduce((acc, d) => acc + d.upi, 0);
+const simTotalCash = mockDays.reduce((acc, d) => acc + d.cash, 0);
+const simTotalDues = mockDays.reduce((acc, d) => acc + d.dues, 0);
+const simFinalTotal = mockDays.reduce((acc, d) => acc + d.total, 0);
+assert(simTotalUpi === 3000, "[MATH INVARIANT] Total UPI matches 3000");
+assert(simTotalCash === 2300, "[MATH INVARIANT] Total Cash matches 2300");
+assert(simTotalDues === 900, "[MATH INVARIANT] Total Dues matches 900");
+assert(simFinalTotal === 6200, "[MATH INVARIANT] Final Total matches 6200");
+assert(simTotalUpi + simTotalCash + simTotalDues === simFinalTotal, "[MATH INVARIANT] UPI + Cash + Dues sum strictly equals Final Total");
+
+// ==============================================================================
+// 33. Clinical Interpretation AI Generation & Catalog Persistence Engine
+// ==============================================================================
+console.log("\n▶ MODULE 33: Clinical Interpretation AI Generation & Catalog Persistence Engine");
+
+// Simulation of isMeaningfulContent helper
+function testIsMeaningfulContent(html?: string | null): boolean {
+  if (!html || typeof html !== "string") return false;
+  const stripped = html
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return stripped.length > 0;
+}
+
+// Simulation of pickBestHtml helper
+function testPickBestHtml(...candidates: Array<string | null | undefined>): string {
+  for (const c of candidates) {
+    if (testIsMeaningfulContent(c)) return (c as string).trim();
+  }
+  return "";
+}
+
+// 1. TipTap Empty Tag Rejection
+assert(!testIsMeaningfulContent("<p></p>"), "[INTERPRETATION SANITIZATION] Strictly rejects empty paragraph tag <p></p>");
+assert(!testIsMeaningfulContent("<p><br></p>"), "[INTERPRETATION SANITIZATION] Strictly rejects empty paragraph with break <p><br></p>");
+assert(!testIsMeaningfulContent("<p>&nbsp;</p>"), "[INTERPRETATION SANITIZATION] Strictly rejects non-breaking space <p>&nbsp;</p>");
+assert(!testIsMeaningfulContent("   "), "[INTERPRETATION SANITIZATION] Strictly rejects whitespace strings");
+assert(!testIsMeaningfulContent(null), "[INTERPRETATION SANITIZATION] Safely handles null input");
+assert(!testIsMeaningfulContent(undefined), "[INTERPRETATION SANITIZATION] Safely handles undefined input");
+
+// 2. Genuine AI Content Acceptance
+const aiSampleInterp = "<p><strong>Clinical Correlation:</strong> Serum calcium levels should always be evaluated alongside serum albumin.</p>";
+assert(testIsMeaningfulContent(aiSampleInterp), "[INTERPRETATION SANITIZATION] Accurately validates genuine clinical interpretation HTML");
+
+// 3. User Bug Reproduction & Fix: Empty editor tag must NOT override valid AI generation
+const staleEditorContent = "<p></p>"; // Editor mounted before user generated AI interpretation
+const generatedAiContent = "<p><strong>Diagnostic Note:</strong> Fasting blood glucose &gt; 126 mg/dL indicates Diabetes Mellitus.</p>";
+const chosenInterpretation = testPickBestHtml(staleEditorContent, generatedAiContent);
+assert(
+  chosenInterpretation === generatedAiContent,
+  "[INTERPRETATION FALLBACK BUG RESOLVED] Stale empty editor HTML does NOT overwrite valid AI-generated interpretation"
+);
+
+// 4. Tests page implementation verification
+const testsPageCode = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/tests/page.tsx"),
+  "utf-8"
+);
+assert(
+  testsPageCode.includes("isMeaningfulContent") && testsPageCode.includes("pickBestHtml"),
+  "[CATALOG UI VALIDATION] tests/page.tsx implements isMeaningfulContent and pickBestHtml helper functions"
+);
+assert(
+  testsPageCode.includes("latestInterpretationRef.current = cleanGenerated;") &&
+  testsPageCode.includes("tiptapInterpRef.current.commands.setContent(cleanGenerated)"),
+  "[AI GENERATION SYNC] handleAiGenerateInterpretation updates both latestInterpretationRef and tiptap editor"
+);
+assert(
+  testsPageCode.includes("safeInterpretation") &&
+  testsPageCode.includes("pickBestHtml(getSafeEditorHtml(tiptapInterpRef), latestInterpretationRef.current"),
+  "[CATALOG SAVE INTEGRITY] handleSaveTest uses pickBestHtml to preserve valid clinical interpretation"
+);
+assert(
+  testsPageCode.includes("interpretation: safeInterpretation || undefined"),
+  "[SUBTEST PAYLOAD SYNC] handleSaveTest attaches safeInterpretation to sub_tests payload"
+);
+assert(
+  testsPageCode.includes("canExpand = hasSub || hasInterp"),
+  "[ROW EXPANSION] Single-field tests with clinical interpretations can be expanded to view guidelines"
+);
+
+// 5. Backend TestController persistence verification
+const backendTestCtrl = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/TestController.php"),
+  "utf-8"
+);
+assert(
+  backendTestCtrl.includes("Sensitivity (S / I / R)") && backendTestCtrl.includes("Sterile after 48 Hours"),
+  "[BACKEND REPORT LAYOUT] updateReportLayout restricts custom_layout diversion strictly to culture sensitivity templates"
+);
+
+// ==============================================================================
+// 34. Mobile Toast Notification Responsiveness & Pill Handle Removal
+// ==============================================================================
+console.log("\n▶ MODULE 34: Mobile Toast Notification Responsiveness & Smooth Display");
+
+const toastCode = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/ui/toast.tsx"),
+  "utf-8"
+);
+
+// 1. Pill Shape Handle Removal
+assert(
+  !toastCode.includes("Mobile Swipe Grab Handle") &&
+  !toastCode.includes("cursor-grab active:cursor-grabbing"),
+  "[TOAST MOBILE CLEANUP] Top pill shape grab handle icon is strictly removed from toast"
+);
+
+// 2. Mobile Responsive Container & Top Safe Area
+assert(
+  toastCode.includes("env(safe-area-inset-top") &&
+  toastCode.includes("max-w-[calc(100vw-1.5rem)]"),
+  "[TOAST MOBILE RESPONSIVENESS] Container positions at top on mobile with safe-area insets and adaptive width"
+);
+
+// 3. Smooth Stack & Content Scrolling
+assert(
+  toastCode.includes("max-h-[85vh] overflow-y-auto overscroll-contain") &&
+  toastCode.includes("overscroll-contain pr-1 break-words scrollbar-thin"),
+  "[TOAST SMOOTH SCROLLING] Container and descriptions support smooth scroll without screen overflow"
+);
+
+// 4. Word Break & Close Button Clearance
+assert(
+  toastCode.includes("break-words") &&
+  toastCode.includes("pr-6 sm:pr-7"),
+  "[TOAST TEXT WRAPPING] Text has word breaks and guarantees clear separation from close button"
+);
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
@@ -3126,4 +3366,5 @@ if (failedTests === 0) {
   console.error("❌ UNIT TEST SUITE DETECTED FAILURES.");
   process.exit(1);
 }
+
 

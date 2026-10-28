@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   IndianRupee, Calendar, Search, RefreshCw, ChevronDown, ChevronRight, ChevronLeft,
   Printer, Clock, CheckCircle2, User, Stethoscope, AlertCircle,
-  FileText, ArrowLeft, X
+  FileText, ArrowLeft, X, Receipt
 } from "lucide-react";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
@@ -289,9 +289,17 @@ export default function DueReportsPage() {
   };
 
   const handleDueCollectedSuccess = (updatedBill: any) => {
-    setBills((prev) =>
-      prev.map((b) => (b.id === updatedBill.id ? { ...b, ...updatedBill } : b))
-    );
+    const net = Math.max(0, Number(updatedBill.total || 0) - Number(updatedBill.discount || 0));
+    const paid = Number(updatedBill.paid_amount ?? updatedBill.paidAmount ?? 0);
+    const remainingDue = Math.max(0, net - paid);
+
+    if (remainingDue <= 0 || updatedBill.status === "PAID") {
+      setBills((prev) => prev.filter((b) => b.id !== updatedBill.id));
+    } else {
+      setBills((prev) =>
+        prev.map((b) => (b.id === updatedBill.id ? { ...b, ...updatedBill } : b))
+      );
+    }
     loadDueBills(false);
   };
 
@@ -328,7 +336,6 @@ export default function DueReportsPage() {
         </div>
 
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
-
           <button
             type="button"
             onClick={() => loadDueBills(true)}

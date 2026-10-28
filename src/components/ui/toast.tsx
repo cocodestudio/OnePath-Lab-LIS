@@ -168,8 +168,8 @@ function ToastCard({
     const deltaX = currentX - touchStartRef.current.x;
     const deltaY = currentY - touchStartRef.current.y;
 
-    // Resistance when swiping upwards (toast is already at the bottom)
-    const effectiveY = deltaY < 0 ? deltaY * 0.25 : deltaY;
+    // Resistance when pulling down past limits (toast sits at the top on mobile)
+    const effectiveY = deltaY > 0 ? deltaY * 0.35 : deltaY;
 
     setDragOffset({
       x: deltaX,
@@ -181,8 +181,8 @@ function ToastCard({
     setIsDragging(false);
     setIsPaused(false);
 
-    // If swiped down by > 35px or sideways by > 65px, dismiss
-    if (dragOffset.y > 35 || Math.abs(dragOffset.x) > 65) {
+    // If swiped up (towards top), or sideways, or pulled down sufficiently, dismiss
+    if (dragOffset.y < -30 || Math.abs(dragOffset.x) > 55 || dragOffset.y > 65) {
       setIsDismissing(true);
       setTimeout(() => {
         onClose();
@@ -197,7 +197,7 @@ function ToastCard({
   // Compute transform & opacity for drag gestures
   const dragStyle: React.CSSProperties = {
     transform: isDismissing
-      ? "translate3d(0, 40px, 0) scale(0.95)"
+      ? "translate3d(0, -35px, 0) scale(0.95)"
       : isDragging
       ? `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)`
       : "translate3d(0, 0, 0)",
@@ -223,36 +223,31 @@ function ToastCard({
       style={dragStyle}
       role="alert"
       aria-live="assertive"
-      className={`pointer-events-auto relative overflow-hidden rounded-2xl border bg-card/95 backdrop-blur-xl p-3.5 sm:p-4 text-card-foreground shadow-2xl transition-all duration-300 ease-out select-none sm:select-auto ${
+      className={`pointer-events-auto relative overflow-hidden rounded-xl sm:rounded-2xl border bg-card/95 backdrop-blur-xl p-3 sm:p-4 text-card-foreground shadow-xl sm:shadow-2xl transition-all duration-300 ease-out select-none sm:select-auto w-full ${
         config.cardBorder
       } ${config.glow} ${
         mounted && !isDismissing
-          ? "translate-y-0 sm:translate-x-0 scale-100"
-          : "translate-y-8 sm:translate-y-0 sm:translate-x-12 scale-95"
+          ? "translate-y-0 sm:translate-x-0 scale-100 opacity-100"
+          : "-translate-y-6 sm:translate-y-0 sm:translate-x-8 scale-95 opacity-0"
       }`}
     >
-      {/* Mobile Swipe Grab Handle (Chrome Mobile Bottom Sheet Style) */}
-      <div className="flex sm:hidden justify-center pb-1 -mt-1 cursor-grab active:cursor-grabbing">
-        <div className="h-1 w-10 rounded-full bg-muted-foreground/35" />
-      </div>
-
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-2.5 sm:gap-3">
         {/* Status Icon */}
         <div
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl shadow-xs transition-transform duration-300 group-hover:scale-105 ${config.iconWrap}`}
+          className={`flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-lg sm:rounded-xl shadow-xs transition-transform duration-300 group-hover:scale-105 ${config.iconWrap}`}
         >
-          <Icon className="h-5 w-5" />
+          <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
         </div>
 
         {/* Content Body */}
-        <div className="min-w-0 flex-1 pt-0.5 pr-6 space-y-0.5">
-          <p className="text-xs sm:text-sm font-bold text-foreground leading-snug tracking-tight">
+        <div className="min-w-0 flex-1 pt-0.5 pr-6 sm:pr-7 space-y-0.5">
+          <p className="text-xs sm:text-sm font-bold text-foreground leading-snug tracking-tight break-words">
             {title}
           </p>
           {description && (
-            <p className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed line-clamp-3">
+            <div className="text-[11px] sm:text-xs text-muted-foreground leading-relaxed max-h-28 overflow-y-auto overscroll-contain pr-1 break-words scrollbar-thin">
               {description}
-            </p>
+            </div>
           )}
         </div>
 
@@ -261,7 +256,7 @@ function ToastCard({
           onClick={triggerClose}
           type="button"
           aria-label="Dismiss notification"
-          className="absolute right-2.5 top-2.5 sm:right-3 sm:top-3 rounded-lg p-1.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground active:scale-95"
+          className="absolute right-2 top-2 sm:right-3 sm:top-3 rounded-lg p-1.5 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground active:scale-95 cursor-pointer"
         >
           <X className="h-4 w-4" />
         </button>
@@ -411,17 +406,30 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
 
       {/* Floating Container:
-          - Mobile: Bottom-center fixed, full-width with padding, like Chrome bottom sheet / snackbar
+          - Mobile: Top-center fixed, responsive with safe-area top inset & smooth stack scrolling
           - Desktop (sm:): Bottom-right fixed with max-w-[380px]
       */}
       <div
-        className="pointer-events-none fixed z-[999999] bottom-3 left-3 right-3 sm:left-auto sm:right-6 sm:bottom-6 sm:w-[380px] max-w-full flex flex-col gap-2.5 transition-all"
+        className="toast-floating-container pointer-events-none fixed z-[999999] left-3 right-3 sm:left-auto sm:right-6 sm:w-[380px] max-w-[calc(100vw-1.5rem)] sm:max-w-[380px] mx-auto sm:mx-0 flex flex-col gap-2 transition-all max-h-[85vh] overflow-y-auto overscroll-contain no-scrollbar p-0.5"
         aria-label="Notifications"
       >
         {toasts.map((t) => (
           <ToastCard key={t.id} {...t} onClose={() => remove(t.id)} />
         ))}
       </div>
+
+      <style jsx>{`
+        .toast-floating-container {
+          top: max(0.75rem, env(safe-area-inset-top, 0.75rem));
+          bottom: auto;
+        }
+        @media (min-width: 640px) {
+          .toast-floating-container {
+            top: auto;
+            bottom: 1.5rem;
+          }
+        }
+      `}</style>
     </ToastContext.Provider>
   );
 }

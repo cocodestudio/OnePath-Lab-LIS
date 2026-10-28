@@ -228,12 +228,33 @@ export default function TestMasterPage() {
   const latestLayoutRef = useRef<string>("");
   const latestInterpretationRef = useRef<string>("");
 
+  // Helper to determine if an HTML string has real clinical content (not just empty tags like <p></p> or <p><br></p>)
+  const isMeaningfulContent = (html?: string | null): boolean => {
+    if (!html || typeof html !== "string") return false;
+    const stripped = html.replace(/<[^>]*>/g, "").trim();
+    if (stripped.length > 0) return true;
+    if (html.includes("<table") || html.includes("<img") || html.includes("<tr") || html.includes("<td") || html.includes("<th")) return true;
+    return false;
+  };
+
+  const pickBestHtml = (...candidates: (string | null | undefined)[]): string => {
+    for (const c of candidates) {
+      if (isMeaningfulContent(c)) return c!.trim();
+    }
+    for (const c of candidates) {
+      if (typeof c === "string" && c.trim().length > 0 && c !== "<p></p>" && c !== "<p><br></p>" && c !== "<p><br/></p>") {
+        return c.trim();
+      }
+    }
+    return "";
+  };
+
   // Crash-proof helper to safely read TipTap HTML without ProseMirror "null (reading 'cached')" crashes
   const getSafeEditorHtml = (ref: React.RefObject<any> | any): string | null => {
     try {
       if (ref?.current && !ref.current.isDestroyed && typeof ref.current.getHTML === "function") {
         const html = ref.current.getHTML();
-        if (typeof html === "string") return html;
+        if (typeof html === "string" && isMeaningfulContent(html)) return html;
       }
     } catch (err) {
       console.warn("getSafeEditorHtml caught error:", err);
@@ -751,7 +772,10 @@ export default function TestMasterPage() {
     latestLayoutRef.current = initialLayout;
 
     // 2. Separate clean medical clinical interpretation (never the table!)
-    const cleanInterp = getClinicalInterpretation(test.name, test.interpretation) || "";
+    const rawInterp = test.interpretation ?? (test as any).interpretation ?? "";
+    const cleanInterp = isMeaningfulContent(rawInterp)
+      ? (getClinicalInterpretation(test.name, rawInterp, test.category) || rawInterp)
+      : (getClinicalInterpretation(test.name, "", test.category) || "");
     setInterpretation(cleanInterp);
     latestInterpretationRef.current = cleanInterp;
 
@@ -875,7 +899,17 @@ export default function TestMasterPage() {
       });
 
       if (res && res.interpretation) {
-        setInterpretation(res.interpretation);
+        const cleanGenerated = res.interpretation.trim();
+        setInterpretation(cleanGenerated);
+        latestInterpretationRef.current = cleanGenerated;
+        try {
+          if (tiptapInterpRef.current && !tiptapInterpRef.current.isDestroyed) {
+            tiptapInterpRef.current.commands.setContent(cleanGenerated);
+          }
+        } catch (e) {
+          console.warn("Could not set TipTap content directly:", e);
+        }
+
         const providerLabel =
           res.provider === "gemini"
             ? "Google Gemini"
@@ -1211,8 +1245,8 @@ export default function TestMasterPage() {
       setError("Please provide a valid Test Name.");
       return;
     }
-    const safeCustomLayout = getSafeEditorHtml(tiptapLayoutRef) || latestLayoutRef.current || customLayout || "";
-    const safeInterpretation = getSafeEditorHtml(tiptapInterpRef) || latestInterpretationRef.current || interpretation || "";
+    const safeCustomLayout = pickBestHtml(getSafeEditorHtml(tiptapLayoutRef), latestLayoutRef.current, customLayout);
+    const safeInterpretation = pickBestHtml(getSafeEditorHtml(tiptapInterpRef), latestInterpretationRef.current, interpretation);
 
     const isCustomEditor = reportFormat === "custom_editor" ||
       (!editingTest && (name || "").toLowerCase().includes("culture"));
@@ -1244,7 +1278,7 @@ export default function TestMasterPage() {
       type,
       price: parseFloat(price) || 0,
       custom_layout: isCustomEditor ? (safeCustomLayout || undefined) : undefined,
-      interpretation: safeInterpretation !== undefined ? safeInterpretation : "",
+      interpretation: safeInterpretation || undefined,
       comment: comment.trim() || undefined,
       notes: notes.trim() || undefined,
       field_type: isCustomEditor ? "Custom Editor" : (isSingleField ? "Single Field" : "Multiple Field"),
@@ -1316,6 +1350,7 @@ export default function TestMasterPage() {
         value_type: sub.valueType,
         custom_options: sub.customOptions,
         sort_order: sIdx + 1,
+        interpretation: safeInterpretation || undefined,
       };
 
       if (sub.subTests && sub.subTests.length > 0) {
@@ -1375,13 +1410,20 @@ export default function TestMasterPage() {
         } : t));
         toast.success("Test updated successfully in database!");
       } else {
-        await fetchFromLaravel("/tests", {
+        const createdTest = await fetchFromLaravel("/tests", {
           method: "POST",
           body: JSON.stringify(payload),
         });
         clearApiCache("/tests");
         if (typeof window !== "undefined") {
           try { localStorage.removeItem("lis_cached_tests"); } catch {}
+        }
+        if (createdTest && createdTest.id) {
+          const formatted = {
+            ...createdTest,
+            interpretation: createdTest.interpretation || safeInterpretation,
+          };
+          setTests(prev => [formatted, ...prev.filter(t => t.id !== formatted.id)]);
         }
         toast.success("New test created successfully!");
       }
@@ -1590,16 +1632,19 @@ export default function TestMasterPage() {
               <tbody className="divide-y divide-border/60">
                 {paginatedTests.map(test => {
                   const hasSub = test.subTests && test.subTests.length > 0;
+                  const hasInterp = isMeaningfulContent(test.interpretation);
+                  const canExpand = hasSub || hasInterp;
                   const isExpanded = !!expandedRows[test.id];
 
                   return (
                     <React.Fragment key={test.id}>
                       <tr className="hover:bg-muted/30 transition-colors">
                         <td className="py-3.5 px-3 text-center">
-                          {hasSub && (
+                          {canExpand && (
                             <button
                               onClick={() => setExpandedRows(prev => ({ ...prev, [test.id]: !prev[test.id] }))}
                               className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                              title={isExpanded ? "Collapse" : "Expand parameters and interpretation"}
                             >
                               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             </button>
@@ -1608,10 +1653,19 @@ export default function TestMasterPage() {
                         <td className="py-3.5 px-4 font-semibold text-foreground">
                           <div className="flex items-center gap-2">
                             <span>{test.name}</span>
-                            {test.interpretation && (
-                              <span title="Has clinical interpretation" className="text-[10px] bg-blue-500/10 text-blue-600 px-1.5 py-0.2 rounded font-bold">
+                            {hasInterp && (
+                              <button
+                                type="button"
+                                title="Has clinical interpretation (Click to view/edit)"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenEditDialog(test);
+                                  setNotesModalOpen(true);
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-md font-bold cursor-pointer hover:bg-blue-500/25 transition-all shadow-2xs"
+                              >
                                 📝 Interp
-                              </span>
+                              </button>
                             )}
                           </div>
                         </td>
@@ -1656,38 +1710,67 @@ export default function TestMasterPage() {
                         </td>
                       </tr>
 
-                      {/* Expanded Sub-tests row */}
-                      {isExpanded && hasSub && (
+                      {/* Expanded Sub-tests & Clinical Interpretation row */}
+                      {isExpanded && canExpand && (
                         <tr className="bg-muted/20">
                           <td colSpan={7} className="py-3 px-8">
-                            <div className="rounded-lg border border-border/70 bg-card p-3 space-y-2">
-                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                                Test Parameters ({test.subTests!.length})
-                              </p>
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                                {test.subTests!.map((sub, sIdx) => (
-                                  <div key={sIdx} className="p-2.5 rounded-md border border-border/60 bg-background text-xs space-y-1">
-                                    <div className="flex items-center justify-between">
-                                      <span className="font-bold text-foreground">{sub.name}</span>
-                                      <span className="font-mono text-[10px] text-muted-foreground">{sub.unit || "No Unit"}</span>
-                                    </div>
-                                    <div className="text-[11px] text-muted-foreground">
-                                      {sub.rangeType === "text" ? (
-                                        <span className="text-blue-600 dark:text-blue-400 font-mono">{sub.textRefRange || "Text Range"}</span>
-                                      ) : sub.genderRefType === "GENDER_SPECIFIC" ? (
-                                        <span>M: {sub.refRangeMinMale || 0}-{sub.refRangeMaxMale || 0} | F: {sub.refRangeMinFemale || 0}-{sub.refRangeMaxFemale || 0}</span>
-                                      ) : (
-                                        <span>Range: {sub.refRangeMin || 0} - {sub.refRangeMax || 0}</span>
-                                      )}
-                                    </div>
-                                    {sub.method && (
-                                      <div className="text-[10px] text-muted-foreground italic truncate">
-                                        Method: {sub.method}
+                            <div className="rounded-lg border border-border/70 bg-card p-3 space-y-3">
+                              {hasSub && (
+                                <div className="space-y-2">
+                                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                                    Test Parameters ({test.subTests!.length})
+                                  </p>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                    {test.subTests!.map((sub, sIdx) => (
+                                      <div key={sIdx} className="p-2.5 rounded-md border border-border/60 bg-background text-xs space-y-1">
+                                        <div className="flex items-center justify-between">
+                                          <span className="font-bold text-foreground">{sub.name}</span>
+                                          <span className="font-mono text-[10px] text-muted-foreground">{sub.unit || "No Unit"}</span>
+                                        </div>
+                                        <div className="text-[11px] text-muted-foreground">
+                                          {sub.rangeType === "text" ? (
+                                            <span className="text-blue-600 dark:text-blue-400 font-mono">{sub.textRefRange || "Text Range"}</span>
+                                          ) : sub.genderRefType === "GENDER_SPECIFIC" ? (
+                                            <span>M: {sub.refRangeMinMale || 0}-{sub.refRangeMaxMale || 0} | F: {sub.refRangeMinFemale || 0}-{sub.refRangeMaxFemale || 0}</span>
+                                          ) : (
+                                            <span>Range: {sub.refRangeMin || 0} - {sub.refRangeMax || 0}</span>
+                                          )}
+                                        </div>
+                                        {sub.method && (
+                                          <div className="text-[10px] text-muted-foreground italic truncate">
+                                            Method: {sub.method}
+                                          </div>
+                                        )}
                                       </div>
-                                    )}
+                                    ))}
                                   </div>
-                                ))}
-                              </div>
+                                </div>
+                              )}
+
+                              {hasInterp && (
+                                <div className="rounded-lg border border-blue-500/30 bg-blue-50/40 dark:bg-blue-950/20 p-3 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold text-xs">
+                                      <FileText className="h-3.5 w-3.5" />
+                                      <span>Clinical Diagnostic Interpretation &amp; Pathological Guidelines</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleOpenEditDialog(test);
+                                        setNotesModalOpen(true);
+                                      }}
+                                      className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+                                    >
+                                      Edit Interpretation →
+                                    </button>
+                                  </div>
+                                  <div
+                                    className="text-xs text-foreground/90 max-h-56 overflow-y-auto leading-relaxed border-t border-blue-500/15 pt-2"
+                                    dangerouslySetInnerHTML={{ __html: test.interpretation! }}
+                                  />
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1703,6 +1786,8 @@ export default function TestMasterPage() {
           <div className="block md:hidden divide-y divide-border/60">
             {paginatedTests.map(test => {
               const hasSub = test.subTests && test.subTests.length > 0;
+              const hasInterp = isMeaningfulContent(test.interpretation);
+              const canExpand = hasSub || hasInterp;
               const isExpanded = !!expandedRows[test.id];
 
               return (
@@ -1712,10 +1797,18 @@ export default function TestMasterPage() {
                     <div className="space-y-0.5 flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-sm text-foreground break-words">{test.name}</span>
-                        {test.interpretation && (
-                          <span className="text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded font-bold shrink-0">
+                        {hasInterp && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleOpenEditDialog(test);
+                              setNotesModalOpen(true);
+                            }}
+                            className="text-[10px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded font-bold shrink-0 cursor-pointer transition-colors"
+                            title="Edit Clinical Interpretation"
+                          >
                             📝 Interp
-                          </span>
+                          </button>
                         )}
                       </div>
                       <div className="flex items-center gap-2 flex-wrap pt-0.5">
@@ -1763,36 +1856,73 @@ export default function TestMasterPage() {
                     </span>
                   </div>
 
-                  {/* Expand Sub-tests Button (Mobile) */}
-                  {hasSub && (
+                  {/* Expand Sub-tests & Interpretation Button (Mobile) */}
+                  {canExpand && (
                     <div>
                       <button
                         onClick={() => setExpandedRows(prev => ({ ...prev, [test.id]: !prev[test.id] }))}
                         className="flex items-center justify-between w-full py-1.5 px-2.5 rounded-md bg-muted/40 hover:bg-muted/70 text-xs font-semibold text-muted-foreground transition-colors cursor-pointer"
                       >
-                        <span>{isExpanded ? "Hide Parameters" : `View ${test.subTests!.length} Parameters`}</span>
+                        <span>
+                          {isExpanded
+                            ? "Hide Details"
+                            : hasSub && hasInterp
+                              ? `View ${test.subTests!.length} Parameters & Interp`
+                              : hasSub
+                                ? `View ${test.subTests!.length} Parameters`
+                                : "View Interpretation"}
+                        </span>
                         {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                       </button>
 
                       {isExpanded && (
-                        <div className="mt-2 space-y-1.5 pl-1">
-                          {test.subTests!.map((sub, sIdx) => (
-                            <div key={sIdx} className="p-2 rounded border border-border/60 bg-background text-xs space-y-0.5">
-                              <div className="flex items-center justify-between">
-                                <span className="font-semibold text-foreground">{sub.name}</span>
-                                <span className="font-mono text-[10px] text-muted-foreground">{sub.unit || "No Unit"}</span>
-                              </div>
-                              <div className="text-[11px] text-muted-foreground">
-                                {sub.rangeType === "text" ? (
-                                  <span className="text-blue-600 dark:text-blue-400 font-mono">{sub.textRefRange || "Text"}</span>
-                                ) : sub.genderRefType === "GENDER_SPECIFIC" ? (
-                                  <span>M: {sub.refRangeMinMale || 0}-{sub.refRangeMaxMale || 0} | F: {sub.refRangeMinFemale || 0}-{sub.refRangeMaxFemale || 0}</span>
-                                ) : (
-                                  <span>Range: {sub.refRangeMin || 0} - {sub.refRangeMax || 0}</span>
-                                )}
-                              </div>
+                        <div className="mt-2 space-y-2 pl-1">
+                          {hasSub && (
+                            <div className="space-y-1.5">
+                              {test.subTests!.map((sub, sIdx) => (
+                                <div key={sIdx} className="p-2 rounded border border-border/60 bg-background text-xs space-y-0.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-semibold text-foreground">{sub.name}</span>
+                                    <span className="font-mono text-[10px] text-muted-foreground">{sub.unit || "No Unit"}</span>
+                                  </div>
+                                  <div className="text-[11px] text-muted-foreground">
+                                    {sub.rangeType === "text" ? (
+                                      <span className="text-blue-600 dark:text-blue-400 font-mono">{sub.textRefRange || "Text"}</span>
+                                    ) : sub.genderRefType === "GENDER_SPECIFIC" ? (
+                                      <span>M: {sub.refRangeMinMale || 0}-{sub.refRangeMaxMale || 0} | F: {sub.refRangeMinFemale || 0}-{sub.refRangeMaxFemale || 0}</span>
+                                    ) : (
+                                      <span>Range: {sub.refRangeMin || 0} - {sub.refRangeMax || 0}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          )}
+
+                          {hasInterp && (
+                            <div className="rounded-lg border border-blue-500/30 bg-blue-50/40 dark:bg-blue-950/20 p-2.5 space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold text-[11px]">
+                                  <FileText className="h-3 w-3" />
+                                  <span>Clinical Interpretation</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleOpenEditDialog(test);
+                                    setNotesModalOpen(true);
+                                  }}
+                                  className="text-[10px] font-semibold text-primary hover:underline cursor-pointer"
+                                >
+                                  Edit →
+                                </button>
+                              </div>
+                              <div
+                                className="text-[11px] text-foreground/90 max-h-40 overflow-y-auto leading-relaxed border-t border-blue-500/15 pt-1.5"
+                                dangerouslySetInnerHTML={{ __html: test.interpretation! }}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -2789,10 +2919,19 @@ export default function TestMasterPage() {
                 type="button"
                 onClick={() => setNotesModalOpen(true)}
                 disabled={saving}
-                className="inline-flex items-center gap-2 px-4 h-11 rounded-xl border border-border bg-card text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                className={`inline-flex items-center gap-2 px-4 h-11 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs disabled:opacity-50 ${
+                  isMeaningfulContent(latestInterpretationRef.current || interpretation)
+                    ? "border-blue-500/50 bg-blue-50/80 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-500/30"
+                    : "border-border bg-card text-foreground hover:bg-muted"
+                }`}
+                title="Configure or generate clinical interpretation and diagnostic remarks"
               >
                 <FileText className="h-4 w-4 text-blue-500" />
-                <span>Clinical Interpretation</span>
+                <span>
+                  {isMeaningfulContent(latestInterpretationRef.current || interpretation)
+                    ? "Clinical Interpretation ✓"
+                    : "Clinical Interpretation"}
+                </span>
               </button>
 
               <Button
@@ -3277,7 +3416,14 @@ export default function TestMasterPage() {
               </DialogDescription>
             </div>
             <button
-              onClick={() => setNotesModalOpen(false)}
+              onClick={() => {
+                const safeHtml = pickBestHtml(getSafeEditorHtml(tiptapInterpRef), latestInterpretationRef.current, interpretation);
+                if (safeHtml) {
+                  setInterpretation(safeHtml);
+                  latestInterpretationRef.current = safeHtml;
+                }
+                setNotesModalOpen(false);
+              }}
               className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted transition-colors cursor-pointer border border-border/70 shadow-xs"
               title="Close dialog"
             >
@@ -3331,7 +3477,14 @@ export default function TestMasterPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setNotesModalOpen(false)}
+                onClick={() => {
+                  const safeHtml = pickBestHtml(getSafeEditorHtml(tiptapInterpRef), latestInterpretationRef.current, interpretation);
+                  if (safeHtml) {
+                    setInterpretation(safeHtml);
+                    latestInterpretationRef.current = safeHtml;
+                  }
+                  setNotesModalOpen(false);
+                }}
                 className="rounded-xl px-5 h-10 text-xs font-semibold cursor-pointer"
               >
                 Close
@@ -3339,7 +3492,7 @@ export default function TestMasterPage() {
               <Button
                 type="button"
                 onClick={async () => {
-                  const safeHtml = getSafeEditorHtml(tiptapInterpRef) || latestInterpretationRef.current || interpretation || "";
+                  const safeHtml = pickBestHtml(getSafeEditorHtml(tiptapInterpRef), latestInterpretationRef.current, interpretation);
                   setInterpretation(safeHtml);
                   latestInterpretationRef.current = safeHtml;
                   setNotesModalOpen(false);
@@ -3371,6 +3524,8 @@ export default function TestMasterPage() {
                       console.error("Auto save interpretation error:", e);
                       toast.error("Failed to auto-save interpretation: " + (e.message || "Unknown error"));
                     }
+                  } else {
+                    toast.success("Interpretation saved to test form! Click 'Create Test' to save the complete test.");
                   }
                 }}
                 className="rounded-xl px-7 h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-sm"

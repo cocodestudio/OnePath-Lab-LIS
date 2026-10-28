@@ -28,6 +28,7 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
   const [amount, setAmount] = useState<string>("");
   const [paymentMode, setPaymentMode] = useState<string>("CASH");
   const [paymentDate, setPaymentDate] = useState<string>(getTodayStr());
+  const [settleAsPaid, setSettleAsPaid] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +41,7 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
   useEffect(() => {
     if (isOpen && bill) {
       setAmount(dueAmount > 0 ? String(dueAmount) : "");
+      setSettleAsPaid(true);
       setPaymentMode("CASH");
       setPaymentDate(getTodayStr());
       setError(null);
@@ -64,9 +66,11 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
     bill.patient?.refDoctor ||
     "Self";
 
+  const collectNum = parseFloat(amount || "0");
+  const isPartial = collectNum > 0 && collectNum < dueAmount - 0.01;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const collectNum = parseFloat(amount);
 
     if (isNaN(collectNum) || collectNum <= 0) {
       setError("Please enter a valid amount greater than ₹0.");
@@ -81,6 +85,8 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
     setIsSubmitting(true);
     setError(null);
 
+    const shouldSettle = !isPartial ? true : settleAsPaid;
+
     try {
       const res = await fetchFromLaravel(`/bills/${bill.id}/collect-due`, {
         method: "POST",
@@ -88,13 +94,16 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
           amount: collectNum,
           payment_mode: paymentMode,
           payment_date: paymentDate,
+          settle_as_paid: shouldSettle,
         }),
       });
 
       if (res && (res.status === "success" || res.bill || res.id)) {
+        const waivedAmount = Number(res.waived_amount || 0);
+        const waivedMsg = waivedAmount > 0 ? ` (₹${waivedAmount.toFixed(2)} waived as discount waiver)` : "";
         toast.success(
-          "Payment Received",
-          `Due payment of ₹${collectNum.toFixed(2)} recorded for ${patientName}.`
+          shouldSettle ? "Invoice Settled & Paid" : "Payment Received",
+          `Due payment of ₹${collectNum.toFixed(2)} recorded for ${patientName}${waivedMsg}.`
         );
         markApiCacheStale("/bills");
         onSuccess(res.bill || res);
@@ -170,7 +179,10 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
               {dueAmount > 0 && (
                 <button
                   type="button"
-                  onClick={() => setAmount(String(dueAmount))}
+                  onClick={() => {
+                    setAmount(String(dueAmount));
+                    setSettleAsPaid(true);
+                  }}
                   className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
                 >
                   Pay Full (₹{dueAmount.toFixed(2)})
@@ -194,6 +206,29 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
                 className="w-full pl-8 pr-4 py-2.5 rounded-lg border border-border bg-background text-foreground font-mono text-base font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
               />
             </div>
+
+            {/* Settle As Paid Settlement Toggle for Custom / Partial Amounts */}
+            {isPartial && (
+              <div className="mt-2.5 flex items-start gap-3 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 transition-all">
+                <input
+                  type="checkbox"
+                  id="settle-as-paid"
+                  checked={settleAsPaid}
+                  onChange={(e) => setSettleAsPaid(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-emerald-500 text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
+                />
+                <label htmlFor="settle-as-paid" className="text-xs select-none cursor-pointer space-y-0.5">
+                  <span className="font-bold text-emerald-700 dark:text-emerald-300 block">
+                    Settle Bill as Fully Paid (Remove from Dues)
+                  </span>
+                  <span className="text-[11px] text-muted-foreground block leading-normal">
+                    {settleAsPaid
+                      ? `Accept ₹${collectNum.toFixed(2)} as final payment. Remaining ₹${(dueAmount - collectNum).toFixed(2)} will be settled as discount waiver and bill marked as PAID.`
+                      : `Keep remaining ₹${(dueAmount - collectNum).toFixed(2)} pending as partial due.`}
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
 
           {/* Payment Mode Selection (Cash & UPI only) */}
@@ -264,7 +299,11 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
               ) : (
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Accept Payment (₹{Number(amount || 0).toFixed(2)})</span>
+                  <span>
+                    {!isPartial || settleAsPaid
+                      ? `Accept ₹${Number(amount || 0).toFixed(2)} & Settle Paid`
+                      : `Accept Partial ₹${Number(amount || 0).toFixed(2)}`}
+                  </span>
                 </>
               )}
             </button>
