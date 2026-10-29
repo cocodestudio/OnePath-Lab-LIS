@@ -723,13 +723,13 @@ export default function RateListPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
             <Button
               variant="outline"
               size="sm"
               onClick={loadB2bClientRateList}
               disabled={loading}
-              className="gap-1.5 text-xs font-semibold"
+              className="gap-1.5 text-xs font-semibold w-full sm:w-auto justify-center"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-primary" : ""}`} />
               <span>Refresh</span>
@@ -756,7 +756,7 @@ export default function RateListPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-xs font-mono shrink-0">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3 text-xs font-mono shrink-0 w-full sm:w-auto">
             <div className="bg-card px-3.5 py-2 rounded-xl border border-border/80 text-center">
               <span className="text-[10px] text-muted-foreground block font-sans">Available Tests</span>
               <strong className="text-foreground text-sm">{filteredB2bTests.length}</strong>
@@ -769,14 +769,14 @@ export default function RateListPage() {
         </div>
 
         {/* ── Sub-tab Switcher: Individual Tests vs Health Packages ── */}
-        <div className="flex items-center gap-2 border-b border-border/70 pb-2">
+        <div className="flex items-center gap-2 border-b border-border/70 pb-2 overflow-x-auto flex-nowrap scrollbar-none">
           <button
             type="button"
             onClick={() => {
               setB2bSubTab("TESTS");
               setSearch("");
             }}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               b2bSubTab === "TESTS"
                 ? "bg-primary text-primary-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -792,7 +792,7 @@ export default function RateListPage() {
               setB2bSubTab("PACKAGES");
               setSearch("");
             }}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               b2bSubTab === "PACKAGES"
                 ? "bg-primary text-primary-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -1135,14 +1135,14 @@ export default function RateListPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto shrink-0">
           <Button
             size="sm"
             onClick={() => setIsCreateModalOpen(true)}
-            className="gap-1.5 text-xs font-bold gradient-primary text-primary-foreground shadow-xs cursor-pointer"
+            className="gap-1.5 text-xs font-bold gradient-primary text-primary-foreground shadow-xs cursor-pointer flex-1 sm:flex-none justify-center"
           >
             <Plus className="h-4 w-4" />
-            <span>+ Create Rate List</span>
+            <span className="truncate">+ Create Rate List</span>
           </Button>
 
           <Button
@@ -1153,7 +1153,7 @@ export default function RateListPage() {
               loadPartners();
             }}
             disabled={loading}
-            className="gap-1.5 text-xs font-semibold cursor-pointer"
+            className="gap-1.5 text-xs font-semibold cursor-pointer flex-1 sm:flex-none justify-center"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-primary" : ""}`} />
             <span>Refresh</span>
@@ -1162,11 +1162,11 @@ export default function RateListPage() {
       </div>
 
       {/* ── Navigation Workspace Tabs (Master, Rates Editor, Partners) ── */}
-      <div className="flex items-center gap-2 border-b border-border/70 pb-2">
+      <div className="flex items-center gap-2 border-b border-border/70 pb-2 overflow-x-auto flex-nowrap scrollbar-none">
         <button
           type="button"
           onClick={() => setActiveTab("MASTER")}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === "MASTER"
               ? "bg-primary text-primary-foreground shadow-xs"
               : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -1179,7 +1179,7 @@ export default function RateListPage() {
         <button
           type="button"
           onClick={() => setActiveTab("RATES")}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === "RATES"
               ? "bg-primary text-primary-foreground shadow-xs"
               : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -1199,7 +1199,7 @@ export default function RateListPage() {
         <button
           type="button"
           onClick={() => setActiveTab("PARTNERS")}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
             activeTab === "PARTNERS"
               ? "bg-primary text-primary-foreground shadow-xs"
               : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -1379,12 +1379,12 @@ export default function RateListPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <div className="grid grid-cols-1 sm:flex items-center gap-2 shrink-0 w-full md:w-auto">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setIsBulkDiscountModalOpen(true)}
-                className="text-xs h-9 px-3 gap-1.5 font-semibold text-purple-600 dark:text-purple-400 border-purple-500/30 hover:bg-purple-500/10 cursor-pointer"
+                className="text-xs h-9 px-3 gap-1.5 font-semibold text-purple-600 dark:text-purple-400 border-purple-500/30 hover:bg-purple-500/10 cursor-pointer w-full sm:w-auto justify-center"
               >
                 <Percent className="h-3.5 w-3.5" />
                 <span>
@@ -1396,7 +1396,7 @@ export default function RateListPage() {
                 size="sm"
                 onClick={handleSaveAllModifiedRates}
                 disabled={isSavingRates || pendingEditsCount === 0}
-                className={`text-xs h-9 px-4 font-bold gap-1.5 cursor-pointer shadow-sm ${
+                className={`text-xs h-9 px-4 font-bold gap-1.5 cursor-pointer shadow-sm w-full sm:w-auto justify-center ${
                   pendingEditsCount > 0
                     ? "bg-emerald-600 hover:bg-emerald-700 text-white animate-pulse"
                     : "gradient-primary text-primary-foreground"
@@ -1418,7 +1418,7 @@ export default function RateListPage() {
           </div>
 
           {/* Sub-tab Switcher: Individual Tests vs Health Packages */}
-          <div className="flex items-center gap-2 border-b border-border/70 pb-2">
+          <div className="flex items-center gap-2 border-b border-border/70 pb-2 overflow-x-auto flex-nowrap scrollbar-none">
             <button
               type="button"
               onClick={() => {
@@ -1426,7 +1426,7 @@ export default function RateListPage() {
                 setSearch("");
                 setCurrentPage(1);
               }}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                 ratesSubTab === "TESTS"
                   ? "bg-primary text-primary-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -1443,7 +1443,7 @@ export default function RateListPage() {
                 setSearch("");
                 setCurrentPage(1);
               }}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                 ratesSubTab === "PACKAGES"
                   ? "bg-primary text-primary-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -1484,8 +1484,8 @@ export default function RateListPage() {
               </div>
 
               {/* Override Filter Pills */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs font-bold text-muted-foreground mr-1">Show:</span>
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full flex-nowrap scrollbar-none">
+                <span className="text-xs font-bold text-muted-foreground mr-1 shrink-0">Show:</span>
                 <Button
                   variant={overrideFilter === "ALL" ? "default" : "outline"}
                   size="sm"
@@ -1493,7 +1493,7 @@ export default function RateListPage() {
                     setOverrideFilter("ALL");
                     setCurrentPage(1);
                   }}
-                  className="text-xs h-8 px-2.5"
+                  className="text-xs h-8 px-2.5 shrink-0 whitespace-nowrap"
                 >
                   All ({ratesSubTab === "TESTS" ? testRates.length : packageRates.length})
                 </Button>
@@ -1504,7 +1504,7 @@ export default function RateListPage() {
                     setOverrideFilter("OVERRIDDEN_ONLY");
                     setCurrentPage(1);
                   }}
-                  className="text-xs h-8 px-2.5 text-emerald-600 dark:text-emerald-400"
+                  className="text-xs h-8 px-2.5 text-emerald-600 dark:text-emerald-400 shrink-0 whitespace-nowrap"
                 >
                   Custom Overrides Only
                 </Button>
@@ -1515,7 +1515,7 @@ export default function RateListPage() {
                     setOverrideFilter("DEFAULT_ONLY");
                     setCurrentPage(1);
                   }}
-                  className="text-xs h-8 px-2.5"
+                  className="text-xs h-8 px-2.5 shrink-0 whitespace-nowrap"
                 >
                   Standard Rates Only
                 </Button>
@@ -1957,9 +1957,9 @@ export default function RateListPage() {
       {/* MODAL 1: CREATE NEW RATE LIST */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[480px] max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <form onSubmit={handleCreateRateList}>
-            <DialogHeader>
+            <DialogHeader className="pr-10">
               <DialogTitle className="flex items-center gap-2 text-base font-bold">
                 <Plus className="h-4 w-4 text-primary" />
                 <span>Create New Custom Rate List</span>
@@ -2021,14 +2021,14 @@ export default function RateListPage() {
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setIsCreateModalOpen(false)}
                 disabled={isCreatingList}
-                className="text-xs"
+                className="text-xs w-full sm:w-auto h-10 sm:h-9"
               >
                 Cancel
               </Button>
@@ -2036,7 +2036,7 @@ export default function RateListPage() {
                 type="submit"
                 size="sm"
                 disabled={isCreatingList || !newListName.trim()}
-                className="text-xs font-bold gradient-primary text-primary-foreground gap-1.5 shadow-sm"
+                className="text-xs font-bold gradient-primary text-primary-foreground gap-1.5 shadow-sm w-full sm:w-auto h-10 sm:h-9"
               >
                 {isCreatingList ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                 <span>Create Rate List</span>
@@ -2050,9 +2050,9 @@ export default function RateListPage() {
       {/* MODAL 2: 1-CLICK CLONE / DUPLICATE */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       <Dialog open={!!cloningList} onOpenChange={(open) => !open && setCloningList(null)}>
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[420px] max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <form onSubmit={handleCloneRateList}>
-            <DialogHeader>
+            <DialogHeader className="pr-10">
               <DialogTitle className="flex items-center gap-2 text-base font-bold">
                 <Copy className="h-4 w-4 text-primary" />
                 <span>Duplicate Rate List</span>
@@ -2076,14 +2076,14 @@ export default function RateListPage() {
               />
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setCloningList(null)}
                 disabled={isSubmittingClone}
-                className="text-xs"
+                className="text-xs w-full sm:w-auto h-10 sm:h-9"
               >
                 Cancel
               </Button>
@@ -2091,7 +2091,7 @@ export default function RateListPage() {
                 type="submit"
                 size="sm"
                 disabled={isSubmittingClone || !cloneName.trim()}
-                className="text-xs font-bold gradient-primary text-primary-foreground gap-1.5 shadow-sm"
+                className="text-xs font-bold gradient-primary text-primary-foreground gap-1.5 shadow-sm w-full sm:w-auto h-10 sm:h-9"
               >
                 {isSubmittingClone ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}
                 <span>Clone Now</span>
@@ -2105,9 +2105,9 @@ export default function RateListPage() {
       {/* MODAL 3: RENAME RATE LIST */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       <Dialog open={!!renamingList} onOpenChange={(open) => !open && setRenamingList(null)}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[400px] max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
           <form onSubmit={handleRenameRateList}>
-            <DialogHeader>
+            <DialogHeader className="pr-10">
               <DialogTitle className="flex items-center gap-2 text-base font-bold">
                 <Edit3 className="h-4 w-4 text-primary" />
                 <span>Rename Rate List</span>
@@ -2128,14 +2128,14 @@ export default function RateListPage() {
               />
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setRenamingList(null)}
                 disabled={isSubmittingRename}
-                className="text-xs"
+                className="text-xs w-full sm:w-auto h-10 sm:h-9"
               >
                 Cancel
               </Button>
@@ -2143,7 +2143,7 @@ export default function RateListPage() {
                 type="submit"
                 size="sm"
                 disabled={isSubmittingRename || !renameValue.trim()}
-                className="text-xs font-bold gradient-primary text-primary-foreground gap-1.5 shadow-sm"
+                className="text-xs font-bold gradient-primary text-primary-foreground gap-1.5 shadow-sm w-full sm:w-auto h-10 sm:h-9"
               >
                 {isSubmittingRename ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                 <span>Save Name</span>
@@ -2157,8 +2157,8 @@ export default function RateListPage() {
       {/* MODAL 4: DELETE CONFIRMATION */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       <Dialog open={!!deletingList} onOpenChange={(open) => !open && setDeletingList(null)}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[420px] max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
+          <DialogHeader className="pr-10">
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-rose-600">
               <Trash2 className="h-4 w-4 text-rose-600" />
               <span>Delete Rate List?</span>
@@ -2168,14 +2168,14 @@ export default function RateListPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <DialogFooter className="mt-4">
+          <DialogFooter className="mt-4 flex-col-reverse sm:flex-row gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => setDeletingList(null)}
               disabled={isSubmittingDelete}
-              className="text-xs"
+              className="text-xs w-full sm:w-auto h-10 sm:h-9"
             >
               Cancel
             </Button>
@@ -2184,7 +2184,7 @@ export default function RateListPage() {
               size="sm"
               onClick={handleDeleteRateList}
               disabled={isSubmittingDelete}
-              className="text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white gap-1.5"
+              className="text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white gap-1.5 w-full sm:w-auto h-10 sm:h-9"
             >
               {isSubmittingDelete ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               <span>Confirm Delete</span>
@@ -2197,8 +2197,8 @@ export default function RateListPage() {
       {/* MODAL 5: BULK % DISCOUNT PRESET */}
       {/* ══════════════════════════════════════════════════════════════════════ */}
       <Dialog open={isBulkDiscountModalOpen} onOpenChange={setIsBulkDiscountModalOpen}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[420px] max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl">
+          <DialogHeader className="pr-10">
             <DialogTitle className="flex items-center gap-2 text-base font-bold">
               <Percent className="h-4 w-4 text-primary" />
               <span>
@@ -2247,13 +2247,13 @@ export default function RateListPage() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => setIsBulkDiscountModalOpen(false)}
-              className="text-xs"
+              className="text-xs w-full sm:w-auto h-10 sm:h-9"
             >
               Cancel
             </Button>
@@ -2261,7 +2261,7 @@ export default function RateListPage() {
               type="button"
               size="sm"
               onClick={handleApplyBulkDiscount}
-              className="text-xs font-bold gradient-primary text-primary-foreground gap-1.5"
+              className="text-xs font-bold gradient-primary text-primary-foreground gap-1.5 w-full sm:w-auto h-10 sm:h-9"
             >
               <Check className="h-3.5 w-3.5" />
               <span>

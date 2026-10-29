@@ -172,17 +172,18 @@ export function MonthlyExpensesRegister({
 
   return (
     <div className="space-y-4 animate-fade-in text-foreground">
-      {/* ── Compact Month & Year Selector Toolbar ── */}
+      {/* ── Compact Month & Year Selector Toolbar (Responsive Sequence on Mobile) ── */}
       <div className="bg-card border border-border/80 rounded-xl p-3 sm:p-4 shadow-xs">
-        <form onSubmit={handleShowClick} className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2.5">
+        <form onSubmit={handleShowClick} className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Month & Year Selectors: 50/50 Grid on Mobile */}
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2.5 w-full sm:w-auto">
             {/* Month Dropdown */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Month:</span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0">Month:</span>
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="h-9 px-3 rounded-lg border border-border bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-2xs"
+                className="w-full sm:w-auto h-9 px-2 sm:px-3 rounded-lg border border-border bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-2xs min-w-0"
               >
                 {MONTHS.map((m) => (
                   <option key={m.value} value={m.value}>
@@ -193,12 +194,12 @@ export function MonthlyExpensesRegister({
             </div>
 
             {/* Year Dropdown */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Year:</span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0">Year:</span>
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="h-9 px-3 rounded-lg border border-border bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-2xs"
+                className="w-full sm:w-auto h-9 px-2 sm:px-3 rounded-lg border border-border bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-2xs min-w-0"
               >
                 {availableYears.map((yr) => (
                   <option key={yr} value={yr}>
@@ -207,62 +208,65 @@ export function MonthlyExpensesRegister({
                 ))}
               </select>
             </div>
+          </div>
 
+          {/* Action Buttons in clean sequence: Show -> Print -> Export CSV */}
+          <div className={`${hasFetched && data ? 'grid grid-cols-3' : 'flex'} gap-2 sm:flex sm:items-center sm:gap-2 w-full sm:w-auto shrink-0`}>
             {/* Show Button */}
             <button
               type="submit"
               disabled={loading}
-              className="h-9 px-4 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60 transition-all"
+              className="h-9 px-3 sm:px-4 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60 transition-all w-full sm:w-auto whitespace-nowrap"
             >
               {loading ? (
                 <>
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                  <span>Loading...</span>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin shrink-0" />
+                  <span className="truncate">Loading...</span>
                 </>
               ) : (
                 <>
-                  <Eye className="h-3.5 w-3.5" />
-                  <span>Show</span>
+                  <Eye className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Show</span>
                 </>
               )}
             </button>
-          </div>
 
-          {/* Action Buttons: Print & Export CSV */}
-          {hasFetched && data && (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="h-9 px-3 rounded-lg border border-border bg-card hover:bg-muted text-xs font-medium text-foreground shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                title="Print statement"
-              >
-                <Printer className="h-3.5 w-3.5 text-muted-foreground" />
-                <span>Print</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadCSV}
-                className="h-9 px-3 rounded-lg border border-border bg-card hover:bg-muted text-xs font-medium text-foreground shadow-2xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                title="Export CSV"
-              >
-                <Download className="h-3.5 w-3.5 text-muted-foreground" />
-                <span>Export CSV</span>
-              </button>
-            </div>
-          )}
+            {/* Print & Export CSV (Sequenced cleanly) */}
+            {hasFetched && data && (
+              <>
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  className="h-9 px-2.5 sm:px-3 rounded-lg border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors w-full sm:w-auto whitespace-nowrap"
+                  title="Print statement"
+                >
+                  <Printer className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="truncate">Print</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadCSV}
+                  className="h-9 px-2.5 sm:px-3 rounded-lg border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors w-full sm:w-auto whitespace-nowrap"
+                  title="Export CSV"
+                >
+                  <Download className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span className="truncate">CSV</span>
+                </button>
+              </>
+            )}
+          </div>
         </form>
       </div>
 
       {/* ── Lightweight Summary Metric Cards (Black, Green, Red) ── */}
       {hasFetched && data?.summary && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
           {/* Total Sales */}
-          <div className="p-3.5 sm:p-4 rounded-xl border border-border/80 bg-card shadow-xs">
+          <div className="p-3 sm:p-4 rounded-xl border border-border/80 bg-card shadow-xs min-w-0">
             <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
               Total Month Sales
             </span>
-            <div className="text-base sm:text-lg font-bold font-mono text-foreground mt-1">
+            <div className="text-sm sm:text-lg font-bold font-mono text-foreground mt-1 truncate">
               {formatINR(data.summary.final_total)}
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -271,11 +275,11 @@ export function MonthlyExpensesRegister({
           </div>
 
           {/* UPI Collections */}
-          <div className="p-3.5 sm:p-4 rounded-xl border border-border/80 bg-card shadow-xs">
+          <div className="p-3 sm:p-4 rounded-xl border border-border/80 bg-card shadow-xs min-w-0">
             <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
               UPI Collections
             </span>
-            <div className="text-base sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1">
+            <div className="text-sm sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 truncate">
               {formatINR(data.summary.total_upi)}
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -284,11 +288,11 @@ export function MonthlyExpensesRegister({
           </div>
 
           {/* Cash Collections */}
-          <div className="p-3.5 sm:p-4 rounded-xl border border-border/80 bg-card shadow-xs">
+          <div className="p-3 sm:p-4 rounded-xl border border-border/80 bg-card shadow-xs min-w-0">
             <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
               Cash Collections
             </span>
-            <div className="text-base sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1">
+            <div className="text-sm sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 truncate">
               {formatINR(data.summary.total_cash)}
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -297,11 +301,11 @@ export function MonthlyExpensesRegister({
           </div>
 
           {/* Outstanding Dues */}
-          <div className="p-3.5 sm:p-4 rounded-xl border border-border/80 bg-card shadow-xs">
+          <div className="p-3 sm:p-4 rounded-xl border border-border/80 bg-card shadow-xs min-w-0">
             <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider block">
               Total Dues
             </span>
-            <div className="text-base sm:text-lg font-bold font-mono text-rose-600 dark:text-rose-400 mt-1">
+            <div className="text-sm sm:text-lg font-bold font-mono text-rose-600 dark:text-rose-400 mt-1 truncate">
               {formatINR(data.summary.total_dues)}
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">

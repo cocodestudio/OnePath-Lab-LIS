@@ -818,6 +818,7 @@ function RegisterPatientPage() {
 
   const [newPatient, setNewPatient] = useState<Patient | null>(null);
   const [availableTests, setAvailableTests] = useState<Test[]>([]);
+  const [loadingTests, setLoadingTests] = useState<boolean>(true);
   const [selectedTests, setSelectedTests] = useState<string[]>([]);
   const [discount, setDiscount] = useState("0");
   const [paidAmount, setPaidAmount] = useState("0");
@@ -1369,6 +1370,7 @@ function RegisterPatientPage() {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setAvailableTests(parsed);
+          setLoadingTests(false);
         }
       }
     } catch { }
@@ -1392,6 +1394,7 @@ function RegisterPatientPage() {
           try { localStorage.setItem("lis_cached_tests", JSON.stringify(list)); } catch { }
         }
       }
+      setLoadingTests(false);
 
       if (rateListResult.status === "fulfilled" && rateListResult.value?.data) {
         setB2bRateData(rateListResult.value.data);
@@ -1764,10 +1767,27 @@ function RegisterPatientPage() {
 
           if (patReport) {
             setExistingReport(patReport);
-            if (patReport.results && Array.isArray(patReport.results)) {
+            const bookedMetaIds = patReport.meta?.booked_test_ids || patReport.meta?.bookedTestIds || patBill?.test_ids;
+            if (Array.isArray(bookedMetaIds) && bookedMetaIds.length > 0) {
+              const validBooked = bookedMetaIds.filter((id: any) => typeof id === "string" && id.length > 0);
+              if (validBooked.length > 0) {
+                setSelectedTests(Array.from(new Set(validBooked)));
+              }
+            } else if (patReport.results && Array.isArray(patReport.results)) {
               const testIds: string[] = [];
               patReport.results.forEach((res: any) => {
                 let testObj = res.test;
+                // If test belongs to a root test in availableTests, map to root
+                const catalogRoot = availableTests.find(at =>
+                  at.id === testObj?.id ||
+                  at.subTests?.some((st: any) => st.id === testObj?.id || st.subTests?.some((sst: any) => sst.id === testObj?.id))
+                );
+                if (catalogRoot) {
+                  if (!testIds.includes(catalogRoot.id)) {
+                    testIds.push(catalogRoot.id);
+                  }
+                  return;
+                }
                 // Climb up to the top-level parent (main panel like CBC) so child parameters aren't booked as separate tests
                 while (testObj) {
                   const parentId = testObj.parentId || testObj.parent_id || testObj.parent?.id;
@@ -2504,7 +2524,18 @@ function RegisterPatientPage() {
     if (selectedTests.includes(testId)) {
       setSelectedTests((prev) => prev.filter((id) => id !== testId));
     } else {
-      setSelectedTests((prev) => [...prev, testId]);
+      const targetTest = availableTests.find(t => t.id === testId);
+      const subIdsToRemove = new Set<string>();
+      if (targetTest?.subTests && Array.isArray(targetTest.subTests)) {
+        const collectSubs = (subs: any[]) => {
+          subs.forEach((s: any) => {
+            if (s.id) subIdsToRemove.add(s.id);
+            if (s.subTests && Array.isArray(s.subTests)) collectSubs(s.subTests);
+          });
+        };
+        collectSubs(targetTest.subTests);
+      }
+      setSelectedTests((prev) => [...prev.filter(id => !subIdsToRemove.has(id)), testId]);
     }
   };
 
@@ -3482,26 +3513,20 @@ function RegisterPatientPage() {
 
                 {/* Section 1: Demographics */}
                 <div className="space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-2 border-b border-border/80 pb-2.5">
                     <div className="flex items-center gap-2 text-sm font-bold text-foreground">
-                      <User className="h-4 w-4 text-primary" />
+                      <User className="h-4 w-4 text-primary shrink-0" />
                       <span>Patient Identity & Demographics</span>
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => setIsAbhaQrModalOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 transition-all shadow-2xs hover:shadow-xs cursor-pointer"
-                        title="Scan QR to Create ABHA Health ID"
-                      >
-                        <QrCode className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                        <span>Create ABHA</span>
-                      </button>
+                    <div className="flex items-center justify-start sm:justify-end gap-2 shrink-0 self-start sm:self-auto flex-wrap">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 shadow-2xs whitespace-nowrap shrink-0">
+                        Step 1
+                      </span>
 
                       <button
                         type="button"
                         onClick={() => setIsAbhaModalOpen(true)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-all cursor-pointer ${isAbhaVerified
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shadow-xs transition-all cursor-pointer whitespace-nowrap ${isAbhaVerified
                           ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
                           : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-blue-600/25 hover:shadow-md"
                           }`}
@@ -3509,9 +3534,16 @@ function RegisterPatientPage() {
                         <ShieldCheck className="h-3.5 w-3.5" />
                         <span>{isAbhaVerified ? "ABHA Linked" : "Link Patient ABHA"}</span>
                       </button>
-                      <span className="text-[10px] font-bold text-primary/80 uppercase tracking-widest bg-primary/10 px-2 py-0.5 rounded">
-                        Step 1
-                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsAbhaQrModalOpen(true)}
+                        className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 transition-all shadow-2xs hover:shadow-xs cursor-pointer whitespace-nowrap"
+                        title="Scan QR to Create ABHA Health ID"
+                      >
+                        <QrCode className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span>Create ABHA</span>
+                      </button>
                     </div>
                   </div>
 
@@ -3640,7 +3672,7 @@ function RegisterPatientPage() {
                             min="0"
                             max="120"
                             placeholder="Years"
-                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs ${fieldErrors.age
+                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pr-6 sm:pr-7 pl-2 sm:pl-3 ${fieldErrors.age
                               ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
                               : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
                               }`}
@@ -3651,7 +3683,7 @@ function RegisterPatientPage() {
                             }}
                             disabled={registering || (!!newPatient && !isEditMode)}
                           />
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-muted-foreground pointer-events-none">Y</span>
+                          <span className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-muted-foreground pointer-events-none select-none">Y</span>
                         </div>
                         <div className="relative">
                           <input
@@ -3660,7 +3692,7 @@ function RegisterPatientPage() {
                             min="0"
                             max="11"
                             placeholder="Months"
-                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs ${fieldErrors.age
+                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pr-6 sm:pr-7 pl-2 sm:pl-3 ${fieldErrors.age
                               ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
                               : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
                               }`}
@@ -3671,7 +3703,7 @@ function RegisterPatientPage() {
                             }}
                             disabled={registering || (!!newPatient && !isEditMode)}
                           />
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-muted-foreground pointer-events-none">M</span>
+                          <span className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-muted-foreground pointer-events-none select-none">M</span>
                         </div>
                         <div className="relative">
                           <input
@@ -3680,7 +3712,7 @@ function RegisterPatientPage() {
                             min="0"
                             max="30"
                             placeholder="Days"
-                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs ${fieldErrors.age
+                            className={`w-full text-center h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-bold shadow-2xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none pr-6 sm:pr-7 pl-2 sm:pl-3 ${fieldErrors.age
                               ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
                               : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
                               }`}
@@ -3691,7 +3723,7 @@ function RegisterPatientPage() {
                             }}
                             disabled={registering || (!!newPatient && !isEditMode)}
                           />
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-muted-foreground pointer-events-none">D</span>
+                          <span className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-muted-foreground pointer-events-none select-none">D</span>
                         </div>
                       </div>
                       {fieldErrors.age && (
@@ -4008,14 +4040,16 @@ function RegisterPatientPage() {
 
                 {/* Section 2: Clinical Referrals & Sample Collection Logistics */}
                 <div className="space-y-4 pt-2">
-                  <div className="flex items-center justify-between border-b border-border/80 pb-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/80 pb-2.5">
                     <div className="flex items-center gap-2 text-sm font-bold text-foreground">
-                      <Stethoscope className="h-4 w-4 text-primary" />
+                      <Stethoscope className="h-4 w-4 text-primary shrink-0" />
                       <span>Referral & Sample Collection Protocol</span>
                     </div>
-                    <span className="text-[10px] font-bold text-primary/80 uppercase tracking-widest bg-primary/10 px-2 py-0.5 rounded">
-                      Step 2
-                    </span>
+                    <div className="flex items-center justify-start sm:justify-end shrink-0 self-start sm:self-auto">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 shadow-2xs whitespace-nowrap shrink-0">
+                        Step 2
+                      </span>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
@@ -4166,9 +4200,14 @@ function RegisterPatientPage() {
                         <input
                           type="datetime-local"
                           suppressHydrationWarning
-                          className="w-full pl-9 pr-1 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-xs font-semibold focus:border-zinc-900 dark:focus:border-white focus:ring-1 outline-none text-foreground transition-all shadow-2xs"
+                          className="w-full pl-9 pr-3 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-xs font-semibold focus:border-zinc-900 dark:focus:border-white focus:ring-1 outline-none text-foreground transition-all shadow-2xs cursor-pointer [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
                           value={collectionDateTime}
                           onChange={(e) => setCollectionDateTime(e.target.value)}
+                          onClick={(e) => {
+                            try {
+                              (e.target as HTMLInputElement).showPicker?.();
+                            } catch (_) {}
+                          }}
                           disabled={registering || (!!newPatient && !isEditMode)}
                         />
                       </div>
@@ -4180,14 +4219,16 @@ function RegisterPatientPage() {
                 {/* Section 3: Identification, Insurance & Corporate Accounts (if enabled) */}
                 {(isFieldEnabled("aadhaarNo") || isFieldEnabled("insuranceNo") || isFieldEnabled("tpa") || isFieldEnabled("hfrId") || isFieldEnabled("uhid") || isFieldEnabled("passportNumber") || isFieldEnabled("corporateName") || isFieldEnabled("corporatePlan") || isFieldEnabled("govPanel")) && (
                   <div className="space-y-4 pt-2">
-                    <div className="flex items-center justify-between border-b border-border/80 pb-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/80 pb-2.5">
                       <div className="flex items-center gap-2 text-sm font-bold text-foreground">
-                        <Shield className="h-4 w-4 text-primary" />
+                        <Shield className="h-4 w-4 text-primary shrink-0" />
                         <span>Identification, Insurance & Corporate Accounts</span>
                       </div>
-                      <span className="text-[10px] font-bold text-primary/80 uppercase tracking-widest bg-primary/10 px-2 py-0.5 rounded">
-                        Step 3
-                      </span>
+                      <div className="flex items-center justify-start sm:justify-end shrink-0 self-start sm:self-auto">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 shadow-2xs whitespace-nowrap shrink-0">
+                          Step 3
+                        </span>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -4493,21 +4534,21 @@ function RegisterPatientPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-end gap-3">
+                      <div className="flex items-center justify-end gap-3 w-full sm:w-auto">
                         <button
                           type="submit"
                           disabled={registering}
-                          className="gradient-primary text-primary-foreground font-bold px-8 py-3.5 rounded-xl ring-inset-top transition-all hover:-translate-y-px hover:shadow-lg active:scale-[0.99] flex items-center gap-2 disabled:opacity-60 text-sm shadow-md cursor-pointer"
+                          className="gradient-primary text-primary-foreground font-bold px-4 sm:px-8 py-3 sm:py-3.5 rounded-xl ring-inset-top transition-all hover:-translate-y-px hover:shadow-lg active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-60 text-xs sm:text-sm shadow-md cursor-pointer whitespace-nowrap w-full sm:w-auto"
                         >
                           {registering ? (
                             <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              <span>Saving Demographics…</span>
+                              <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                              <span className="whitespace-nowrap">Saving Demographics…</span>
                             </>
                           ) : (
                             <>
-                              <span>Save & Select Clinical Tests</span>
-                              <ArrowRight className="h-4 w-4" />
+                              <span className="whitespace-nowrap">Save & Select Clinical Tests</span>
+                              <ArrowRight className="h-4 w-4 shrink-0" />
                             </>
                           )}
                         </button>
@@ -4520,18 +4561,18 @@ function RegisterPatientPage() {
               {/* Interactive Test Catalog Banner */}
               <div
                 onClick={() => newPatient && setIsModalOpen(true)}
-                className={`p-6 rounded-2xl border-2 transition-all flex flex-col sm:flex-row items-center justify-between gap-4 ${newPatient
+                className={`p-4 sm:p-6 rounded-2xl border-2 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${newPatient
                   ? "bg-accent/60 border-primary cursor-pointer shadow-md hover:bg-accent/80"
                   : "bg-muted/30 border-dashed border-border/80 opacity-70 cursor-not-allowed"
                   }`}
               >
-                <div className="flex items-center gap-4 text-center sm:text-left">
-                  <div className={`w-13 h-13 rounded-2xl flex items-center justify-center shrink-0 p-3.5 shadow-sm ${newPatient ? "gradient-primary text-primary-foreground" : "bg-muted text-muted-foreground border border-border"
+                <div className="flex items-start sm:items-center gap-3.5 sm:gap-4 text-left w-full sm:w-auto">
+                  <div className={`w-12 h-12 sm:w-13 sm:h-13 rounded-2xl flex items-center justify-center shrink-0 p-3 shadow-sm ${newPatient ? "gradient-primary text-primary-foreground" : "bg-muted text-muted-foreground border border-border"
                     }`}>
-                    <FlaskConical className="h-6 w-6" />
+                    <FlaskConical className="h-5 w-5 sm:h-6 sm:w-6" />
                   </div>
-                  <div>
-                    <h4 className="font-bold text-base text-foreground">Diagnostic Investigation Catalog</h4>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-bold text-sm sm:text-base text-foreground leading-snug">Diagnostic Investigation Catalog</h4>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {newPatient
                         ? `${selectedTestObjects.length + selectedOutsourceTests.length} investigations linked (${selectedTestObjects.length} in-house${selectedOutsourceTests.length > 0 ? `, ${selectedOutsourceTests.length} outsource` : ""}). Click here to add, search or modify panels.`
@@ -4541,27 +4582,27 @@ function RegisterPatientPage() {
                 </div>
 
                 {newPatient && (
-                  <span className="gradient-primary text-primary-foreground px-5 py-2.5 rounded-xl font-bold text-xs shrink-0 shadow-sm flex items-center gap-2">
+                  <span className="gradient-primary text-primary-foreground px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs shrink-0 shadow-sm flex items-center justify-center gap-2 whitespace-nowrap w-full sm:w-auto">
                     <span>Manage Tests ({selectedTestObjects.length + selectedOutsourceTests.length})</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
+                    <ArrowRight className="h-3.5 w-3.5 shrink-0" />
                   </span>
                 )}
               </div>
 
               {/* Smart Specimen Tube Triage & Multi-Vial Barcode Assignment */}
               {newPatient && specimenTubes.length > 0 && (
-                <div className="rounded-2xl border border-border/90 bg-card p-6 shadow-sm space-y-5 animate-fade-in">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/70 pb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-xs">
-                        <TestTube2 className="h-6 w-6" />
+                <div className="rounded-2xl border border-border/90 bg-card p-4 sm:p-6 shadow-sm space-y-5 animate-fade-in">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 border-b border-border/70 pb-4">
+                    <div className="flex items-start sm:items-center gap-3">
+                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 shadow-xs">
+                        <TestTube2 className="h-5 w-5 sm:h-6 sm:w-6" />
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-display font-bold text-base text-foreground">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                          <h4 className="font-display font-bold text-sm sm:text-base text-foreground leading-snug">
                             Specimen Tube Triage & Multi-Vial Barcoding
                           </h4>
-                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20 whitespace-nowrap shrink-0 shadow-2xs">
                             Smart Phlebotomy
                           </span>
                         </div>
@@ -4571,11 +4612,11 @@ function RegisterPatientPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-muted text-foreground border border-border">
+                    <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-muted text-foreground border border-border whitespace-nowrap">
                         {specimenTubes.length} Tubes Required
                       </span>
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 border ${specimenTubes.every(t => vialBarcodes[t.tubeType]?.trim())
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1 border whitespace-nowrap ${specimenTubes.every(t => vialBarcodes[t.tubeType]?.trim())
                         ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
                         : "bg-amber-500/10 text-amber-600 border-amber-500/30"
                         }`}>
@@ -5409,7 +5450,7 @@ function RegisterPatientPage() {
 
       {/* 1. Test Selection Catalog Modal (Horizontal Landscape) */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-6xl w-[96vw] max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-3xl bg-card border border-border shadow-2xl animate-scale-in">
+        <DialogContent className="max-w-6xl w-[96vw] max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl sm:rounded-3xl bg-card border border-border shadow-2xl animate-scale-in">
           <DialogTitle className="sr-only">Diagnostic Test Directory</DialogTitle>
 
           {/* Header */}
@@ -5564,7 +5605,7 @@ function RegisterPatientPage() {
           </div>
 
           {/* Catalog Body: Tests, Packages, or Outsource Grid */}
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6 bg-background custom-scrollbar">
+          <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6 bg-background custom-scrollbar">
             {catalogMode === "PACKAGES" ? (
               filteredPackagesForCatalog.length === 0 ? (
                 <div className="text-center py-16 text-muted-foreground space-y-2">
@@ -5844,6 +5885,27 @@ function RegisterPatientPage() {
                   ))
                 )}
               </div>
+            ) : (loadingTests && availableTests.length === 0) ? (
+              <div className="space-y-4 py-2 animate-pulse">
+                <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                  <div className="h-4 w-32 bg-muted rounded" />
+                  <div className="h-3 w-20 bg-muted/60 rounded" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="p-3.5 rounded-2xl border border-border/80 bg-card/60 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-4 w-4 rounded bg-muted" />
+                        <div className="space-y-1.5">
+                          <div className="h-3.5 w-28 bg-muted rounded" />
+                          <div className="h-2.5 w-16 bg-muted/60 rounded" />
+                        </div>
+                      </div>
+                      <div className="h-4 w-12 bg-muted rounded" />
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : Object.keys(filteredGroups).length === 0 ? (
               <div className="text-center py-16 text-muted-foreground space-y-2">
                 <FlaskConical className="h-10 w-10 mx-auto opacity-30" />
@@ -5951,7 +6013,7 @@ function RegisterPatientPage() {
           </div>
 
           {/* Refined Bottom Summary Bar */}
-          <div className="border-t border-border/80 px-6 py-4 shrink-0 bg-muted/40 backdrop-blur-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="border-t border-border/80 px-4 sm:px-6 py-3 sm:py-4 shrink-0 bg-muted/40 backdrop-blur-xs flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
             <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto text-xs">
               <div className="px-3.5 py-1.5 rounded-xl bg-card border border-border flex items-center gap-2 shadow-2xs">
                 <FlaskConical className="h-3.5 w-3.5 text-primary" />
@@ -6121,7 +6183,7 @@ function RegisterPatientPage() {
 
       {/* 3. Manage Referring Doctors Modal */}
       <Dialog open={isDoctorModalOpen} onOpenChange={setIsDoctorModalOpen}>
-        <DialogContent className="max-w-xl w-full max-h-[85vh] overflow-y-auto rounded-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl p-4 sm:p-6">
           <DialogTitle className="sr-only">Manage Referring Doctors</DialogTitle>
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b border-border/80 pb-3">
@@ -6300,7 +6362,7 @@ function RegisterPatientPage() {
 
       {/* 4. Manage Collection Points Modal */}
       <Dialog open={isCollectionModalOpen} onOpenChange={setIsCollectionModalOpen}>
-        <DialogContent className="max-w-xl w-full max-h-[85vh] overflow-y-auto rounded-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl p-4 sm:p-6">
           <DialogTitle className="sr-only">Manage Collection Points</DialogTitle>
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b border-border/80 pb-3">
@@ -6386,7 +6448,7 @@ function RegisterPatientPage() {
 
       {/* 5. Manage Phlebotomists Modal */}
       <Dialog open={isPhleboModalOpen} onOpenChange={setIsPhleboModalOpen}>
-        <DialogContent className="max-w-xl w-full max-h-[85vh] overflow-y-auto rounded-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl p-4 sm:p-6">
           <DialogTitle className="sr-only">Manage Phlebotomists</DialogTitle>
           <div className="space-y-4">
             <div className="flex items-center gap-2 border-b border-border/80 pb-3">
@@ -6663,7 +6725,7 @@ function RegisterPatientPage() {
 
       {/* PayU Payment Gateway Modal */}
       <Dialog open={isPayUModalOpen} onOpenChange={setIsPayUModalOpen}>
-        <DialogContent className="max-w-md bg-card border border-border/80 rounded-2xl p-6 shadow-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-md bg-card border border-border/80 rounded-2xl p-5 sm:p-6 shadow-2xl">
           <DialogTitle className="font-display font-bold text-foreground flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-primary" />
             <span>PayU Instant Collection Gate</span>

@@ -9,8 +9,14 @@ import {
   Search, Plus, Edit2, Trash2, FlaskConical, AlertTriangle,
   Loader2, ChevronDown, ChevronRight, ChevronUp, ChevronLeft,
   FileText, ArrowLeft, Sliders, Check, GripVertical,
-  Calendar, Sparkles, CornerDownRight, Eye, X
+  Calendar, Sparkles, CornerDownRight, Eye, X, MoreVertical
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
@@ -2022,28 +2028,28 @@ export default function TestMasterPage() {
       )}
 
       {/* =========================================================================
-          MAJESTIC FULL-WIDTH DIALOG WINDOW (w-[95vw] h-[92vh] max-w-[95vw])
+          MAJESTIC RESPONSIVE DIALOG WINDOW (Fullscreen on mobile, 95vw on desktop)
       ========================================================================= */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setSaving(false); }}>
-        <DialogContent className="max-w-[95vw] w-[95vw] sm:max-w-[95vw] h-[92vh] max-h-[94vh] p-0 gap-0 overflow-hidden rounded-2xl border border-border/90 bg-card shadow-2xl flex flex-col" hideClose>
-          {/* Top Bar with Back Arrow & Actions (No redundant X cross icon) */}
-          <div className="min-h-16 py-2.5 sm:py-0 border-b border-border/80 bg-card px-3 sm:px-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
-            <div className="flex items-center gap-2.5 sm:gap-3">
+        <DialogContent className="w-full max-w-full sm:max-w-[95vw] sm:w-[95vw] h-[100dvh] sm:h-[92vh] max-h-[100dvh] sm:max-h-[94vh] p-0 gap-0 overflow-hidden rounded-none sm:rounded-2xl border-0 sm:border border-border/90 bg-card shadow-2xl flex flex-col" hideClose>
+          {/* Top Bar with Back Arrow, Title, Three-Dots Dropdown on Mobile, and Primary CTA */}
+          <div className="min-h-14 sm:min-h-16 py-2 sm:py-0 border-b border-border/80 bg-card px-3 sm:px-6 flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <button
                 type="button"
                 onClick={() => setDialogOpen(false)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg border border-border/80 bg-background text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs shrink-0"
+                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-border/80 bg-background text-xs font-bold text-foreground hover:bg-muted transition-colors cursor-pointer shadow-xs shrink-0"
               >
                 <ArrowLeft className="h-4 w-4 text-primary" />
-                <span>Back</span>
+                <span className="hidden sm:inline">Back</span>
               </button>
 
               <div className="h-5 w-px bg-border/80 hidden sm:block" />
 
               <div className="min-w-0">
-                <DialogTitle className="font-display text-sm sm:text-base font-bold text-foreground flex items-center gap-2 truncate">
+                <DialogTitle className="font-display text-sm sm:text-base font-bold text-foreground flex items-center gap-1.5 sm:gap-2 truncate">
                   <span className="truncate">{editingTest ? `Edit Test: ${editingTest.name}` : "Create Diagnostic Test Panel"}</span>
-                  <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] sm:text-[11px] font-mono font-bold shrink-0">
+                  <span className="px-1.5 sm:px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] sm:text-[11px] font-mono font-bold shrink-0">
                     {testCode || "NEW"}
                   </span>
                 </DialogTitle>
@@ -2053,32 +2059,60 @@ export default function TestMasterPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5 justify-end">
-              <button
-                type="button"
-                onClick={handleOpenLivePreview}
-                className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[11px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors cursor-pointer shadow-xs"
-                title="Open live report layout preview and parameter manager"
-              >
-                <Eye className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-emerald-500" />
-                <span>Live Preview</span>
-              </button>
+            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+              {/* Desktop Secondary Action Buttons (>= sm) */}
+              <div className="hidden sm:flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenLivePreview}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors cursor-pointer shadow-xs"
+                  title="Open live report layout preview and parameter manager"
+                >
+                  <Eye className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-emerald-500" />
+                  <span>Live Preview</span>
+                </button>
 
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                  className="rounded-lg px-3 sm:px-4 h-8 sm:h-10 text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </Button>
+              </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDialogOpen(false)}
-                className="rounded-lg px-3 sm:px-4 h-8 sm:h-10 text-xs font-semibold cursor-pointer"
-              >
-                Cancel
-              </Button>
+              {/* Mobile Three-Dots Dropdown (< sm) */}
+              <div className="flex sm:hidden">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="p-2 rounded-lg border border-border/80 bg-background text-muted-foreground hover:text-foreground cursor-pointer"
+                      title="More actions"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onClick={handleOpenLivePreview} className="gap-2 text-xs cursor-pointer">
+                      <Eye className="h-3.5 w-3.5 text-emerald-500" />
+                      <span>Live Preview</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setDialogOpen(false)} className="gap-2 text-xs cursor-pointer">
+                      <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>Cancel &amp; Close</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
 
+              {/* Primary Action Button (Always visible on all screen sizes) */}
               <Button
                 type="button"
                 onClick={handleSaveTest}
                 disabled={saving}
-                className="rounded-lg px-4 sm:px-6 h-8 sm:h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-md flex items-center gap-1.5 sm:gap-2 cursor-pointer disabled:opacity-50"
+                className="rounded-lg px-3 sm:px-6 h-8 sm:h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-md flex items-center gap-1.5 sm:gap-2 cursor-pointer disabled:opacity-50 shrink-0"
               >
                 {saving ? <Loader2 className="h-3.5 sm:h-4 w-3.5 sm:w-4 animate-spin" /> : <Check className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
                 <span>{editingTest ? "Save Changes" : "Create Test"}</span>
@@ -2087,7 +2121,7 @@ export default function TestMasterPage() {
           </div>
 
           {/* Form Scrollable Body */}
-          <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 text-xs bg-muted/10">
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-8 space-y-4 sm:space-y-6 text-xs bg-muted/10">
             {error && (
               <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs font-semibold flex items-center gap-2.5 shadow-xs">
                 <AlertTriangle className="h-5 w-5 shrink-0" />
@@ -2096,7 +2130,7 @@ export default function TestMasterPage() {
             )}
 
             {/* Master Overview Card (Clean Standard 4-Column Grid with Comfortable Height) */}
-            <div className="p-6 bg-card border border-border/80 rounded-xl shadow-xs space-y-4">
+            <div className="p-4 sm:p-6 bg-card border border-border/80 rounded-xl shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-border/60 pb-3">
                 <div className="flex items-center gap-2">
                   <FlaskConical className="h-5 w-5 text-primary" />
@@ -2313,7 +2347,7 @@ export default function TestMasterPage() {
                       }}
                       onDragEnd={handleDragEnd}
                       onDrop={(e) => handleDrop(e, sIdx)}
-                      className={`p-6 bg-card border rounded-xl shadow-xs space-y-4 transition-all relative ${
+                      className={`p-4 sm:p-6 bg-card border rounded-xl shadow-xs space-y-4 transition-all relative ${
                         draggedIndex === sIdx
                           ? "opacity-50 border-2 border-primary/60 border-dashed bg-primary/5 shadow-inner"
                           : dragOverIndex === sIdx

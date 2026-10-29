@@ -458,6 +458,13 @@ html.lenis, html.lenis body {
   -webkit-user-select: none;
 }
 
+@media (max-width: 640px) {
+  .sheet-pan-canvas {
+    touch-action: pan-y !important;
+    overflow-x: hidden !important;
+  }
+}
+
 .sheet-pan-canvas.is-draggable {
   cursor: grab;
 }

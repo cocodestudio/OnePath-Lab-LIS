@@ -219,11 +219,11 @@ function SupportContent() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap w-full sm:w-auto">
             {activeView !== "HUB" && (
               <button
                 onClick={() => setActiveView("HUB")}
-                className="px-3.5 py-2 rounded-lg border border-border/90 bg-card hover:bg-accent text-xs font-bold text-foreground transition-all shadow-sm flex items-center gap-1.5"
+                className="px-3.5 py-2 rounded-lg border border-border/90 bg-card hover:bg-accent text-xs font-bold text-foreground transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap flex-1 sm:flex-none"
               >
                 <span>← Support Hub</span>
               </button>
@@ -233,7 +233,7 @@ function SupportContent() {
                 setHistoryCategoryFilter("ALL");
                 setActiveView("HISTORY");
               }}
-              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${activeView === "HISTORY"
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 whitespace-nowrap flex-1 sm:flex-none ${activeView === "HISTORY"
                   ? "gradient-primary text-primary-foreground"
                   : "border border-border/90 bg-card hover:bg-accent text-foreground"
                 }`}
@@ -356,7 +356,7 @@ function SupportContent() {
                 type="button"
                 onClick={() => handleSubmitTicket("GENERAL_SUPPORT")}
                 disabled={submitting || !description.trim()}
-                className="w-full gradient-primary text-primary-foreground font-bold text-xs py-3 rounded-xl ring-inset-top hover:-translate-y-px active:scale-[0.99] transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full gradient-primary text-primary-foreground font-bold text-xs py-3 rounded-xl ring-inset-top hover:-translate-y-px active:scale-[0.99] transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 <span>Submit Support Ticket →</span>
@@ -395,7 +395,7 @@ function SupportContent() {
                 <div className="flex items-center justify-between pt-2 border-t border-border/60">
                   <button
                     onClick={() => setActiveView("ISSUE")}
-                    className="text-xs font-bold text-red-600 dark:text-red-400 hover:underline flex items-center gap-1"
+                    className="text-xs font-bold text-red-600 dark:text-red-400 hover:underline flex items-center gap-1 whitespace-nowrap shrink-0"
                   >
                     <span>Report an issue</span>
                     <ExternalLink className="h-3 w-3" />
@@ -405,7 +405,7 @@ function SupportContent() {
                       setHistoryCategoryFilter("ISSUE");
                       setActiveView("HISTORY");
                     }}
-                    className="text-[10px] font-bold text-muted-foreground hover:text-foreground"
+                    className="text-[10px] font-bold text-muted-foreground hover:text-foreground whitespace-nowrap shrink-0"
                   >
                     History
                   </button>
@@ -433,7 +433,7 @@ function SupportContent() {
                 <div className="flex items-center justify-between pt-2 border-t border-border/60">
                   <button
                     onClick={() => setActiveView("FEEDBACK")}
-                    className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                    className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 whitespace-nowrap shrink-0"
                   >
                     <span>Share feedback</span>
                     <ExternalLink className="h-3 w-3" />
@@ -443,7 +443,7 @@ function SupportContent() {
                       setHistoryCategoryFilter("FEEDBACK");
                       setActiveView("HISTORY");
                     }}
-                    className="text-[10px] font-bold text-muted-foreground hover:text-foreground"
+                    className="text-[10px] font-bold text-muted-foreground hover:text-foreground whitespace-nowrap shrink-0"
                   >
                     History
                   </button>
@@ -471,7 +471,7 @@ function SupportContent() {
                 <div className="flex items-center justify-between pt-2 border-t border-border/60">
                   <button
                     onClick={() => setActiveView("FEATURE")}
-                    className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                    className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 whitespace-nowrap shrink-0"
                   >
                     <span>Request feature</span>
                     <ExternalLink className="h-3 w-3" />
@@ -481,7 +481,7 @@ function SupportContent() {
                       setHistoryCategoryFilter("FEATURE_REQUEST");
                       setActiveView("HISTORY");
                     }}
-                    className="text-[10px] font-bold text-muted-foreground hover:text-foreground"
+                    className="text-[10px] font-bold text-muted-foreground hover:text-foreground whitespace-nowrap shrink-0"
                   >
                     History
                   </button>
@@ -590,11 +590,11 @@ function SupportContent() {
               </Select>
             </div>
 
-            <div className="pt-2 flex items-center justify-between">
+            <div className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4">
               <button
                 type="button"
                 onClick={handleBackSmart}
-                className="px-4 py-2.5 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5 whitespace-nowrap w-full sm:w-auto"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 <span>Cancel / Back</span>
@@ -603,7 +603,7 @@ function SupportContent() {
                 type="button"
                 onClick={() => handleSubmitTicket("ISSUE")}
                 disabled={submitting}
-                className="gradient-primary text-primary-foreground font-bold text-xs px-8 py-3 rounded-xl ring-inset-top hover:-translate-y-px transition-all shadow-md flex items-center gap-1.5"
+                className="gradient-primary text-primary-foreground font-bold text-xs px-6 sm:px-8 py-3 rounded-xl ring-inset-top hover:-translate-y-px transition-all shadow-md flex items-center justify-center gap-1.5 whitespace-nowrap w-full sm:w-auto"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bug className="h-4 w-4" />}
                 <span>Report Issue</span>
@@ -718,11 +718,11 @@ function SupportContent() {
               </Select>
             </div>
 
-            <div className="pt-2 flex items-center justify-between">
+            <div className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4">
               <button
                 type="button"
                 onClick={handleBackSmart}
-                className="px-4 py-2.5 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5 whitespace-nowrap w-full sm:w-auto"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 <span>Cancel / Back</span>
@@ -731,7 +731,7 @@ function SupportContent() {
                 type="button"
                 onClick={() => handleSubmitTicket("FEEDBACK")}
                 disabled={submitting}
-                className="gradient-primary text-primary-foreground font-bold text-xs px-8 py-3 rounded-xl ring-inset-top hover:-translate-y-px transition-all shadow-md flex items-center gap-1.5"
+                className="gradient-primary text-primary-foreground font-bold text-xs px-6 sm:px-8 py-3 rounded-xl ring-inset-top hover:-translate-y-px transition-all shadow-md flex items-center justify-center gap-1.5 whitespace-nowrap w-full sm:w-auto"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageSquare className="h-4 w-4" />}
                 <span>Share your feedback</span>
@@ -831,11 +831,11 @@ function SupportContent() {
               </Select>
             </div>
 
-            <div className="pt-2 flex items-center justify-between">
+            <div className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4">
               <button
                 type="button"
                 onClick={handleBackSmart}
-                className="px-4 py-2.5 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5 whitespace-nowrap w-full sm:w-auto"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 <span>Cancel / Back</span>
@@ -844,7 +844,7 @@ function SupportContent() {
                 type="button"
                 onClick={() => handleSubmitTicket("FEATURE_REQUEST")}
                 disabled={submitting}
-                className="gradient-primary text-primary-foreground font-bold text-xs px-8 py-3 rounded-xl ring-inset-top hover:-translate-y-px transition-all shadow-md flex items-center gap-1.5"
+                className="gradient-primary text-primary-foreground font-bold text-xs px-6 sm:px-8 py-3 rounded-xl ring-inset-top hover:-translate-y-px transition-all shadow-md flex items-center justify-center gap-1.5 whitespace-nowrap w-full sm:w-auto"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lightbulb className="h-4 w-4" />}
                 <span>Request a new feature</span>
@@ -985,7 +985,7 @@ function SupportContent() {
         <DialogContent className="w-[95vw] max-w-3xl p-0 gap-0 overflow-hidden rounded-2xl bg-card border border-border/80 shadow-2xl max-h-[92vh] flex flex-col">
           <DialogTitle className="sr-only">Support Ticket Details</DialogTitle>
 
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border/80 bg-card shrink-0">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-border/80 bg-card shrink-0">
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
                 <LifeBuoy className="h-5 w-5" />

@@ -11,8 +11,14 @@ import { useRouter } from "next/navigation";
 import {
   Printer, FileText, CheckCircle2, ChevronUp, ChevronDown,
   Trash2, Eye, EyeOff, Save, Check, Loader2, Sparkles, Sliders, BookOpen,
-  GripVertical, Layers, ChevronRight, Phone, Send, Download
+  GripVertical, Layers, ChevronRight, Phone, Send, Download, MoreVertical
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { useReactToPrint } from "react-to-print";
 import { ReportSheet, PaginatedReportPreview, type PrintSettings, type ReportTest } from "@/components/report-sheet";
 import { WhatsAppQrDialog } from "@/components/whatsapp-qr-dialog";
@@ -799,26 +805,29 @@ export function PrintPreviewDialog({
         )}
 
         {/* ── Top Bar ── */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 sm:px-6 py-3.5 bg-background border-b border-border shadow-xs z-10 shrink-0 gap-3 sm:gap-4">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-3.5 sm:px-6 py-3 sm:py-3.5 bg-background border-b border-border shadow-xs z-10 shrink-0 gap-2.5 sm:gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <div className="bg-primary/10 p-2 rounded-lg shrink-0">
-              <FileText className="h-5 w-5 text-primary" />
+              <FileText className="h-4 sm:h-5 w-4 sm:w-5 text-primary" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="font-semibold text-sm sm:text-base leading-none text-foreground">Report Sheet & Parameter Manager</h2>
-                <span className="bg-primary/15 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap">
+                <h2 className="font-semibold text-xs sm:text-base leading-none text-foreground truncate max-w-[170px] sm:max-w-none">
+                  Report Sheet
+                </h2>
+                <span className="bg-primary/15 text-primary text-[9.5px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 whitespace-nowrap">
                   Live Customizer
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {totalPages} page{totalPages > 1 ? "s" : ""} · Drag items/blocks up & down to reorder, toggle interpretation, and save lab layout in real-time.
+              <p className="text-[10.5px] sm:text-xs text-muted-foreground mt-0.5 truncate">
+                {totalPages} page{totalPages > 1 ? "s" : ""} · Reorder &amp; format parameters
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             {/* Mobile Tab Switcher on < md */}
-            <div className="flex md:hidden items-center bg-muted/60 p-1 rounded-xl border border-border w-full mb-1">
+            <div className="flex md:hidden items-center bg-muted/60 p-1 rounded-xl border border-border w-full mb-0.5">
               <button
                 type="button"
                 onClick={() => setMobileTab("preview")}
@@ -837,60 +846,104 @@ export function PrintPreviewDialog({
               </button>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSaveLayout}
-              disabled={isSavingLayout}
-              className="gap-1.5 border-primary/40 hover:bg-primary/10 text-primary font-bold text-xs shadow-xs cursor-pointer flex-1 sm:flex-none"
-            >
-              {isSavingLayout ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : layoutSavedSuccess ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Save className="h-3.5 w-3.5" />}
-              <span>{isSavingLayout ? "Saving..." : layoutSavedSuccess ? "Saved!" : "Save Layout"}</span>
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="cursor-pointer">Cancel</Button>
-            {canShowWhatsApp && (
+            {/* Mobile Action Bar (< sm) with Three Dots Menu */}
+            <div className="flex sm:hidden items-center justify-between gap-1.5 w-full">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSaveLayout}
+                disabled={isSavingLayout}
+                className="gap-1.5 border-primary/40 hover:bg-primary/10 text-primary font-bold text-xs shadow-xs cursor-pointer flex-1 h-9"
+              >
+                {isSavingLayout ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : layoutSavedSuccess ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Save className="h-3.5 w-3.5" />}
+                <span>{isSavingLayout ? "Saving..." : layoutSavedSuccess ? "Saved!" : "Save Layout"}</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="cursor-pointer h-9 px-3 text-xs shrink-0">
+                Cancel
+              </Button>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 px-2.5 cursor-pointer shrink-0" title="More Actions">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => handlePrint()} className="gap-2 cursor-pointer text-xs">
+                    <Printer className="h-4 w-4 text-primary" />
+                    <span>Print Document</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDirectDownloadPdf()} disabled={isDownloadingPdf} className="gap-2 cursor-pointer text-xs">
+                    <Download className="h-4 w-4 text-emerald-600" />
+                    <span>Download PDF</span>
+                  </DropdownMenuItem>
+                  {canShowWhatsApp && (
+                    <DropdownMenuItem onClick={() => handleWhatsApp()} disabled={isSendingWhatsApp} className="gap-2 cursor-pointer text-xs">
+                      <Send className="h-4 w-4 text-emerald-500" />
+                      <span>Send WhatsApp</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            {/* Desktop Full Action Buttons (>= sm) */}
+            <div className="hidden sm:flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSaveLayout}
+                disabled={isSavingLayout}
+                className="gap-1.5 border-primary/40 hover:bg-primary/10 text-primary font-bold text-xs shadow-xs cursor-pointer"
+              >
+                {isSavingLayout ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : layoutSavedSuccess ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Save className="h-3.5 w-3.5" />}
+                <span>{isSavingLayout ? "Saving..." : layoutSavedSuccess ? "Saved!" : "Save Layout"}</span>
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="cursor-pointer">Cancel</Button>
+              {canShowWhatsApp && (
+                <Button
+                  size="sm"
+                  onClick={() => handleWhatsApp()}
+                  disabled={isSendingWhatsApp}
+                  className="gap-1.5 font-bold shadow-xs cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {isSendingWhatsApp ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Sending...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current shrink-0" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                      </svg>
+                      <span>Send WhatsApp</span>
+                    </>
+                  )}
+                </Button>
+              )}
               <Button
                 size="sm"
-                onClick={() => handleWhatsApp()}
-                disabled={isSendingWhatsApp}
-                className="gap-1.5 font-bold shadow-xs cursor-pointer flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={() => handleDirectDownloadPdf()}
+                disabled={isDownloadingPdf}
+                className="gap-1.5 font-bold shadow-xs cursor-pointer bg-emerald-700 hover:bg-emerald-800 text-white"
               >
-                {isSendingWhatsApp ? (
+                {isDownloadingPdf ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Sending...</span>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Generating PDF...</span>
                   </>
                 ) : (
                   <>
-                    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current shrink-0" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                    </svg>
-                    <span>Send WhatsApp</span>
+                    <Download className="h-4 w-4" />
+                    <span>Download PDF</span>
                   </>
                 )}
               </Button>
-            )}
-            <Button
-              size="sm"
-              onClick={() => handleDirectDownloadPdf()}
-              disabled={isDownloadingPdf}
-              className="gap-1.5 font-bold shadow-xs cursor-pointer flex-1 sm:flex-none bg-emerald-700 hover:bg-emerald-800 text-white"
-            >
-              {isDownloadingPdf ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  <span>Generating PDF...</span>
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4" />
-                  <span>Download PDF</span>
-                </>
-              )}
-            </Button>
-            <Button size="sm" onClick={() => handlePrint()} className="gap-1.5 font-bold shadow-xs cursor-pointer flex-1 sm:flex-none">
-              <Printer className="h-4 w-4" /> Print Document
-            </Button>
+              <Button size="sm" onClick={() => handlePrint()} className="gap-1.5 font-bold shadow-xs cursor-pointer">
+                <Printer className="h-4 w-4" /> Print Document
+              </Button>
+            </div>
           </div>
         </div>
 

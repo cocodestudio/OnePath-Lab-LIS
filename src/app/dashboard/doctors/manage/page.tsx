@@ -1183,156 +1183,158 @@ export default function ManageDoctorsPage() {
           ADD / EDIT DOCTOR MODAL
       ═══════════════════════════════════════════════════════════════ */}
       <Dialog open={isDoctorModalOpen} onOpenChange={setIsDoctorModalOpen}>
-        <DialogContent className="max-w-md rounded-3xl border border-border/80 shadow-2xl p-6 bg-background">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2">
-              <Stethoscope className="h-5 w-5 text-primary" />
-              <span>{editingDoctor ? "Edit Doctor Profile" : "Register Referring Doctor"}</span>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl sm:rounded-3xl border border-border/80 shadow-2xl bg-background">
+          <DialogHeader className="p-5 sm:p-6 border-b border-border/70 pr-12 shrink-0">
+            <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+              <Stethoscope className="h-5 w-5 text-primary shrink-0" />
+              <span className="truncate">{editingDoctor ? "Edit Doctor Profile" : "Register Referring Doctor"}</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Add doctor demographics and baseline commission percentage
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSaveDoctorProfile} className="space-y-4 pt-2">
-            <div className="grid grid-cols-2 gap-3">
+          <form onSubmit={handleSaveDoctorProfile} className="flex-1 flex flex-col justify-between overflow-hidden">
+            <div className="p-5 sm:p-6 overflow-y-auto max-h-[calc(92vh-10rem)] space-y-4 custom-scrollbar">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-bold text-foreground">Doctor Full Name *</Label>
+                  <Input
+                    type="text"
+                    required
+                    placeholder="e.g. Dr. Rajesh Sharma"
+                    value={doctorForm.name}
+                    onChange={(e) => setDoctorForm({ ...doctorForm, name: e.target.value })}
+                    className="mt-1 h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs font-bold text-foreground">Degree (Optional)</Label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. MBBS, MD"
+                    value={doctorForm.degree}
+                    onChange={(e) => setDoctorForm({ ...doctorForm, degree: e.target.value })}
+                    className="mt-1 h-9 text-xs rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-bold text-foreground">Specialty</Label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. Cardiologist"
+                    value={doctorForm.specialty}
+                    onChange={(e) => setDoctorForm({ ...doctorForm, specialty: e.target.value })}
+                    className="mt-1 h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs font-bold text-foreground">Clinic / Hospital</Label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. Apollo Clinic"
+                    value={doctorForm.clinic_hospital}
+                    onChange={(e) => setDoctorForm({ ...doctorForm, clinic_hospital: e.target.value })}
+                    className="mt-1 h-9 text-xs rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-bold text-foreground">Phone Number</Label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. 9876543210"
+                    value={doctorForm.phone}
+                    onChange={(e) => setDoctorForm({ ...doctorForm, phone: e.target.value })}
+                    className="mt-1 h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs font-bold text-foreground">Base Commission %</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    placeholder="0"
+                    value={doctorForm.default_commission_percent}
+                    onChange={(e) => setDoctorForm({ ...doctorForm, default_commission_percent: e.target.value })}
+                    className="mt-1 h-9 text-xs rounded-xl font-mono font-bold"
+                  />
+                </div>
+              </div>
+
               <div>
-                <Label className="text-xs font-bold text-foreground">Doctor Full Name *</Label>
+                <Label className="text-xs font-bold text-foreground">Email (Optional)</Label>
                 <Input
-                  type="text"
-                  required
-                  placeholder="e.g. Dr. Rajesh Sharma"
-                  value={doctorForm.name}
-                  onChange={(e) => setDoctorForm({ ...doctorForm, name: e.target.value })}
+                  type="email"
+                  placeholder="doctor@example.com"
+                  value={doctorForm.email}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, email: e.target.value })}
                   className="mt-1 h-9 text-xs rounded-xl"
                 />
               </div>
 
               <div>
-                <Label className="text-xs font-bold text-foreground">Degree (Optional)</Label>
+                <Label className="text-xs font-bold text-foreground">Address / Notes</Label>
                 <Input
                   type="text"
-                  placeholder="e.g. MBBS, MD"
-                  value={doctorForm.degree}
-                  onChange={(e) => setDoctorForm({ ...doctorForm, degree: e.target.value })}
-                  className="mt-1 h-9 text-xs rounded-xl"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs font-bold text-foreground">Specialty</Label>
-                <Input
-                  type="text"
-                  placeholder="e.g. Cardiologist"
-                  value={doctorForm.specialty}
-                  onChange={(e) => setDoctorForm({ ...doctorForm, specialty: e.target.value })}
+                  placeholder="Clinic address or chamber timing"
+                  value={doctorForm.address}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, address: e.target.value })}
                   className="mt-1 h-9 text-xs rounded-xl"
                 />
               </div>
 
-              <div>
-                <Label className="text-xs font-bold text-foreground">Clinic / Hospital</Label>
-                <Input
-                  type="text"
-                  placeholder="e.g. Apollo Clinic"
-                  value={doctorForm.clinic_hospital}
-                  onChange={(e) => setDoctorForm({ ...doctorForm, clinic_hospital: e.target.value })}
-                  className="mt-1 h-9 text-xs rounded-xl"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs font-bold text-foreground">Phone Number</Label>
-                <Input
-                  type="text"
-                  placeholder="e.g. 9876543210"
-                  value={doctorForm.phone}
-                  onChange={(e) => setDoctorForm({ ...doctorForm, phone: e.target.value })}
-                  className="mt-1 h-9 text-xs rounded-xl"
-                />
-              </div>
-
-              <div>
-                <Label className="text-xs font-bold text-foreground">Base Commission %</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  placeholder="0"
-                  value={doctorForm.default_commission_percent}
-                  onChange={(e) => setDoctorForm({ ...doctorForm, default_commission_percent: e.target.value })}
-                  className="mt-1 h-9 text-xs rounded-xl font-mono font-bold"
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-xs font-bold text-foreground">Email (Optional)</Label>
-              <Input
-                type="email"
-                placeholder="doctor@example.com"
-                value={doctorForm.email}
-                onChange={(e) => setDoctorForm({ ...doctorForm, email: e.target.value })}
-                className="mt-1 h-9 text-xs rounded-xl"
-              />
-            </div>
-
-            <div>
-              <Label className="text-xs font-bold text-foreground">Address / Notes</Label>
-              <Input
-                type="text"
-                placeholder="Clinic address or chamber timing"
-                value={doctorForm.address}
-                onChange={(e) => setDoctorForm({ ...doctorForm, address: e.target.value })}
-                className="mt-1 h-9 text-xs rounded-xl"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="checkbox"
-                id="manage-doc-active"
-                checked={doctorForm.is_active}
-                onChange={(e) => setDoctorForm({ ...doctorForm, is_active: e.target.checked })}
-                className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
-              />
-              <label htmlFor="manage-doc-active" className="text-xs font-semibold text-foreground cursor-pointer">
-                Active Doctor <span className="text-[11px] text-muted-foreground font-normal">(Uncheck for temporary doctor — referrals won't count in cases analytics)</span>
-              </label>
-            </div>
-
-            {doctorForm.phone.trim().length >= 8 && (
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+              <div className="flex items-center gap-2 pt-1">
                 <input
                   type="checkbox"
-                  id="manage-doc-send-whatsapp"
-                  checked={sendWhatsAppInvite}
-                  onChange={(e) => setSendWhatsAppInvite(e.target.checked)}
-                  className="h-4 w-4 rounded border-border text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                  id="manage-doc-active"
+                  checked={doctorForm.is_active}
+                  onChange={(e) => setDoctorForm({ ...doctorForm, is_active: e.target.checked })}
+                  className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
                 />
-                <label htmlFor="manage-doc-send-whatsapp" className="text-xs font-semibold text-emerald-950 dark:text-emerald-100 cursor-pointer flex-1">
-                  Send Doctor Portal Access Link via WhatsApp <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-normal block sm:inline">(Direct 1-click report view on doctor&apos;s phone)</span>
+                <label htmlFor="manage-doc-active" className="text-xs font-semibold text-foreground cursor-pointer">
+                  Active Doctor <span className="text-[11px] text-muted-foreground font-normal">(Uncheck for temporary doctor — referrals won't count in cases analytics)</span>
                 </label>
               </div>
-            )}
 
-            <DialogFooter className="pt-2">
+              {doctorForm.phone.trim().length >= 8 && (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <input
+                    type="checkbox"
+                    id="manage-doc-send-whatsapp"
+                    checked={sendWhatsAppInvite}
+                    onChange={(e) => setSendWhatsAppInvite(e.target.checked)}
+                    className="h-4 w-4 rounded border-border text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                  />
+                  <label htmlFor="manage-doc-send-whatsapp" className="text-xs font-semibold text-emerald-950 dark:text-emerald-100 cursor-pointer flex-1">
+                    Send Doctor Portal Access Link via WhatsApp <span className="text-[11px] text-emerald-700 dark:text-emerald-300 font-normal block sm:inline">(Direct 1-click report view on doctor&apos;s phone)</span>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="p-4 sm:p-5 border-t border-border/70 bg-muted/20 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 shrink-0">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsDoctorModalOpen(false)}
-                className="rounded-xl border-border text-xs cursor-pointer"
+                className="w-full sm:w-auto h-10 sm:h-9 rounded-xl border-border text-xs cursor-pointer"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={isSaving}
-                className="rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold cursor-pointer"
+                className="w-full sm:w-auto h-10 sm:h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold cursor-pointer"
               >
                 {isSaving ? "Saving..." : "Save Doctor"}
               </Button>
@@ -1343,24 +1345,24 @@ export default function ManageDoctorsPage() {
 
       {/* ── STATEMENT PRINT SETTINGS MODAL ── */}
       <Dialog open={isPrintSettingsModalOpen} onOpenChange={setIsPrintSettingsModalOpen}>
-        <DialogContent className="max-w-xl w-full rounded-2xl p-6">
-          <DialogHeader className="space-y-1.5 border-b border-border/70 pb-4">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl sm:rounded-3xl border border-border/80 shadow-2xl bg-background">
+          <DialogHeader className="p-5 sm:p-6 border-b border-border/70 pr-12 shrink-0">
             <div className="flex items-center gap-2.5 text-primary">
-              <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
+              <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                 <Printer className="h-5 w-5 text-primary" />
               </div>
-              <div>
-                <DialogTitle className="text-base font-bold text-foreground">
+              <div className="min-w-0">
+                <DialogTitle className="text-sm sm:text-base font-bold text-foreground truncate">
                   Doctor Statement Print Settings
                 </DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground">
-                  Choose which columns, demographics, and revenue metrics appear on the official PDF statement.
+                <DialogDescription className="text-xs text-muted-foreground truncate">
+                  Choose which columns and demographics appear on the PDF statement.
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
-          <div className="space-y-5 py-4 max-h-[65vh] overflow-y-auto pr-1">
+          <div className="space-y-5 p-4 sm:p-6 overflow-y-auto max-h-[calc(92vh-10rem)] custom-scrollbar">
             {/* Section 1: Patient Details */}
             <div className="space-y-2.5">
               <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
@@ -1547,23 +1549,23 @@ export default function ManageDoctorsPage() {
             </div>
           </div>
 
-          <DialogFooter className="flex flex-col sm:flex-row items-center justify-between gap-2.5 border-t border-border/70 pt-4">
+          <DialogFooter className="p-4 sm:p-5 border-t border-border/70 bg-muted/20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={() => setStatementPrintSettings({ ...defaultDoctorStatementPrintSettings })}
-              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+              className="text-xs text-muted-foreground hover:text-foreground cursor-pointer w-full sm:w-auto"
             >
               Reset to Defaults
             </Button>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={() => setIsPrintSettingsModalOpen(false)}
-                className="text-xs cursor-pointer"
+                className="text-xs cursor-pointer flex-1 sm:flex-none h-10 sm:h-8"
               >
                 Cancel
               </Button>
@@ -1572,7 +1574,7 @@ export default function ManageDoctorsPage() {
                 size="sm"
                 disabled={isSavingPrintSettings}
                 onClick={handleSavePrintSettings}
-                className="text-xs font-semibold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer shadow-xs"
+                className="text-xs font-semibold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer shadow-xs flex-1 sm:flex-none h-10 sm:h-8"
               >
                 {isSavingPrintSettings ? (
                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />

@@ -111,17 +111,20 @@ export function resolvePackageTestIds(pkg: LabPackage, availableTests: any[] = [
   if (Array.isArray(availableTests) && availableTests.length > 0) {
     // 1. Direct ID match
     for (const tid of rawIds) {
+      if (!tid) continue;
       const matched = availableTests.find(at => at.id === tid);
       if (matched && !resolvedIds.includes(matched.id)) {
         resolvedIds.push(matched.id);
       }
     }
 
-    // 2. Code match
+    // 2. Exact Code match (Only when tid is not a UUID)
     for (const tid of rawIds) {
+      if (!tid || uuidRegex.test(tid)) continue;
+      const cleanTid = tid.toLowerCase().trim();
       const matched = availableTests.find(at => {
         const code = (at.testCode || at.test_code || at.code || "").toLowerCase().trim();
-        return code && (code === tid.toLowerCase().trim() || tid.toLowerCase().includes(code));
+        return code && code === cleanTid;
       });
       if (matched && !resolvedIds.includes(matched.id)) {
         resolvedIds.push(matched.id);
@@ -138,15 +141,18 @@ export function resolvePackageTestIds(pkg: LabPackage, availableTests: any[] = [
       }
     }
 
-    // 3. Name match (exact or substring)
+    // 3. Name match: exact match first, then normalized exact match without parentheses (never loose substring)
     for (const testName of pkgTestNames) {
-      if (!testName) continue;
+      if (!testName || testName.length < 3) continue;
       let matched = availableTests.find(at => (at.name || "").toLowerCase().trim() === testName);
       if (!matched) {
-        matched = availableTests.find(at => {
-          const atName = (at.name || "").toLowerCase().trim();
-          return atName.includes(testName) || testName.includes(atName);
-        });
+        const cleanPkgName = testName.replace(/\s*\([^)]*\)/g, "").trim();
+        if (cleanPkgName.length >= 4) {
+          matched = availableTests.find(at => {
+            const cleanAtName = (at.name || "").toLowerCase().replace(/\s*\([^)]*\)/g, "").trim();
+            return cleanAtName === cleanPkgName;
+          });
+        }
       }
       if (matched && !resolvedIds.includes(matched.id)) {
         resolvedIds.push(matched.id);

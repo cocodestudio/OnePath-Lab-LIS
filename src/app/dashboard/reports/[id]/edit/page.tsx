@@ -2573,48 +2573,48 @@ function ResultEntryContent() {
                     </div>
 
                     {/* Main Test Footer: + Add Note, + Add Remarks, + Add Advices */}
-                    <div className="p-4 bg-muted/20 border-t border-border/60 space-y-3">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    <div className="p-3 sm:p-4 bg-muted/20 border-t border-border/60 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate">
                           Test Section Findings & Notes ({group.mainTestName})
                         </span>
 
-                        {/* 3 Action Buttons */}
-                        <div className="flex items-center gap-2">
+                        {/* 3 Action Buttons - Single line on mobile */}
+                        <div className="grid grid-cols-3 gap-1.5 w-full sm:w-auto sm:flex sm:items-center sm:gap-2">
                           <button
                             type="button"
                             onClick={() => toggleTestMeta(group.mainTestId, "notes")}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer border ${currentTestMeta.notes !== undefined
+                            className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3 sm:py-1 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer border truncate ${currentTestMeta.notes !== undefined
                               ? "bg-primary/10 text-primary border-primary/30"
                               : "bg-background hover:bg-muted text-muted-foreground border-border/80"
                               }`}
                           >
-                            <Plus className="h-3 w-3" />
-                            <span>{currentTestMeta.notes !== undefined ? "Note Active" : "Add Note"}</span>
+                            <Plus className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{currentTestMeta.notes !== undefined ? "Note Active" : "Add Note"}</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => toggleTestMeta(group.mainTestId, "remarks")}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer border ${currentTestMeta.remarks !== undefined
+                            className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3 sm:py-1 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer border truncate ${currentTestMeta.remarks !== undefined
                               ? "bg-primary/10 text-primary border-primary/30"
                               : "bg-background hover:bg-muted text-muted-foreground border-border/80"
                               }`}
                           >
-                            <Plus className="h-3 w-3" />
-                            <span>{currentTestMeta.remarks !== undefined ? "Remarks Active" : "Add Remarks"}</span>
+                            <Plus className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{currentTestMeta.remarks !== undefined ? "Remarks Active" : "Add Remarks"}</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => toggleTestMeta(group.mainTestId, "advices")}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer border ${currentTestMeta.advices !== undefined
+                            className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-1.5 sm:px-3 sm:py-1 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer border truncate ${currentTestMeta.advices !== undefined
                               ? "bg-primary/10 text-primary border-primary/30"
                               : "bg-background hover:bg-muted text-muted-foreground border-border/80"
                               }`}
                           >
-                            <Plus className="h-3 w-3" />
-                            <span>{currentTestMeta.advices !== undefined ? "Advices Active" : "Add Advices"}</span>
+                            <Plus className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{currentTestMeta.advices !== undefined ? "Advices Active" : "Add Advices"}</span>
                           </button>
                         </div>
                       </div>

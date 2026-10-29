@@ -438,16 +438,16 @@ export default function B2bWalletsPage() {
             )}
           </div>
 
-          {/* Balance Status Filters */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-bold text-muted-foreground mr-1 flex items-center gap-1">
+          {/* Balance Status Filters - Single-line horizontal scroll on mobile */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full custom-scrollbar flex-nowrap shrink-0">
+            <span className="text-xs font-bold text-muted-foreground mr-1 flex items-center gap-1 shrink-0 whitespace-nowrap">
               <Filter className="h-3.5 w-3.5 text-primary" /> Balance:
             </span>
             <Button
               variant={balanceFilter === "ALL" ? "default" : "outline"}
               size="sm"
               onClick={() => setBalanceFilter("ALL")}
-              className="text-xs h-8 px-3"
+              className="text-xs h-8 px-3 shrink-0 whitespace-nowrap"
             >
               All
             </Button>
@@ -455,7 +455,7 @@ export default function B2bWalletsPage() {
               variant={balanceFilter === "HEALTHY" ? "default" : "outline"}
               size="sm"
               onClick={() => setBalanceFilter("HEALTHY")}
-              className="text-xs h-8 px-3"
+              className="text-xs h-8 px-3 shrink-0 whitespace-nowrap"
             >
               Healthy (&gt;₹500)
             </Button>
@@ -463,7 +463,7 @@ export default function B2bWalletsPage() {
               variant={balanceFilter === "LOW" ? "default" : "outline"}
               size="sm"
               onClick={() => setBalanceFilter("LOW")}
-              className="text-xs h-8 px-3"
+              className="text-xs h-8 px-3 shrink-0 whitespace-nowrap"
             >
               Low (₹1–500)
             </Button>
@@ -471,22 +471,22 @@ export default function B2bWalletsPage() {
               variant={balanceFilter === "DEFICIT" ? "default" : "outline"}
               size="sm"
               onClick={() => setBalanceFilter("DEFICIT")}
-              className="text-xs h-8 px-3"
+              className="text-xs h-8 px-3 shrink-0 whitespace-nowrap"
             >
               Zero / Deficit (≤₹0)
             </Button>
           </div>
 
-          {/* Tier Filter */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-bold text-muted-foreground mr-1">Rate Tier:</span>
+          {/* Tier Filter - Single-line horizontal scroll on mobile */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full custom-scrollbar flex-nowrap shrink-0">
+            <span className="text-xs font-bold text-muted-foreground mr-1 shrink-0 whitespace-nowrap">Rate Tier:</span>
             {["ALL", "LOW", "MEDIUM", "HIGH"].map((t) => (
               <Button
                 key={t}
                 variant={tierFilter === t ? "default" : "outline"}
                 size="sm"
                 onClick={() => setTierFilter(t)}
-                className="text-xs h-8 px-2.5"
+                className="text-xs h-8 px-2.5 shrink-0 whitespace-nowrap"
               >
                 {t}
               </Button>
@@ -810,16 +810,16 @@ export default function B2bWalletsPage() {
                       />
                     </div>
 
-                    {/* Preset Chips */}
-                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    {/* Preset Chips - 5 equal columns on mobile */}
+                    <div className="grid grid-cols-5 gap-1 sm:flex sm:items-center sm:gap-1.5 pt-0.5">
                       {[500, 1000, 2000, 5000, 10000].map((amt) => (
                         <button
                           key={amt}
                           type="button"
                           onClick={() => setTopUpAmount(String(amt))}
-                          className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-muted hover:bg-primary/10 hover:text-primary border border-border/70 transition-colors cursor-pointer"
+                          className="text-[10px] sm:text-[11px] font-bold px-1 sm:px-2.5 py-1 rounded-lg bg-muted hover:bg-primary/10 hover:text-primary border border-border/70 transition-colors cursor-pointer text-center justify-center truncate whitespace-nowrap"
                         >
-                          +₹{amt.toLocaleString("en-IN")}
+                          +₹{amt >= 1000 ? `${amt / 1000}k` : amt}
                         </button>
                       ))}
                     </div>
@@ -874,15 +874,15 @@ export default function B2bWalletsPage() {
 
                   {/* Real-time Calculation Summary */}
                   {Number(topUpAmount) > 0 && (
-                    <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground font-medium">Balance After:</span>
-                      <div className="font-mono font-bold text-foreground text-xs">
+                    <div className="p-2.5 sm:p-3 rounded-xl bg-primary/5 border border-primary/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs">
+                      <span className="text-muted-foreground font-medium text-[11px] sm:text-xs">Balance After Adjustment:</span>
+                      <div className="font-mono font-bold text-foreground text-xs flex items-center gap-1 whitespace-nowrap">
                         <span>{formatCurrency(selectedClient.wallet_balance || 0)}</span>
-                        <span className="mx-1 text-primary">
+                        <span className="text-primary">
                           {topUpType === "CREDIT" ? "+" : "-"} {formatCurrency(topUpAmount)}
                         </span>
                         <span>=</span>
-                        <strong className="ml-1 text-emerald-600 dark:text-emerald-400 text-sm">
+                        <strong className="text-emerald-600 dark:text-emerald-400 text-xs sm:text-sm">
                           {formatCurrency(
                             topUpType === "CREDIT"
                               ? (Number(selectedClient.wallet_balance) || 0) + Number(topUpAmount)
@@ -911,15 +911,15 @@ export default function B2bWalletsPage() {
                     </div>
                   )}
 
-                  {/* Submit Button */}
-                  <div className="pt-2 flex items-center justify-end gap-2">
+                  {/* Submit Action Buttons */}
+                  <div className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       onClick={handleClosePanel}
                       disabled={isSubmittingTopUp}
-                      className="text-xs h-9 px-3"
+                      className="w-full sm:w-auto text-xs h-10 sm:h-9 px-4"
                     >
                       Cancel
                     </Button>
@@ -928,7 +928,7 @@ export default function B2bWalletsPage() {
                       type="submit"
                       size="sm"
                       disabled={isSubmittingTopUp || !Number(topUpAmount)}
-                      className="text-xs h-9 px-4 font-bold gradient-primary text-primary-foreground gap-1.5 cursor-pointer shadow-sm"
+                      className="w-full sm:w-auto text-xs h-10 sm:h-9 px-5 font-bold gradient-primary text-primary-foreground gap-1.5 cursor-pointer shadow-sm justify-center"
                     >
                       {isSubmittingTopUp ? (
                         <>

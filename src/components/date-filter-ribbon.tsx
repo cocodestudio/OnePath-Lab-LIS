@@ -119,6 +119,7 @@ export function DateFilterRibbon({
             <input
               type="date"
               value={singleDate}
+              onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
               onChange={(e) => onSingleDateChange(e.target.value)}
               className="h-9 px-2 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer"
             />
@@ -182,28 +183,35 @@ export function DateFilterRibbon({
           </div>
         </div>
       ) : (
-        /* Date Range Mode: From Date to To Date */
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="flex items-center bg-background border border-border/90 rounded-xl px-2.5 py-0.5 shadow-xs gap-1.5 shrink-0 flex-wrap sm:flex-nowrap">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">From</span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => onStartDateChange(e.target.value)}
-              className="h-8 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer"
-            />
+        /* Date Range Mode: From Date to To Date (Responsive Dual Grid for Mobile & Desktop) */
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-1.5 w-full sm:w-auto">
+          {/* Dual Date Input: Side-by-side 50/50 on Mobile with zero overflow */}
+          <div className="grid grid-cols-2 sm:flex sm:items-center bg-background border border-border/90 rounded-xl p-1 sm:px-2.5 sm:py-0.5 shadow-xs gap-1 sm:gap-1.5 w-full sm:w-auto">
+            <div className="flex items-center gap-1.5 px-2 py-1 sm:p-0 rounded-lg bg-muted/20 sm:bg-transparent min-w-0">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">From</span>
+              <input
+                type="date"
+                value={startDate}
+                onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
+                onChange={(e) => onStartDateChange(e.target.value)}
+                className="w-full sm:w-auto h-7 sm:h-8 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer min-w-0"
+              />
+            </div>
             <span className="text-muted-foreground/60 hidden sm:inline">→</span>
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">To</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => onEndDateChange(e.target.value)}
-              className="h-8 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer"
-            />
+            <div className="flex items-center gap-1.5 px-2 py-1 sm:p-0 rounded-lg bg-muted/20 sm:bg-transparent min-w-0">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">To</span>
+              <input
+                type="date"
+                value={endDate}
+                onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
+                onChange={(e) => onEndDateChange(e.target.value)}
+                className="w-full sm:w-auto h-7 sm:h-8 bg-transparent text-xs text-foreground outline-none font-semibold cursor-pointer min-w-0"
+              />
+            </div>
           </div>
 
           {/* Range Quick Presets */}
-          <div className="flex items-center gap-1 flex-wrap">
+          <div className="flex items-center gap-1 flex-wrap w-full sm:w-auto overflow-x-auto pb-0.5 sm:pb-0">
             <Button
               type="button"
               variant="outline"

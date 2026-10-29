@@ -417,7 +417,7 @@ export default function WorksheetPage() {
 
           {/* Specific Date Picker (Visible when "Specific Date" is selected) */}
           {dateMode === "date" && (
-            <div className="space-y-1.5 min-w-[220px]">
+            <div className="space-y-1.5 w-full sm:w-auto sm:min-w-[220px]">
               <label className="text-xs font-bold text-foreground">
                 Choose Specific Date
               </label>
@@ -431,7 +431,7 @@ export default function WorksheetPage() {
           )}
 
           {/* Department Filter Dropdown */}
-          <div className="space-y-1.5 min-w-[240px]" ref={deptDropdownRef}>
+          <div className="space-y-1.5 w-full sm:w-auto sm:min-w-[240px]" ref={deptDropdownRef}>
             <label className="text-xs font-bold text-foreground flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Layers className="h-3.5 w-3.5 text-primary" />
@@ -760,27 +760,27 @@ export default function WorksheetPage() {
 
         {/* Table Footer Bottom Sticky Action Bar */}
         {filteredPatients.length > 0 && (
-          <div className="p-4 px-6 bg-muted/30 border-t border-border/70 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="p-3.5 sm:p-4 px-4 sm:px-6 bg-muted/30 border-t border-border/70 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground w-full sm:w-auto justify-between sm:justify-start">
               <span className="font-bold text-foreground">{selectedReportIds.size}</span>
-              <span>of {filteredPatients.length} patients ready for manual laboratory worksheet generation.</span>
+              <span className="truncate">of {filteredPatients.length} patients ready</span>
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="grid grid-cols-2 sm:flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 onClick={handleDirectPrint}
                 disabled={isDirectPrinting || isDownloadingPdf || selectedReportIds.size === 0}
-                className="h-10 px-4 text-xs font-bold gap-1.5 cursor-pointer rounded-xl bg-background flex-1 sm:flex-none"
+                className="h-10 px-3 sm:px-4 text-xs font-bold gap-1.5 cursor-pointer rounded-xl bg-background flex-1 sm:flex-none justify-center"
               >
                 {isDirectPrinting ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
                   <Printer className="h-3.5 w-3.5 text-muted-foreground" />
                 )}
-                <span>Print Selected</span>
+                <span>Print</span>
               </Button>
 
               <Button
@@ -788,14 +788,14 @@ export default function WorksheetPage() {
                 size="sm"
                 onClick={handleDownloadWorksheet}
                 disabled={isDownloadingPdf || isDirectPrinting || selectedReportIds.size === 0}
-                className="h-10 px-6 text-xs font-bold gap-2 gradient-primary text-primary-foreground cursor-pointer rounded-xl shadow-md flex-1 sm:flex-none hover:opacity-95"
+                className="h-10 px-4 sm:px-6 text-xs font-bold gap-2 gradient-primary text-primary-foreground cursor-pointer rounded-xl shadow-md flex-1 sm:flex-none hover:opacity-95 justify-center"
               >
                 {isDownloadingPdf ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Download className="h-4 w-4" />
                 )}
-                <span>{isDownloadingPdf ? "Downloading..." : `Download Worksheet (${selectedReportIds.size})`}</span>
+                <span className="truncate">{isDownloadingPdf ? "Downloading..." : `Download (${selectedReportIds.size})`}</span>
               </Button>
             </div>
           </div>

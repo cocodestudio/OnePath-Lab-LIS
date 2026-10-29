@@ -314,25 +314,25 @@ export default function PackagesPage() {
 
       {/* ── Inline Create / Edit Package Panel (NO DIALOG MODAL) ── */}
       {isInlineFormOpen && (
-        <div className="bg-card border-2 border-primary/40 rounded-2xl p-4 sm:p-7 shadow-lg space-y-5 sm:space-y-6 animate-fade-in ring-4 ring-primary/5">
-          <div className="flex items-center justify-between border-b border-border/80 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl gradient-primary text-primary-foreground flex items-center justify-center shadow-sm">
-                <Boxes className="h-5 w-5" />
+        <div className="bg-card border-2 border-primary/40 rounded-2xl p-3.5 sm:p-7 shadow-lg space-y-4 sm:space-y-6 animate-fade-in ring-4 ring-primary/5">
+          <div className="flex items-center justify-between border-b border-border/80 pb-3 sm:pb-4 gap-2">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl gradient-primary text-primary-foreground flex items-center justify-center shadow-sm shrink-0">
+                <Boxes className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
               <div>
-                <h2 className="font-display text-base font-bold text-foreground">
+                <h2 className="font-display text-sm sm:text-base font-bold text-foreground">
                   {editingPackageId ? "Edit Diagnostic Package" : "Create New Diagnostic Package"}
                 </h2>
-                <p className="text-xs text-muted-foreground">
-                  Define package details, price, and select the constituent laboratory tests.
+                <p className="text-[11px] sm:text-xs text-muted-foreground line-clamp-1">
+                  Define package details, price, and select constituent tests.
                 </p>
               </div>
             </div>
             <button
               type="button"
               onClick={handleCancelForm}
-              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer shrink-0"
             >
               <X className="h-5 w-5" />
             </button>
@@ -413,27 +413,25 @@ export default function PackagesPage() {
             </div>
 
             {/* Price Telemetry Banner */}
-            <div className="p-4 rounded-xl bg-muted/40 border border-border/80 flex flex-wrap items-center justify-between gap-4 text-xs">
-              <div className="flex flex-wrap items-center gap-4">
-                <div>
-                  <span className="text-muted-foreground">Selected Tests: </span>
+            <div className="p-3 sm:p-4 rounded-xl bg-muted/40 border border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="grid grid-cols-3 sm:flex sm:items-center gap-2 sm:gap-4 text-center sm:text-left">
+                <div className="bg-background/80 sm:bg-transparent p-2 sm:p-0 rounded-lg border border-border/50 sm:border-0">
+                  <span className="text-[10.5px] sm:text-xs text-muted-foreground block sm:inline">Tests: </span>
                   <strong className="text-foreground font-mono">{selectedTestIds.length}</strong>
                 </div>
-                <span className="text-muted-foreground/40">|</span>
-                <div>
-                  <span className="text-muted-foreground">Sum of Retail MRP: </span>
-                  <strong className="text-foreground font-mono">₹{regularSumTotal.toFixed(2)}</strong>
+                <div className="bg-background/80 sm:bg-transparent p-2 sm:p-0 rounded-lg border border-border/50 sm:border-0">
+                  <span className="text-[10.5px] sm:text-xs text-muted-foreground block sm:inline">MRP: </span>
+                  <strong className="text-foreground font-mono">₹{regularSumTotal.toFixed(0)}</strong>
                 </div>
-                <span className="text-muted-foreground/40">|</span>
-                <div>
-                  <span className="text-muted-foreground">Package Tariff: </span>
-                  <strong className="text-primary font-mono font-bold">₹{parsedPackagePrice.toFixed(2)}</strong>
+                <div className="bg-background/80 sm:bg-transparent p-2 sm:p-0 rounded-lg border border-border/50 sm:border-0">
+                  <span className="text-[10.5px] sm:text-xs text-muted-foreground block sm:inline">Tariff: </span>
+                  <strong className="text-primary font-mono font-bold">₹{parsedPackagePrice.toFixed(0)}</strong>
                 </div>
               </div>
 
               {savingsAmount > 0 && (
-                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
-                  <Percent className="h-3.5 w-3.5" />
+                <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                  <Percent className="h-3.5 w-3.5 shrink-0" />
                   <span>Patient Savings: ₹{savingsAmount.toFixed(0)} ({savingsPercent}% OFF)</span>
                 </div>
               )}
@@ -539,17 +537,17 @@ export default function PackagesPage() {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-border/80">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 pt-3 border-t border-border/80">
               <button
                 type="button"
                 onClick={handleCancelForm}
-                className="px-4 py-2.5 rounded-xl border border-border bg-card text-foreground font-semibold text-xs hover:bg-muted transition-colors cursor-pointer"
+                className="w-full sm:w-auto h-10 px-4 py-2 rounded-xl border border-border bg-card text-foreground font-semibold text-xs hover:bg-muted transition-colors cursor-pointer justify-center flex items-center"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-6 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md hover:-translate-y-px transition-all cursor-pointer ring-inset-top"
+                className="w-full sm:w-auto h-10 px-6 py-2 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md hover:-translate-y-px transition-all cursor-pointer ring-inset-top justify-center flex items-center"
               >
                 {editingPackageId ? "Update Package" : "Save Package"}
               </button>

@@ -888,9 +888,9 @@ function LabAccountContent() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="font-display text-2xl font-bold text-foreground">Lab Account &amp; Billing</h1>
-            <span className="font-mono text-xs font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="font-display text-xl sm:text-2xl font-bold text-foreground">Lab Account &amp; Billing</h1>
+            <span className="font-mono text-xs font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20 whitespace-nowrap">
               Lab ID #: {customLabId}
             </span>
           </div>
@@ -902,7 +902,7 @@ function LabAccountContent() {
         <div className="flex items-center gap-2">
           <Link
             href="/dashboard/support"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-semibold text-foreground hover:bg-accent transition-colors shadow-xs"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-semibold text-foreground hover:bg-accent transition-colors shadow-xs whitespace-nowrap"
           >
             <Shield className="h-3.5 w-3.5 text-primary" />
             <span>Need Help?</span>
@@ -963,7 +963,7 @@ function LabAccountContent() {
       )}
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-6 border-b border-border text-sm font-semibold overflow-x-auto w-full scrollbar-none flex-nowrap table-responsive-container">
+      <div className="flex items-center gap-4 sm:gap-6 border-b border-border text-sm font-semibold overflow-x-auto w-full scrollbar-none flex-nowrap pb-1">
         <button
           onClick={() => {
             if (!isCentreSaved) {
@@ -1207,7 +1207,7 @@ function LabAccountContent() {
                 </div>
 
                 {/* Yearly Cycle Settlement Card */}
-                <div className="p-4 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent rounded-xl border border-amber-500/30 flex items-center justify-between gap-4 text-xs">
+                <div className="p-3.5 sm:p-4 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent rounded-xl border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 text-xs">
                   <div className="flex items-center gap-3">
                     <div className="h-9 w-9 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-700 dark:text-amber-400 shrink-0">
                       <Receipt className="h-4 w-4" />
@@ -1220,13 +1220,13 @@ function LabAccountContent() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto border-t sm:border-t-0 border-amber-500/20 pt-2 sm:pt-0">
                     <span className="font-mono font-black text-sm text-foreground">₹{yearlyExtraCharges}</span>
                     <button
                       type="button"
                       onClick={() => handlePayUsage()}
                       disabled={initiatingPayment === "usage" || Number(yearlyExtraCharges) <= 0}
-                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs hover:opacity-95 transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs hover:opacity-95 transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer whitespace-nowrap"
                     >
                       {initiatingPayment === "usage" ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1313,7 +1313,7 @@ function LabAccountContent() {
                 </div>
 
                 {/* Overlimit Settlement Card */}
-                <div className="p-4 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent rounded-xl border border-emerald-500/30 flex items-center justify-between gap-4 text-xs">
+                <div className="p-3.5 sm:p-4 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent rounded-xl border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 text-xs">
                   <div className="flex items-center gap-3">
                     <div className="h-9 w-9 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-700 dark:text-emerald-400 shrink-0">
                       <Receipt className="h-4 w-4" />
@@ -1326,13 +1326,13 @@ function LabAccountContent() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto border-t sm:border-t-0 border-emerald-500/20 pt-2 sm:pt-0">
                     <span className="font-mono font-black text-sm text-foreground">₹{whatsappOverlimitCharge}</span>
                     <button
                       type="button"
                       onClick={() => handlePayWhatsAppUsage()}
                       disabled={initiatingPayment === "whatsapp" || Number(whatsappOverlimitCharge) <= 0}
-                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs hover:opacity-95 transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs hover:opacity-95 transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer whitespace-nowrap"
                     >
                       {initiatingPayment === "whatsapp" ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -2056,14 +2056,14 @@ function LabAccountContent() {
               <label className="text-xs font-bold text-foreground block">Official Laboratory Logo</label>
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 {centreForm.logoUrl ? (
-                  <div className="flex items-center gap-4 bg-card p-3 rounded-xl border border-border shadow-xs">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 bg-card p-3 rounded-xl border border-border shadow-xs w-full sm:w-auto">
                     <div className="h-16 w-16 rounded-lg bg-white border border-border flex items-center justify-center overflow-hidden shrink-0">
                       <img src={centreForm.logoUrl} alt="Lab Logo" className="max-h-full max-w-full object-contain" />
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs font-bold text-foreground">Active Logo Uploaded</p>
-                      <div className="flex items-center gap-2">
-                        <label className="px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-2xs">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold text-foreground transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-2xs whitespace-nowrap">
                           <Upload className="h-3 w-3 text-primary" />
                           <span>Change</span>
                           <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
@@ -2071,7 +2071,7 @@ function LabAccountContent() {
                         <button
                           type="button"
                           onClick={() => setCentreForm(prev => ({ ...prev, logoUrl: "" }))}
-                          className="px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                          className="px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-2xs whitespace-nowrap"
                         >
                           <Trash2 className="h-3 w-3" />
                           <span>Remove</span>
@@ -2209,7 +2209,7 @@ function LabAccountContent() {
               <button
                 type="submit"
                 disabled={savingCentre}
-                className="px-6 py-2.5 rounded-lg bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm inline-flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {savingCentre ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                 <span>Save Centre Profile</span>
@@ -2233,8 +2233,8 @@ function LabAccountContent() {
       </Dialog>
       {/* ── Dialog: Confirm Volume Tier Change ── */}
       <Dialog open={showVolumeConfirmModal} onOpenChange={setShowVolumeConfirmModal}>
-        <DialogContent className="max-w-md p-6 rounded-2xl border border-border bg-card shadow-2xl space-y-4">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl border border-border bg-card shadow-2xl space-y-4">
+          <DialogHeader className="pr-8">
             <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
               <Activity className="h-5 w-5 text-primary" />
               <span>Confirm Patient Volume Change</span>
@@ -2277,11 +2277,11 @@ function LabAccountContent() {
                   </p>
                 </div>
 
-                <DialogFooter className="pt-2 flex flex-row items-center justify-end gap-2">
+                <DialogFooter className="pt-2 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 w-full">
                   <button
                     type="button"
                     onClick={() => setShowVolumeConfirmModal(false)}
-                    className="px-4 py-2 rounded-xl border border-border bg-background text-xs font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer"
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl border border-border bg-background text-xs font-semibold text-foreground hover:bg-muted transition-colors cursor-pointer text-center"
                   >
                     Cancel
                   </button>
@@ -2289,7 +2289,7 @@ function LabAccountContent() {
                     type="button"
                     onClick={handleConfirmVolumeTierChange}
                     disabled={updatingVolume}
-                    className="px-5 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+                    className="w-full sm:w-auto px-5 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all shadow-sm cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5 whitespace-nowrap"
                   >
                     {updatingVolume ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                     <span>Confirm &amp; Update Tier</span>
@@ -2303,8 +2303,8 @@ function LabAccountContent() {
 
       {/* ── Dialog: Active Plan Alert ── */}
       <Dialog open={!!activePlanAlert} onOpenChange={() => setActivePlanAlert(null)}>
-        <DialogContent className="max-w-md p-6 rounded-2xl border border-border bg-card shadow-2xl space-y-4">
-          <DialogHeader>
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md max-h-[92vh] overflow-y-auto p-4 sm:p-6 rounded-2xl border border-border bg-card shadow-2xl space-y-4">
+          <DialogHeader className="pr-8">
             <DialogTitle className="text-lg font-bold flex items-center gap-2 text-amber-600 dark:text-amber-500">
               <Lock className="h-5 w-5" />
               <span>Active Subscription Plan</span>
@@ -2336,11 +2336,11 @@ function LabAccountContent() {
                 </p>
               </div>
 
-              <DialogFooter className="pt-2 flex justify-end">
+              <DialogFooter className="pt-2 flex justify-end w-full">
                 <button
                   type="button"
                   onClick={() => setActivePlanAlert(null)}
-                  className="px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all cursor-pointer"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all cursor-pointer text-center"
                 >
                   Understood
                 </button>

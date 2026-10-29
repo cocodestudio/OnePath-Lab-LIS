@@ -572,15 +572,15 @@ export default function SmartReportSettingsPage() {
     <div className="w-full max-w-full p-3 sm:p-5 lg:p-6 space-y-5">
 
       {/* ── Page Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/80 p-5 rounded-2xl shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/80 p-4 sm:p-5 rounded-2xl shadow-xs">
         <div className="flex items-center gap-3.5">
-          <div className="h-11 w-11 rounded-xl bg-gradient-to-tr from-sky-500 via-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
+          <div className="h-11 w-11 rounded-xl bg-gradient-to-tr from-sky-500 via-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/20 shrink-0">
             <Sparkles className="h-6 w-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">AI Smart Report Settings</h1>
-              <span className="bg-sky-500/15 text-sky-600 dark:text-sky-400 text-xs font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">Customizer</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-foreground">AI Smart Report Settings</h1>
+              <span className="bg-sky-500/15 text-sky-600 dark:text-sky-400 text-xs font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider shrink-0">Customizer</span>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
               Personalize cover page, interior layout, back cover, and clinical intelligence sections.
@@ -590,7 +590,7 @@ export default function SmartReportSettingsPage() {
         <Button
           onClick={handleSave}
           disabled={isSaving}
-          className="h-10 px-5 gap-2 font-bold text-sm bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm rounded-xl cursor-pointer"
+          className="h-10 px-5 gap-2 font-bold text-sm bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm rounded-xl cursor-pointer w-full sm:w-auto justify-center"
         >
           {isSaving
             ? <><Loader2 className="h-4 w-4 animate-spin" /><span>Saving...</span></>
@@ -721,7 +721,7 @@ export default function SmartReportSettingsPage() {
               </h2>
             </div>
             {/* Sub-tabs */}
-            <div className="flex items-center bg-muted/60 p-1 rounded-xl border border-border/60 w-fit">
+            <div className="flex items-center bg-muted/60 p-1 rounded-xl border border-border/60 w-full sm:w-fit overflow-x-auto flex-nowrap scrollbar-none">
               {(["cover", "interior", "exterior"] as const).map((tab) => (
                 <button
                   key={tab}
@@ -730,7 +730,7 @@ export default function SmartReportSettingsPage() {
                     setTemplateTab(tab);
                     setPreviewTab(tab);
                   }}
-                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                     templateTab === tab ? "bg-background text-primary shadow-xs" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >

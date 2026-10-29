@@ -3471,6 +3471,462 @@ assert(
   "[REPORT SHEET MEASUREMENT GUARD] Block heights are protected from being wiped to zero by temporary detached/hidden frames"
 );
 
+// ============================================================================
+// MODULE 36: Patient Registration UI/UX Polish, Mobile Responsiveness & Test Isolation
+// ============================================================================
+console.log("\n▶ MODULE 36: Patient Registration UI/UX Polish, Mobile Responsiveness & Test Isolation");
+
+const registerPageCode = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/patients/register/page.tsx"),
+  "utf-8"
+);
+const packagesLibCode = fs.readFileSync(
+  path.resolve(__dirname, "../src/lib/packages.ts"),
+  "utf-8"
+);
+
+// 1. Step 1 and Step 2 Badges Pill Shape
+assert(
+  registerPageCode.includes("Step 1") && registerPageCode.includes("rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20"),
+  "[STEP 1 PILL BADGE] Step 1 badge is styled as a consistent rounded pill matching ABHA badge"
+);
+
+assert(
+  registerPageCode.includes("Step 2") &&
+  registerPageCode.includes("inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20 shadow-2xs whitespace-nowrap shrink-0"),
+  "[STEP 2 PILL BADGE] Step 2 badge is styled as a consistent rounded pill matching Step 1"
+);
+
+assert(
+  registerPageCode.includes("flex flex-col sm:flex-row sm:items-center justify-between") &&
+  !registerPageCode.includes('<span className="truncate">Patient Identity & Demographics</span>'),
+  "[SECTION HEADERS NO TRUNCATE] Section headers provide full-width non-truncated titles with action buttons cleanly positioned on mobile"
+);
+
+assert(
+  registerPageCode.includes("self-start sm:self-auto") &&
+  registerPageCode.includes("justify-start sm:justify-end"),
+  "[MOBILE LEFT ALIGNMENT] Step 1, Step 2, and Link Patient ABHA align to the left side on mobile"
+);
+
+// 2. Mobile Header Sequence & Create ABHA Mobile Visibility
+assert(
+  registerPageCode.includes("hidden sm:inline-flex") && registerPageCode.includes("Create ABHA"),
+  "[CREATE ABHA MOBILE HIDDEN] Create ABHA button is hidden on mobile screens (hidden sm:inline-flex)"
+);
+
+assert(
+  registerPageCode.includes("Link Patient ABHA") && registerPageCode.includes("rounded-full text-xs font-semibold"),
+  "[LINK ABHA PILL BUTTON] Link Patient ABHA button features clean rounded-full pill shape"
+);
+
+// 3. Collection Date & Time Picker
+assert(
+  registerPageCode.includes("[&::-webkit-calendar-picker-indicator]:hidden") &&
+  registerPageCode.includes("[&::-webkit-calendar-picker-indicator]:appearance-none"),
+  "[COLLECTION DATE PICKER] Default browser calendar icon is removed from date-time input"
+);
+
+assert(
+  registerPageCode.includes("showPicker?.()"),
+  "[COLLECTION DATE SHOW PICKER] Clicking anywhere on the collection date input directly opens native date picker"
+);
+
+// 4. Age Fields Spinner Arrow Removal & Dedicated Spacing
+assert(
+  registerPageCode.includes("[appearance:textfield]") &&
+  registerPageCode.includes("[&::-webkit-outer-spin-button]:appearance-none") &&
+  registerPageCode.includes("[&::-webkit-inner-spin-button]:appearance-none"),
+  "[AGE SPINNER REMOVAL] Number spinner arrows are removed from Years, Months, and Days inputs"
+);
+
+assert(
+  registerPageCode.includes("pr-6 sm:pr-7 pl-2 sm:pl-3"),
+  "[AGE LABEL SPACING] Age inputs provide dedicated right padding so letters Y, M, D never overlap with numbers"
+);
+
+// 5. 'Save & Select Clinical Tests' Button Single-Line Layout
+assert(
+  registerPageCode.includes("Save & Select Clinical Tests</span>") &&
+  registerPageCode.includes("whitespace-nowrap w-full sm:w-auto"),
+  "[SAVE & SELECT BUTTON] Save & Select Clinical Tests button strictly enforces whitespace-nowrap single-line layout"
+);
+
+// 6. Add Dialogs (Doctor, Centre, Staff, PayU) Mobile Screen Edge Clearance
+assert(
+  registerPageCode.includes("isDoctorModalOpen") &&
+  registerPageCode.includes("w-[calc(100vw-2rem)] sm:w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl p-4 sm:p-6"),
+  "[ADD DOCTOR MODAL] Doctor modal has dedicated margin clearance from mobile edges (w-[calc(100vw-2rem)])"
+);
+
+assert(
+  registerPageCode.includes("isCollectionModalOpen") &&
+  registerPageCode.includes("w-[calc(100vw-2rem)] sm:w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl p-4 sm:p-6"),
+  "[ADD CENTRE MODAL] Collection point modal has dedicated margin clearance from mobile edges"
+);
+
+assert(
+  registerPageCode.includes("isPhleboModalOpen") &&
+  registerPageCode.includes("w-[calc(100vw-2rem)] sm:w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl p-4 sm:p-6"),
+  "[ADD STAFF MODAL] Phlebotomist / Staff modal has dedicated margin clearance from mobile edges"
+);
+
+// 7. Test Catalog Shimmer Loading Feedback
+assert(
+  registerPageCode.includes("loadingTests && availableTests.length === 0") &&
+  registerPageCode.includes("animate-pulse"),
+  "[CATALOG SHIMMER SKELETON] Test directory displays responsive animated shimmer skeleton during slow network loading"
+);
+
+// 8. Package Resolution Precision & Safe Test Selection (Anti-Select-All Bug)
+const mockAvailable = [
+  { id: "uuid-cbc-01", name: "Complete Blood Count (CBC)", testCode: "CBC", price: 250 },
+  { id: "uuid-dlc-02", name: "Differential Leukocyte Count (DLC)", testCode: "DLC", price: 150 },
+  { id: "uuid-lft-03", name: "Liver Function Test (LFT)", testCode: "LFT", price: 500 },
+];
+
+const mockPkg = {
+  id: "pkg-01",
+  name: "Hemogram Focus",
+  code: "PKG-HEMO",
+  price: 250,
+  testIds: ["uuid-cbc-01"],
+  tests: [{ id: "uuid-cbc-01", name: "Complete Blood Count (CBC)" }],
+  createdAt: new Date().toISOString(),
+};
+
+const resolved = resolvePackageTestIds(mockPkg, mockAvailable);
+assert(
+  resolved.length === 1 && resolved[0] === "uuid-cbc-01",
+  "[PACKAGE RESOLUTION PRECISION] Resolves exactly the specified test without matching rogue tests"
+);
+assert(
+  !resolved.includes("uuid-dlc-02"),
+  "[DLC ISOLATION] Resolving CBC does NOT inject Differential Leukocyte Count (DLC) into package test IDs"
+);
+
+// 9. Anti-Select-All Protection with Non-UUID Test Codes
+const mockGenericPkg = {
+  id: "pkg-generic",
+  name: "Custom Bundle",
+  code: "PKG-CUSTOM",
+  price: 500,
+  testIds: ["uuid-cbc-01"],
+  tests: [{ id: "uuid-cbc-01", name: "Complete Blood Count (CBC)" }],
+  createdAt: new Date().toISOString(),
+};
+const genericResolved = resolvePackageTestIds(mockGenericPkg, mockAvailable);
+assert(
+  genericResolved.length === 1 && !genericResolved.includes("uuid-lft-03"),
+  "[ANTI-SELECT-ALL BUG DEFENSE] Package resolution does NOT accidentally select all available tests"
+);
+
+// 10. Specimen Tube Triage & Smart Phlebotomy Single-Line Pill
+assert(
+  registerPageCode.includes("Smart Phlebotomy") &&
+  registerPageCode.includes("rounded-full text-[10px] sm:text-[11px] font-extrabold uppercase bg-primary/10 text-primary border border-primary/20 whitespace-nowrap shrink-0 shadow-2xs"),
+  "[SMART PHLEBOTOMY PILL] Smart Phlebotomy is rendered as a clean single-line pill badge"
+);
+
+assert(
+  registerPageCode.includes("Manage Tests (") &&
+  registerPageCode.includes("whitespace-nowrap w-full sm:w-auto"),
+  "[MANAGE TESTS CARD BUTTON] Manage Tests button cleanly spans full-width on mobile and stays single-line"
+);
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODULE 37: Financial Modals, Due Collections, Zoomable Invoices, Date Range & Sample Rejection Mobile Responsiveness
+// ══════════════════════════════════════════════════════════════════════════════
+console.log("\n▶ MODULE 37: Financial Modals, Due Collections, Zoomable Invoices, Date Range & Sample Rejection Mobile Responsiveness");
+
+// 1. AcceptDueModal Responsiveness & Mobile Alignment
+const acceptDueCode = fs.readFileSync(path.resolve(__dirname, "../src/components/accept-due-modal.tsx"), "utf-8");
+assert(
+  acceptDueCode.includes("w-[calc(100vw-2rem)] sm:w-full max-h-[92vh]"),
+  "[ACCEPT DUE MODAL SCREEN MARGINS] Accept Due modal has dedicated margin clearance on mobile devices"
+);
+assert(
+  acceptDueCode.includes("flex flex-col-reverse sm:flex-row"),
+  "[ACCEPT DUE FOOTER BUTTONS] Action buttons are cleanly stacked on mobile and row-aligned on desktop"
+);
+assert(
+  acceptDueCode.includes("showPicker?.()"),
+  "[ACCEPT DUE DATE PICKER] Clicking anywhere on payment date input directly triggers native date picker"
+);
+assert(
+  acceptDueCode.includes("truncate") && acceptDueCode.includes("whitespace-nowrap"),
+  "[ACCEPT DUE TEXT INTEGRITY] Patient name, doctor, and due amounts enforce clean single-line truncation"
+);
+
+// 2. DateFilterRibbon Dual Date Range Mobile Grid
+const dateRibbonCode = fs.readFileSync(path.resolve(__dirname, "../src/components/date-filter-ribbon.tsx"), "utf-8");
+assert(
+  dateRibbonCode.includes("grid grid-cols-2 sm:flex sm:items-center"),
+  "[DATE RIBBON DUAL GRID] From and To date fields render side-by-side in a responsive 50/50 grid on mobile"
+);
+assert(
+  dateRibbonCode.includes("showPicker?.()"),
+  "[DATE RIBBON SHOW PICKER] Range and single date inputs invoke showPicker() on tap"
+);
+
+// 3. Billing Tax Invoice Modal 3-Button Full-Width Toolbar & Clean Header (No Zoom Controls)
+const billingPageCode = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/billing/page.tsx"), "utf-8");
+assert(
+  billingPageCode.includes("grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:gap-2.5"),
+  "[BILLING 3-BUTTON TOOLBAR] WhatsApp, Download PDF, and Print buttons span full width in balanced 3-column grid on mobile"
+);
+assert(
+  billingPageCode.includes("h-10 sm:h-9") && billingPageCode.includes("rounded-xl"),
+  "[BILLING 3-BUTTON EQUAL HEIGHT] Action buttons have unified equal height and corner radius without wasted space"
+);
+assert(
+  !billingPageCode.includes('title="Zoom Out"') && !billingPageCode.includes('title="Zoom In"'),
+  "[BILLING INVOICE NO ZOOM BUTTONS] Top header strictly omits cluttering zoom in/out controls"
+);
+assert(
+  billingPageCode.includes("pr-12") && billingPageCode.includes("shrink-0"),
+  "[BILLING HEADER CLOSE CLEARANCE] Top header enforces dedicated clearance from dialog close button"
+);
+
+// 4. Dues Report View Bill Modal Responsiveness
+const duesPageCode = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/billing/dues/page.tsx"), "utf-8");
+assert(
+  duesPageCode.includes("w-[calc(100vw-1.5rem)] sm:w-full max-h-[94vh]"),
+  "[DUES VIEW BILL SCREEN MARGINS] View Bill dialog in dues report fits comfortably on mobile screens"
+);
+assert(
+  duesPageCode.includes("printInvoiceElement") && duesPageCode.includes("Printer"),
+  "[DUES VIEW BILL PRINT ACTION] View Bill dialog provides responsive print trigger"
+);
+
+// 5. Monthly Business Report Responsive Toolbar & Sequence
+const monthlyExpensesCode = fs.readFileSync(path.resolve(__dirname, "../src/components/monthly-expenses-register.tsx"), "utf-8");
+assert(
+  monthlyExpensesCode.includes("grid grid-cols-2 gap-2 sm:flex sm:items-center"),
+  "[MONTHLY SELECTORS 50/50] Month and Year selectors sit side-by-side in responsive grid on mobile"
+);
+assert(
+  monthlyExpensesCode.includes("grid grid-cols-3") && monthlyExpensesCode.includes("Show") && monthlyExpensesCode.includes("Print"),
+  "[MONTHLY BUTTON SEQUENCE] Show, Print, and CSV export buttons align in clean sequence on mobile"
+);
+assert(
+  monthlyExpensesCode.includes("min-w-0") && monthlyExpensesCode.includes("truncate"),
+  "[MONTHLY SUMMARY METRICS] Summary cards protect numbers from line-wrapping with truncate and min-w-0"
+);
+
+// 6. Patients Sample Rejection Modal Mobile Responsiveness
+const patientsPageCode = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/patients/page.tsx"), "utf-8");
+assert(
+  patientsPageCode.includes("w-[calc(100vw-2rem)] sm:w-full max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden"),
+  "[REJECT SAMPLE STRUCTURED CONTAINER] Sample reject modal uses fixed-header scrollable-body container with edge clearance"
+);
+assert(
+  patientsPageCode.includes("pr-12 shrink-0") && patientsPageCode.includes("Reject Laboratory Sample"),
+  "[REJECT SAMPLE HEADER CLEARANCE] Rejection header enforces dedicated right clearance avoiding close button collision"
+);
+assert(
+  patientsPageCode.includes("flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end"),
+  "[REJECT SAMPLE FOOTER BUTTONS] Cancel and Confirm Rejection buttons stack full-width on mobile with equal touch targets"
+);
+assert(
+  patientsPageCode.includes("h-10 sm:h-9"),
+  "[REJECT SAMPLE BUTTON HEIGHTS] Action buttons maintain comfortable 40px touch targets on mobile devices"
+);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODULE 38: Enter Results Action Buttons Single-Line Grid & Fullscreen Print Report Responsive Canvas
+// ══════════════════════════════════════════════════════════════════════════════
+console.log("\n▶ MODULE 38: Enter Results Action Buttons Single-Line Grid & Fullscreen Print Report Responsive Canvas");
+const globalsContent = fs.readFileSync(path.resolve(__dirname, "../src/app/globals.css"), "utf-8");
+
+// 1. Enter Results Findings Action Buttons Single-Line Mobile Alignment
+const editPageCode38 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/reports/[id]/edit/page.tsx"), "utf-8");
+assert(
+  editPageCode38.includes("grid grid-cols-3 gap-1.5 w-full sm:w-auto sm:flex sm:items-center sm:gap-2"),
+  "[ENTER RESULTS 3-BUTTON GRID] Add Note, Add Remarks, and Add Advices align in a single-line 3-column grid on mobile"
+);
+assert(
+  editPageCode38.includes('toggleTestMeta(group.mainTestId, "notes")') &&
+  editPageCode38.includes('toggleTestMeta(group.mainTestId, "remarks")') &&
+  editPageCode38.includes('toggleTestMeta(group.mainTestId, "advices")'),
+  "[ENTER RESULTS METADATA ACTIONS] All 3 metadata actions bind correctly to main test group"
+);
+assert(
+  editPageCode38.includes("inline-flex items-center justify-center") && editPageCode38.includes("truncate"),
+  "[ENTER RESULTS BUTTON ERGONOMICS] Buttons use centered text with truncation preventing multi-line overflow"
+);
+
+// 2. Fullscreen Print Report Modal Responsive Fit & Canvas Locking
+const fullscreenModalCode38 = fs.readFileSync(path.resolve(__dirname, "../src/components/fullscreen-print-report-modal.tsx"), "utf-8");
+assert(
+  fullscreenModalCode38.includes("w-full max-w-full sm:max-w-[96vw] sm:w-[96vw] h-[100dvh] sm:h-[92vh]"),
+  "[PRINT MODAL FULL VIEWPORT] Print report modal expands to full 100dvh viewport on mobile without clipping"
+);
+assert(
+  fullscreenModalCode38.includes('className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 flex justify-center items-start custom-scrollbar"') &&
+  globalsContent.includes("touch-action: pan-y !important") &&
+  globalsContent.includes("overflow-x: hidden !important"),
+  "[PRINT MODAL CANVAS LOCK] Report canvas disables horizontal pan/drag on mobile while maintaining vertical scrolling"
+);
+assert(
+  fullscreenModalCode38.includes("isMobile ? mobileScale : zoomScale"),
+  "[PRINT MODAL ADAPTIVE SCALE] Page scale dynamically fits screen width on mobile and allows zoom on desktop"
+);
+assert(
+  fullscreenModalCode38.includes("hidden sm:flex items-center gap-1.5"),
+  "[PRINT MODAL CLEAN MOBILE HEADER] Secondary toolbar buttons are cleanly hidden on mobile so preview remains uncluttered"
+);
+assert(
+  fullscreenModalCode38.includes("hidden lg:flex p-1.5 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"),
+  "[PRINT MODAL SETTINGS SINGLE CLOSE] Duplicate inner close button in settings sidebar is removed on mobile view"
+);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODULE 39: Referral Manage Modals, B2B Wallets, Live Customizer & Add Test Responsive Systems
+// ══════════════════════════════════════════════════════════════════════════════
+console.log("\n▶ MODULE 39: Referral Manage Modals, B2B Wallets, Live Customizer & Add Test Responsive Systems");
+
+// 1. Doctors Referral Manage: Add Doctor & Statement Print Settings Modals
+const doctorsManageCode39 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/doctors/manage/page.tsx"), "utf-8");
+assert(
+  doctorsManageCode39.includes("w-[calc(100vw-2rem)] sm:max-w-md max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden"),
+  "[DOCTOR MODAL SCREEN MARGINS] Add/Edit Doctor modal preserves edge clearance and structured scroll container"
+);
+assert(
+  doctorsManageCode39.includes("w-[calc(100vw-2rem)] sm:max-w-xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden"),
+  "[STATEMENT SETTINGS SCREEN MARGINS] Statement print settings dialog preserves edge clearance on mobile"
+);
+assert(
+  doctorsManageCode39.includes("grid grid-cols-1 sm:grid-cols-2 gap-3"),
+  "[DOCTOR FORM GRID ADAPTIVITY] Doctor form fields collapse to 1 column on mobile to prevent label squeezing"
+);
+
+// 2. B2B Wallets: Single-Line Filters, Preset Chips, and Full-Width Action Buttons
+const b2bWalletsCode39 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/b2b/wallets/page.tsx"), "utf-8");
+assert(
+  b2bWalletsCode39.includes("overflow-x-auto pb-1 max-w-full custom-scrollbar flex-nowrap"),
+  "[B2B WALLET FILTERS SINGLE LINE] Balance and Tier filter buttons scroll horizontally in a clean single line on mobile"
+);
+assert(
+  b2bWalletsCode39.includes("grid grid-cols-5 gap-1 sm:flex sm:items-center sm:gap-1.5"),
+  "[B2B WALLET PRESETS 5-COL] Preset chips align in a balanced 5-column single row on mobile"
+);
+assert(
+  b2bWalletsCode39.includes("flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2"),
+  "[B2B WALLET ACTIONS FULL WIDTH] Deposit and Cancel actions expand to full-width comfortable touch targets on mobile"
+);
+
+// 3. Print Preview Dialog: Live Customizer Badge Single-Line & Three-Dots Menu
+const printPreviewCode39 = fs.readFileSync(path.resolve(__dirname, "../src/components/print-preview-dialog.tsx"), "utf-8");
+assert(
+  printPreviewCode39.includes("Live Customizer") &&
+  printPreviewCode39.includes("whitespace-nowrap") &&
+  printPreviewCode39.includes("shrink-0"),
+  "[PRINT PREVIEW BADGE SINGLE LINE] Live Customizer badge enforces single-line layout without double-line wrap"
+);
+assert(
+  printPreviewCode39.includes('<MoreVertical className="h-4 w-4" />') &&
+  printPreviewCode39.includes("DropdownMenu"),
+  "[PRINT PREVIEW THREE DOTS] Secondary print and WhatsApp actions collapse cleanly into a 3-dots dropdown on mobile"
+);
+
+// 4. Test Catalog: Add New Test Fullscreen Dialog & Three-Dots Header
+const testsPageCode39 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/tests/page.tsx"), "utf-8");
+assert(
+  testsPageCode39.includes("w-full max-w-full sm:max-w-[95vw] sm:w-[95vw] h-[100dvh] sm:h-[92vh] max-h-[100dvh] sm:max-h-[94vh]"),
+  "[TEST DIALOG FULL VIEWPORT] Add/Edit Test dialog expands to full viewport on mobile without clipping"
+);
+assert(
+  testsPageCode39.includes('<MoreVertical className="h-4 w-4" />') &&
+  testsPageCode39.includes("DropdownMenu"),
+  "[TEST DIALOG THREE DOTS] Live Preview and Cancel secondary actions are neatly packaged in a 3-dots dropdown on mobile"
+);
+assert(
+  testsPageCode39.includes("p-4 sm:p-6 bg-card border rounded-xl shadow-xs space-y-4"),
+  "[TEST PARAMETER CARD PADDING] Parameter cards maintain comfortable inner breathing room on mobile devices"
+);
+
+// ============================================================================
+// MODULE 40: WORKSHEET, PACKAGES, RATELIST, SMART REPORT, SUPPORT & LAB ACCOUNT RESPONSIVENESS
+// ============================================================================
+console.log("\n--- MODULE 40: MOBILE RESPONSIVENESS (WORKSHEET, PACKAGES, RATELIST, SMART REPORT, SUPPORT, LAB ACCOUNT) ---");
+
+// 1. Worksheet: Date picker, department filter, and sticky bottom table actions
+const worksheetCode40 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/tests/worksheet/page.tsx"), "utf-8");
+assert(
+  worksheetCode40.includes("w-full sm:w-auto sm:min-w-[220px]") &&
+  worksheetCode40.includes("w-full sm:w-auto sm:min-w-[240px]"),
+  "[WORKSHEET MOBILE FILTERS] Date and Department filters expand to full-width on mobile viewports"
+);
+assert(
+  worksheetCode40.includes("grid grid-cols-2 sm:flex") &&
+  worksheetCode40.includes("w-full sm:w-auto"),
+  "[WORKSHEET BOTTOM ACTION BAR] Table print actions align in a balanced 2-column mobile grid"
+);
+
+// 2. Packages: Dialog panel padding, telemetry grid, and full-width touch buttons
+const packagesCode40 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/tests/packages/page.tsx"), "utf-8");
+assert(
+  packagesCode40.includes("p-3.5 sm:p-7") &&
+  packagesCode40.includes("grid grid-cols-3 sm:flex"),
+  "[PACKAGES DIALOG RESPONSIVENESS] Package editor panel padding and pricing telemetry adapt to mobile"
+);
+assert(
+  packagesCode40.includes("flex-col-reverse sm:flex-row items-stretch sm:items-center") &&
+  packagesCode40.includes("w-full sm:w-auto h-10"),
+  "[PACKAGES ACTION BUTTONS] Package save and cancel buttons stack comfortably on mobile"
+);
+
+// 3. Ratelist: Workspace tabs touch scroll, B2B metrics, and edge-to-edge modals
+const ratelistCode40 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/ratelist/page.tsx"), "utf-8");
+assert(
+  ratelistCode40.includes("grid grid-cols-2 sm:flex") &&
+  ratelistCode40.includes("overflow-x-auto pb-1 max-w-full flex-nowrap scrollbar-none"),
+  "[RATELIST MOBILE NAVIGATION & METRICS] Rate list tabs touch-scroll horizontally and metrics form 2-column grid"
+);
+assert(
+  ratelistCode40.includes("w-[calc(100vw-2rem)]"),
+  "[RATELIST DIALOGS EDGE-TO-EDGE] Rate list dialogs use edge-to-edge container width with safe touch margins"
+);
+
+// 4. Smart Report: A4 scaling outer wrapper, horizontal scroll protection & header grid
+const smartReportCode40 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/reports/[id]/smart-report/page.tsx"), "utf-8");
+assert(
+  smartReportCode40.includes("Math.round(794 * zoomScale)") &&
+  smartReportCode40.includes("overflow-x-hidden"),
+  "[SMART REPORT A4 SCALING] Scaled A4 preview wrapper strictly clips overflow to prevent horizontal drag"
+);
+assert(
+  smartReportCode40.includes("grid grid-cols-2 sm:flex sm:items-center") &&
+  smartReportCode40.includes("w-full sm:w-auto"),
+  "[SMART REPORT ACTION GRID] Top action buttons align in a 2-column mobile grid"
+);
+
+// 5. Help & Support: Single-line button text & stacked form action buttons
+const supportCode40 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/support/page.tsx"), "utf-8");
+assert(
+  supportCode40.includes("Ticket History") &&
+  supportCode40.includes("whitespace-nowrap shrink-0"),
+  "[SUPPORT BUTTONS NO WRAP] Ticket History and support buttons prevent 2nd line text breaks"
+);
+assert(
+  supportCode40.includes("flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between"),
+  "[SUPPORT ACTION STACKING] Form submit and cancel buttons stack vertically on mobile viewports"
+);
+
+// 6. Lab Account: Header wrap, tabs scroll, settlement card stacking & edge-to-edge dialogs
+const labAccountCode40 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/account/lab/page.tsx"), "utf-8");
+assert(
+  labAccountCode40.includes("w-full sm:w-auto inline-flex items-center justify-center") &&
+  labAccountCode40.includes("gap-4 sm:gap-6 border-b border-border text-sm font-semibold overflow-x-auto"),
+  "[LAB ACCOUNT HEADER & TABS] Need Help button expands to full width and navigation tabs scroll cleanly"
+);
+assert(
+  labAccountCode40.includes("w-[calc(100vw-2rem)] sm:max-w-md max-h-[92vh] overflow-y-auto"),
+  "[LAB ACCOUNT DIALOGS MOBILE] Confirm volume and alert modals adapt to edge-to-edge mobile screens"
+);
+
 console.log("\n===============================================================================");
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

@@ -1685,39 +1685,56 @@ export default function PatientsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 3. REJECT SAMPLE MODAL */}
+      {/* 3. REJECT SAMPLE MODAL (Fully Structured Mobile & Desktop Layout) */}
       <Dialog open={!isB2B && !!rejectPatient} onOpenChange={() => setRejectPatient(null)}>
-        <DialogContent className="max-w-md w-full rounded-2xl">
+        <DialogContent className="max-w-md w-[calc(100vw-2rem)] sm:w-full max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl bg-card border border-border/80 shadow-2xl animate-in fade-in-0 zoom-in-95 duration-200">
           <DialogTitle className="sr-only">Reject Laboratory Sample</DialogTitle>
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 border-b border-border/80 pb-3 text-amber-600">
-              <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
-                <Ban className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="font-display text-base font-bold text-foreground">Reject Laboratory Sample</h3>
-                <p className="text-xs text-muted-foreground">Mark specimen as clinically rejected. Bills & audit records remain intact.</p>
+          
+          {/* Top Header with dedicated close button clearance */}
+          <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-border/80 bg-muted/20 pr-12 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
+                <Ban className="w-4 h-4" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="font-display text-sm sm:text-base font-bold text-foreground truncate">
+                  Reject Laboratory Sample
+                </h3>
+                <p className="text-[11px] sm:text-xs text-muted-foreground truncate">
+                  Mark specimen as clinically rejected. Bills remain intact.
+                </p>
               </div>
             </div>
+          </div>
 
-            <div className="bg-muted/40 p-3 rounded-xl space-y-1 text-xs border border-border/60">
-              <p className="text-muted-foreground">
-                Patient: <strong className="text-foreground">{rejectPatient?.name}</strong>
-              </p>
-              <p className="text-muted-foreground">
-                ID / Barcode: <span className="font-mono text-primary font-semibold">{rejectPatient?.custom_id || rejectPatient?.customId || "—"}</span> {rejectPatient?.vial_barcode ? `· ${rejectPatient.vial_barcode}` : ''}
-              </p>
+          {/* Scrollable Content Body */}
+          <div className="p-4 sm:p-6 space-y-4 overflow-y-auto max-h-[calc(92vh-8.5rem)] custom-scrollbar">
+            {/* Patient & Specimen Info */}
+            <div className="p-3.5 rounded-xl border border-border/70 bg-muted/30 space-y-2 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground text-[11px] uppercase font-semibold shrink-0">Patient</span>
+                <span className="font-bold text-foreground text-xs truncate text-right">{rejectPatient?.name}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-border/40">
+                <span className="text-muted-foreground text-[11px] uppercase font-semibold shrink-0">PID / Barcode</span>
+                <div className="flex items-center gap-1.5 font-mono text-[11px] text-right">
+                  <span className="font-bold text-primary">{rejectPatient?.custom_id || rejectPatient?.customId || "—"}</span>
+                  {rejectPatient?.vial_barcode && <span className="text-muted-foreground">· {rejectPatient.vial_barcode}</span>}
+                </div>
+              </div>
               {rejectPatient?.meta?.sample_status === 'REJECTED' && (
-                <p className="text-rose-600 font-medium pt-1">
-                  Current Status: Already Rejected ({rejectPatient?.meta?.rejection_reason || 'Hemolytic'})
-                </p>
+                <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-rose-500/20 text-rose-600 dark:text-rose-400 font-medium">
+                  <span className="text-[11px] uppercase font-semibold shrink-0">Current Status</span>
+                  <span className="text-[11px] font-bold text-right truncate">Already Rejected ({rejectPatient?.meta?.rejection_reason || 'Hemolytic'})</span>
+                </div>
               )}
             </div>
 
-            <div className="space-y-2">
+            {/* Rejection Reason Selector */}
+            <div className="space-y-1.5">
               <Label className="text-xs font-semibold text-foreground">Clinical Rejection Reason</Label>
               <Select value={rejectReason} onValueChange={setRejectReason}>
-                <SelectTrigger className="w-full h-9 text-xs">
+                <SelectTrigger className="w-full h-10 text-xs rounded-xl border-border bg-background cursor-pointer">
                   <SelectValue placeholder="Select clinical reason" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1738,27 +1755,30 @@ export default function PatientsPage() {
                     placeholder="Enter custom rejection reason..."
                     value={customRejectReason}
                     onChange={(e) => setCustomRejectReason(e.target.value)}
-                    className="h-9 text-xs"
+                    className="h-10 text-xs rounded-xl border-border bg-background"
                   />
                 </div>
               )}
             </div>
 
-            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-700 dark:text-amber-400 space-y-1">
+            {/* Financial Safety Notice */}
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
               <p className="font-semibold flex items-center gap-1.5">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0" /> Financial & Audit Safety:
+                <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600" /> Financial &amp; Audit Safety:
               </p>
-              <p>
+              <p className="leading-relaxed text-[11px] text-muted-foreground">
                 Rejecting this sample will <strong>NOT</strong> delete the billing ledger or alter B2B wallet deductions. If this is a B2B client, they will be notified to register a fresh sample.
               </p>
             </div>
+          </div>
 
-            <div className="flex justify-between items-center pt-2 border-t border-border/80">
-              {rejectPatient?.meta?.sample_status === 'REJECTED' ? (
+          {/* Dedicated Fixed Footer */}
+          <div className="px-4 sm:px-6 py-3 border-t border-border/80 bg-muted/10 shrink-0">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-2.5">
+              {rejectPatient?.meta?.sample_status === 'REJECTED' && (
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
                   onClick={async () => {
                     if (!rejectPatient) return;
                     setRejecting(true);
@@ -1777,33 +1797,28 @@ export default function PatientsPage() {
                     }
                   }}
                   disabled={rejecting}
-                  className="text-xs text-muted-foreground hover:text-foreground"
+                  className="w-full sm:w-auto h-10 sm:h-9 text-xs font-semibold text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10 cursor-pointer order-last sm:order-first"
                 >
                   Restore to Active
                 </Button>
-              ) : <div />}
-
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setRejectPatient(null)}
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleRejectSample}
-                  disabled={rejecting || (rejectReason === "Other" && !customRejectReason.trim())}
-                  className="text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white shadow-sm flex items-center gap-1.5"
-                >
-                  {rejecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
-                  <span>{rejectPatient?.meta?.sample_status === 'REJECTED' ? "Update Rejection" : "Confirm Rejection"}</span>
-                </Button>
-              </div>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRejectPatient(null)}
+                className="w-full sm:w-auto h-10 sm:h-9 text-xs font-semibold text-foreground cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleRejectSample}
+                disabled={rejecting || (rejectReason === "Other" && !customRejectReason.trim())}
+                className="w-full sm:w-auto h-10 sm:h-9 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-sm flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+              >
+                {rejecting ? <Loader2 className="h-4 w-4 animate-spin shrink-0" /> : <Ban className="h-4 w-4 shrink-0" />}
+                <span>{rejectPatient?.meta?.sample_status === 'REJECTED' ? "Update Rejection" : "Confirm Rejection"}</span>
+              </Button>
             </div>
           </div>
         </DialogContent>

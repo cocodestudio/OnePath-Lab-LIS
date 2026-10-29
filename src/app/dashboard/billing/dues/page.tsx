@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   IndianRupee, Calendar, Search, RefreshCw, ChevronDown, ChevronRight, ChevronLeft,
   Printer, Clock, CheckCircle2, User, Stethoscope, AlertCircle,
+  ZoomIn, ZoomOut,
   FileText, ArrowLeft, X, Receipt
 } from "lucide-react";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
@@ -75,6 +76,7 @@ export default function DueReportsPage() {
   // Modals state
   const [selectedBillForDue, setSelectedBillForDue] = useState<any | null>(null);
   const [selectedBillForInvoice, setSelectedBillForInvoice] = useState<any | null>(null);
+  const [invoiceZoom, setInvoiceZoom] = useState<number>(100);
   const [labData, setLabData] = useState<any>(null);
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
 
@@ -621,7 +623,7 @@ export default function DueReportsPage() {
                               )}
                               <button
                                 type="button"
-                                onClick={() => setSelectedBillForInvoice(b)}
+                                onClick={() => { if (typeof window !== "undefined" && window.innerWidth < 640) setInvoiceZoom(75); else setInvoiceZoom(100); setSelectedBillForInvoice(b); }}
                                 className="text-primary hover:text-primary/80 font-semibold text-xs hover:underline cursor-pointer shrink-0"
                               >
                                 View bill
@@ -899,38 +901,43 @@ export default function DueReportsPage() {
         />
       )}
 
-      {/* View Bill Invoice Modal (Using clean Radix Dialog with translucent soft overlay) */}
+      {/* View Bill Invoice Modal (Responsive layout with Zoom Controls & Pristine View) */}
       <Dialog
         open={Boolean(selectedBillForInvoice)}
         onOpenChange={(open) => !open && setSelectedBillForInvoice(null)}
       >
-        <DialogContent className="max-w-4xl w-[96vw] sm:w-full max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl print:max-h-none print:max-w-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0">
+        <DialogContent className="max-w-4xl w-[calc(100vw-1.5rem)] sm:w-full max-h-[94vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl print:max-h-none print:max-w-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0 animate-in fade-in-0 zoom-in-95 duration-200">
           <DialogTitle className="sr-only">Tax Invoice Preview</DialogTitle>
 
           {/* Top Header */}
-          <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-border/80 bg-card shrink-0 gap-2 print:hidden pr-12">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-3 sm:px-6 py-3 sm:py-3.5 border-b border-border/80 bg-card shrink-0 gap-2.5 print:hidden pr-10 sm:pr-12">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <FileText className="w-4.5 h-4.5" />
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <FileText className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm sm:text-base font-bold text-foreground truncate">
-                  Tax Invoice Preview · {selectedBillForInvoice?.regNo}
-                </h3>
-                <p className="text-xs text-muted-foreground truncate">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <h3 className="text-xs sm:text-base font-bold text-foreground truncate">
+                    Tax Invoice Preview
+                  </h3>
+                  <span className="font-mono bg-primary/15 text-primary text-[10px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0">
+                    {selectedBillForInvoice?.regNo}
+                  </span>
+                </div>
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
                   Patient: <strong className="text-foreground">{selectedBillForInvoice?.patientName}</strong> · PID: <span className="font-mono">{selectedBillForInvoice?.regNo}</span>
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => {
                   const el = document.getElementById("invoice-print-container");
                   if (el) printInvoiceElement(el);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all cursor-pointer shadow-xs"
+                className="h-9 px-4 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1.5 whitespace-nowrap w-full sm:w-auto"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Print</span>
@@ -939,10 +946,15 @@ export default function DueReportsPage() {
           </div>
 
           {/* Canvas */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-zinc-100 dark:bg-zinc-900/60 flex justify-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">
+          <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 bg-zinc-100 dark:bg-zinc-900/60 flex justify-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">
             {selectedBillForInvoice && (
               <div
                 id="invoice-print-container"
+                style={{
+                  transform: invoiceZoom !== 100 ? `scale(${invoiceZoom / 100})` : undefined,
+                  transformOrigin: "top center",
+                  transition: "transform 0.15s ease-out",
+                }}
                 className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 bg-white max-w-full print:shadow-none print:ring-0 print:border-none print:p-0 print:m-0 print:w-full"
               >
                 <InvoiceSheet

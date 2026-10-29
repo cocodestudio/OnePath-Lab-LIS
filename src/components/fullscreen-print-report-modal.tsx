@@ -71,6 +71,8 @@ export function FullscreenPrintReportModal({
   const [showClinicalInterpretation, setShowClinicalInterpretation] = useState<boolean>(true);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [zoomScale, setZoomScale] = useState<number>(0.80);
+  const [mobileScale, setMobileScale] = useState<number>(0.45);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
   const [totalPages, setTotalPages] = useState(1);
   const [liveLab, setLiveLab] = useState<any>(() => {
     if (typeof window !== "undefined") {
@@ -90,10 +92,33 @@ export function FullscreenPrintReportModal({
   const [savePhoneToProfile, setSavePhoneToProfile] = useState(true);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 640) {
-      setZoomScale(0.42);
-    }
+    const handleResize = () => {
+      if (typeof window !== "undefined") {
+        const w = window.innerWidth;
+        const mobile = w < 640;
+        setIsMobile(mobile);
+        if (mobile) {
+          const availableW = Math.max(280, w - 16);
+          setMobileScale(Number((availableW / 794).toFixed(3)));
+        }
+      }
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    if (open && typeof window !== "undefined") {
+      const w = window.innerWidth;
+      const mobile = w < 640;
+      setIsMobile(mobile);
+      if (mobile) {
+        const availableW = Math.max(280, w - 16);
+        setMobileScale(Number((availableW / 794).toFixed(3)));
+      }
+    }
+  }, [open]);
 
   // ── Extract distinct Main Tests ───────────────────────
   const mainTests = useMemo(() => {
@@ -493,7 +518,7 @@ export function FullscreenPrintReportModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] max-h-[92vh] p-0 m-0 border border-border/80 rounded-3xl overflow-hidden flex flex-col bg-background shadow-2xl [&>button.absolute]:hidden">
+      <DialogContent className="w-full max-w-full sm:max-w-[96vw] sm:w-[96vw] h-[100dvh] sm:h-[92vh] max-h-[100dvh] sm:max-h-[92vh] p-0 m-0 border-0 sm:border border-border/80 rounded-none sm:rounded-3xl overflow-hidden flex flex-col bg-background shadow-2xl [&>button.absolute]:hidden">
         <DialogTitle className="sr-only">Print & Preview Report</DialogTitle>
 
         {/* Mobile View Switcher Tabs (< lg) */}
@@ -636,24 +661,24 @@ export function FullscreenPrintReportModal({
                 : "max-lg:fixed max-lg:inset-0 max-lg:opacity-0 max-lg:pointer-events-none max-lg:-z-50 lg:flex"
             }`}
           >
-            {/* Top Toolbar */}
-            <div className="h-12 bg-zinc-800/90 border-b border-zinc-700/80 px-4 flex items-center justify-between text-zinc-200 shrink-0 print:hidden">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-bold text-zinc-200 font-mono">
+            {/* Top Toolbar - On mobile only clean info is shown, buttons removed per user requirement */}
+            <div className="h-9 sm:h-12 bg-zinc-800/90 border-b border-zinc-700/80 px-3 sm:px-4 flex items-center justify-between text-zinc-200 shrink-0 print:hidden">
+              <div className="flex items-center gap-2 sm:gap-3 text-xs font-mono min-w-0">
+                <span className="font-bold text-zinc-200 truncate max-w-[140px] sm:max-w-none">
                   {report.patient?.name || "Patient Report"}
                 </span>
                 <span className="text-zinc-500">·</span>
-                <span className="text-xs font-mono text-zinc-400 font-bold bg-zinc-700/60 px-2 py-0.5 rounded">
+                <span className="font-mono text-zinc-400 font-bold bg-zinc-700/60 px-1.5 py-0.5 rounded text-[11px] sm:text-xs shrink-0">
                   {report.customId}
                 </span>
                 <span className="text-zinc-500">|</span>
-                <span className="text-xs font-bold text-zinc-300 font-mono">
-                  Page 1 / {totalPages}
+                <span className="font-bold text-zinc-300 text-[11px] sm:text-xs shrink-0">
+                  {totalPages > 1 ? `1 / ${totalPages} Pages` : "1 Page"}
                 </span>
               </div>
 
-              {/* Zoom & Action Controls */}
-              <div className="flex items-center gap-1.5">
+              {/* Desktop Zoom & Action Controls (Hidden on mobile per user instruction) */}
+              <div className="hidden sm:flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setZoomScale((p) => Math.max(0.4, Number((p - 0.08).toFixed(2))))}
@@ -682,7 +707,7 @@ export function FullscreenPrintReportModal({
                   <RotateCcw className="h-3.5 w-3.5" />
                 </button>
 
-                {/* Mobile / Desktop Quick Toggle for Letterhead Header & Footer */}
+                {/* Quick Toggle for Letterhead Header & Footer */}
                 <button
                   type="button"
                   onClick={() => setPrintWithHeaderFooter((prev) => !prev)}
@@ -694,8 +719,7 @@ export function FullscreenPrintReportModal({
                   title={printWithHeaderFooter ? "Header & Footer Active (Click to Hide)" : "Click to Show Header & Footer"}
                 >
                   <Layers className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Letterhead</span>
-                  <span className="sm:hidden">{printWithHeaderFooter ? "LH On" : "LH Off"}</span>
+                  <span>Letterhead</span>
                 </button>
 
                 <div className="h-4 w-px bg-zinc-700 mx-2" />
@@ -720,14 +744,14 @@ export function FullscreenPrintReportModal({
               </div>
             </div>
 
-            {/* Live Center Sheet Viewport (Rendered with forwarded printRef!) */}
+            {/* Live Center Sheet Viewport: Fixed fit on mobile, no horizontal drag/pan, vertically scrollable */}
             <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 flex justify-center items-start custom-scrollbar">
-              <div className="rounded-xl overflow-hidden shadow-2xl">
+              <div className="w-full flex flex-col items-center">
                 <PaginatedReportPreview
                   ref={printRef}
                   report={activeReportData}
                   settings={printSettings}
-                  scale={zoomScale}
+                  scale={isMobile ? mobileScale : zoomScale}
                   hideInterpretation={!showClinicalInterpretation}
                   autoFitToFooter={autoFitToFooter}
                   onPageCount={setTotalPages}
@@ -745,7 +769,7 @@ export function FullscreenPrintReportModal({
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className="p-1.5 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                className="hidden lg:flex p-1.5 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
                 title="Close"
               >
                 <X className="h-4 w-4" />

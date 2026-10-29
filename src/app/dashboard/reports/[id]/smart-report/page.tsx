@@ -506,42 +506,56 @@ export default function SmartReportGeneratedPage() {
       {/* ═════════════════════════════════════════════════════════════════
           TOP ACTION BAR: STRICTLY 2 MAIN ACTION OPTIONS (no-print)
       ═════════════════════════════════════════════════════════════════ */}
-      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b border-border/80 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4 shadow-sm no-print">
+      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b border-border/80 px-3 sm:px-6 py-2.5 sm:py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 shadow-sm no-print">
         
         {/* Left: Back & Patient Details */}
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.back()}
-            className="h-9 px-3 rounded-xl border-border/80 hover:bg-muted text-xs font-semibold gap-1.5 cursor-pointer"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Back</span>
-          </Button>
+        <div className="flex items-center justify-between sm:justify-start gap-2.5">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.back()}
+              className="h-9 px-2.5 sm:px-3 rounded-xl border-border/80 hover:bg-muted text-xs font-semibold gap-1.5 cursor-pointer shrink-0"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Back</span>
+            </Button>
 
-          <div className="h-5 w-px bg-border hidden sm:block" />
+            <div className="h-5 w-px bg-border hidden sm:block shrink-0" />
 
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-sm sm:text-base font-bold text-foreground leading-none">
-                {patient.name || "Patient Report"}
-              </h1>
-              <span
-                className="text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-2xs"
-                style={{
-                  backgroundColor: `${themeColor}18`,
-                  color: themeColor,
-                }}
-              >
-                <Sparkles className="h-3 w-3" />
-                <span>AI Smart Report</span>
-              </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h1 className="text-xs sm:text-base font-bold text-foreground leading-none truncate max-w-[140px] sm:max-w-none">
+                  {patient.name || "Patient Report"}
+                </h1>
+                <span
+                  className="text-[9.5px] sm:text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-2xs shrink-0"
+                  style={{
+                    backgroundColor: `${themeColor}18`,
+                    color: themeColor,
+                  }}
+                >
+                  <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                  <span>AI Smart Report</span>
+                </span>
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 truncate">
+                File: <span className="font-mono font-medium">{report.customId}</span> · {patient.age ? `${patient.age} Y` : ""} {patient.gender || ""}
+              </p>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              File: <span className="font-mono font-medium">{report.customId}</span> · {patient.age ? `${patient.age} Y` : ""} {patient.gender || ""}
-            </p>
           </div>
+
+          {/* Quick Print Button on Mobile Header */}
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => handlePrint()}
+            className="sm:hidden h-9 w-9 rounded-xl border-border/80 text-primary hover:bg-muted shrink-0 cursor-pointer"
+            title="Print Report"
+          >
+            <Printer className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Center: Zoom Controls (Screen Only) */}
@@ -576,13 +590,13 @@ export default function SmartReportGeneratedPage() {
         </div>
 
         {/* Right: Action Buttons (WhatsApp, Download PDF, Print) */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-wrap justify-end">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
           {/* Action 1: Send on WhatsApp */}
           <Button
             type="button"
             onClick={() => handleWhatsApp()}
             disabled={isSendingWhatsApp}
-            className="h-10 px-4 gap-2 font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-sm rounded-xl transition-all"
+            className="h-10 px-3 sm:px-4 gap-1.5 sm:gap-2 font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-sm rounded-xl transition-all justify-center flex-1 sm:flex-none"
           >
             {isSendingWhatsApp ? (
               <>
@@ -604,7 +618,7 @@ export default function SmartReportGeneratedPage() {
             type="button"
             onClick={handleDownloadPdf}
             disabled={isDownloadingPdf}
-            className="h-10 px-4 gap-2 font-bold text-xs bg-emerald-700 hover:bg-emerald-800 text-white cursor-pointer shadow-md rounded-xl transition-all"
+            className="h-10 px-3 sm:px-4 gap-1.5 sm:gap-2 font-bold text-xs bg-emerald-700 hover:bg-emerald-800 text-white cursor-pointer shadow-md rounded-xl transition-all justify-center flex-1 sm:flex-none"
             title="Download PDF"
           >
             {isDownloadingPdf ? (
@@ -612,14 +626,14 @@ export default function SmartReportGeneratedPage() {
             ) : (
               <Download className="h-4 w-4" />
             )}
-            <span>{isDownloadingPdf ? "Downloading..." : "Download PDF"}</span>
+            <span className="truncate">{isDownloadingPdf ? "Downloading..." : "Download"}</span>
           </Button>
 
-          {/* Action 3: Print Report */}
+          {/* Action 3: Print Report (Hidden on mobile row since top row has icon) */}
           <Button
             type="button"
             onClick={() => handlePrint()}
-            className="h-10 px-3.5 gap-1.5 font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer shadow-md rounded-xl transition-all"
+            className="hidden sm:inline-flex h-10 px-3.5 gap-1.5 font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer shadow-md rounded-xl transition-all"
             title="Print Report (Ctrl+P)"
           >
             <Printer className="h-4 w-4" />
@@ -693,15 +707,23 @@ export default function SmartReportGeneratedPage() {
       {/* ═════════════════════════════════════════════════════════════════
           A4 MULTI-PAGE CANVAS CONTAINER
       ═════════════════════════════════════════════════════════════════ */}
-      <div className="flex justify-center items-start pt-6 sm:pt-8 px-2 sm:px-4 overflow-auto custom-scrollbar">
+      <div className="flex justify-center items-start pt-4 sm:pt-8 px-1 sm:px-4 overflow-x-hidden overflow-y-auto custom-scrollbar w-full">
         <div
-          ref={reportContainerRef}
-          className="report-print-canvas flex flex-col items-center gap-8 origin-top transition-transform duration-200"
           style={{
-            transform: `scale(${zoomScale})`,
-            width: 794,
+            width: Math.round(794 * zoomScale),
+            overflow: "visible",
+            flexShrink: 0,
           }}
         >
+          <div
+            ref={reportContainerRef}
+            className="report-print-canvas flex flex-col items-center gap-8 origin-top transition-transform duration-200"
+            style={{
+              transform: `scale(${zoomScale})`,
+              transformOrigin: "top left",
+              width: 794,
+            }}
+          >
 
           {/* ─────────────────────────────────────────────────────────────
               PAGE 1: SMART REPORT COVER PAGE
@@ -1712,6 +1734,7 @@ export default function SmartReportGeneratedPage() {
             </div>
           )}
 
+          </div>
         </div>
       </div>
 
@@ -1719,7 +1742,7 @@ export default function SmartReportGeneratedPage() {
           WHATSAPP NUMBER PROMPT MODAL
       ═════════════════════════════════════════════════════════════════ */}
       <Dialog open={isPhonePromptOpen} onOpenChange={setIsPhonePromptOpen}>
-        <DialogContent className="sm:max-w-[420px] p-6 rounded-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-[420px] p-4 sm:p-6 rounded-2xl">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-1">
               <div className="h-10 w-10 rounded-full bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600">
