@@ -146,17 +146,17 @@ export function MachineIntegrationTab() {
     <div className="space-y-8 animate-fade-in pb-12">
 
       {/* ── Top Status Banner: Active LAN / TCP & Serial Cable Listener ── */}
-      <div className="bg-card border border-border rounded-2xl p-6 shadow-xs relative overflow-hidden">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-xs relative overflow-hidden">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 sm:gap-6 relative z-10">
           <div className="space-y-2">
-            <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
               <div className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
                 <Radio className="h-5 w-5 animate-pulse" />
               </div>
-              <h2 className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
                 <span>Machine Auto-Communication & Interfacing Hub</span>
               </h2>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[11px] font-bold">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] sm:text-[11px] font-bold shrink-0 whitespace-nowrap">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
                 LAN (PORT 5100) & SERIAL (RS-232) READY
               </span>
@@ -167,11 +167,11 @@ export function MachineIntegrationTab() {
           </div>
 
           {/* Quick Action Button: Download Windows Bridge */}
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0 w-full sm:w-auto">
             <a
               href="/START_MACHINE_BRIDGE.bat"
               download="START_MACHINE_BRIDGE.bat"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-muted/80 hover:bg-muted border border-border text-foreground text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-98"
+              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-muted/80 hover:bg-muted border border-border text-foreground text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-98"
               title="Download 1-Click Windows Starter"
             >
               <Download className="h-4 w-4 text-primary" />
@@ -183,9 +183,9 @@ export function MachineIntegrationTab() {
         {/* Dual Mode Connection Options Box */}
         <div className="mt-6 pt-5 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           {/* Mode 1: LAN / TCP-IP */}
-          <div className="bg-muted/40 border border-border/80 rounded-xl p-4 space-y-1.5">
+          <div className="bg-muted/40 border border-border/80 rounded-xl p-3.5 sm:p-4 space-y-1.5">
             <div className="flex items-center gap-2 text-primary font-bold">
-              <Server className="h-4 w-4" />
+              <Server className="h-4 w-4 shrink-0" />
               <span>Option A: LAN Ethernet Cable / Wi-Fi (Aveacon / Beacon)</span>
             </div>
             <p className="text-muted-foreground text-[11px] leading-relaxed">
@@ -195,9 +195,9 @@ export function MachineIntegrationTab() {
           </div>
 
           {/* Mode 2: RS-232 Serial Cable */}
-          <div className="bg-muted/40 border border-border/80 rounded-xl p-4 space-y-1.5">
+          <div className="bg-muted/40 border border-border/80 rounded-xl p-3.5 sm:p-4 space-y-1.5">
             <div className="flex items-center gap-2 text-primary font-bold">
-              <Cable className="h-4 w-4" />
+              <Cable className="h-4 w-4 shrink-0" />
               <span>Option B: RS-232 Serial Cable (Nihon Kohden / Mindray / Erba)</span>
             </div>
             <p className="text-muted-foreground text-[11px] leading-relaxed">
@@ -210,10 +210,10 @@ export function MachineIntegrationTab() {
 
       {/* ── Active Configured Analyzers ── */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h3 className="font-display font-bold text-sm text-foreground flex items-center gap-2">
-              <Cpu className="h-4 w-4 text-primary" />
+              <Cpu className="h-4 w-4 text-primary shrink-0" />
               <span>Configured Analyzers ({instruments.length})</span>
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -222,7 +222,7 @@ export function MachineIntegrationTab() {
           </div>
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-xs hover:brightness-105 active:scale-98 transition-all cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-xs hover:brightness-105 active:scale-98 transition-all cursor-pointer w-full sm:w-auto"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>Add Analyzer</span>
@@ -233,14 +233,14 @@ export function MachineIntegrationTab() {
           {instruments.map((inst) => (
             <div
               key={inst.id}
-              className={`p-4 rounded-xl border transition-all ${
+              className={`p-3.5 sm:p-4 rounded-xl border transition-all ${
                 inst.is_active
                   ? "bg-card border-border/90 shadow-xs"
                   : "bg-muted/40 border-border/50 opacity-75"
               }`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3 min-w-0">
                   <div
                     className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
                       inst.category === "Haematology"
@@ -250,11 +250,11 @@ export function MachineIntegrationTab() {
                   >
                     <HardDrive className="h-5 w-5" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="text-xs font-bold text-foreground">{inst.name}</h4>
+                      <h4 className="text-xs font-bold text-foreground truncate">{inst.name}</h4>
                       <span
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${
                           inst.is_active
                             ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
                             : "bg-slate-500/10 text-slate-500"
@@ -263,10 +263,10 @@ export function MachineIntegrationTab() {
                         {inst.is_active ? "ACTIVE" : "PAUSED"}
                       </span>
                     </div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                       {inst.model || inst.category} · <span className="font-mono text-foreground font-semibold">{inst.protocol}</span>
                     </p>
-                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-2 font-mono">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground mt-2 font-mono">
                       {inst.connection_type === "TCP_IP" ? (
                         <span>Port: <strong className="text-foreground">{inst.port} (TCP)</strong></span>
                       ) : (
@@ -279,7 +279,7 @@ export function MachineIntegrationTab() {
 
                 <button
                   onClick={() => handleDeleteInstrument(inst.id)}
-                  className="text-muted-foreground hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer"
+                  className="text-muted-foreground hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
                   title="Remove Machine"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -287,20 +287,20 @@ export function MachineIntegrationTab() {
               </div>
 
               {/* Toggles Footer */}
-              <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between text-xs">
+              <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between gap-2 text-xs flex-wrap sm:flex-nowrap">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={inst.auto_apply}
                     onChange={() => handleToggleAutoApply(inst)}
-                    className="rounded text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
+                    className="rounded text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer shrink-0"
                   />
                   <span className="text-[11px] font-medium text-foreground">Auto-fill matching report</span>
                 </label>
 
                 <button
                   onClick={() => handleToggleActive(inst)}
-                  className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                  className="text-[11px] font-bold text-primary hover:underline cursor-pointer shrink-0"
                 >
                   {inst.is_active ? "Disable" : "Enable"}
                 </button>
@@ -312,7 +312,7 @@ export function MachineIntegrationTab() {
 
       {/* ── Dialog: Add New Machine (TCP/IP or Serial RS-232) ── */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="max-w-md bg-card border border-border rounded-2xl p-6 shadow-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="font-display font-bold text-foreground">Configure New Instrument</DialogTitle>
           </DialogHeader>
@@ -329,7 +329,7 @@ export function MachineIntegrationTab() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-foreground">Category</label>
                 <select
@@ -358,7 +358,7 @@ export function MachineIntegrationTab() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-foreground">Protocol</label>
                 <select
@@ -392,7 +392,7 @@ export function MachineIntegrationTab() {
                   >
                     <option value="COM1">COM1</option>
                     <option value="COM2">COM2</option>
-                    <option value="COM3">COM3 (USB-Serial)</option>
+                    <option value="COM3 (USB-Serial)">COM3 (USB-Serial)</option>
                     <option value="COM4">COM4</option>
                     <option value="COM5">COM5</option>
                     <option value="COM6">COM6</option>
@@ -404,7 +404,7 @@ export function MachineIntegrationTab() {
             </div>
 
             {newDevice.connection_type === "SERIAL_RS232" && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-foreground">Baud Rate</label>
                   <select
@@ -428,17 +428,17 @@ export function MachineIntegrationTab() {
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setIsAddModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted"
+                className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted text-center cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="gradient-primary text-primary-foreground font-bold text-xs px-5 py-2 rounded-xl shadow-xs cursor-pointer hover:brightness-105"
+                className="w-full sm:w-auto gradient-primary text-primary-foreground font-bold text-xs px-5 py-2 rounded-xl shadow-xs cursor-pointer hover:brightness-105 text-center"
               >
                 Save Machine
               </button>

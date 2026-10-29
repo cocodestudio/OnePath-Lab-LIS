@@ -19,6 +19,9 @@ export default function PublicReportVerificationPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<any | null>(null);
+  const [requiresPhone, setRequiresPhone] = useState(false);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [submittingPhone, setSubmittingPhone] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [scale, setScale] = useState<number>(1);
   const [fitScale, setFitScale] = useState<number>(0.45);
@@ -49,38 +52,50 @@ export default function PublicReportVerificationPage() {
     return () => window.removeEventListener("resize", updateScale);
   }, []);
 
+  const fetchReport = async (phoneVerification?: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const apiOrigin = process.env.NEXT_PUBLIC_API_URL 
+        ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/lis\/?$/, "").replace(/\/api\/?$/, "")
+        : "https://api.onepathlab.com";
+
+      const phoneParam = phoneVerification ? `?phone=${encodeURIComponent(phoneVerification)}` : "";
+      const res = await fetch(`${apiOrigin}/api/lis/public/reports/${reportId}${phoneParam}`, {
+        headers: { "Accept": "application/json" },
+        cache: "no-store",
+      });
+
+      if (res.status === 403) {
+        const errData = await res.json().catch(() => ({}));
+        if (errData.requires_phone) {
+          setRequiresPhone(true);
+          setError(errData.error || "Please enter the registered mobile number to verify this report.");
+          return;
+        }
+      }
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || errData.message || "Report not found or invalid QR verification code.");
+      }
+
+      const data = await res.json();
+      setReport(data);
+      setRequiresPhone(false);
+      setError(null);
+    } catch (err: any) {
+      console.error("Public report verification error:", err);
+      setError(err.message || "Unable to retrieve verified laboratory report.");
+    } finally {
+      setLoading(false);
+      setSubmittingPhone(false);
+    }
+  };
+
   useEffect(() => {
     if (!reportId) return;
-
-    const fetchReport = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const apiOrigin = process.env.NEXT_PUBLIC_API_URL 
-          ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api\/lis\/?$/, "").replace(/\/api\/?$/, "")
-          : "https://api.onepathlab.com";
-
-        const res = await fetch(`${apiOrigin}/api/lis/public/reports/${reportId}`, {
-          headers: { "Accept": "application/json" },
-          cache: "no-store",
-        });
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || errData.message || "Report not found or invalid QR verification code.");
-        }
-
-        const data = await res.json();
-        setReport(data);
-      } catch (err: any) {
-        console.error("Public report verification error:", err);
-        setError(err.message || "Unable to retrieve verified laboratory report.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchReport();
   }, [reportId]);
 
@@ -300,6 +315,54 @@ export default function PublicReportVerificationPage() {
           <div>
             <h2 className="text-base font-bold text-slate-800 tracking-tight">Verifying Medical Record...</h2>
             <p className="text-xs text-slate-500 mt-1">Connecting to OnePath Secure Diagnostic Repository</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (requiresPhone) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 text-center space-y-4 shadow-sm">
+          <div className="h-12 w-12 rounded-full bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+            <Lock className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Security Verification Required</h2>
+            <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+              To protect patient confidentiality, please verify the registered mobile number (or at least the last 4 digits) to view this diagnostic report.
+            </p>
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (phoneInput.trim().length >= 4) {
+                setSubmittingPhone(true);
+                fetchReport(phoneInput.trim());
+              }
+            }}
+            className="space-y-3 pt-2"
+          >
+            <input
+              type="tel"
+              placeholder="Enter patient mobile or last 4 digits"
+              value={phoneInput}
+              onChange={(e) => setPhoneInput(e.target.value)}
+              className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm font-medium text-center tracking-wider focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              autoFocus
+            />
+            {error && <p className="text-xs text-rose-600">{error}</p>}
+            <button
+              type="submit"
+              disabled={submittingPhone || phoneInput.trim().length < 4}
+              className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {submittingPhone ? "Verifying..." : "Verify & View Report"}
+            </button>
+          </form>
+          <div className="pt-2 text-[11px] text-slate-400 font-mono">
+            Report Reference: {reportId}
           </div>
         </div>
       </div>

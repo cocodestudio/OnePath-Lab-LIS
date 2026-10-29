@@ -535,3 +535,166 @@ html.lenis, html.lenis body {
   );
 }
 
+/* ── Premium Targeted Shimmer for Logout Button ──────────────────── */
+.logout-btn-shimmer {
+  position: relative !important;
+  overflow: hidden !important;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--destructive) / 0.08) 0%,
+    hsl(var(--destructive) / 0.22) 50%,
+    hsl(var(--destructive) / 0.08) 100%
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: shimmer-sweep 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite !important;
+  border: 1px solid hsl(var(--destructive) / 0.35) !important;
+}
+
+.logout-btn-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.5) 45%,
+    rgba(255, 255, 255, 0.75) 50%,
+    rgba(255, 255, 255, 0.5) 55%,
+    transparent 100%
+  );
+  animation: shimmer-slide 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+.dark .logout-btn-shimmer::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.15) 45%,
+    rgba(255, 255, 255, 0.35) 50%,
+    rgba(255, 255, 255, 0.15) 55%,
+    transparent 100%
+  );
+}
+
+/* ── Sileo Physics-Based Toast Overrides (Top-Center & Lightweight Dark Professional Theme) ── */
+[data-sileo-viewport] {
+  z-index: 999999 !important;
+  pointer-events: none !important;
+}
+
+[data-sileo-viewport][data-position^="top"] {
+  top: max(0.75rem, env(safe-area-inset-top, 0.75rem)) !important;
+}
+
+[data-sileo-toast] {
+  pointer-events: auto !important;
+  max-width: calc(100vw - 1.5rem) !important;
+  font-family: inherit !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: transparent !important;
+  filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.35)) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2)) !important;
+}
+
+/* Lightweight Dark Slate Background (Crisp edges, strictly zero background rectangular blur) */
+[data-sileo-viewport] [data-sileo-pill],
+[data-sileo-viewport] [data-sileo-body],
+[data-sileo-pill],
+[data-sileo-body] {
+  fill: #1e2536 !important;
+  stroke: none !important;
+}
+
+/* Professional Crisp Typography: Clean White Title */
+[data-sileo-viewport] [data-sileo-title],
+[data-sileo-viewport][data-theme] [data-sileo-title],
+[data-sileo-title] {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* High-Legibility Slate Description */
+[data-sileo-viewport] [data-sileo-description],
+[data-sileo-viewport][data-theme] [data-sileo-description],
+[data-sileo-description] {
+  color: #cbd5e1 !important;
+  font-weight: 400 !important;
+  line-height: 1.4 !important;
+}
+
+/* Vivid Status Icon Badges with Soft Glow */
+[data-sileo-badge] {
+  border-radius: 9999px !important;
+}
+
+[data-sileo-badge][data-state="success"] {
+  color: #34d399 !important;
+  background-color: rgba(16, 185, 129, 0.22) !important;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.35) !important;
+}
+
+[data-sileo-badge][data-state="error"] {
+  color: #fb7185 !important;
+  background-color: rgba(244, 63, 94, 0.22) !important;
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.35) !important;
+}
+
+[data-sileo-badge][data-state="warning"] {
+  color: #fbbf24 !important;
+  background-color: rgba(245, 158, 11, 0.22) !important;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.35) !important;
+}
+
+[data-sileo-badge][data-state="info"],
+[data-sileo-badge][data-state="loading"] {
+  color: #38bdf8 !important;
+  background-color: rgba(14, 165, 233, 0.22) !important;
+  box-shadow: 0 0 12px rgba(14, 165, 233, 0.35) !important;
+}
+
+[data-sileo-badge][data-state="action"] {
+  color: #a78bfa !important;
+  background-color: rgba(139, 92, 246, 0.22) !important;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.35) !important;
+}
+
+/* Action Button: Refined Translucent Dark Pill */
+[data-sileo-button] {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.14) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  font-weight: 600 !important;
+  transition: all 0.18s ease !important;
+}
+
+[data-sileo-button]:hover {
+  background-color: rgba(255, 255, 255, 0.24) !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
+}
+
+/* Mobile & PC Top-Center Alignment & Responsiveness */
+@media (max-width: 640px) {
+  [data-sileo-viewport] {
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+  }
+
+  [data-sileo-toast] {
+    width: min(100%, 360px) !important;
+    max-width: calc(100vw - 1.5rem) !important;
+  }
+}
+
+

@@ -110,11 +110,8 @@ export function logout(reason?: string) {
   document.cookie = `lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax${isSecure ? "; Secure" : ""};`;
   document.cookie = `lis_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax${isSecure ? "; Secure" : ""};`;
 
-  const targetUrl = reason === "suspended" ? "/login?suspended=true" : "/login";
+  const targetUrl = reason === "suspended" ? "/login?suspended=true" : "/login?logout=1";
   if (typeof window !== "undefined") {
-    try {
-      window.history.replaceState(null, "", targetUrl);
-    } catch {}
     window.location.replace(targetUrl);
   }
 }

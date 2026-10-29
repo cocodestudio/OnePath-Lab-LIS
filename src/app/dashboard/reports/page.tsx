@@ -671,6 +671,8 @@ export default function ReportsListPage() {
     }
 
     setSendingWhatsAppId(rep.id);
+    const toastId = (toast as any).loading?.("Sending WhatsApp...", "Generating PDF & dispatching to patient...")
+      || (toast as any)({ title: "Sending WhatsApp...", description: "Generating PDF & dispatching to patient...", type: "loading" as any });
 
     try {
       const fullReport = await fetchFromLaravel(`/reports/${rep.id}`);
@@ -748,12 +750,14 @@ export default function ReportsListPage() {
       });
 
       if (res?.status === "success" || res?.success) {
+        if (toastId) (toast as any).dismiss?.(toastId);
         toast({
           variant: "success",
           title: "Sent on WhatsApp!",
           description: `Report PDF sent to patient's WhatsApp (${digitsOnly}) successfully.`,
         });
       } else {
+        if (toastId) (toast as any).dismiss?.(toastId);
         const errorMsg = res?.message || "Could not deliver WhatsApp message via server gateway.";
         toast({
           variant: "warning",
@@ -767,6 +771,7 @@ export default function ReportsListPage() {
         window.open(`https://wa.me/91${tenDigits}?text=${text}`, "_blank");
       }
     } catch (err: any) {
+      if (toastId) (toast as any).dismiss?.(toastId);
       console.error("WhatsApp dispatch error:", err);
       toast({
         variant: "error",
@@ -1715,20 +1720,11 @@ export default function ReportsListPage() {
                                 size="sm"
                                 onClick={() => triggerWhatsApp(rep)}
                                 disabled={sendingWhatsAppId === rep.id}
-                                className="h-8 px-2 xl:px-2.5 gap-1 font-bold text-xs rounded-xl cursor-pointer border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-xs"
+                                className="h-8 px-2 xl:px-2.5 gap-1 font-bold text-xs rounded-xl cursor-pointer border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
                                 title="Send report directly to patient's WhatsApp"
                               >
-                                {sendingWhatsAppId === rep.id ? (
-                                  <>
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                    <span className="hidden xl:inline">Sending...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <MessageCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                    <span className="hidden xl:inline">WhatsApp</span>
-                                  </>
-                                )}
+                                <MessageCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span className="hidden xl:inline">WhatsApp</span>
                               </Button>
                             </div>
                           );

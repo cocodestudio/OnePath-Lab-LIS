@@ -8,7 +8,7 @@ import {
   Eye, EyeOff, ArrowRight, Microscope, Activity, Building2,
   Sparkles, CheckCircle2, X, Briefcase
 } from "lucide-react";
-import { getAuthBaseUrl, getStoredToken } from "@/lib/api-client";
+import { getAuthBaseUrl, getStoredToken, clearApiCache } from "@/lib/api-client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -188,6 +188,8 @@ export default function LoginPage() {
       localStorage.setItem("lis_user", JSON.stringify(user || {}));
       sessionStorage.removeItem("lis_subscription_locked");
       sessionStorage.removeItem("lis_logged_out");
+      sessionStorage.setItem("lis_fresh_login", "1");
+      clearApiCache();
 
       const maxAge = rememberMe ? 2592000 : 86400 * 7;
       const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";

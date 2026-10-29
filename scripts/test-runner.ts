@@ -18,6 +18,7 @@ import {
   DEFAULT_BIOPSY_TEMPLATE,
 } from "../src/lib/clinical-test-helper";
 import { clearApiCache } from "../src/lib/api-client";
+import { sanitizeHtml } from "../src/lib/sanitize";
 import { getTodayStr, getYesterdayStr, getDaysAgoStr, getStartOfMonthStr, getRecordLocalDate } from "../src/lib/date-utils";
 import {
   isParamFormulaCalculated,
@@ -420,25 +421,25 @@ assert(
 try {
   const defaultTestsPath = path.resolve(__dirname, "../../Backend/database/data/default_tests.json");
   const defaultTests = JSON.parse(fs.readFileSync(defaultTestsPath, "utf-8"));
-  
+
   const malariaAntigen = defaultTests.find((t: any) => t.testCode === "SERO_152_MAL_AG" || t.code === "SERO_152_MAL_AG");
   const agSubtests = malariaAntigen?.subTests || malariaAntigen?.subtests || [];
   const agSubNames = agSubtests.map((s: any) => s.name.toLowerCase());
   const agHasSpeciesOnly = agSubNames.length === 2 &&
-                           agSubNames.some((n: string) => n.includes("falciparum")) &&
-                           agSubNames.some((n: string) => n.includes("vivax")) &&
-                           !agSubNames.some((n: string) => n.includes("igg")) &&
-                           !agSubNames.some((n: string) => n.includes("igm"));
+    agSubNames.some((n: string) => n.includes("falciparum")) &&
+    agSubNames.some((n: string) => n.includes("vivax")) &&
+    !agSubNames.some((n: string) => n.includes("igg")) &&
+    !agSubNames.some((n: string) => n.includes("igm"));
   assert(agHasSpeciesOnly, "[ZERO REGRESSION] Malaria Antigen has strictly Pf & Pv species only (no IgG/IgM)");
 
   const malariaCard = defaultTests.find((t: any) => t.testCode === "HAEM_013_MP_CARD" || t.code === "HAEM_013_MP_CARD");
   const cardSubtests = malariaCard?.subTests || malariaCard?.subtests || [];
   const cardSubNames = cardSubtests.map((s: any) => s.name.toLowerCase());
   const cardHasAntibodiesOnly = cardSubNames.length === 2 &&
-                                cardSubNames.some((n: string) => n.includes("igg")) &&
-                                cardSubNames.some((n: string) => n.includes("igm")) &&
-                                !cardSubNames.some((n: string) => n.includes("falciparum")) &&
-                                !cardSubNames.some((n: string) => n.includes("vivax"));
+    cardSubNames.some((n: string) => n.includes("igg")) &&
+    cardSubNames.some((n: string) => n.includes("igm")) &&
+    !cardSubNames.some((n: string) => n.includes("falciparum")) &&
+    !cardSubNames.some((n: string) => n.includes("vivax"));
   assert(cardHasAntibodiesOnly, "[ZERO REGRESSION] Malaria Card has strictly IgG & IgM antibodies only (no Pf/Pv)");
 } catch (e: any) {
   assert(false, "Verification of default_tests.json structure", e?.message);
@@ -513,7 +514,7 @@ try {
       if (ref?.current && !ref.current.isDestroyed && typeof ref.current.getHTML === "function") {
         return ref.current.getHTML();
       }
-    } catch {}
+    } catch { }
     return null;
   };
   safeExtractedValue = getSafeHtml(mockDestroyedEditor) ?? getSafeHtml(mockNullEditor) ?? "FALLBACK_SAFE";
@@ -1261,7 +1262,8 @@ function resolvePatientTopRibbonDetails(report: any) {
   const formatClinicalDateTime = (val: any) => {
     if (!val) return "—";
     try {
-      const d = new Date(val);
+      const dateOnlyMatch = typeof val === "string" && /^\d{4}-\d{2}-\d{2}$/.test(val.trim());
+      const d = dateOnlyMatch ? new Date(`${val.trim()}T00:00:00`) : new Date(val);
       if (isNaN(d.getTime())) return String(val);
       const strVal = String(val);
       const hasTime = strVal.includes("T") || strVal.includes(":") || (strVal.includes(" ") && /\d{1,2}:\d{2}/.test(strVal));
@@ -1329,10 +1331,10 @@ function resolvePatientTopRibbonDetails(report: any) {
 
   const displayReferredBy =
     rawRefDoctor &&
-    String(rawRefDoctor).trim() !== "" &&
-    String(rawRefDoctor).trim() !== "—" &&
-    String(rawRefDoctor).trim().toLowerCase() !== "null" &&
-    String(rawRefDoctor).trim().toLowerCase() !== "undefined"
+      String(rawRefDoctor).trim() !== "" &&
+      String(rawRefDoctor).trim() !== "—" &&
+      String(rawRefDoctor).trim().toLowerCase() !== "null" &&
+      String(rawRefDoctor).trim().toLowerCase() !== "undefined"
       ? String(rawRefDoctor).trim().toLowerCase().startsWith("dr")
         ? String(rawRefDoctor).trim()
         : `Dr. ${String(rawRefDoctor).trim()}`
@@ -1951,6 +1953,19 @@ const apiClientSrc = fs.readFileSync(path.resolve(__dirname, "../src/lib/api-cli
 assert(
   !apiClientSrc.includes("Signing Out Securely...") && apiClientSrc.includes("window.location.replace(targetUrl)"),
   "[LOGOUT GUARD] Logout executes instantly via window.location.replace without blocking DOM overlays"
+);
+
+// 20.10 Targeted Logout Shimmer & Prefetch Redirect Guardrail
+const navbarContent20 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/navbar.tsx"), "utf-8");
+const globalsContent20 = fs.readFileSync(path.resolve(__dirname, "../src/app/globals.css"), "utf-8");
+
+assert(
+  navbarContent20.includes("isLoggingOut") &&
+  navbarContent20.includes("logout-btn-shimmer") &&
+  navbarContent20.includes('router.prefetch("/login")') &&
+  globalsContent20.includes(".logout-btn-shimmer") &&
+  apiClientSrc.includes('targetUrl = reason === "suspended" ? "/login?suspended=true" : "/login?logout=1"'),
+  "[TARGETED LOGOUT SHIMMER UX] Logout button renders targeted shimmer effect with login prefetch and zero-delay redirect"
 );
 
 // 20.9 Infinite Login Redirect Loop Defense
@@ -3159,7 +3174,7 @@ const sidebarSrcMod32 = fs.readFileSync(path.resolve(__dirname, "../src/app/dash
 assert(
   sidebarSrcMod32.includes("Financial Analytics") &&
   (sidebarSrcMod32.includes('{ name: "Monthly Expenses", href: "/dashboard/billing/monthly-expenses" }') ||
-   sidebarSrcMod32.includes('{ name: "Monthly Business Report", href: "/dashboard/billing/monthly-expenses" }')),
+    sidebarSrcMod32.includes('{ name: "Monthly Business Report", href: "/dashboard/billing/monthly-expenses" }')),
   "[SIDEBAR FINANCIAL ANALYTICS] Financial Analytics menu includes 'Monthly Business Report' / 'Monthly Expenses' option"
 );
 
@@ -3847,6 +3862,23 @@ assert(
   "[TEST PARAMETER CARD PADDING] Parameter cards maintain comfortable inner breathing room on mobile devices"
 );
 
+assert(
+  testsPageCode39.includes("min-h-14 sm:min-h-16 py-2 sm:py-0 border-t border-border/80 bg-card px-3 sm:px-6 flex items-center justify-between gap-2 shrink-0") &&
+  testsPageCode39.includes('DropdownMenuContent align="end" className="w-56"') &&
+  testsPageCode39.includes("Clinical Interpretation ✓") &&
+  testsPageCode39.includes("w-full max-w-full sm:max-w-6xl sm:w-[95vw] h-[100dvh] sm:h-[88vh]"),
+  "[TEST DIALOG FOOTER THREE DOTS & MODAL] Bottom action footer matches top bar alignment, packages Clinical Interpretation into 3-dots, and interpretation modal is mobile-responsive"
+);
+
+// 5. B2B Wallets: Top-up / Ledger Switcher & Ledger Log Shape Symmetry
+assert(
+  b2bWalletsCode39.includes("bg-muted/80 p-1 rounded-xl border border-border/60 text-xs w-full shadow-2xs") &&
+  b2bWalletsCode39.includes("flex-1 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer text-center") &&
+  b2bWalletsCode39.includes("bg-muted/80 p-1 rounded-xl border border-border/60 text-xs w-full sm:w-auto shadow-2xs") &&
+  b2bWalletsCode39.includes('id="b2b-action-panel"'),
+  "[B2B WALLET SWITCHER SYMMETRY] Top-up/Ledger switcher and Ledger Log filter share identical responsive rounded-xl shape with mobile scroll anchor"
+);
+
 // ============================================================================
 // MODULE 40: WORKSHEET, PACKAGES, RATELIST, SMART REPORT, SUPPORT & LAB ACCOUNT RESPONSIVENESS
 // ============================================================================
@@ -3854,6 +3886,10 @@ console.log("\n--- MODULE 40: MOBILE RESPONSIVENESS (WORKSHEET, PACKAGES, RATELI
 
 // 1. Worksheet: Date picker, department filter, and sticky bottom table actions
 const worksheetCode40 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/tests/worksheet/page.tsx"), "utf-8");
+assert(
+  worksheetCode40.includes("h-9 w-9 sm:h-10 sm:w-10 rounded-xl sm:rounded-2xl gradient-primary text-primary-foreground flex items-center justify-center shadow-xs shrink-0 mt-0.5 sm:mt-0"),
+  "[WORKSHEET RESPONSIVE LOGO] Top-left logo features optical baseline alignment, responsive scaling, and shrink-0 protection on mobile"
+);
 assert(
   worksheetCode40.includes("w-full sm:w-auto sm:min-w-[220px]") &&
   worksheetCode40.includes("w-full sm:w-auto sm:min-w-[240px]"),
@@ -3927,7 +3963,252 @@ assert(
   "[LAB ACCOUNT DIALOGS MOBILE] Confirm volume and alert modals adapt to edge-to-edge mobile screens"
 );
 
+
+// MODULE 41: STORED XSS SANITIZATION & REPORT SECURITY (DOMPurify & Delimiter Bypass Defense)
+console.log("\n▶ MODULE 41: Stored XSS Sanitization & Slash-Delimiter Bypass Defense");
+
+const slashSvg = '<svg/onload=alert(1)>';
+const cleanedSvg = sanitizeHtml(slashSvg);
+assert(
+  !cleanedSvg.includes("onload") && !cleanedSvg.includes("alert("),
+  "[XSS DEFENSE] Strips slash-delimited event handlers like <svg/onload=alert(1)>"
+);
+
+const slashImg = '<img/src=x/onerror=alert(1)>';
+const cleanedImg = sanitizeHtml(slashImg);
+assert(
+  !cleanedImg.includes("onerror") && !cleanedImg.includes("alert("),
+  "[XSS DEFENSE] Strips slash-delimited onerror on img tags"
+);
+
+const standardHandler = '<b onmouseover=alert(1)>Safe Label</b>';
+const cleanedHandler = sanitizeHtml(standardHandler);
+assert(
+  !cleanedHandler.includes("onmouseover") && cleanedHandler.includes("Safe Label"),
+  "[XSS DEFENSE] Strips whitespace-delimited event handlers and preserves safe contents"
+);
+
+const scriptTag = '<script>alert("pwned")</script>';
+const cleanedScript = sanitizeHtml(scriptTag);
+assert(
+  !cleanedScript.includes("script") && !cleanedScript.includes("alert"),
+  "[XSS DEFENSE] Completely removes script tags and script bodies"
+);
+
+const normalTable = '<table style="width:100%"><thead><tr><th>Test</th><th>Result</th></tr></thead><tbody><tr><td>Hemoglobin</td><td>14.2</td></tr></tbody></table>';
+const cleanedTable = sanitizeHtml(normalTable);
+assert(
+  cleanedTable.includes("<table") && cleanedTable.includes("Hemoglobin") && cleanedTable.includes("14.2"),
+  "[XSS DEFENSE] Preserves legitimate medical table markup and values"
+);
+
+const reportSheetCode41 = fs.readFileSync(path.resolve(__dirname, "../src/components/report-sheet.tsx"), "utf-8");
+assert(
+  reportSheetCode41.includes("sanitizeHtml(preTableHtml)") &&
+  reportSheetCode.includes("sanitizeHtml(rowsHtml)") &&
+  reportSheetCode.includes("sanitizeHtml(postTableHtml)"),
+  "[REPORT SHEET SANITIZATION] Custom editor chunked tables sanitize preTable, rows, and postTable HTML"
+);
+
+const testsPageSrc41 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/tests/page.tsx"), "utf-8");
+assert(
+  testsPageSrc41.includes("sanitizeHtml(test.interpretation || \"\")"),
+  "[TESTS DASHBOARD XSS DEFENSE] Tests page sanitizes clinical interpretations with sanitizeHtml"
+);
+
+const smartReportPageSrc41 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/reports/[id]/smart-report/page.tsx"), "utf-8");
+assert(
+  smartReportPageSrc41.includes("sanitizeHtml(") &&
+  smartReportPageSrc41.includes("smartSettings.disclaimerText"),
+  "[SMART REPORT XSS DEFENSE] Smart report view strictly sanitizes clinical disclaimer HTML"
+);
+
 console.log("\n===============================================================================");
+
+// 42. Sileo Physics-Based Toast Integration & Top-Center Responsive Architecture
+console.log("\n▶ MODULE 42: Sileo Physics-Based Toast Integration & Top-Center Architecture");
+
+const layoutCode42 = fs.readFileSync(path.resolve(__dirname, "../src/app/layout.tsx"), "utf-8");
+assert(
+  layoutCode42.includes('import "sileo/styles.css";'),
+  "[SILEO STYLES IMPORT] Root layout imports sileo/styles.css for spring physics animation curves"
+);
+
+const globalsCss42 = fs.readFileSync(path.resolve(__dirname, "../src/app/globals.css"), "utf-8");
+assert(
+  globalsCss42.includes("[data-sileo-viewport]") &&
+  globalsCss42.includes("z-index: 999999 !important;") &&
+  globalsCss42.includes("env(safe-area-inset-top"),
+  "[SILEO VIEWPORT OVERRIDES] globals.css enforces z-index 999999 and safe-area top inset for notch screens"
+);
+assert(
+  globalsCss42.includes("[data-sileo-toast]") &&
+  globalsCss42.includes("max-width: calc(100vw - 1.5rem) !important;"),
+  "[SILEO TOAST RESPONSIVENESS] globals.css enforces max-width constraints on small mobile viewports"
+);
+
+const toastCode42 = fs.readFileSync(path.resolve(__dirname, "../src/components/ui/toast.tsx"), "utf-8");
+assert(
+  toastCode42.includes('import { Toaster, sileo } from "sileo";') &&
+  toastCode42.includes("export { Toaster, sileo };"),
+  "[SILEO EXPORTS] toast.tsx re-exports Toaster and sileo instance directly"
+);
+assert(
+  toastCode42.includes('position="top-center"') &&
+  toastCode42.includes("<Toaster"),
+  "[SILEO TOASTER TOP-CENTER] ToastProvider mounts Toaster configured with top-center position"
+);
+assert(
+  toastCode42.includes("handler.action =") &&
+  toastCode42.includes("handler.promise =") &&
+  toastCode42.includes("handler.dismiss =") &&
+  toastCode42.includes("handler.clear =") &&
+  toastCode42.includes("handler.show ="),
+  "[SILEO FULL ACTION SET] useToast hook provides action, promise, dismiss, clear, and show methods"
+);
+assert(
+  toastCode42.includes('position: "top-center"') &&
+  toastCode42.includes("normalizeToastOptions"),
+  "[SILEO NORMALIZATION] normalizeToastOptions enforces top-center position across all actions"
+);
+assert(
+  (globalsCss42.includes("fill: #1e2536 !important;") || globalsCss42.includes("fill: #141923 !important;")) &&
+  globalsCss42.includes("backdrop-filter: none !important;") &&
+  globalsCss42.includes("color: #ffffff !important;") &&
+  (toastCode42.includes('fill: "#1e2536"') || toastCode42.includes('fill: "#141923"')),
+  "[SILEO CLEAN LIGHTWEIGHT DARK] Sileo toast configures clean lightweight dark slate (#1e2536) with zero rectangular background blur"
+);
+assert(
+  toastCode42.includes("handler.loading =") &&
+  toastCode42.includes('type: "loading" as any'),
+  "[SILEO LOADER TOAST] Sileo toast exposes handler.loading for async operations"
+);
+
+const printPreviewSrc42 = fs.readFileSync(path.resolve(__dirname, "../src/components/print-preview-dialog.tsx"), "utf-8");
+assert(
+  printPreviewSrc42.includes("disabled={isDownloadingPdf}") &&
+  printPreviewSrc42.includes("disabled={isSendingWhatsApp}") &&
+  printPreviewSrc42.includes('toast.loading("Generating PDF..."') &&
+  printPreviewSrc42.includes('toast.loading("Sending WhatsApp..."'),
+  "[REPORT PRINT LOCK & LOADER] Report print dialog locks download & whatsapp buttons while firing physics loader toasts"
+);
+
+// Dynamic check on Sileo module in node_modules
+const { sileo: rawSileo, Toaster: rawToaster } = require("sileo");
+assert(
+  typeof rawSileo === "object" &&
+  typeof rawSileo.success === "function" &&
+  typeof rawSileo.error === "function" &&
+  typeof rawSileo.warning === "function" &&
+  typeof rawSileo.info === "function" &&
+  typeof rawSileo.action === "function" &&
+  typeof rawSileo.promise === "function" &&
+  typeof rawSileo.dismiss === "function" &&
+  typeof rawSileo.clear === "function" &&
+  typeof rawSileo.show === "function",
+  "[SILEO MODULE VALIDATION] Sileo library provides all 9 action functions"
+);
+assert(
+  typeof rawToaster === "function",
+  "[SILEO TOASTER COMPONENT] Sileo Toaster React component is valid and mountable"
+);
+
+
+console.log("\n===============================================================================");
+
+// 43. Mobile Responsive Layout: Settings (Letterhead Preview, LIS Pro Pill, Report Layout, RBAC, Payment Gateway, Machine Integration) & Top Navbar
+console.log("\n▶ MODULE 43: Mobile Responsive Settings, Tabs & Navbar Popover Layout");
+
+const navbarSrc43 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/navbar.tsx"), "utf-8");
+assert(
+  navbarSrc43.includes("collisionPadding={12}") &&
+  navbarSrc43.includes("sideOffset={8}") &&
+  navbarSrc43.includes("w-[calc(100vw-1.5rem)] max-w-[360px] sm:w-96"),
+  "[NAVBAR NOTIFICATION POPOVER] Navbar popover enforces responsive width and boundary padding on mobile viewports"
+);
+assert(
+  navbarSrc43.includes("shrink-0 relative text-slate-500 hover:text-slate-800") ||
+  navbarSrc43.includes("shrink-0"),
+  "[NAVBAR NOTIFICATION BUTTON] Notification trigger button has shrink-0 and responsive alignment"
+);
+
+const settingsSrc43 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/settings/page.tsx"), "utf-8");
+assert(
+  settingsSrc43.includes("shrink-0 whitespace-nowrap self-center") &&
+  settingsSrc43.includes("LIS Pro"),
+  "[SETTINGS HEADER PILL] 'LIS Pro' pill badge is strictly aligned in a single line without wrapping or breaking"
+);
+assert(
+  settingsSrc43.includes("overflow-x-auto overflow-y-visible sheet-pan-canvas") &&
+  settingsSrc43.includes("min-w-fit mx-auto flex justify-center"),
+  "[LETTERHEAD PREVIEW RESPONSIVENESS] Letterhead preview container centers scaled sheet and prevents left-edge clipping"
+);
+assert(
+  settingsSrc43.includes("previewScale") &&
+  settingsSrc43.includes("window.innerWidth < 400"),
+  "[LETTERHEAD SCALE CALCULATION] Preview automatically computes compact scale factor on narrow mobile screens"
+);
+assert(
+  settingsSrc43.includes("shrink-0 whitespace-nowrap") &&
+  settingsSrc43.includes("Registration & Report Sync") &&
+  settingsSrc43.includes("Active · Separate Page per Test") &&
+  settingsSrc43.includes("Active (Department-wise)") &&
+  settingsSrc43.includes("Zero-Latency Fast Print"),
+  "[REPORT LAYOUT PILL LABELS] Report layout feature tags and pill shape labels are protected with shrink-0 whitespace-nowrap"
+);
+
+const rbacSrc43 = fs.readFileSync(path.resolve(__dirname, "../src/components/collection-centers-tab.tsx"), "utf-8");
+assert(
+  rbacSrc43.includes("overflow-x-auto max-w-full scrollbar-none") &&
+  rbacSrc43.includes("min-w-[760px]"),
+  "[RBAC COLLECTION CENTERS TAB] RBAC tab provides horizontal scrolling for filter pills and minimum width for accounts table"
+);
+
+const paymentGatewaySrc43 = fs.readFileSync(path.resolve(__dirname, "../src/components/payment-gateway-tab.tsx"), "utf-8");
+assert(
+  paymentGatewaySrc43.includes("p-4 sm:p-6") &&
+  paymentGatewaySrc43.includes("w-full sm:w-auto justify-center"),
+  "[PAYMENT GATEWAY TAB] Payment gateway tab supports responsive padding and mobile-friendly action buttons"
+);
+
+const machineIntegrationSrc43 = fs.readFileSync(path.resolve(__dirname, "../src/components/machine-integration-tab.tsx"), "utf-8");
+assert(
+  machineIntegrationSrc43.includes("p-4 sm:p-6") &&
+  machineIntegrationSrc43.includes("p-3.5 sm:p-4") &&
+  machineIntegrationSrc43.includes("w-full sm:w-auto justify-center"),
+  "[MACHINE INTEGRATION TAB] Machine interfacing tab adapts banner, connection cards, and add analyzer buttons for mobile"
+);
+assert(
+  machineIntegrationSrc43.includes("w-[calc(100vw-2rem)]") &&
+  machineIntegrationSrc43.includes("grid-cols-1 sm:grid-cols-2"),
+  "[MACHINE INTEGRATION MODAL] Add Analyzer modal enforces mobile viewport width and single-column dropdown stacking"
+);
+assert(
+  settingsSrc43.includes("getResponsiveResetScale") &&
+  settingsSrc43.includes("window.addEventListener(\"resize\""),
+  "[SETTINGS RESIZE LISTENER] Dynamic scale attaches window resize listener and calculates responsive zoom reset"
+);
+assert(
+  rbacSrc43.includes("flex-col-reverse sm:flex-row") &&
+  rbacSrc43.includes("w-full sm:w-auto"),
+  "[RBAC ACTIONS STACKING] RBAC creation and edit forms stack action buttons cleanly on mobile viewports"
+);
+assert(
+  settingsSrc43.includes("bg-emerald-600 text-white shadow-xs shrink-0 whitespace-nowrap") &&
+  settingsSrc43.includes("Transparent PNG"),
+  "[SIGNATURE BADGE NO-WRAP] Doctor Digital Signature transparent PNG badge is protected against line wrapping"
+);
+assert(
+  settingsSrc43.includes("Official Letterhead Background (A4 / A5)") &&
+  settingsSrc43.includes("Custom UPI QR Active"),
+  "[BILLS LAYOUT MOBILE RESPONSIVENESS] Bills Layout cards and uploaded previews adapt cleanly across mobile viewports"
+);
+assert(
+  navbarSrc43.includes("min-h-[36px] min-w-[36px]") &&
+  navbarSrc43.includes("pointer-events-none"),
+  "[NAVBAR TOUCH TARGET] Notification trigger button enforces accessible touch target and non-intercepting badge"
+);
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 
@@ -3938,5 +4219,3 @@ if (failedTests === 0) {
   console.error("❌ UNIT TEST SUITE DETECTED FAILURES.");
   process.exit(1);
 }
-
-

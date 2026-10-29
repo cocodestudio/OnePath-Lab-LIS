@@ -406,10 +406,28 @@ function SettingsContent() {
   const [activePreset, setActivePreset] = useState<"standard" | "compact" | "preprinted" | "custom">("standard");
   const [previewScale, setPreviewScale] = useState<number>(0.55);
 
+  const getResponsiveResetScale = React.useCallback(() => {
+    if (typeof window === "undefined") return 0.55;
+    if (window.innerWidth < 400) return 0.34;
+    if (window.innerWidth < 640) return 0.38;
+    return 0.55;
+  }, []);
+
   useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 640) {
-      setPreviewScale(0.38);
-    }
+    if (typeof window === "undefined") return;
+    const updateScale = () => {
+      const w = window.innerWidth;
+      if (w < 400) {
+        setPreviewScale(0.34);
+      } else if (w < 640) {
+        setPreviewScale(0.38);
+      } else {
+        setPreviewScale(0.55);
+      }
+    };
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
   }, []);
 
   // New Signature Modal state
@@ -1297,13 +1315,13 @@ function SettingsContent() {
     <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-fade-in relative">
 
       {/* Sticky Header Bar with Sub-Tabs and Save Button */}
-      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md pb-4 pt-1 border-b border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="font-display text-2xl font-bold text-foreground">
+      <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md pb-4 pt-1 border-b border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 flex-nowrap min-w-0">
+            <h1 className="font-display text-lg sm:text-2xl font-bold text-foreground tracking-tight whitespace-nowrap truncate">
               Lab & Stationery Settings
             </h1>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary uppercase tracking-wider">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary uppercase tracking-wider shrink-0 whitespace-nowrap self-center">
               LIS Pro
             </span>
           </div>
@@ -1312,7 +1330,7 @@ function SettingsContent() {
           </p>
 
           {/* Top Sub-Navigation Tabs */}
-          <div className="flex items-center gap-2 mt-3 bg-muted/60 p-1 rounded-xl w-full sm:w-fit overflow-x-auto border border-border/60 scrollbar-none table-responsive-container flex-nowrap">
+          <div className="flex items-center gap-1.5 sm:gap-2 mt-3 bg-muted/60 p-1 rounded-xl w-full sm:w-fit overflow-x-auto border border-border/60 scrollbar-none flex-nowrap py-1 touch-pan-x">
             <button
               type="button"
               onClick={() => setActiveTab("letterhead")}
@@ -1392,12 +1410,12 @@ function SettingsContent() {
         </div>
 
         {activeTab !== "collection-centers" && activeTab !== "payment-gateway" && activeTab !== "machine-integration" && (
-          <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto">
             <button
               type="button"
               onClick={saveSettings}
               disabled={isSaving}
-              className="px-6 py-2.5 rounded-xl gradient-primary text-primary-foreground text-xs font-bold shadow-md hover:brightness-105 transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-50 ring-inset-top"
+              className="w-full sm:w-auto justify-center px-6 py-2.5 rounded-xl gradient-primary text-primary-foreground text-xs font-bold shadow-md hover:brightness-105 transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-50 ring-inset-top"
             >
               {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               <span>{isSaving ? "Saving..." : "Save Settings"}</span>
@@ -1411,7 +1429,7 @@ function SettingsContent() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start animate-fade-in">
           {/* Left Side: Controls & Sliders */}
           <div className="lg:col-span-5 space-y-6">
-            <div className="p-6 bg-card border border-border/90 rounded-xl shadow-xs space-y-6">
+            <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-xl shadow-xs space-y-6">
               <div>
                 <h3 className="font-display font-bold text-sm text-foreground">Interactive Margin Controls</h3>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -1557,7 +1575,7 @@ function SettingsContent() {
             </div>
 
             {/* Letterhead Upload Box */}
-            <div className="p-6 bg-card border border-border/90 rounded-xl shadow-xs space-y-4">
+            <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-xl shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-display font-bold text-sm text-foreground">Letterhead Background Image</h3>
@@ -1566,7 +1584,7 @@ function SettingsContent() {
                   </p>
                 </div>
                 {settings.bgImage && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 shrink-0">
                     <Check className="h-3 w-3" /> Active
                   </span>
                 )}
@@ -1574,7 +1592,7 @@ function SettingsContent() {
 
               {settings.bgImage ? (
                 <div className="space-y-3">
-                  <div className="relative rounded-xl border border-border overflow-hidden bg-muted/40 p-3 flex items-center justify-between gap-4">
+                  <div className="relative rounded-xl border border-border overflow-hidden bg-muted/40 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-14 w-11 rounded border border-border/80 bg-white overflow-hidden shrink-0 shadow-xs flex items-center justify-center">
                         <img
@@ -1589,8 +1607,8 @@ function SettingsContent() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <label className="px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-accent text-xs font-bold text-foreground transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-xs">
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+                      <label className="flex-1 sm:flex-initial justify-center px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-accent text-xs font-bold text-foreground transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-xs">
                         <Upload className="h-3.5 w-3.5 text-primary" />
                         <span>Change</span>
                         <input
@@ -1605,7 +1623,7 @@ function SettingsContent() {
                         type="button"
                         onClick={handleDeleteLetterhead}
                         disabled={isDeletingLetterhead}
-                        className="px-3 py-1.5 rounded-lg border border-destructive/30 bg-destructive/10 hover:bg-destructive/20 text-xs font-bold text-destructive transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                        className="flex-1 sm:flex-initial justify-center px-3 py-1.5 rounded-lg border border-destructive/30 bg-destructive/10 hover:bg-destructive/20 text-xs font-bold text-destructive transition-colors cursor-pointer inline-flex items-center gap-1.5"
                       >
                         {isDeletingLetterhead ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         <span>Delete</span>
@@ -1657,22 +1675,22 @@ function SettingsContent() {
 
           {/* Right Side: Live Interactive ReportSheet Preview */}
           <div className="lg:col-span-7 space-y-4">
-            <div className="flex items-center justify-between bg-card p-3 rounded-xl border border-border/80 shadow-xs">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-card p-3 rounded-xl border border-border/80 shadow-xs">
+              <div className="flex items-center justify-between sm:justify-start gap-2.5 w-full sm:w-auto">
                 <span className="text-xs font-bold text-foreground">Interactive Live Preview</span>
-                <div className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded-lg border border-border/60">
+                <div className="flex items-center gap-1 bg-muted px-2 py-0.5 rounded-lg border border-border/60 shrink-0">
                   <span className="text-[10px] text-muted-foreground font-mono font-bold">
                     A4 Canvas ({Math.round(previewScale * 100)}%)
                   </span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
                 {settings.bgImage && (
                   <button
                     type="button"
                     onClick={() => setShowWithLetterheadPreview(!showWithLetterheadPreview)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer shrink-0 ${
                       showWithLetterheadPreview
                         ? "bg-primary/10 border-primary text-primary"
                         : "bg-muted border-border text-muted-foreground hover:text-foreground"
@@ -1682,10 +1700,10 @@ function SettingsContent() {
                   </button>
                 )}
 
-                <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 border border-border/60">
+                <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 border border-border/60 shrink-0 ml-auto sm:ml-0">
                   <button
                     type="button"
-                    onClick={() => setPreviewScale(prev => Math.max(0.35, prev - 0.05))}
+                    onClick={() => setPreviewScale(prev => Math.max(0.25, Number((prev - 0.05).toFixed(2))))}
                     className="p-1 hover:bg-card rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     title="Zoom Out"
                   >
@@ -1693,7 +1711,7 @@ function SettingsContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPreviewScale(0.55)}
+                    onClick={() => setPreviewScale(getResponsiveResetScale())}
                     className="p-1 hover:bg-card rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     title="Reset Zoom"
                   >
@@ -1701,7 +1719,7 @@ function SettingsContent() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setPreviewScale(prev => Math.min(0.85, prev + 0.05))}
+                    onClick={() => setPreviewScale(prev => Math.min(0.85, Number((prev + 0.05).toFixed(2))))}
                     className="p-1 hover:bg-card rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     title="Zoom In"
                   >
@@ -1711,24 +1729,26 @@ function SettingsContent() {
               </div>
             </div>
 
-            <div className="bg-muted/40 border border-border/80 rounded-2xl p-2 sm:p-6 flex justify-center overflow-auto sheet-pan-canvas min-h-[640px]">
-              <div
-                style={{
-                  transform: `scale(${previewScale})`,
-                  transformOrigin: "top center",
-                  width: "794px",
-                  height: "1123px",
-                  marginBottom: `-${1123 * (1 - previewScale)}px`,
-                  marginRight: `-${794 * (1 - previewScale) / 2}px`,
-                  marginLeft: `-${794 * (1 - previewScale) / 2}px`,
-                }}
-                className="shadow-2xl ring-1 ring-border bg-white rounded-sm shrink-0 transition-transform duration-200"
-              >
-                <ReportSheet
-                  report={previewReportData}
-                  settings={activePreviewSettings}
-                  showMarginGuides={true}
-                />
+            <div className="bg-muted/40 border border-border/80 rounded-2xl p-2 sm:p-6 overflow-x-auto overflow-y-visible sheet-pan-canvas min-h-[420px] sm:min-h-[640px]">
+              <div className="min-w-fit mx-auto flex justify-center">
+                <div
+                  style={{
+                    transform: `scale(${previewScale})`,
+                    transformOrigin: "top center",
+                    width: "794px",
+                    height: "1123px",
+                    marginBottom: `-${1123 * (1 - previewScale)}px`,
+                    marginRight: `-${794 * (1 - previewScale) / 2}px`,
+                    marginLeft: `-${794 * (1 - previewScale) / 2}px`,
+                  }}
+                  className="shadow-2xl ring-1 ring-border bg-white rounded-sm shrink-0 transition-transform duration-200"
+                >
+                  <ReportSheet
+                    report={previewReportData}
+                    settings={activePreviewSettings}
+                    showMarginGuides={true}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -1739,18 +1759,18 @@ function SettingsContent() {
       {activeTab === "report-layout" && (
         <div className="space-y-8 animate-fade-in">
           {/* SECTION 1: DEFAULT DESIGNATION */}
-          <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-border/80 pb-3">
+          <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/80 pb-3">
               <div>
                 <h2 className="font-display text-base font-bold text-foreground flex items-center gap-2">
-                  <Tag className="h-4 w-4 text-primary" />
+                  <Tag className="h-4 w-4 text-primary shrink-0" />
                   <span>Default Designation</span>
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Select which title / salutation will be selected by default on the patient registration form.
                 </p>
               </div>
-              <span className="text-xs font-mono font-bold px-2.5 py-1 bg-primary/10 text-primary rounded-lg border border-primary/20">
+              <span className="text-xs font-mono font-bold px-2.5 py-1 bg-primary/10 text-primary rounded-lg border border-primary/20 shrink-0 self-start sm:self-auto">
                 Selected: {normalizeDesignation(layoutSettings.defaultDesignation)}
               </span>
             </div>
@@ -1788,7 +1808,7 @@ function SettingsContent() {
           </div>
 
           {/* SECTION 2: REPORT SETTING & FLAGS */}
-          <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
+          <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
             <div className="border-b border-border/80 pb-3">
               <h2 className="font-display text-base font-bold text-foreground flex items-center gap-2">
                 <Palette className="h-4 w-4 text-primary" />
@@ -1860,9 +1880,9 @@ function SettingsContent() {
                 </label>
               </div>
 
-              <div className="flex flex-wrap items-center gap-6 bg-muted/40 p-4 rounded-xl border border-border/60">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3.5 sm:gap-6 bg-muted/40 p-3.5 sm:p-4 rounded-xl border border-border/60">
                 {/* Low Color Picker */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <span className="text-xs font-bold text-foreground">Low:</span>
                   <div className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-2 py-1 shadow-2xs">
                     <input
@@ -1884,7 +1904,7 @@ function SettingsContent() {
                 </div>
 
                 {/* High Color Picker */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <span className="text-xs font-bold text-foreground">High:</span>
                   <div className="flex items-center gap-1.5 bg-background border border-border rounded-lg px-2 py-1 shadow-2xs">
                     <input
@@ -1943,15 +1963,15 @@ function SettingsContent() {
           </div>
 
           {/* SECTION 3: PATIENT INTAKE & REGISTRATION FIELDS (FORM RULES) */}
-          <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
+          <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-border/80 pb-4">
               <div>
-                <div className="flex items-center gap-2">
-                  <ClipboardList className="h-5 w-5 text-primary" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <ClipboardList className="h-5 w-5 text-primary shrink-0" />
                   <h2 className="font-display text-base font-bold text-foreground">
                     Patient Intake Fields & Form Rules
                   </h2>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary shrink-0 whitespace-nowrap">
                     Registration & Report Sync
                   </span>
                 </div>
@@ -1960,11 +1980,11 @@ function SettingsContent() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto w-full sm:w-auto justify-between sm:justify-start">
                 <button
                   type="button"
                   onClick={handleEnableAllIntakeFields}
-                  className="px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-accent text-xs font-bold text-foreground transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="flex-1 sm:flex-initial justify-center px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-accent text-xs font-bold text-foreground transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <CheckSquare className="h-3.5 w-3.5 text-primary" />
                   <span>Enable All</span>
@@ -1972,7 +1992,7 @@ function SettingsContent() {
                 <button
                   type="button"
                   onClick={handleResetDefaultIntakeFields}
-                  className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="flex-1 sm:flex-initial justify-center px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   <span>Reset Default</span>
@@ -1981,7 +2001,7 @@ function SettingsContent() {
             </div>
 
             {/* Category Filter Tabs */}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
+            <div className="flex items-center gap-2 pt-1 overflow-x-auto max-w-full scrollbar-none pb-1 touch-pan-x">
               {[
                 { id: "ALL", label: "All Fields", count: (layoutSettings.intakeFields || DEFAULT_INTAKE_FIELDS).length },
                 { id: "Demographics", label: "Demographics", count: (layoutSettings.intakeFields || DEFAULT_INTAKE_FIELDS).filter(f => f.category === "Demographics").length },
@@ -1996,7 +2016,7 @@ function SettingsContent() {
                     key={cat.id}
                     type="button"
                     onClick={() => setIntakeCategoryFilter(cat.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border inline-flex items-center gap-1.5 cursor-pointer select-none ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border inline-flex items-center gap-1.5 cursor-pointer select-none shrink-0 whitespace-nowrap ${
                       isActive
                         ? "bg-primary text-primary-foreground border-primary shadow-xs font-extrabold ring-1 ring-primary/20"
                         : "bg-background border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
@@ -2039,7 +2059,7 @@ function SettingsContent() {
                             Tag: {field.orderingName}
                           </span>
                         </div>
-                        <span className={`text-[9.5px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
+                        <span className={`text-[9.5px] font-extrabold uppercase px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap ${
                           field.enabled
                             ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
                             : "bg-muted text-muted-foreground border border-border"
@@ -2049,7 +2069,7 @@ function SettingsContent() {
                       </div>
 
                       {/* 3 Interactive Option Checkboxes */}
-                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/60 text-[11px]">
+                      <div className="grid grid-cols-3 gap-1.5 sm:gap-2 pt-2 border-t border-border/60 text-[10.5px] sm:text-[11px]">
                         {/* 1. Show on Registration Form */}
                         {(() => {
                           const isCore = field.key === "phone" || field.key === "address" || field.key === "name" || field.key === "ageGender" || field.key === "refDoctor";
@@ -2101,7 +2121,7 @@ function SettingsContent() {
           </div>
 
           {/* SECTION 4: REPORT ORDERING */}
-          <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
+          <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/80 pb-3">
               <div>
                 <h2 className="font-display text-base font-bold text-foreground flex items-center gap-2">
@@ -2112,11 +2132,11 @@ function SettingsContent() {
                   Click fields to select and sequence what appears in the patient information header on the report.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto w-full sm:w-auto justify-between sm:justify-start">
                 <button
                   type="button"
                   onClick={handleClearAllOrdering}
-                  className="px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="flex-1 sm:flex-initial justify-center px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   <span>Clear All</span>
@@ -2124,7 +2144,7 @@ function SettingsContent() {
                 <button
                   type="button"
                   onClick={handleResetDefaultOrdering}
-                  className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="flex-1 sm:flex-initial justify-center px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   <span>Reset Default</span>
@@ -2142,7 +2162,7 @@ function SettingsContent() {
                     key={fieldName}
                     type="button"
                     onClick={() => handleToggleOrderingField(fieldName)}
-                    className={`relative px-3.5 py-2 rounded-xl text-xs font-bold transition-all border inline-flex items-center gap-2 cursor-pointer select-none ${
+                    className={`relative px-3.5 py-2 rounded-xl text-xs font-bold transition-all border inline-flex items-center gap-2 cursor-pointer select-none shrink-0 whitespace-nowrap ${
                       isSelected
                         ? "bg-primary/10 border-primary text-primary shadow-xs ring-1 ring-primary/20 pr-7"
                         : "bg-background border-border/80 text-muted-foreground hover:text-foreground hover:border-border hover:bg-muted/40"
@@ -2161,15 +2181,15 @@ function SettingsContent() {
           </div>
 
           {/* SECTION: MULTI-PAGE TEST SEPARATION / SEPARATE PAGE PER TEST */}
-          <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
+          <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-3">
               <div>
-                <div className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-primary" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary shrink-0" />
                   <h2 className="font-display text-base font-bold text-foreground">
                     Multi-Page Test Separation (1 Test Per Page)
                   </h2>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 whitespace-nowrap ${
                     layoutSettings.separatePagePerTest
                       ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
                       : "bg-muted text-muted-foreground border border-border"
@@ -2215,15 +2235,15 @@ function SettingsContent() {
           </div>
 
           {/* SECTION: DEPARTMENT SEQUENCE & GROUPING PRIORITY */}
-          <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
+          <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
               <div>
-                <div className="flex items-center gap-2">
-                  <Layers className="h-5 w-5 text-primary" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Layers className="h-5 w-5 text-primary shrink-0" />
                   <h2 className="font-display text-base font-bold text-foreground">
-                    Department Sequence & Grouping Priority
+                    Department Sequence &amp; Grouping Priority
                   </h2>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold shrink-0 whitespace-nowrap ${
                     layoutSettings.groupByDepartment
                       ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
                       : "bg-muted text-muted-foreground border border-border"
@@ -2236,11 +2256,11 @@ function SettingsContent() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={handleResetDefaultDeptOrder}
-                  className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="w-full sm:w-auto justify-center px-3 py-1.5 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
                   title="Reset to default medical sequence (Haematology, Biochemistry, Serology, etc.)"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
@@ -2282,7 +2302,7 @@ function SettingsContent() {
 
             {/* Department Drag & Drop Reorder List */}
             <div className="space-y-2">
-              <div className="text-[11px] font-semibold text-muted-foreground flex items-center justify-between px-1">
+              <div className="text-[11px] font-semibold text-muted-foreground flex flex-col sm:flex-row sm:items-center justify-between gap-1 px-1">
                 <span>Drag &amp; Drop to Reorder Priority ({currentDeptOrder.length} Departments)</span>
                 <span className="text-[10px] text-primary font-medium">Hold &amp; Drag cards to change sequence</span>
               </div>
@@ -2352,7 +2372,7 @@ function SettingsContent() {
             </div>
 
             {/* Add Custom Department Input */}
-            <form onSubmit={handleAddCustomDept} className="flex items-center gap-2 pt-2">
+            <form onSubmit={handleAddCustomDept} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2">
               <input
                 type="text"
                 placeholder="Add another department (e.g. Molecular Biology, Allergy, Cytology)…"
@@ -2363,7 +2383,7 @@ function SettingsContent() {
               <button
                 type="submit"
                 disabled={!newCustomDept.trim()}
-                className="gradient-primary text-primary-foreground font-bold text-xs px-4 py-2 rounded-xl shadow-xs hover:-translate-y-px transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                className="gradient-primary text-primary-foreground font-bold text-xs px-4 py-2.5 sm:py-2 rounded-xl shadow-xs hover:-translate-y-px transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0 w-full sm:w-auto"
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>Add Department</span>
@@ -2372,11 +2392,11 @@ function SettingsContent() {
           </div>
 
           {/* SECTION 4: TESTS TYPOGRAPHY */}
-          <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
+          <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
             <div className="border-b border-border/80 pb-3">
               <h2 className="font-display text-base font-bold text-foreground flex items-center gap-2">
-                <Type className="h-4 w-4 text-primary" />
-                <span>Tests (Typography & Layout)</span>
+                <Type className="h-4 w-4 text-primary shrink-0" />
+                <span>Tests (Typography &amp; Layout)</span>
               </h2>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Customize font sizes, spacing, lines, and alignments for investigation headers and parameter rows.
@@ -2387,12 +2407,12 @@ function SettingsContent() {
             <div className="p-4 sm:p-5 rounded-2xl bg-muted/30 border border-border/80 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <Palette className="h-4 w-4 text-primary" />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Palette className="h-4 w-4 text-primary shrink-0" />
                     <h3 className="text-sm font-bold text-foreground">
                       Report Typography &amp; Font Family
                     </h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary border border-primary/20">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary border border-primary/20 shrink-0 whitespace-nowrap">
                       Zero-Latency Fast Print
                     </span>
                   </div>
@@ -2441,7 +2461,7 @@ function SettingsContent() {
                           >
                             {font.name}
                           </span>
-                          <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md ${
+                          <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md shrink-0 whitespace-nowrap ${
                             isSelected
                               ? "bg-primary text-primary-foreground"
                               : "bg-muted text-muted-foreground"
@@ -2723,7 +2743,7 @@ function SettingsContent() {
           </div>
 
           {/* SECTION 5: SPACING & INTERCHANGE COLUMNS */}
-          <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
+          <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
             <div className="border-b border-border/80 pb-3">
               <h2 className="font-display text-base font-bold text-foreground flex items-center gap-2">
                 <MoveHorizontal className="h-4 w-4 text-primary" />
@@ -2857,7 +2877,7 @@ function SettingsContent() {
                 </div>
                 <span>Unit</span>
                 {layoutSettings.spacing.interchangeColumns && (
-                  <span className="ml-1 text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-mono">
+                  <span className="ml-1 text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-mono shrink-0 whitespace-nowrap">
                     (Swapped)
                   </span>
                 )}
@@ -2866,7 +2886,7 @@ function SettingsContent() {
           </div>
 
           {/* SECTION 6: COLUMN WIDTH & LABELS */}
-          <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
+          <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
             <div className="border-b border-border/80 pb-3">
               <h2 className="font-display text-base font-bold text-foreground flex items-center gap-2">
                 <Columns className="h-4 w-4 text-primary" />
@@ -2941,15 +2961,15 @@ function SettingsContent() {
           </div>
 
             {/* SECTION 7: DOCTOR DIGITAL SIGNATURE & AUTHENTICATION */}
-            <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
+            <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/80 pb-4">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <PenTool className="h-5 w-5 text-primary" />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <PenTool className="h-5 w-5 text-primary shrink-0" />
                     <h2 className="font-display text-base font-bold text-foreground">
                       Doctor Digital Signatures
                     </h2>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 shrink-0 whitespace-nowrap">
                       {(layoutSettings.doctorSignatures || [layoutSettings.doctorSignature]).length} Doctor{(layoutSettings.doctorSignatures || [layoutSettings.doctorSignature]).length > 1 ? "s" : ""} Added
                     </span>
                   </div>
@@ -3222,7 +3242,7 @@ function SettingsContent() {
                           )}
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
                           <label className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-border bg-background hover:bg-muted/40 cursor-pointer text-xs font-bold select-none">
                             <input
                               type="checkbox"
@@ -3284,7 +3304,7 @@ function SettingsContent() {
                                     />
 
                                     <div className="absolute top-2 right-2 flex items-center gap-1.5">
-                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-600 text-white shadow-xs">
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-600 text-white shadow-xs shrink-0 whitespace-nowrap">
                                         Transparent PNG
                                       </span>
                                       <button
@@ -3433,7 +3453,7 @@ function SettingsContent() {
 
                           {/* Margins & Size Sliders Box */}
                           <div className="p-4 rounded-xl bg-muted/20 border border-border/80 space-y-4">
-                            <div className="flex flex-wrap items-center justify-between border-b border-border/80 pb-2.5 gap-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border/80 pb-2.5 gap-2">
                               <div className="flex items-center gap-2">
                                 <Sliders className="h-3.5 w-3.5 text-primary" />
                                 <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
@@ -3669,7 +3689,7 @@ function SettingsContent() {
             </div>
 
             {/* SECTION 8: END OF REPORT TEXT */}
-            <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
+            <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
               <div className="border-b border-border/80 pb-3">
                 <h2 className="font-display text-base font-bold text-foreground flex items-center gap-2">
                   <Asterisk className="h-4 w-4 text-primary" />
@@ -3738,10 +3758,10 @@ function SettingsContent() {
           <div className="lg:col-span-6 space-y-6">
             
             {/* 1. Bill Branding & Logo Customization */}
-            <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
+            <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
               <div className="border-b border-border/80 pb-3">
                 <h2 className="font-display text-base font-bold text-foreground flex items-center gap-2">
-                  <Receipt className="h-4 w-4 text-primary" />
+                  <Receipt className="h-4 w-4 text-primary shrink-0" />
                   <span>Bill Branding & Logo Configuration</span>
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -3769,18 +3789,20 @@ function SettingsContent() {
                 </div>
 
                 {billSettings.logoImage ? (
-                  <div className="relative rounded-xl border border-border bg-muted/30 p-3 flex items-center justify-between gap-4">
-                    <div className="h-12 w-24 rounded-lg overflow-hidden bg-white border border-border/80 shrink-0 flex items-center justify-center p-1">
-                      <img src={billSettings.logoImage} alt="Bill Logo" className="max-h-full max-w-full object-contain" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-foreground">Bill Logo Active</p>
-                      <p className="text-[11px] text-muted-foreground">Custom logo will be used on bills</p>
+                  <div className="relative rounded-xl border border-border bg-muted/30 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-12 w-24 rounded-lg overflow-hidden bg-white border border-border/80 shrink-0 flex items-center justify-center p-1">
+                        <img src={billSettings.logoImage} alt="Bill Logo" className="max-h-full max-w-full object-contain" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-foreground">Bill Logo Active</p>
+                        <p className="text-[11px] text-muted-foreground">Custom logo will be used on bills</p>
+                      </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => setBillSettings(prev => ({ ...prev, logoImage: null }))}
-                      className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
+                      className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer self-end sm:self-auto shrink-0"
                       title="Remove Bill Logo"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -3838,10 +3860,10 @@ function SettingsContent() {
             </div>
 
             {/* 2. Stationery Background & Margins */}
-            <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
+            <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
               <div className="border-b border-border/80 pb-3">
                 <h3 className="font-display text-base font-bold text-foreground flex items-center gap-2">
-                  <Layers className="h-4 w-4 text-primary" />
+                  <Layers className="h-4 w-4 text-primary shrink-0" />
                   <span>Letterhead Stationery Background & Layout</span>
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -3855,18 +3877,20 @@ function SettingsContent() {
                   Official Letterhead Background (A4 / A5)
                 </label>
                 {billSettings.bgImage ? (
-                  <div className="relative rounded-xl border border-border bg-muted/30 p-3 flex items-center justify-between gap-4">
-                    <div className="h-14 w-20 rounded overflow-hidden bg-white border border-border/80 shrink-0 flex items-center justify-center p-1">
-                      <img src={billSettings.bgImage} alt="Background" className="h-full w-full object-contain" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-foreground">Letterhead Background Active</p>
-                      <p className="text-[11px] text-muted-foreground">Bills will print directly overlaid on this stationery</p>
+                  <div className="relative rounded-xl border border-border bg-muted/30 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-14 w-20 rounded overflow-hidden bg-white border border-border/80 shrink-0 flex items-center justify-center p-1">
+                        <img src={billSettings.bgImage} alt="Background" className="h-full w-full object-contain" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-foreground">Letterhead Background Active</p>
+                        <p className="text-[11px] text-muted-foreground">Bills will print directly overlaid on this stationery</p>
+                      </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => setBillSettings(prev => ({ ...prev, bgImage: null }))}
-                      className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
+                      className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer self-end sm:self-auto shrink-0"
                       title="Remove Background"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -3926,7 +3950,7 @@ function SettingsContent() {
             </div>
 
             {/* 3. Checkboxes Grid: Field Visibility Options */}
-            <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
+            <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
               <div className="border-b border-border/80 pb-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Bill Field Visibility Options
@@ -3982,7 +4006,7 @@ function SettingsContent() {
             </div>
 
             {/* 4. Bill Margins */}
-            <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
+            <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
               <div className="border-b border-border/80 pb-3">
                 <h3 className="font-display font-bold text-sm text-foreground">Bill Page Margins & Spacing</h3>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -4099,8 +4123,8 @@ function SettingsContent() {
             </div>
 
             {/* 4. Bill Field Ordering (Image 2) */}
-            <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-border/80 pb-3">
+            <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-border/80 pb-3">
                 <div>
                   <h3 className="font-display font-bold text-sm text-foreground">Bill Field Ordering</h3>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -4110,7 +4134,7 @@ function SettingsContent() {
                 <button
                   type="button"
                   onClick={handleClearAllBillOrdering}
-                  className="px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="self-start sm:self-auto shrink-0 px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-2xs"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   <span>Clear All</span>
@@ -4146,7 +4170,7 @@ function SettingsContent() {
             </div>
 
             {/* 5. GST Details & UPI QR for Bill (Image 2) */}
-            <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
+            <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
               {/* GST Number */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between border-b border-border/80 pb-2">
@@ -4178,7 +4202,7 @@ function SettingsContent() {
               <div className="space-y-4 pt-3 border-t border-border/80">
                 <div className="flex items-center justify-between border-b border-border/80 pb-2">
                   <span className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                    <QrCode className="h-4 w-4 text-primary" />
+                    <QrCode className="h-4 w-4 text-primary shrink-0" />
                     <span>UPI QR for Bill</span>
                   </span>
                   <label className="flex items-center gap-2 text-xs font-semibold text-foreground cursor-pointer">
@@ -4198,18 +4222,18 @@ function SettingsContent() {
                     Upload Custom UPI Payment QR Code (PhonePe / GPay / Paytm / BharatPe / Bank QR)
                   </label>
                   {billSettings.upi.qrImageUrl ? (
-                    <div className="relative rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
+                    <div className="relative rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="h-16 w-16 rounded-lg overflow-hidden bg-white border border-border shrink-0 flex items-center justify-center p-1 shadow-2xs">
                           <img src={billSettings.upi.qrImageUrl} alt="Custom UPI QR" className="h-full w-full object-contain" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-xs font-bold text-foreground">Custom UPI QR Active</p>
                           <p className="text-[10.5px] text-muted-foreground">Will be printed on invoices with outstanding dues</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <label className="px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-2xs">
+                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+                        <label className="flex-1 sm:flex-initial justify-center px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-2xs">
                           <Upload className="h-3 w-3 text-primary" />
                           <span>Change</span>
                           <input type="file" accept="image/*" onChange={handleUpiQrUpload} className="hidden" />
@@ -4217,7 +4241,7 @@ function SettingsContent() {
                         <button
                           type="button"
                           onClick={() => setBillSettings(prev => ({ ...prev, upi: { ...prev.upi, qrImageUrl: null } }))}
-                          className="px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                          className="flex-1 sm:flex-initial justify-center px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
                         >
                           <Trash2 className="h-3 w-3" />
                           <span>Remove</span>
@@ -4274,7 +4298,7 @@ function SettingsContent() {
             </div>
 
             {/* 6. Terms and conditions & Signatures (Image 3) */}
-            <div className="p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
+            <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-5">
               <div className="border-b border-border/80 pb-3">
                 <h3 className="font-display font-bold text-sm text-foreground">Terms and conditions & Signatures</h3>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -4333,18 +4357,18 @@ function SettingsContent() {
 
           {/* Right Side: Live Interactive Invoice Preview */}
           <div className="lg:col-span-6 space-y-4">
-            <div className="flex items-center justify-between bg-card p-3 rounded-xl border border-border/80 shadow-xs">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-card p-3 rounded-xl border border-border/80 shadow-xs">
+              <div className="flex items-center justify-between sm:justify-start gap-2.5 w-full sm:w-auto">
                 <span className="text-xs font-bold text-foreground">Interactive Bill Canvas</span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-primary/10 text-primary">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-primary/10 text-primary shrink-0">
                   {billSettings.size} ({Math.round(previewScale * 100)}%)
                 </span>
               </div>
 
-              <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 border border-border/60">
+              <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 border border-border/60 shrink-0 ml-auto sm:ml-0">
                 <button
                   type="button"
-                  onClick={() => setPreviewScale(prev => Math.max(0.35, prev - 0.05))}
+                  onClick={() => setPreviewScale(prev => Math.max(0.25, Number((prev - 0.05).toFixed(2))))}
                   className="p-1 hover:bg-card rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                   title="Zoom Out"
                 >
@@ -4352,7 +4376,7 @@ function SettingsContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPreviewScale(0.55)}
+                  onClick={() => setPreviewScale(getResponsiveResetScale())}
                   className="p-1 hover:bg-card rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                   title="Reset Zoom"
                 >
@@ -4360,7 +4384,7 @@ function SettingsContent() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPreviewScale(prev => Math.min(0.85, prev + 0.05))}
+                  onClick={() => setPreviewScale(prev => Math.min(0.85, Number((prev + 0.05).toFixed(2))))}
                   className="p-1 hover:bg-card rounded text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                   title="Zoom In"
                 >
@@ -4369,20 +4393,22 @@ function SettingsContent() {
               </div>
             </div>
 
-            <div className="bg-muted/40 border border-border/80 rounded-2xl p-2 sm:p-6 flex justify-center overflow-auto sheet-pan-canvas min-h-[640px]">
-              <div
-                style={{
-                  transform: `scale(${previewScale})`,
-                  transformOrigin: "top center",
-                  width: billSettings.size === "A5" ? "559px" : "794px",
-                  height: billSettings.size === "A5" ? "794px" : "1123px",
-                  marginBottom: `-${(billSettings.size === "A5" ? 794 : 1123) * (1 - previewScale)}px`,
-                  marginRight: `-${(billSettings.size === "A5" ? 559 : 794) * (1 - previewScale) / 2}px`,
-                  marginLeft: `-${(billSettings.size === "A5" ? 559 : 794) * (1 - previewScale) / 2}px`,
-                }}
-                className="shadow-2xl ring-1 ring-border bg-white rounded-sm shrink-0 transition-transform duration-200"
-              >
-                <InvoiceSheet invoice={previewInvoiceData} settings={billSettings} />
+            <div className="bg-muted/40 border border-border/80 rounded-2xl p-2 sm:p-6 overflow-x-auto overflow-y-visible sheet-pan-canvas min-h-[420px] sm:min-h-[640px]">
+              <div className="min-w-fit mx-auto flex justify-center">
+                <div
+                  style={{
+                    transform: `scale(${previewScale})`,
+                    transformOrigin: "top center",
+                    width: billSettings.size === "A5" ? "559px" : "794px",
+                    height: billSettings.size === "A5" ? "794px" : "1123px",
+                    marginBottom: `-${(billSettings.size === "A5" ? 794 : 1123) * (1 - previewScale)}px`,
+                    marginRight: `-${(billSettings.size === "A5" ? 559 : 794) * (1 - previewScale) / 2}px`,
+                    marginLeft: `-${(billSettings.size === "A5" ? 559 : 794) * (1 - previewScale) / 2}px`,
+                  }}
+                  className="shadow-2xl ring-1 ring-border bg-white rounded-sm shrink-0 transition-transform duration-200"
+                >
+                  <InvoiceSheet invoice={previewInvoiceData} settings={billSettings} />
+                </div>
               </div>
             </div>
           </div>

@@ -105,19 +105,19 @@ export function PaymentGatewayTab() {
     <div className="space-y-6">
 
       {/* Top Banner */}
-      <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-xs relative overflow-hidden">
+      <div className="bg-card border border-border/80 rounded-2xl p-4 sm:p-6 shadow-xs relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <CreditCard className="h-6 w-6" />
+          <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <CreditCard className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h2 className="text-lg font-bold text-foreground">PayU Payment Gateway & Bank Settlement</h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 flex items-center gap-1">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-bold text-foreground">PayU Payment Gateway & Bank Settlement</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60 inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
                   <ShieldCheck className="h-3 w-3" /> 100% Direct Bank Settlement
                 </span>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border shrink-0 whitespace-nowrap ${
                   payuMode === "test"
                     ? "bg-amber-50 text-amber-700 border-amber-200"
                     : "bg-blue-50 text-blue-700 border-blue-200"
@@ -125,17 +125,17 @@ export function PaymentGatewayTab() {
                   {payuMode === "test" ? "Sandbox Test Mode" : "Live Production Mode"}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
+              <p className="text-xs text-muted-foreground mt-1 max-w-2xl leading-relaxed">
                 Configure your own PayU Merchant Key & Salt. When your B2B partners recharge via PayU (UPI QR, Cards, or NetBanking), 100% of the funds are deposited directly into your laboratory's verified bank account.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto w-full sm:w-auto">
             <button
               type="button"
               onClick={loadSettings}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-background hover:bg-accent text-xs font-semibold text-foreground transition-all cursor-pointer"
+              className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-border bg-background hover:bg-accent text-xs font-semibold text-foreground transition-all cursor-pointer w-full sm:w-auto"
               title="Refresh credentials from server"
             >
               <RefreshCw className="h-3.5 w-3.5" />
@@ -147,15 +147,15 @@ export function PaymentGatewayTab() {
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Master Toggle & Mode Selection */}
-        <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-xs space-y-5">
-          <div className="flex items-center justify-between">
+        <div className="bg-card border border-border/80 rounded-2xl p-4 sm:p-6 shadow-xs space-y-5">
+          <div className="flex items-start sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-foreground">Enable Online B2B Wallet Recharge</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Allow B2B franchisees & collection centers to recharge their wallet balance online via PayU.
               </p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
+            <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5 sm:mt-0">
               <input
                 type="checkbox"
                 checked={isEnabled}
@@ -206,13 +206,13 @@ export function PaymentGatewayTab() {
         </div>
 
         {/* Section: PayU Credentials */}
-        <div className="bg-card border border-border/80 rounded-2xl p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="bg-card border border-border/80 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center shrink-0">
                 <CreditCard className="h-5 w-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h3 className="text-sm font-bold text-foreground">PayU Merchant API Credentials</h3>
                 <p className="text-xs text-muted-foreground">
                   Found in your PayU Dashboard under <strong>Settings &gt; API Keys</strong>.
@@ -220,7 +220,7 @@ export function PaymentGatewayTab() {
               </div>
             </div>
 
-            <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground">
+            <span className="text-[10px] sm:text-xs font-mono font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground shrink-0 self-start sm:self-auto">
               SHA-512 Hash
             </span>
           </div>
@@ -273,7 +273,7 @@ export function PaymentGatewayTab() {
           <button
             type="submit"
             disabled={isSaving}
-            className="flex items-center gap-2 h-11 px-6 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-md hover:-translate-y-px active:scale-[0.98] transition-all cursor-pointer"
+            className="w-full sm:w-auto justify-center flex items-center gap-2 h-11 px-6 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs shadow-md hover:-translate-y-px active:scale-[0.98] transition-all cursor-pointer"
           >
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             <span>{isSaving ? "Saving Settings..." : "Save Payment Gateway Settings"}</span>

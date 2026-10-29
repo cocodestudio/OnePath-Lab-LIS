@@ -96,6 +96,14 @@ export default function Navbar() {
   const [todaySales, setTodaySales] = useState<string>("₹0");
   const [copiedLabId, setCopiedLabId] = useState(false);
   const [isLocked, setIsLocked] = useState<boolean>(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Warm-up prefetch for /login so that logout redirect is ultra-fast
+  useEffect(() => {
+    try {
+      router.prefetch("/login");
+    } catch {}
+  }, [router]);
 
   useEffect(() => {
     setUser(getStoredUser());
@@ -651,15 +659,15 @@ export default function Navbar() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border/80 bg-card/80 hover:bg-accent text-foreground text-xs font-bold transition-all shadow-xs ring-inset-top"
+              className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl border border-border/80 bg-card/80 hover:bg-accent text-foreground text-xs font-bold transition-all shadow-xs ring-inset-top shrink-0"
               title="Help & Support"
             >
-              <LifeBuoy className="h-4 w-4 text-primary" />
+              <LifeBuoy className="h-4 w-4 text-primary shrink-0" />
               <span className="hidden md:inline">Help</span>
               <ChevronDown className="h-3 w-3 text-muted-foreground/60 hidden sm:inline" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 rounded-2xl p-1.5 shadow-xl border-border/90">
+          <DropdownMenuContent align="end" sideOffset={8} collisionPadding={12} className="w-56 rounded-2xl p-1.5 shadow-xl border-border/90 z-50">
             <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2.5 py-1">
               Helpdesk & Assistance
             </DropdownMenuLabel>
@@ -707,27 +715,27 @@ export default function Navbar() {
         <DropdownMenu open={isNotifOpen} onOpenChange={setIsNotifOpen}>
           <DropdownMenuTrigger asChild>
             <button
-              className="relative p-2.5 rounded-xl border border-border/80 bg-card/80 hover:bg-accent text-foreground transition-all shadow-xs outline-none"
+              className="relative p-2 sm:p-2.5 min-h-[36px] min-w-[36px] flex items-center justify-center rounded-xl border border-border/80 bg-card/80 hover:bg-accent text-foreground transition-all shadow-xs outline-none shrink-0"
               title="System Notifications"
               aria-label="Notifications"
             >
-              <Bell className="h-4 w-4 text-foreground/80" />
+              <Bell className="h-4 w-4 text-foreground/80 shrink-0" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full gradient-primary text-[9px] font-bold text-primary-foreground animate-pulse shadow-sm">
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full gradient-primary text-[9px] font-bold text-primary-foreground animate-pulse shadow-sm pointer-events-none">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
             </button>
           </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" className="w-[calc(100vw-1.5rem)] max-w-[360px] sm:w-96 p-0 rounded-2xl border-border/90 bg-card shadow-2xl overflow-hidden animate-scale-in">
+          <DropdownMenuContent align="end" sideOffset={8} collisionPadding={12} className="w-[calc(100vw-1.5rem)] max-w-[360px] sm:w-96 p-0 rounded-2xl border-border/90 bg-card shadow-2xl overflow-hidden animate-scale-in z-50">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-border/80 bg-muted/40">
+            <div className="flex items-center justify-between px-3.5 sm:px-4 py-3 sm:py-3.5 border-b border-border/80 bg-muted/40">
               <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4 text-primary" />
+                <Bell className="h-4 w-4 text-primary shrink-0" />
                 <span className="font-bold text-xs text-foreground uppercase tracking-wider">Notifications</span>
                 {unreadCount > 0 && (
-                  <span className="font-mono text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.2 rounded-full">
+                  <span className="font-mono text-[10px] font-bold bg-primary/10 text-primary px-2 py-0.2 rounded-full shrink-0">
                     {unreadCount} new
                   </span>
                 )}
@@ -736,7 +744,7 @@ export default function Navbar() {
               {unreadCount > 0 && (
                 <button
                   onClick={markAllAsRead}
-                  className="text-[11px] font-bold text-primary hover:underline"
+                  className="text-[11px] font-bold text-primary hover:underline shrink-0"
                 >
                   Mark all as read
                 </button>
@@ -780,9 +788,9 @@ export default function Navbar() {
                               type="button"
                               onClick={(e) => deleteNotification(notif.id, e)}
                               title="Delete notification"
-                              className="opacity-70 hover:opacity-100 p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all cursor-pointer"
+                              className="opacity-70 hover:opacity-100 p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all cursor-pointer"
                             >
-                              <Trash2 className="h-3 w-3" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         </div>
@@ -801,15 +809,15 @@ export default function Navbar() {
             </div>
 
             {/* Dropdown Footer: Clear Notifications */}
-            <div className="p-2.5 px-3 bg-muted/40 border-t border-border/80 flex items-center justify-between">
-              <span className="text-[11px] font-medium text-muted-foreground">
+            <div className="p-2.5 px-3 bg-muted/40 border-t border-border/80 flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+              <span className="text-[11px] font-medium text-muted-foreground shrink-0">
                 {notifications.length} notification{notifications.length === 1 ? "" : "s"}
               </span>
               <button
                 type="button"
                 onClick={clearAllNotifications}
                 disabled={notifications.length === 0}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer w-full sm:w-auto shrink-0"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 <span>Clear All Notifications</span>
@@ -839,7 +847,13 @@ export default function Navbar() {
         </div>
 
         {/* Profile dropdown (matching exact Screenshot 1 reference) */}
-        <DropdownMenu>
+        <DropdownMenu onOpenChange={(open) => {
+          if (open) {
+            try {
+              router.prefetch("/login");
+            } catch {}
+          }
+        }}>
           <DropdownMenuTrigger className="flex items-center gap-2 rounded-xl pl-1 pr-2 py-1 outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 cursor-pointer">
             <Avatar className="h-8 w-8">
               {userAvatar && <AvatarImage src={userAvatar} alt={userProfileName} className="object-cover" />}
@@ -954,14 +968,33 @@ export default function Navbar() {
             {/* Logout */}
             <div className="p-2 border-t border-border/80 bg-muted/20">
               <DropdownMenuItem
+                disabled={isLoggingOut}
                 onSelect={(e) => {
                   e.preventDefault();
-                  logout();
+                  if (isLoggingOut) return;
+                  setIsLoggingOut(true);
+                  // Brief micro-delay to let the sleek targeted shimmer effect run on the logout button before zero-leak purge & redirect
+                  setTimeout(() => {
+                    logout();
+                  }, 240);
                 }}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
+                className={`relative overflow-hidden flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer select-none ${
+                  isLoggingOut
+                    ? "logout-btn-shimmer text-destructive pointer-events-none shadow-xs"
+                    : "text-destructive hover:bg-destructive/10"
+                }`}
               >
-                <LogOut className="h-4 w-4" />
-                <span>Logout</span>
+                {isLoggingOut ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-destructive shrink-0 relative z-10" />
+                    <span className="relative z-10 font-bold tracking-wide">Logging out…</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="h-4 w-4 shrink-0" />
+                    <span>Logout</span>
+                  </>
+                )}
               </DropdownMenuItem>
             </div>
           </DropdownMenuContent>

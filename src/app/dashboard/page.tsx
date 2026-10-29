@@ -317,10 +317,32 @@ export default function DashboardOverviewPage() {
       };
     }
 
+    const isFreshSession = typeof window !== "undefined" && (
+      sessionStorage.getItem("lis_fresh_login") === "1" ||
+      sessionStorage.getItem("lis_logged_out") === "true" ||
+      (!stats.totalPatients && !stats.totalReports && !recentReports.length && !dueBills.length)
+    );
+
+    if (isFreshSession) {
+      try {
+        sessionStorage.removeItem("lis_fresh_login");
+        sessionStorage.removeItem("lis_logged_out");
+      } catch {}
+      memoryOverviewLabId = null;
+      memoryOverviewStats = null;
+      memoryOverviewCharts = null;
+      memoryOverviewReports = null;
+      memoryOverviewDues = null;
+      memoryOverviewLab = null;
+      lastOverviewFetchTime = 0;
+      lastLabFetchTime = 0;
+      refreshLabInfo(true);
+    }
+
     const now = Date.now();
     const isCacheFresh = (now - lastOverviewFetchTime < 45000) && (stats.totalPatients > 0 || recentReports.length > 0 || dueBills.length > 0);
-    if (!isCacheFresh) {
-      loadDashboardData(false);
+    if (!isCacheFresh || isFreshSession) {
+      loadDashboardData(isFreshSession);
     }
 
     return () => {
@@ -358,7 +380,7 @@ export default function DashboardOverviewPage() {
     }
     try {
       const hasExistingData = stats.totalPatients > 0 || recentReports.length > 0 || dueBills.length > 0;
-      if (forceRefresh && !hasExistingData) {
+      if (!hasExistingData) {
         setLoading(true);
       }
       const [analytics, reports, duesRes] = await Promise.all([

@@ -24,6 +24,7 @@ import { TipTapEditor } from "@/components/tiptap-editor";
 import { PrintPreviewDialog } from "@/components/print-preview-dialog";
 import type { ReportSheetData, ReportTest } from "@/components/report-sheet";
 import { normalizeReportSettings } from "@/lib/report-settings";
+import { sanitizeHtml } from "@/lib/sanitize";
 import {
   isGenuineCustomEditorTest,
   isStandardAnalyteTest,
@@ -1774,7 +1775,7 @@ export default function TestMasterPage() {
                                   </div>
                                   <div
                                     className="text-xs text-foreground/90 max-h-56 overflow-y-auto leading-relaxed border-t border-blue-500/15 pt-2"
-                                    dangerouslySetInnerHTML={{ __html: test.interpretation! }}
+                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(test.interpretation || "") }}
                                   />
                                 </div>
                               )}
@@ -1926,7 +1927,7 @@ export default function TestMasterPage() {
                               </div>
                               <div
                                 className="text-[11px] text-foreground/90 max-h-40 overflow-y-auto leading-relaxed border-t border-blue-500/15 pt-1.5"
-                                dangerouslySetInnerHTML={{ __html: test.interpretation! }}
+                                dangerouslySetInnerHTML={{ __html: sanitizeHtml(test.interpretation || "") }}
                               />
                             </div>
                           )}
@@ -2094,13 +2095,33 @@ export default function TestMasterPage() {
                       <MoreVertical className="h-4 w-4" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem
+                      onClick={() => setNotesModalOpen(true)}
+                      className="gap-2 text-xs cursor-pointer font-medium"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                      <span className="truncate">
+                        {isMeaningfulContent(latestInterpretationRef.current || interpretation)
+                          ? "Clinical Interpretation ✓"
+                          : "Clinical Interpretation"}
+                      </span>
+                    </DropdownMenuItem>
+                    {reportFormat === "custom_editor" && (
+                      <DropdownMenuItem
+                        onClick={() => setLayoutModalOpen(true)}
+                        className="gap-2 text-xs cursor-pointer font-medium"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span>Customize Table Layout</span>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={handleOpenLivePreview} className="gap-2 text-xs cursor-pointer">
-                      <Eye className="h-3.5 w-3.5 text-emerald-500" />
+                      <Eye className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                       <span>Live Preview</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setDialogOpen(false)} className="gap-2 text-xs cursor-pointer">
-                      <ArrowLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                    <DropdownMenuItem onClick={() => setDialogOpen(false)} className="gap-2 text-xs cursor-pointer text-muted-foreground">
+                      <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
                       <span>Cancel &amp; Close</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -2916,67 +2937,126 @@ export default function TestMasterPage() {
           </div>
 
           {/* Bottom Action Footer Bar */}
-          <div className="p-4 px-6 sm:px-8 border-t border-border bg-background/95 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {reportFormat === "custom_editor" ? (
-                <span className="font-semibold text-primary">Custom Table Mode</span>
-              ) : (
-                <span className="font-semibold">{subTests.length} Parameter{subTests.length !== 1 ? "s" : ""}</span>
-              )}
-              <span>•</span>
-              <span className="font-semibold text-foreground">Category: {category === "Other" && customCategory ? customCategory : category}</span>
+          <div className="min-h-14 sm:min-h-16 py-2 sm:py-0 border-t border-border/80 bg-card px-3 sm:px-6 flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 text-xs text-muted-foreground min-w-0">
+              <div className="flex items-center gap-1.5 truncate">
+                {reportFormat === "custom_editor" ? (
+                  <span className="font-semibold text-primary truncate">Custom Table Mode</span>
+                ) : (
+                  <span className="font-semibold whitespace-nowrap">{subTests.length} Param{subTests.length !== 1 ? "s" : ""}</span>
+                )}
+                <span>•</span>
+                <span className="font-semibold text-foreground truncate">
+                  {category === "Other" && customCategory ? customCategory : category}
+                </span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDialogOpen(false)}
-                disabled={saving}
-                className="rounded-xl px-5 h-11 text-xs font-semibold cursor-pointer"
-              >
-                Cancel
-              </Button>
+            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+              {/* Desktop Secondary Action Buttons (>= sm) */}
+              <div className="hidden sm:flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                  disabled={saving}
+                  className="rounded-lg px-3 sm:px-4 h-8 sm:h-10 text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </Button>
 
-              {reportFormat === "custom_editor" && (
+                {reportFormat === "custom_editor" && (
+                  <button
+                    type="button"
+                    onClick={() => setLayoutModalOpen(true)}
+                    disabled={saving}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg border border-primary/40 bg-primary/10 text-xs font-bold text-primary hover:bg-primary/20 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    <FileText className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-primary" />
+                    <span>Customize Table Layout</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => setLayoutModalOpen(true)}
+                  onClick={() => setNotesModalOpen(true)}
                   disabled={saving}
-                  className="inline-flex items-center gap-2 px-4 h-11 rounded-xl border border-primary/40 bg-primary/10 text-xs font-bold text-primary hover:bg-primary/20 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-xs disabled:opacity-50 ${
+                    isMeaningfulContent(latestInterpretationRef.current || interpretation)
+                      ? "border-blue-500/50 bg-blue-50/80 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-500/30"
+                      : "border-border bg-card text-foreground hover:bg-muted"
+                  }`}
+                  title="Configure or generate clinical interpretation and diagnostic remarks"
                 >
-                  <FileText className="h-4 w-4 text-primary" />
-                  <span>Customize Table Layout</span>
+                  <FileText className="h-3.5 sm:h-4 w-3.5 sm:w-4 text-blue-500" />
+                  <span>
+                    {isMeaningfulContent(latestInterpretationRef.current || interpretation)
+                      ? "Clinical Interpretation ✓"
+                      : "Clinical Interpretation"}
+                  </span>
                 </button>
-              )}
+              </div>
 
-              <button
-                type="button"
-                onClick={() => setNotesModalOpen(true)}
-                disabled={saving}
-                className={`inline-flex items-center gap-2 px-4 h-11 rounded-xl border text-xs font-bold transition-all cursor-pointer shadow-xs disabled:opacity-50 ${
-                  isMeaningfulContent(latestInterpretationRef.current || interpretation)
-                    ? "border-blue-500/50 bg-blue-50/80 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-500/30"
-                    : "border-border bg-card text-foreground hover:bg-muted"
-                }`}
-                title="Configure or generate clinical interpretation and diagnostic remarks"
-              >
-                <FileText className="h-4 w-4 text-blue-500" />
-                <span>
-                  {isMeaningfulContent(latestInterpretationRef.current || interpretation)
-                    ? "Clinical Interpretation ✓"
-                    : "Clinical Interpretation"}
-                </span>
-              </button>
+              {/* Mobile Three-Dots Dropdown (< sm) */}
+              <div className="flex sm:hidden">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="p-2 rounded-lg border border-border/80 bg-background text-muted-foreground hover:text-foreground cursor-pointer"
+                      title="More options"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem
+                      onClick={() => setNotesModalOpen(true)}
+                      className="gap-2 text-xs cursor-pointer font-medium"
+                    >
+                      <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                      <span className="truncate">
+                        {isMeaningfulContent(latestInterpretationRef.current || interpretation)
+                          ? "Clinical Interpretation ✓"
+                          : "Clinical Interpretation"}
+                      </span>
+                    </DropdownMenuItem>
 
+                    {reportFormat === "custom_editor" && (
+                      <DropdownMenuItem
+                        onClick={() => setLayoutModalOpen(true)}
+                        className="gap-2 text-xs cursor-pointer font-medium"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span>Customize Table Layout</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    <DropdownMenuItem onClick={handleOpenLivePreview} className="gap-2 text-xs cursor-pointer">
+                      <Eye className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                      <span>Live Preview</span>
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem
+                      onClick={() => setDialogOpen(false)}
+                      className="gap-2 text-xs cursor-pointer text-muted-foreground"
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+                      <span>Cancel &amp; Close</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Primary Action Button (Always visible on all screen sizes) */}
               <Button
                 type="button"
                 onClick={handleSaveTest}
                 disabled={saving}
-                className="rounded-xl px-8 h-11 gradient-primary text-primary-foreground text-xs font-bold shadow-md hover:brightness-105 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                className="rounded-lg px-3 sm:px-6 h-8 sm:h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-md flex items-center gap-1.5 sm:gap-2 cursor-pointer disabled:opacity-50 shrink-0"
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                <span>{saving ? "Saving to Database..." : (editingTest ? "Save Changes" : "Create Test")}</span>
+                {saving ? <Loader2 className="h-3.5 sm:h-4 w-3.5 sm:w-4 animate-spin" /> : <Check className="h-3.5 sm:h-4 w-3.5 sm:w-4" />}
+                <span>{saving ? "Saving..." : (editingTest ? "Save Changes" : "Create Test")}</span>
               </Button>
             </div>
           </div>
@@ -3439,14 +3519,14 @@ export default function TestMasterPage() {
           RICH TIPTAP CLINICAL INTERPRETATION MODAL
       ========================================================================= */}
       <Dialog open={notesModalOpen} onOpenChange={setNotesModalOpen}>
-        <DialogContent className="max-w-6xl w-[95vw] h-[88vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl border-border/80 shadow-2xl bg-card">
-          <div className="p-4 px-6 border-b border-border/80 bg-card flex items-center justify-between shrink-0">
-            <div>
-              <DialogTitle className="font-display text-base font-bold text-foreground flex items-center gap-2">
-                <FileText className="h-4 w-4 text-primary" />
-                <span>Clinical Interpretation: {name || "Main Test"}</span>
+        <DialogContent className="w-full max-w-full sm:max-w-6xl sm:w-[95vw] h-[100dvh] sm:h-[88vh] max-h-[100dvh] sm:max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-none sm:rounded-2xl border-0 sm:border border-border/80 shadow-2xl bg-card">
+          <div className="p-3.5 sm:p-4 px-4 sm:px-6 border-b border-border/80 bg-card flex items-center justify-between shrink-0">
+            <div className="min-w-0 pr-2">
+              <DialogTitle className="font-display text-sm sm:text-base font-bold text-foreground flex items-center gap-1.5 sm:gap-2 truncate">
+                <FileText className="h-4 w-4 text-primary shrink-0" />
+                <span className="truncate">Clinical Interpretation: {name || "Main Test"}</span>
               </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
+              <DialogDescription className="text-xs text-muted-foreground hidden sm:block">
                 Diagnostic guidelines, biological reference intervals, and pathological interpretation printed on patient reports.
               </DialogDescription>
             </div>
@@ -3459,20 +3539,20 @@ export default function TestMasterPage() {
                 }
                 setNotesModalOpen(false);
               }}
-              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted transition-colors cursor-pointer border border-border/70 shadow-xs"
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground bg-muted/40 hover:bg-muted transition-colors cursor-pointer border border-border/70 shadow-xs shrink-0"
               title="Close dialog"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="p-6 flex-1 overflow-y-auto bg-muted/10">
+          <div className="p-3.5 sm:p-6 flex-1 overflow-y-auto bg-muted/10">
             <div className="space-y-2 h-full flex flex-col">
               <div className="flex items-center justify-between shrink-0">
                 <label className="font-bold text-xs text-foreground block">
                   Diagnostic Significance &amp; Pathological Guidelines:
                 </label>
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-[11px] text-muted-foreground hidden sm:inline">
                   Reference tables and clinical remarks will appear directly in patient reports
                 </span>
               </div>
@@ -3490,16 +3570,16 @@ export default function TestMasterPage() {
             </div>
           </div>
 
-          <div className="p-4 px-6 border-t border-border bg-muted/30 flex items-center justify-between shrink-0">
-            <span className="text-[11px] text-muted-foreground">
+          <div className="p-3.5 sm:p-4 px-4 sm:px-6 border-t border-border bg-muted/30 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
+            <span className="text-[10.5px] sm:text-[11px] text-muted-foreground hidden sm:inline">
               Clinical interpretation is automatically appended to patient diagnostic reports when enabled.
             </span>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap sm:flex-nowrap items-center justify-end gap-2 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={handleAiGenerateInterpretation}
                 disabled={generatingAiInterpretation}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-purple-500/40 bg-purple-50 hover:bg-purple-100/80 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-purple-500/40 bg-purple-50 hover:bg-purple-100/80 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Generate comprehensive clinical interpretation with reference table using AI"
               >
                 {generatingAiInterpretation ? (
@@ -3507,7 +3587,7 @@ export default function TestMasterPage() {
                 ) : (
                   <Sparkles className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
                 )}
-                <span>{generatingAiInterpretation ? "Generating Interpretation..." : "AI Generate Interpretation"}</span>
+                <span>{generatingAiInterpretation ? "Generating..." : "AI Generate Interpretation"}</span>
               </button>
               <Button
                 type="button"
@@ -3520,7 +3600,7 @@ export default function TestMasterPage() {
                   }
                   setNotesModalOpen(false);
                 }}
-                className="rounded-xl px-5 h-10 text-xs font-semibold cursor-pointer"
+                className="flex-1 sm:flex-initial rounded-xl px-4 sm:px-5 h-9 sm:h-10 text-xs font-semibold cursor-pointer justify-center"
               >
                 Close
               </Button>
@@ -3563,7 +3643,7 @@ export default function TestMasterPage() {
                     toast.success("Interpretation saved to test form! Click 'Create Test' to save the complete test.");
                   }
                 }}
-                className="rounded-xl px-7 h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-sm"
+                className="w-full sm:w-auto rounded-xl px-5 sm:px-7 h-9 sm:h-10 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-sm justify-center"
               >
                 Done / Save Interpretation
               </Button>

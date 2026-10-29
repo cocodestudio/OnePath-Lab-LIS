@@ -407,19 +407,19 @@ export function CollectionCentersTab() {
       {viewMode === "ADD" && (
         <div className="rounded-2xl bg-card border border-border/80 shadow-xs overflow-hidden animate-fade-in">
           {/* Header with Back Button */}
-          <div className="p-6 border-b border-border/70 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+          <div className="p-4 sm:p-6 border-b border-border/70 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-2.5 sm:gap-3">
               <button
                 type="button"
                 onClick={() => setViewMode("LIST")}
-                className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
+                className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer shrink-0"
                 title="Back to Accounts List"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
               <div>
-                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-primary" />
+                <h3 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2 flex-wrap">
+                  <Shield className="h-5 w-5 text-primary shrink-0" />
                   <span>Create New RBAC Staff / Partner Account</span>
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -431,14 +431,14 @@ export function CollectionCentersTab() {
             <button
               type="button"
               onClick={() => setViewMode("LIST")}
-              className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer self-start sm:self-auto"
+              className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer self-start sm:self-auto shrink-0"
             >
               Cancel
             </button>
           </div>
 
           {/* Full-width Form Body */}
-          <form onSubmit={handleCreateCenter} className="p-6 sm:p-8 space-y-6">
+          <form onSubmit={handleCreateCenter} className="p-4 sm:p-8 space-y-5 sm:space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Card 1: Account Information & Role Selection */}
               <div className="p-5 rounded-xl bg-muted/30 border border-border/70 space-y-4">
@@ -619,18 +619,18 @@ export function CollectionCentersTab() {
                     Tick or untick specific modules to customize exactly what this staff member or branch is allowed to perform.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
                   <button
                     type="button"
                     onClick={() => setPermissions(ROLE_DEFAULT_PERMISSIONS[role] || [])}
-                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground transition-colors cursor-pointer"
+                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground transition-colors cursor-pointer shrink-0 whitespace-nowrap"
                   >
                     Reset to {role} Defaults
                   </button>
                   <button
                     type="button"
                     onClick={() => setPermissions(ALL_PERMISSIONS.map(p => p.key))}
-                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer"
+                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
                   >
                     Select All
                   </button>
@@ -677,18 +677,18 @@ export function CollectionCentersTab() {
             </div>
 
             {/* Bottom Actions */}
-            <div className="pt-4 border-t border-border/70 flex items-center justify-end gap-3">
+            <div className="pt-4 border-t border-border/70 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3">
               <button
                 type="button"
                 onClick={() => setViewMode("LIST")}
-                className="px-5 py-2.5 rounded-xl border border-border bg-card text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-border bg-card text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer text-center"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full sm:w-auto justify-center px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-50 text-center"
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 <span>
@@ -706,19 +706,19 @@ export function CollectionCentersTab() {
       {viewMode === "EDIT" && editingCenter && (
         <div className="rounded-2xl bg-card border border-border/80 shadow-xs overflow-hidden animate-fade-in">
           {/* Header with Back Button */}
-          <div className="p-6 border-b border-border/70 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+          <div className="p-4 sm:p-6 border-b border-border/70 bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-2.5 sm:gap-3">
               <button
                 type="button"
                 onClick={() => { setViewMode("LIST"); setEditingCenter(null); }}
-                className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
+                className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer shrink-0"
                 title="Back to Accounts List"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
               <div>
-                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                  <KeyRound className="h-5 w-5 text-primary" />
+                <h3 className="text-base sm:text-lg font-bold text-foreground flex items-center gap-2 flex-wrap">
+                  <KeyRound className="h-5 w-5 text-primary shrink-0" />
                   <span>Edit Account: {editingCenter.name}</span>
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -730,14 +730,14 @@ export function CollectionCentersTab() {
             <button
               type="button"
               onClick={() => { setViewMode("LIST"); setEditingCenter(null); }}
-              className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer self-start sm:self-auto"
+              className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer self-start sm:self-auto shrink-0"
             >
               Cancel
             </button>
           </div>
 
           {/* Full-width Form Body */}
-          <form onSubmit={handleUpdateCenter} className="p-6 sm:p-8 space-y-6">
+          <form onSubmit={handleUpdateCenter} className="p-4 sm:p-8 space-y-5 sm:space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Card 1: Details & Role */}
               <div className="p-5 rounded-xl bg-muted/30 border border-border/70 space-y-4">
@@ -884,18 +884,18 @@ export function CollectionCentersTab() {
                     Tick or untick specific modules to update operational access for this account.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
                   <button
                     type="button"
                     onClick={() => setEditPermissions(ROLE_DEFAULT_PERMISSIONS[editRole] || [])}
-                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground transition-colors cursor-pointer"
+                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground transition-colors cursor-pointer shrink-0 whitespace-nowrap"
                   >
                     Reset to {editRole} Defaults
                   </button>
                   <button
                     type="button"
                     onClick={() => setEditPermissions(ALL_PERMISSIONS.map(p => p.key))}
-                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer"
+                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
                   >
                     Select All
                   </button>
@@ -941,18 +941,18 @@ export function CollectionCentersTab() {
             </div>
 
             {/* Bottom Actions */}
-            <div className="pt-4 border-t border-border/70 flex items-center justify-end gap-3">
+            <div className="pt-4 border-t border-border/70 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3">
               <button
                 type="button"
                 onClick={() => { setViewMode("LIST"); setEditingCenter(null); }}
-                className="px-5 py-2.5 rounded-xl border border-border bg-card text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-border bg-card text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer text-center"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full sm:w-auto justify-center px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-50 text-center"
               >
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 <span>Save Changes</span>
@@ -968,44 +968,44 @@ export function CollectionCentersTab() {
       {viewMode === "LIST" && (
         <>
           {/* Metric Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <ShieldCheck className="h-6 w-6" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="p-4 sm:p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex items-center gap-3 sm:gap-4">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <ShieldCheck className="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Total Accounts</p>
-                <p className="text-2xl font-extrabold text-foreground tracking-tight mt-0.5">{centers.length}</p>
+                <p className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight mt-0.5">{centers.length}</p>
               </div>
             </div>
 
-            <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
-                <Users className="h-6 w-6" />
+            <div className="p-4 sm:p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex items-center gap-3 sm:gap-4">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                <Users className="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Receptionists</p>
-                <p className="text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 tracking-tight mt-0.5">{receptionistCount}</p>
+                <p className="text-xl sm:text-2xl font-extrabold text-indigo-600 dark:text-indigo-400 tracking-tight mt-0.5">{receptionistCount}</p>
               </div>
             </div>
 
-            <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                <Building2 className="h-6 w-6" />
+            <div className="p-4 sm:p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex items-center gap-3 sm:gap-4">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Building2 className="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Collection Centers</p>
-                <p className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 tracking-tight mt-0.5">{ccCount}</p>
+                <p className="text-xl sm:text-2xl font-extrabold text-amber-600 dark:text-amber-400 tracking-tight mt-0.5">{ccCount}</p>
               </div>
             </div>
 
-            <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-                <Briefcase className="h-6 w-6" />
+            <div className="p-4 sm:p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex items-center gap-3 sm:gap-4">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                <Briefcase className="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">B2B Partner Labs</p>
-                <p className="text-2xl font-extrabold text-purple-600 dark:text-purple-400 tracking-tight mt-0.5">{b2bCount}</p>
+                <p className="text-xl sm:text-2xl font-extrabold text-purple-600 dark:text-purple-400 tracking-tight mt-0.5">{b2bCount}</p>
               </div>
             </div>
           </div>
@@ -1013,11 +1013,11 @@ export function CollectionCentersTab() {
           {/* Main Container */}
           <div className="rounded-2xl bg-card border border-border/80 shadow-xs overflow-hidden">
             {/* Table Header: Title, Filter Pills, and Add Button */}
-            <div className="p-5 border-b border-border/70 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-muted/20">
+            <div className="p-4 sm:p-5 border-b border-border/70 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-muted/20">
               <div>
-                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <span>RBAC Staff & Partner Roles</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary">
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2 flex-wrap">
+                  <span>RBAC Staff &amp; Partner Roles</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary shrink-0 whitespace-nowrap">
                     {filteredCenters.length} Accounts
                   </span>
                 </h3>
@@ -1026,13 +1026,13 @@ export function CollectionCentersTab() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-between sm:justify-start">
                 {/* Filter Pills */}
-                <div className="p-1 bg-background rounded-xl border border-border flex items-center gap-1">
+                <div className="p-1 bg-background rounded-xl border border-border flex items-center gap-1 overflow-x-auto max-w-full scrollbar-none shrink-0">
                   <button
                     type="button"
                     onClick={() => setRoleFilter("ALL")}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                       roleFilter === "ALL" ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -1041,7 +1041,7 @@ export function CollectionCentersTab() {
                   <button
                     type="button"
                     onClick={() => setRoleFilter("RECEPTIONIST")}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                       roleFilter === "RECEPTIONIST" ? "bg-indigo-600 text-white shadow-xs" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -1050,7 +1050,7 @@ export function CollectionCentersTab() {
                   <button
                     type="button"
                     onClick={() => setRoleFilter("COLLECTION_CENTER")}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                       roleFilter === "COLLECTION_CENTER" ? "bg-amber-600 text-white shadow-xs" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -1059,7 +1059,7 @@ export function CollectionCentersTab() {
                   <button
                     type="button"
                     onClick={() => setRoleFilter("B2B")}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                       roleFilter === "B2B" ? "bg-purple-600 text-white shadow-xs" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -1067,24 +1067,26 @@ export function CollectionCentersTab() {
                   </button>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shadow-xs cursor-pointer"
-                  title="Refresh Accounts"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
-                </button>
+                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-between sm:justify-start">
+                  <button
+                    type="button"
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shadow-xs cursor-pointer shrink-0"
+                    title="Refresh Accounts"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setViewMode("ADD")}
-                  className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  <PlusCircle className="h-4 w-4" />
-                  <span>Add Role / Terminal</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("ADD")}
+                    className="flex-1 sm:flex-initial justify-center px-3.5 sm:px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <PlusCircle className="h-4 w-4 shrink-0" />
+                    <span>Add Role / Terminal</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1107,8 +1109,8 @@ export function CollectionCentersTab() {
               </div>
             ) : (
               /* Table of Accounts */
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="overflow-x-auto min-w-full">
+                <table className="w-full text-left border-collapse min-w-[760px]">
                   <thead>
                     <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
                       <th className="py-3 px-5">Staff / Partner Name</th>

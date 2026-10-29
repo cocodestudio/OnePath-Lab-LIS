@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import "sileo/styles.css";
 
 export const viewport: Viewport = {
   width: "device-width",

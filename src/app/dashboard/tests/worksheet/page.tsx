@@ -312,12 +312,12 @@ export default function WorksheetPage() {
     <div className="max-w-7xl mx-auto space-y-6 pb-24 animate-fade-in">
       {/* ── Page Header ────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl gradient-primary text-primary-foreground flex items-center justify-center shadow-xs">
-            <FileSpreadsheet className="h-5 w-5" />
+        <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl sm:rounded-2xl gradient-primary text-primary-foreground flex items-center justify-center shadow-xs shrink-0 mt-0.5 sm:mt-0">
+            <FileSpreadsheet className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
-          <div>
-            <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2 flex-wrap">
+          <div className="min-w-0">
+            <h1 className="font-display text-lg sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <span>Manual Laboratory Worksheet</span>
               <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                 1-Click Download

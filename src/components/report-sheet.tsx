@@ -920,9 +920,10 @@ export function buildReportBlocks(
           const isBlank = !rawVal || rawVal === "<p></p>" || rawVal === "<p><br></p>" || rawVal === "<p><br/></p>";
           const isPlainStatusVal = !rawVal.includes("<") && /^(normal(\s*[\/\-]\s*negative)?|negative|positive)$/i.test(rawVal.trim());
           const initialTemplate = getCustomEditorInitialTemplate(item.test);
-          const content = (!isBlank && !isPlainStatusVal)
+          const rawContent = (!isBlank && !isPlainStatusVal)
             ? rawVal
             : (initialTemplate || "<p class='text-zinc-400 italic text-xs'>No content recorded.</p>");
+          const content = sanitizeHtml(rawContent);
 
           // Check if content has a multi-row table (e.g. Culture & Sensitivity with 39 rows) that needs multi-page pagination
           let isMultiPageTable = false;
@@ -971,7 +972,7 @@ export function buildReportBlocks(
                       textAlign: "left",
                       lineHeight: 1.35,
                     }}
-                    dangerouslySetInnerHTML={{ __html: preTableHtml }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(preTableHtml) }}
                   />
                 ),
               });
@@ -987,8 +988,8 @@ export function buildReportBlocks(
               const contHeader = theadHtml ? (
                 <div className="report-custom-editor-content" style={{ marginTop: "2px", marginBottom: "0px" }}>
                   <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", margin: 0 }}>
-                    <colgroup dangerouslySetInnerHTML={{ __html: colgroupHtml }} />
-                    <thead dangerouslySetInnerHTML={{ __html: theadHtml }} />
+                    <colgroup dangerouslySetInnerHTML={{ __html: sanitizeHtml(colgroupHtml) }} />
+                    <thead dangerouslySetInnerHTML={{ __html: sanitizeHtml(theadHtml) }} />
                   </table>
                 </div>
               ) : null;
@@ -999,11 +1000,11 @@ export function buildReportBlocks(
                 node: (
                   <div className="report-custom-editor-content">
                     <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", margin: 0 }}>
-                      <colgroup dangerouslySetInnerHTML={{ __html: colgroupHtml }} />
+                      <colgroup dangerouslySetInnerHTML={{ __html: sanitizeHtml(colgroupHtml) }} />
                       {isFirstChunk && theadHtml && (
-                        <thead dangerouslySetInnerHTML={{ __html: theadHtml }} />
+                        <thead dangerouslySetInnerHTML={{ __html: sanitizeHtml(theadHtml) }} />
                       )}
-                      <tbody dangerouslySetInnerHTML={{ __html: rowsHtml }} />
+                      <tbody dangerouslySetInnerHTML={{ __html: sanitizeHtml(rowsHtml) }} />
                     </table>
                   </div>
                 ),
@@ -1022,7 +1023,7 @@ export function buildReportBlocks(
                       fontSize: `${typo.testParameterFontSize || 10.5}px`,
                       textAlign: "left",
                     }}
-                    dangerouslySetInnerHTML={{ __html: postTableHtml }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(postTableHtml) }}
                   />
                 ),
               });

@@ -186,6 +186,11 @@ export default function B2bWalletsPage() {
     setReferenceId("");
     setNotes("");
     setTopUpMessage(null);
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setTimeout(() => {
+        document.getElementById("b2b-action-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
   };
 
   // Open In-Page Horizontal History Panel
@@ -194,6 +199,11 @@ export default function B2bWalletsPage() {
     setActivePanel("HISTORY");
     setHistoryTypeFilter("ALL");
     fetchPartnerHistory(client.id);
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setTimeout(() => {
+        document.getElementById("b2b-action-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
   };
 
   // Switch between TopUp and History in the horizontal panel
@@ -694,53 +704,57 @@ export default function B2bWalletsPage() {
         {/* ── RIGHT COLUMN: IN-PAGE HORIZONTAL WORKSPACE (OPENS SIDE-BY-SIDE ON THE SAME PAGE) ── */}
         {activePanel !== "NONE" && selectedClient && (
           <div className="lg:col-span-5 space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="rounded-2xl border-2 border-primary/30 bg-card overflow-hidden shadow-lg">
+            <div id="b2b-action-panel" className="rounded-2xl border-2 border-primary/30 bg-card overflow-hidden shadow-lg">
               {/* Panel Header */}
-              <div className="p-4 border-b border-border/80 bg-muted/30 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                    {activePanel === "TOPUP" ? <Wallet className="h-4 w-4" /> : <History className="h-4 w-4" />}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-foreground truncate max-w-[200px]" title={selectedClient.lab_name || selectedClient.name}>
-                      {selectedClient.lab_name || selectedClient.name}
-                    </h3>
-                    <p className="text-[11px] text-muted-foreground font-mono">
-                      Bal: <strong className="text-foreground">{formatCurrency(selectedClient.wallet_balance || 0)}</strong> · Tier: {selectedClient.rate_tier || "HIGH"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  {/* Switch between Topup and History tab */}
-                  <div className="flex items-center bg-muted p-0.5 rounded-lg text-xs">
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchPanel("TOPUP")}
-                      className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                        activePanel === "TOPUP" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Top-up
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSwitchPanel("HISTORY")}
-                      className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                        activePanel === "HISTORY" ? "bg-card text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      Ledger
-                    </button>
+              <div className="p-3.5 sm:p-4 border-b border-border/80 bg-muted/30 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      {activePanel === "TOPUP" ? <Wallet className="h-4 w-4" /> : <History className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-sm text-foreground truncate" title={selectedClient.lab_name || selectedClient.name}>
+                        {selectedClient.lab_name || selectedClient.name}
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground font-mono truncate">
+                        Bal: <strong className="text-foreground">{formatCurrency(selectedClient.wallet_balance || 0)}</strong> · Tier: {selectedClient.rate_tier || "HIGH"}
+                      </p>
+                    </div>
                   </div>
 
                   <button
                     type="button"
                     onClick={handleClosePanel}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer shrink-0"
                     title="Close Side Panel"
                   >
                     <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* Top-up / Ledger Switcher - Exact same shape as Ledger Log switcher, 100% responsive */}
+                <div className="flex items-center bg-muted/80 p-1 rounded-xl border border-border/60 text-xs w-full shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchPanel("TOPUP")}
+                    className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer text-center ${
+                      activePanel === "TOPUP"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Top-up
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchPanel("HISTORY")}
+                    className={`flex-1 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer text-center ${
+                      activePanel === "HISTORY"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Ledger
                   </button>
                 </div>
               </div>
@@ -951,17 +965,19 @@ export default function B2bWalletsPage() {
               {/* ───────────────────────────────────────────────────────────── */}
               {activePanel === "HISTORY" && (
                 <div className="p-4 sm:p-5 space-y-3 max-h-[600px] overflow-y-auto">
-                  {/* Filter Pills */}
-                  <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-2.5">
-                    <span className="text-[11px] font-bold text-muted-foreground uppercase">
+                  {/* Filter Pills - Identical shape to Top-up/Ledger switcher */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-2.5">
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                       Ledger Log ({filteredHistory.length})
                     </span>
-                    <div className="flex items-center gap-1 bg-muted p-0.5 rounded-lg text-xs">
+                    <div className="flex items-center bg-muted/80 p-1 rounded-xl border border-border/60 text-xs w-full sm:w-auto shadow-2xs">
                       <button
                         type="button"
                         onClick={() => setHistoryTypeFilter("ALL")}
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer ${
-                          historyTypeFilter === "ALL" ? "bg-card text-foreground shadow-2xs" : "text-muted-foreground"
+                        className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
+                          historyTypeFilter === "ALL"
+                            ? "bg-card text-foreground shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
                         All
@@ -969,8 +985,10 @@ export default function B2bWalletsPage() {
                       <button
                         type="button"
                         onClick={() => setHistoryTypeFilter("CREDIT")}
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer ${
-                          historyTypeFilter === "CREDIT" ? "bg-emerald-500/15 text-emerald-600 shadow-2xs" : "text-muted-foreground"
+                        className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
+                          historyTypeFilter === "CREDIT"
+                            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
                         Credits
@@ -978,8 +996,10 @@ export default function B2bWalletsPage() {
                       <button
                         type="button"
                         onClick={() => setHistoryTypeFilter("DEBIT")}
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer ${
-                          historyTypeFilter === "DEBIT" ? "bg-rose-500/15 text-rose-600 shadow-2xs" : "text-muted-foreground"
+                        className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
+                          historyTypeFilter === "DEBIT"
+                            ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 shadow-xs"
+                            : "text-muted-foreground hover:text-foreground"
                         }`}
                       >
                         Debits
@@ -1059,9 +1079,9 @@ export default function B2bWalletsPage() {
                               {t.description || "Wallet Adjustment"}
                             </p>
 
-                            <div className="flex items-center justify-between text-[10.5px] text-muted-foreground pt-1 border-t border-border/50">
-                              <span>{formatDate(date)} · {method}</span>
-                              <span className="font-mono">Bal: {balAfter !== undefined ? formatCurrency(balAfter) : "—"}</span>
+                            <div className="flex flex-wrap items-center justify-between gap-1 text-[10.5px] text-muted-foreground pt-1 border-t border-border/50">
+                              <span className="truncate">{formatDate(date)} · {method}</span>
+                              <span className="font-mono shrink-0">Bal: {balAfter !== undefined ? formatCurrency(balAfter) : "—"}</span>
                             </div>
                           </div>
                         );
