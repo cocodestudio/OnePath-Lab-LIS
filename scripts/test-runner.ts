@@ -4209,6 +4209,171 @@ assert(
   "[NAVBAR TOUCH TARGET] Notification trigger button enforces accessible touch target and non-intercepting badge"
 );
 
+
+// ==============================================================================
+// 44. Comprehensive LIS AI Assistant Training, Role-Based Access & Tech Shielding
+// ==============================================================================
+console.log("\n▶ MODULE 44: Comprehensive LIS AI Assistant Training, Role-Based Access & Tech Shielding");
+
+const aiWidgetSrc44 = fs.readFileSync(path.resolve(__dirname, "../src/components/ai-guide-widget.tsx"), "utf-8");
+const aiBackendSrc44 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/AiController.php"), "utf-8");
+
+// 44.1 Frontend AI Guide - Role-Aware FAQs & Quick Prompts
+assert(
+  aiWidgetSrc44.includes("ADMIN_FAQ_SUGGESTIONS") &&
+  aiWidgetSrc44.includes("AI Smart Clinical Report") &&
+  aiWidgetSrc44.includes("Manual Batch Worksheet") &&
+  aiWidgetSrc44.includes("Diagnostic Health Packages") &&
+  aiWidgetSrc44.includes("Rate List & 1-Click % Discount") &&
+  aiWidgetSrc44.includes("Dues & Balance Collection") &&
+  aiWidgetSrc44.includes("Monthly Expenses & P&L") &&
+  aiWidgetSrc44.includes("Sample Rejection & Recollection") &&
+  aiWidgetSrc44.includes("Lab Account & Daily Quota") &&
+  aiWidgetSrc44.includes("RBAC & Staff Terminals"),
+  "[AI GUIDE WIDGET FAQS] Frontend AI Guide widget includes quick prompts for all modern modules"
+);
+
+// 44.2 Frontend AI Fallback - Sections 14 through 25
+assert(
+  aiWidgetSrc44.includes("14. AI Smart Clinical Reports") &&
+  aiWidgetSrc44.includes("15. Manual Laboratory Worksheet") &&
+  aiWidgetSrc44.includes("16. Diagnostic Health Packages") &&
+  aiWidgetSrc44.includes("17. Rate List Master & Agreements") &&
+  aiWidgetSrc44.includes("18. Dues Management & Outstanding Balance") &&
+  aiWidgetSrc44.includes("19. Monthly Business & Expenses Register") &&
+  aiWidgetSrc44.includes("20. Sample Rejection & Recollection") &&
+  aiWidgetSrc44.includes("21. Lab Account, Subscriptions & GST Invoices") &&
+  aiWidgetSrc44.includes("22. Role-Based Access Control (RBAC) & Terminal Accounts") &&
+  aiWidgetSrc44.includes("23. Custom Editor & Narrative Histopathology Reports") &&
+  aiWidgetSrc44.includes("24. Outsourced Cases & Batch Printing") &&
+  aiWidgetSrc44.includes("25. Help & Technical Support System"),
+  "[AI CLIENT FALLBACK SECTIONS] Frontend fallback knowledge base contains full guidance for sections 14 through 25"
+);
+
+// 44.3 Strict Tech Shielding & Role Security Checks
+assert(
+  aiWidgetSrc44.includes('"laravel"') &&
+  aiWidgetSrc44.includes('"source code"') &&
+  aiWidgetSrc44.includes("OnePath LIS is a proprietary, secure enterprise laboratory information system"),
+  "[TECH SHIELDING CLIENT] Frontend AI guide intercepts and shields technical stack and source code queries"
+);
+
+// 44.4 Backend AI Controller - System Prompt Role Coverage
+assert(
+  aiBackendSrc44.includes("ROLE 1: COLLECTION CENTER (CC) PORTAL") &&
+  aiBackendSrc44.includes("ROLE 2: RECEPTIONIST (FRONT DESK) PORTAL") &&
+  aiBackendSrc44.includes("ROLE 3: B2B PARTNER PORTAL") &&
+  aiBackendSrc44.includes("ROLE 4: ADMIN / PATHOLOGIST / SUPER ADMIN"),
+  "[BACKEND AI ROLES] Backend AI controller defines explicit clinical and financial role boundaries"
+);
+
+// 44.5 Backend AI Controller - Modern Feature System Prompt Coverage
+assert(
+  aiBackendSrc44.includes("Collection Centers CANNOT enter test results") &&
+  aiBackendSrc44.includes("Receptionists do not enter test result values") &&
+  aiBackendSrc44.includes("B2B Partners only see their own patients") &&
+  aiBackendSrc44.includes("AI Smart Clinical Reports") &&
+  aiBackendSrc44.includes("Role-Based Access Control (RBAC)"),
+  "[BACKEND AI SYSTEM PROMPT] Backend system prompt comprehensively trains the AI model on all modern LIS workflows"
+);
+
+// 44.6 Backend Fallback Engine Completeness
+assert(
+  aiBackendSrc44.includes("14. AI Smart Clinical Reports & Visual Executive Dossier") &&
+  aiBackendSrc44.includes("15. Manual Laboratory Worksheet (Batch Bench Testing)") &&
+  aiBackendSrc44.includes("16. Diagnostic Health Packages") &&
+  aiBackendSrc44.includes("17. Rate List Master & B2B Custom Agreements") &&
+  aiBackendSrc44.includes("18. Dues Management & Outstanding Balance Collection") &&
+  aiBackendSrc44.includes("19. Monthly Business & Operational Expenses Register") &&
+  aiBackendSrc44.includes("20. Sample Rejection & Quality Control Recollection") &&
+  aiBackendSrc44.includes("21. Lab Account, SaaS Subscription & GST Tax Invoices") &&
+  aiBackendSrc44.includes("22. Role-Based Access Control (RBAC) & Terminal Accounts") &&
+  aiBackendSrc44.includes("23. Custom Editor & Narrative Histopathology / Biopsy Reports") &&
+  aiBackendSrc44.includes("24. Outsourced Cases & Batch Report Printing") &&
+  aiBackendSrc44.includes("25. Help & Technical Support System"),
+  "[BACKEND AI FALLBACK ENGINE] Backend offline fallback engine mirrors all modern sections 14 through 25"
+);
+
+// ==============================================================================
+// 45. Pre-Generated Vector PDF Caching & Zero-Resource Concurrency Engine (Approach A)
+// ==============================================================================
+console.log("\n▶ MODULE 45: Pre-Generated Vector PDF Caching & Zero-Resource Concurrency Engine (Approach A)");
+
+const pdfRouteSrc45 = fs.readFileSync(
+  path.join(__dirname, "../src/app/api/reports/download-pdf/route.ts"),
+  "utf-8"
+);
+
+assert(
+  pdfRouteSrc45.includes("crypto.createHash(\"sha256\").update(html).digest(\"hex\")"),
+  "[PDF CACHE DETERMINISM] Next.js route uses cryptographic SHA-256 content hashing for deterministic PDF cache keys"
+);
+
+assert(
+  pdfRouteSrc45.includes(".cache") && pdfRouteSrc45.includes("reports-pdf"),
+  "[PDF DISK PERSISTENCE] Next.js route establishes local disk cache directory for pre-generated vector PDFs"
+);
+
+assert(
+  pdfRouteSrc45.includes("X-PDF-Cache") &&
+  pdfRouteSrc45.includes("\"HIT\"") &&
+  pdfRouteSrc45.includes("\"MISS\""),
+  "[PDF CACHE TELEMETRY] Next.js route emits X-PDF-Cache HIT/MISS telemetry headers"
+);
+
+assert(
+  pdfRouteSrc45.includes("inflightGenerations") &&
+  pdfRouteSrc45.includes("new Map<string, Promise<Buffer>>()"),
+  "[PDF REQUEST DEDUPLICATION] Next.js route prevents duplicate concurrent Chromium runs via SingleFlight map"
+);
+
+assert(
+  pdfRouteSrc45.includes("MAX_CONCURRENT_CHROMIUM") &&
+  pdfRouteSrc45.includes("acquireSlot") &&
+  pdfRouteSrc45.includes("releaseSlot"),
+  "[PDF CONCURRENCY GUARD] Next.js route bounds simultaneous Chromium instances with semaphore to eliminate OOM server crashes"
+);
+
+assert(
+  pdfRouteSrc45.includes("preferCSSPageSize: true") &&
+  pdfRouteSrc45.includes("deviceScaleFactor: 2"),
+  "[PDF PRISTINE VECTOR QUALITY] Chromium preserves high-DPI 2x vector scaling and exact CSS page size"
+);
+
+// ==============================================================================
+// 46. Responsive AI Assistant Window, Responsive Send Button & Instant Topic Dismissal
+// ==============================================================================
+console.log("\n▶ MODULE 46: Responsive AI Assistant Window, Responsive Send Button & Instant Topic Dismissal");
+
+const aiWidgetSrc46 = fs.readFileSync(path.resolve(__dirname, "../src/components/ai-guide-widget.tsx"), "utf-8");
+
+// 46.1 Mobile & PC Responsive Window Container
+assert(
+  aiWidgetSrc46.includes("fixed inset-x-2 bottom-2 sm:inset-x-auto sm:bottom-6 sm:left-4 md:left-[268px]") &&
+  aiWidgetSrc46.includes("w-auto sm:w-[460px] md:w-[480px]") &&
+  aiWidgetSrc46.includes("max-w-[calc(100vw-16px)] sm:max-w-[500px]") &&
+  aiWidgetSrc46.includes("h-[calc(100dvh-16px)] sm:h-[620px] max-h-[calc(100dvh-16px)] sm:max-h-[740px]"),
+  "[AI WINDOW RESPONSIVE CONTAINER] AI guide window adapts dynamically across mobile viewports and desktop sidebar layout"
+);
+
+// 46.2 Mobile Responsive Send Button & Input Form
+assert(
+  aiWidgetSrc46.includes("min-h-[32px] sm:h-7.5 px-3 sm:px-3.5") &&
+  aiWidgetSrc46.includes("shrink-0 whitespace-nowrap") &&
+  aiWidgetSrc46.includes("Tap <strong>Send</strong>") &&
+  aiWidgetSrc46.includes("Press <strong>Enter ↵</strong> to send"),
+  "[AI SEND BUTTON RESPONSIVENESS] Send button and bottom hints adapt cleanly for touch screens and keyboard input"
+);
+
+// 46.3 Common Help Topics Instant Dismissal & Auto-Scroll
+assert(
+  aiWidgetSrc46.includes("hasUserMessage = useMemo(() =>") &&
+  aiWidgetSrc46.includes('messages.some((m) => m.role === "user")') &&
+  aiWidgetSrc46.includes("!hasUserMessage && !loading && (") &&
+  aiWidgetSrc46.includes("scrollToBottom()"),
+  "[COMMON TOPICS DISMISSAL BUG FIX] Common help topics disappear immediately upon user command and chat auto-scrolls smoothly"
+);
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 

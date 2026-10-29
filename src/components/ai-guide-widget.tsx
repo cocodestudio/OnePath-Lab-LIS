@@ -7,7 +7,7 @@ import {
   ArrowRight, ExternalLink, HelpCircle,
   FlaskConical, Users, FileText, Settings,
   Cpu, Receipt, Layers, Compass, Loader2,
-  Clock, Activity, Wallet, Boxes
+  Clock, Activity, Wallet, Boxes, FileSpreadsheet, Shield, AlertTriangle
 } from "lucide-react";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 
@@ -123,14 +123,54 @@ const B2B_FAQ_SUGGESTIONS = [
 // 4. Lab Administrator / Pathologist / Super Admin Options
 const ADMIN_FAQ_SUGGESTIONS = [
   {
-    icon: Users,
-    label: "Patient Registration",
-    query: "How do I register a new patient and print vial barcodes?",
+    icon: Sparkles,
+    label: "AI Smart Clinical Report",
+    query: "How to generate and customize 4-page visual AI Smart Reports with organ wellness scores?",
+  },
+  {
+    icon: FileSpreadsheet,
+    label: "Manual Batch Worksheet",
+    query: "How to generate and download batch worksheets for laboratory bench testing?",
+  },
+  {
+    icon: Boxes,
+    label: "Diagnostic Health Packages",
+    query: "How to create bundled health checkup packages and calculate patient savings?",
   },
   {
     icon: Layers,
-    label: "1-Test-Per-Page Print",
-    query: "How to print each test on a separate page in reports?",
+    label: "Rate List & 1-Click % Discount",
+    query: "How to configure B2B custom rate agreements and 1-click % discount presets?",
+  },
+  {
+    icon: Receipt,
+    label: "Dues & Balance Collection",
+    query: "How to track pending patient dues and accept partial or full payments?",
+  },
+  {
+    icon: Activity,
+    label: "Monthly Expenses & P&L",
+    query: "How to log operational lab expenses and track monthly revenue and net profit?",
+  },
+  {
+    icon: AlertTriangle,
+    label: "Sample Rejection & Recollection",
+    query: "How to reject hemolyzed or clotted samples and request recollection?",
+  },
+  {
+    icon: Settings,
+    label: "Lab Account & Daily Quota",
+    query: "How does the daily 50 free bill quota, WhatsApp credits, and GST tax invoices work?",
+  },
+  {
+    icon: Shield,
+    label: "RBAC & Staff Terminals",
+    query: "How to create role-based staff logins and set granular module permissions?",
+  },
+  {
+    icon: Cpu,
+    label: "Analyzer Machine Bridge",
+    query: "How to connect automated cell counter or analyzer to LIS via ASTM or HL7?",
   },
   {
     icon: FileText,
@@ -138,36 +178,12 @@ const ADMIN_FAQ_SUGGESTIONS = [
     query: "How to enter test results and generate AI clinical impressions?",
   },
   {
-    icon: Settings,
-    label: "Letterhead & Margins",
-    query: "How to upload letterhead and configure print margins?",
-  },
-  {
-    icon: FlaskConical,
-    label: "Test Master & Rates",
-    query: "How to add a new test and configure pricing in rate list?",
-  },
-  {
-    icon: Cpu,
-    label: "Analyzer Machine Bridge",
-    query: "How to connect automated cell counter or analyzer to LIS?",
-  },
-  {
-    icon: Layers,
-    label: "Collection Centers & B2B",
-    query: "How to add collection centers and manage B2B wallets?",
-  },
-  {
-    icon: Receipt,
-    label: "ABHA ID & ABDM Poster",
-    query: "How to create ABHA ID and use the QR poster?",
-  },
-  {
-    icon: Boxes,
-    label: "Inventory & Reagents",
-    query: "How to manage pathology inventory, stock in new lots, and log daily consumption?",
+    icon: Users,
+    label: "Patient Registration & Barcode",
+    query: "How do I register a new patient and print vial barcodes?",
   },
 ];
+
 
 function getWelcomeMessage(role: string): string {
   if (role === "COLLECTION_CENTER") {
@@ -320,6 +336,18 @@ export function AiGuideWidget() {
     if (userRole === "B2B") return B2B_FAQ_SUGGESTIONS;
     return ADMIN_FAQ_SUGGESTIONS;
   }, [userRole]);
+
+  // Check if any user message has been sent in the active conversation
+  const hasUserMessage = useMemo(() => {
+    return messages.some((m) => m.role === "user");
+  }, [messages]);
+
+  // Auto-scroll to latest message on new message or loading state change
+  useEffect(() => {
+    if (isOpen) {
+      scrollToBottom();
+    }
+  }, [messages, loading, isOpen]);
 
   // Listen for custom trigger events from the sidebar
   useEffect(() => {
@@ -533,40 +561,40 @@ export function AiGuideWidget() {
         }`}
       />
 
-      {/* =========================================================================
-          FLOATING CHATBOX WINDOW (Positioned at bottom-left adjacent to sidebar)
+{/* =========================================================================
+          FLOATING CHATBOX WINDOW (Responsive on PC, Tablets and Mobile)
       ========================================================================= */}
       <div
-        className={`fixed bottom-4 sm:bottom-6 left-3 md:left-[268px] z-50 w-[calc(100vw-24px)] sm:w-[460px] md:w-[480px] max-w-[500px] h-[calc(100dvh-80px)] sm:h-[620px] max-h-[740px] flex flex-col rounded-2xl border border-slate-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden origin-bottom-left transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`fixed inset-x-2 bottom-2 sm:inset-x-auto sm:bottom-6 sm:left-4 md:left-[268px] z-50 w-auto sm:w-[460px] md:w-[480px] max-w-[calc(100vw-16px)] sm:max-w-[500px] h-[calc(100dvh-16px)] sm:h-[620px] max-h-[calc(100dvh-16px)] sm:max-h-[740px] flex flex-col rounded-2xl border border-slate-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden origin-bottom-left transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isOpen
             ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
             : "opacity-0 scale-90 translate-y-4 pointer-events-none"
         }`}
       >
         {/* Header */}
-        <div className="p-3.5 px-4 bg-slate-50/90 dark:bg-zinc-800/60 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-              <Bot className="h-4 w-4" />
+        <div className="p-3 sm:p-3.5 px-3.5 sm:px-4 bg-slate-50/90 dark:bg-zinc-800/60 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between shrink-0 gap-2">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+              <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">{portalInfo.title}</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-semibold text-[9px] border border-emerald-200 dark:border-emerald-800">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+                <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate">{portalInfo.title}</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-semibold text-[9px] border border-emerald-200 dark:border-emerald-800 shrink-0 whitespace-nowrap">
                   {portalInfo.badge}
                 </span>
               </div>
-              <p className="text-[10.5px] text-slate-500 dark:text-slate-400">
+              <p className="text-[10px] sm:text-[10.5px] text-slate-500 dark:text-slate-400 truncate max-w-[180px] sm:max-w-xs">
                 {portalInfo.subtitle}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
             <button
               type="button"
               onClick={handleResetChat}
-              className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="min-h-[30px] min-w-[30px] sm:min-h-[28px] sm:min-w-[28px] flex items-center justify-center p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
               title="Clear conversation"
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -574,7 +602,7 @@ export function AiGuideWidget() {
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="min-h-[30px] min-w-[30px] sm:min-h-[28px] sm:min-w-[28px] flex items-center justify-center p-1.5 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
               title="Close"
             >
               <X className="h-4 w-4" />
@@ -583,33 +611,33 @@ export function AiGuideWidget() {
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-3.5 space-y-3 bg-slate-50/40 dark:bg-zinc-950/40">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-3.5 space-y-3 bg-slate-50/40 dark:bg-zinc-950/40">
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              className={`flex gap-1.5 sm:gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.role === "assistant" && (
-                <div className="w-6 h-6 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 mt-0.5">
-                  <Bot className="h-3.5 w-3.5" />
+                <div className="w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 mt-0.5">
+                  <Bot className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                 </div>
               )}
 
               <div
-                className={`relative max-w-[88%] rounded-xl p-3 shadow-2xs ${
+                className={`relative max-w-[90%] sm:max-w-[85%] rounded-xl p-2.5 sm:p-3 shadow-2xs text-xs sm:text-[13px] ${
                   msg.role === "user"
-                    ? "bg-emerald-600 text-white rounded-tr-xs font-medium text-xs"
+                    ? "bg-emerald-600 text-white rounded-tr-xs font-medium"
                     : "bg-white dark:bg-zinc-900 border border-slate-200/90 dark:border-zinc-800 text-slate-800 dark:text-zinc-100 rounded-tl-xs"
                 }`}
               >
                 {msg.role === "user" ? (
-                  <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  <p className="whitespace-pre-wrap leading-relaxed break-words">{msg.content}</p>
                 ) : (
                   renderMessageContent(msg.content)
                 )}
                 <span
                   suppressHydrationWarning
-                  className={`block text-[9px] mt-1.5 text-right ${
+                  className={`block text-[8.5px] sm:text-[9px] mt-1.5 text-right ${
                     msg.role === "user" ? "text-emerald-100/70" : "text-slate-400"
                   }`}
                 >
@@ -621,22 +649,22 @@ export function AiGuideWidget() {
 
           {/* Typing Loader */}
           {loading && (
-            <div className="flex gap-2 items-center">
-              <div className="w-6 h-6 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
-                <Bot className="h-3.5 w-3.5" />
+            <div className="flex gap-1.5 sm:gap-2 items-center">
+              <div className="w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                <Bot className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               </div>
               <div className="px-3 py-2 rounded-xl rounded-tl-xs bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-500 dark:text-slate-400 text-xs flex items-center gap-2 shadow-2xs">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" />
-                <span>OnePath AI is finding the guide...</span>
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 shrink-0" />
+                <span className="truncate">OnePath AI is finding the guide...</span>
               </div>
             </div>
           )}
 
-          {/* Quick FAQ Suggestion Cards */}
-          {messages.length <= 2 && (
+          {/* Quick FAQ Suggestion Cards (Shown ONLY before user enters any prompt - removes immediately upon sending) */}
+          {!hasUserMessage && !loading && (
             <div className="pt-2 space-y-2">
               <div className="flex items-center gap-1.5 text-[10.5px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">
-                <Compass className="h-3.5 w-3.5 text-emerald-600" />
+                <Compass className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
                 <span>Common Help Topics:</span>
               </div>
               <div className="grid grid-cols-1 gap-1.5">
@@ -647,11 +675,11 @@ export function AiGuideWidget() {
                       key={idx}
                       type="button"
                       onClick={() => handleSendMessage(faq.query)}
-                      className="w-full flex items-center justify-between p-2.5 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50/50 dark:hover:bg-zinc-800/70 hover:border-emerald-300 dark:hover:border-zinc-700 text-left transition-all group cursor-pointer shadow-2xs"
+                      className="w-full flex items-center justify-between p-2.5 px-3 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-emerald-50/50 dark:hover:bg-zinc-800/70 hover:border-emerald-300 dark:hover:border-zinc-700 text-left transition-all group cursor-pointer shadow-2xs active:scale-[0.99]"
                     >
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-800 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                      <div className="flex items-center gap-2 text-xs font-medium text-slate-800 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 min-w-0 pr-2">
                         <Icon className="h-3.5 w-3.5 text-slate-400 group-hover:text-emerald-600 shrink-0" />
-                        <span>{faq.label}</span>
+                        <span className="truncate">{faq.label}</span>
                       </div>
                       <ArrowRight className="h-3 w-3 text-slate-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all shrink-0" />
                     </button>
@@ -664,8 +692,8 @@ export function AiGuideWidget() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Bottom Chat Input Form (Upgraded, Professional Textarea Container) */}
-        <div className="p-3 bg-white dark:bg-zinc-900 border-t border-slate-200/80 dark:border-zinc-800 shrink-0">
+        {/* Bottom Chat Input Form (Upgraded, Professional Textarea Container & Responsive Send Button) */}
+        <div className="p-2.5 sm:p-3 bg-white dark:bg-zinc-900 border-t border-slate-200/80 dark:border-zinc-800 shrink-0">
           <div className="relative flex flex-col rounded-xl border border-slate-200 dark:border-zinc-750 bg-slate-50/80 dark:bg-zinc-950/70 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/15 focus-within:bg-white dark:focus-within:bg-zinc-900 transition-all shadow-2xs">
             <textarea
               ref={textareaRef}
@@ -675,19 +703,19 @@ export function AiGuideWidget() {
               onKeyDown={handleKeyDown}
               placeholder={portalInfo.placeholder}
               disabled={loading}
-              className="w-full resize-none bg-transparent px-3.5 pt-2.5 pb-2 text-xs sm:text-[13px] leading-5 text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none disabled:opacity-50 min-h-[46px] max-h-[120px]"
+              className="w-full resize-none bg-transparent px-3 sm:px-3.5 pt-2 sm:pt-2.5 pb-1.5 sm:pb-2 text-xs sm:text-[13px] leading-5 text-slate-900 dark:text-zinc-100 placeholder:text-slate-400 dark:placeholder:text-zinc-500 focus:outline-none disabled:opacity-50 min-h-[42px] sm:min-h-[46px] max-h-[100px] sm:max-h-[120px]"
             />
-            <div className="flex items-center justify-between px-3 pb-2 pt-1 border-t border-slate-100 dark:border-zinc-800/60">
-              <div className="flex items-center gap-1.5 text-[10.5px] text-slate-400">
-                <Sparkles className="h-3 w-3 text-emerald-600" />
-                <span className="font-medium text-slate-500 dark:text-slate-400">OnePath AI</span>
+            <div className="flex items-center justify-between px-2.5 sm:px-3 pb-2 pt-1 border-t border-slate-100 dark:border-zinc-800/60 gap-2">
+              <div className="flex items-center gap-1.5 text-[10px] sm:text-[10.5px] text-slate-400 shrink-0">
+                <Sparkles className="h-3 w-3 text-emerald-600 shrink-0" />
+                <span className="font-medium text-slate-500 dark:text-slate-400 whitespace-nowrap">OnePath AI</span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 {input.trim() && (
                   <button
                     type="button"
                     onClick={() => setInput("")}
-                    className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                    className="p-1 sm:p-1.5 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
                     title="Clear input"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -697,7 +725,7 @@ export function AiGuideWidget() {
                   type="button"
                   onClick={() => handleSendMessage()}
                   disabled={!input.trim() || loading}
-                  className="h-7.5 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-2xs transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95"
+                  className="min-h-[32px] sm:h-7.5 px-3 sm:px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
                   title="Send message (Enter ↵)"
                 >
                   {loading ? (
@@ -705,7 +733,7 @@ export function AiGuideWidget() {
                   ) : (
                     <>
                       <span>Send</span>
-                      <Send className="h-3 w-3" />
+                      <Send className="h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0" />
                     </>
                   )}
                 </button>
@@ -713,9 +741,12 @@ export function AiGuideWidget() {
             </div>
           </div>
 
-          <div className="mt-1.5 flex items-center justify-between px-1 text-[9.5px] text-slate-400">
-            <span>{portalInfo.footer}</span>
-            <span>Press <strong>Enter ↵</strong> to send</span>
+          <div className="mt-1.5 flex items-center justify-between px-1 text-[9px] sm:text-[9.5px] text-slate-400">
+            <span className="truncate max-w-[60%]">{portalInfo.footer}</span>
+            <span className="shrink-0 text-right">
+              <span className="hidden sm:inline">Press <strong>Enter ↵</strong> to send</span>
+              <span className="sm:hidden">Tap <strong>Send</strong></span>
+            </span>
           </div>
         </div>
       </div>
@@ -1253,6 +1284,192 @@ function getClientFallbackAnswer(query: string, role: string = "ADMIN"): string 
         + "2. Click **'+ Add Center'**, enter center name, code, and commission rate.\n"
         + "3. Provide login credentials so they can register samples from their center.\n"
         + "4. Monitor sales in [Open B2B Sales](/dashboard/b2b) and manage prepaid wallets in [Open B2B Wallets](/dashboard/b2b/wallets).";
+  }
+
+  // 14. AI Smart Clinical Reports
+  if (q.includes("smart report") || q.includes("organ wellness") || q.includes("spider chart") || q.includes("radar chart") || q.includes("health dossier") || q.includes("visual report") || q.includes("executive summary")) {
+    return isHindi
+      ? "AI Smart Clinical Report generate aur configure karne ke steps:\n\n"
+        + "1. **Smart Report Workspace**: [Open AI Smart Reports](/dashboard/smart-report) me jayein ya direct kisi approved patient ke report me **'AI Smart Report'** button dabayein.\n"
+        + "2. **Clinical Synthesis**: AI automatically biochemical parameters ko correlate karta hai, Organ Wellness Matrix (Liver, Kidney, Lipid, Bone, Hematology) calculate karta hai aur visual spider charts assemble karta hai.\n"
+        + "3. **Cover & Interior Designer**: 6 modern cover templates (Classic, Modern, Tech, Wellness, Gradient, Minimal) aur interior themes chun sakte hain.\n"
+        + "4. **WhatsApp & PDF Delivery**: 1-Click me official vector PDF download karein ya direct patient ke WhatsApp par dispatch karein."
+      : "To generate and customize AI Smart Clinical Reports:\n\n"
+        + "1. Go to **Dashboard > Smart Report**: [Open AI Smart Reports](/dashboard/smart-report) or click **'AI Smart Report'** on any verified patient report.\n"
+        + "2. **Automated Clinical Synthesis**: The AI engine correlates biomarkers, computes organ wellness scores (Liver, Kidney, Cardiac, Bone, Blood health), and plots interactive radar/spider charts.\n"
+        + "3. **Designer Templates**: Choose from 6 cover designs (Classic, Modern, Tech, Wellness, Gradient, Minimal) and customized interior layouts.\n"
+        + "4. **Patient Delivery**: Download a 4-page visual PDF dossier or deliver directly to the patient's phone via WhatsApp in 1 click.";
+  }
+
+  // 15. Manual Laboratory Worksheet
+  if (q.includes("worksheet") || q.includes("bench") || q.includes("manual sheet") || q.includes("work sheet") || q.includes("bench sheet")) {
+    return isHindi
+      ? "Manual Laboratory Worksheet download karne ke steps:\n\n"
+        + "1. **Worksheet Page Kholein**: Sidebar se **Tests > Worksheet** me jayein: [Open Worksheet](/dashboard/tests/worksheet).\n"
+        + "2. **Date Preset & Filter**: Date range chuney (Today, Yesterday, Last 7 Days, ya Specific Date) aur Department select karein (e.g. Biochemistry, Hematology, Immunology).\n"
+        + "3. **Patient & Test List**: Selected date ke registered patients, unke PID, barcode aur required test parameters ki table dikhegi.\n"
+        + "4. **1-Click Batch Print**: **'Print Worksheet'** par click karein. Physical printable sheet generate hogi jisme bench technician manual reading aur optical density likh kar batch testing kar sakte hain."
+      : "To generate and print a Manual Laboratory Worksheet:\n\n"
+        + "1. Navigate to **Dashboard > Tests > Worksheet**: [Open Worksheet](/dashboard/tests/worksheet).\n"
+        + "2. **Date & Department Filters**: Select a date preset (Today, Yesterday, Last 7 Days, or Custom Date) and choose a department (e.g. Biochemistry, Hematology).\n"
+        + "3. **Batch Patient Roster**: The table displays all registered patients, unique PIDs, tube barcodes, and prescribed test analytes.\n"
+        + "4. **1-Click Bench Print**: Click **'Print Worksheet'** to produce a clean physical worksheet with blank entry grids for lab technicians to record optical density and manual instrument readings.";
+  }
+
+  // 16. Diagnostic Health Packages
+  if (q.includes("package") || q.includes("health package") || q.includes("combo") || q.includes("bundle") || q.includes("checkup")) {
+    return isHindi
+      ? "Diagnostic Health Packages manage karne ke steps:\n\n"
+        + "1. **Health Packages Manager**: Sidebar me **Tests > Packages** me jayein: [Open Health Packages](/dashboard/tests/packages).\n"
+        + "2. **Naya Package Banayein**: **'+ New Package'** dabayein, Package Name (e.g. Executive Full Body Health Checkup, Diabetic Care), Code aur Package Price bharein.\n"
+        + "3. **Constituent Tests Select Karein**: List me se shamil hone wale sabhi tests select karein. Screen par live telemetry dikhegi jo total test MRP, patient savings amount (₹), aur discount percentage (%) auto-calculate karti hai.\n"
+        + "4. **Patient Booking**: Save hote hi naya package Patient Registration me available ho jata hai jise 1 click me add kiya ja sakta hai."
+      : "To manage Diagnostic Health Packages:\n\n"
+        + "1. Go to **Dashboard > Tests > Packages**: [Open Health Packages](/dashboard/tests/packages).\n"
+        + "2. **Create New Package**: Click **'+ New Package'**, specify package name (e.g. Executive Health Checkup), code, and discounted package price.\n"
+        + "3. **Select Constituent Tests**: Check all constituent lab tests. The live pricing telemetry calculates regular test sum, patient savings (₹), and savings discount % automatically.\n"
+        + "4. **Instant Intake Availability**: Created packages appear immediately in Patient Registration for instant 1-click patient booking.";
+  }
+
+  // 17. Rate List Master & Agreements
+  if (q.includes("rate list") || q.includes("ratelist") || q.includes("agreement") || q.includes("discount preset") || q.includes("markup") || q.includes("rate override") || q.includes("rate card")) {
+    return isHindi
+      ? "Rate List Master aur B2B Agreements manage karne ke steps:\n\n"
+        + "1. **Rate List Hub**: Sidebar se **Finance & Rates > Rate List** par jayein: [Open Rate List](/dashboard/ratelist).\n"
+        + "2. **Admin Master Rates**: Yahan standard base test prices configure kar sakte hain.\n"
+        + "3. **B2B Agreements**: **'+ Create Rate List'** dabakar specific B2B partner ya clinic ke liye customized rate card banayein.\n"
+        + "4. **1-Click % Discount Preset**: **'1-Click % Discount'** button se sabhi tests par ek sath bulk markup ya discount (+10%, -20%) apply karein ya individual test ka price override set karein.\n"
+        + "5. **Client Assignment**: Partner Assignment tab se rate list ko related B2B partners ko assign karein."
+      : "To configure Rate Lists and B2B Client Agreements:\n\n"
+        + "1. Go to **Dashboard > Finance & Rates > Rate List**: [Open Rate List](/dashboard/ratelist).\n"
+        + "2. **Master Rate Card**: Review and maintain baseline standard retail prices for all tests.\n"
+        + "3. **Create Custom Agreements**: Click **'+ Create Rate List'** to establish dedicated pricing tiers for collection centers or corporate B2B clients.\n"
+        + "4. **Bulk % Presets & Overrides**: Use the **'1-Click % Discount'** tool to apply global markup/discount percentages or specify custom rates for individual high-volume tests.\n"
+        + "5. **Partner Mapping**: In the Partner Assignment tab, map rate cards to specific B2B partners.";
+  }
+
+  // 18. Dues Management & Outstanding Balance
+  if (q.includes("due") || q.includes("dues") || q.includes("pending payment") || q.includes("accept payment") || q.includes("clear due") || q.includes("baki") || q.includes("baaki") || q.includes("udhar")) {
+    return isHindi
+      ? "Dues dekhne aur balance payment accept karne ke steps:\n\n"
+        + "1. **Dues Management Ledger**: Sidebar me **Billing > Dues** me jayein: [Open Dues Management](/dashboard/billing/dues).\n"
+        + "2. **Filter & Search**: Patient Name, Mobile number ya PID se pending due bills search karein.\n"
+        + "3. **Accept Payment**: Patient ke aage **'Accept Payment'** button dabayein. Modal me pending balance dikhega.\n"
+        + "4. **Payment Mode**: Full payment ya Partial amount enter karein, payment mode (Cash, Card, UPI, PayU) select karein aur confirm karein.\n"
+        + "5. **Clearance Receipt**: Payment save hote hi instant thermal/A4 due clearance receipt print ho sakti hai aur patient balance zero ho jayega."
+      : "To manage pending receivables and collect due payments:\n\n"
+        + "1. Navigate to **Dashboard > Billing > Dues**: [Open Dues Management](/dashboard/billing/dues).\n"
+        + "2. Search for pending invoices by Patient Name, Phone, or PID.\n"
+        + "3. Click **'Accept Payment'** on any overdue patient row.\n"
+        + "4. Enter full or partial payment amount, choose payment method (Cash, Card, UPI, PayU), and submit.\n"
+        + "5. An instant settlement receipt is generated and the patient's balance updates immediately.";
+  }
+
+  // 19. Monthly Business & Expenses Register
+  if (q.includes("monthly business") || q.includes("expense") || q.includes("kharcha") || q.includes("profit") || q.includes("p&l") || q.includes("loss") || q.includes("net revenue") || q.includes("overhead")) {
+    return isHindi
+      ? "Monthly Business aur Lab Expenses track karne ke steps:\n\n"
+        + "1. **Monthly Expenses Register**: Sidebar me **Billing > Monthly Expenses** me jayein: [Open Monthly Expenses](/dashboard/billing/monthly-expenses).\n"
+        + "2. **Expense Log Karein**: **'+ Add Expense'** dabakar category select karein (Reagents, Laboratory Rent, Staff Salaries, Electricity, Disposables, Maintenance) aur amount enter karein.\n"
+        + "3. **Live Profit & Loss**: Page ke top summary cards par Total Revenue, Total Expenses, aur Net Operating Profit/Loss live calculate hota hai.\n"
+        + "4. **Audit Export**: Monthly financial statement ko 1 click me official CSV spreadsheet me export kar sakte hain."
+      : "To track Monthly Business Revenue and Lab Expenses:\n\n"
+        + "1. Go to **Dashboard > Billing > Monthly Expenses**: [Open Monthly Expenses](/dashboard/billing/monthly-expenses).\n"
+        + "2. **Log Expenses**: Click **'+ Add Expense'** to record lab overheads (Reagents, Facility Rent, Staff Payroll, Utilities, Disposables, Machine Maintenance).\n"
+        + "3. **Real-Time P&L Summary**: Summary telemetry displays gross revenue, total operational expenditures, and Net Profit/Loss.\n"
+        + "4. **CSV Export**: Click **'Export CSV'** to generate a complete monthly financial audit ledger.";
+  }
+
+  // 20. Sample Rejection & Recollection
+  if (q.includes("reject") || q.includes("rejection") || q.includes("recollect") || q.includes("recollection") || q.includes("clotted") || q.includes("hemolysis") || q.includes("kharaab") || q.includes("kharab")) {
+    return isHindi
+      ? "Sample Rejection aur Recollection log karne ke steps:\n\n"
+        + "1. **Track Samples ya Today's Samples**: [Open Track Samples](/dashboard/track-samples) ya [Open Today's Samples](/dashboard/today-samples) me patient locate karein.\n"
+        + "2. **Reject Sample Action**: Action menu se **'Reject Sample'** par click karein.\n"
+        + "3. **Clinical Reason Select Karein**: Standard laboratory rejection reason chunein (Hemolyzed, Clotted, Insufficient Volume QNS, Lipemic, Wrong Tube).\n"
+        + "4. Remarks bharkar confirm karein. System sample status ko **'REJECTED'** mark karta hai aur phlebotomist ko fresh sample recollection alert trigger karta hai."
+      : "To log Sample Rejection and request a fresh specimen:\n\n"
+        + "1. Locate the patient under [Open Track Samples](/dashboard/track-samples) or [Open Today's Samples](/dashboard/today-samples).\n"
+        + "2. Click **'Reject Sample'** from the action menu.\n"
+        + "3. Select clinical rejection criteria (Hemolysis, Clotted, Insufficient Volume QNS, Lipemic, Wrong Tube, Label Mismatch).\n"
+        + "4. Enter notes and submit. The status updates to **'REJECTED'** and triggers a phlebotomy recollection notification.";
+  }
+
+  // 21. Lab Account, Subscriptions & GST Invoices
+  if (q.includes("subscription") || q.includes("plan") || q.includes("quota") || q.includes("over quota") || q.includes("overquota") || q.includes("over-quota") || q.includes("whatsapp credit") || q.includes("gst invoice") || q.includes("tax invoice") || q.includes("sac code") || q.includes("lab account")) {
+    return isHindi
+      ? "Lab Account, Subscription Plans aur GST Invoices manage karne ke steps:\n\n"
+        + "1. **Lab Account & Billing**: Top profile menu se **Lab Account** par jayein: [Open Lab Account](/dashboard/account/lab).\n"
+        + "2. **Subscription Plans**: 6-Month Professional vs 1-Year Enterprise plans choose/renew karein online PayU gateway se.\n"
+        + "3. **Daily Patient Quota**: Har plan me 50 patient reports rozana bilkul **FREE** hain. 50 se upar reports 30–50 paise/bill par calculate hoti hain aur annual settlement me pay hoti hain.\n"
+        + "4. **WhatsApp Message Credits**: Plan ke sath 3,500 free WhatsApp messages milte hain. Free quota ke baad messages 30 paise (₹0.30) par PayU se instantly settle kiye ja sakte hain.\n"
+        + "5. **Official GST Tax Invoices**: 'Invoices' tab me sabhi payments ke official GST invoices (SAC Code: 998314) generate hote hain jinhe 1 click me PDF download ya direct email kiya ja sakta hai.\n"
+        + "6. **Centre Branding**: 'Centre & GST Profile' tab me Diagnostic Centre Name, Address, GSTIN, aur Official Logo upload karein."
+      : "To manage Lab Account, Software Subscriptions, and GST Invoices:\n\n"
+        + "1. Navigate to **Dashboard > Lab Account & Billing**: [Open Lab Account](/dashboard/account/lab).\n"
+        + "2. **Subscription Tiers**: Review or renew 6-Month Professional or 1-Year Enterprise licenses via PayU.\n"
+        + "3. **Daily Quota Management**: 1–50 patient reports/day are included **FREE**. Reports beyond 50/day are tracked at 30–50 paise/report and settled annually.\n"
+        + "4. **WhatsApp Communication Credits**: Includes 3,500 complimentary WhatsApp messages. Excess messages are billed at ₹0.30/msg with instant PayU recharge.\n"
+        + "5. **Official GST Tax Invoices**: Access downloadable tax invoices (SAC 998314) under the 'Invoices' tab.\n"
+        + "6. **Diagnostic Centre Profile**: Update lab registration, address, GSTIN, and upload official letterhead logos under 'Centre & GST Profile'.";
+  }
+
+  // 22. Role-Based Access Control (RBAC) & Terminal Accounts
+  if (q.includes("rbac") || q.includes("permission") || q.includes("role") || q.includes("terminal") || q.includes("staff login") || q.includes("operator") || q.includes("access control")) {
+    return isHindi
+      ? "Role-Based Access Control (RBAC) aur Staff Terminals configure karne ke steps:\n\n"
+        + "1. **RBAC Settings**: Sidebar se **Settings > RBAC** tab par jayein: [Open RBAC Settings](/dashboard/settings?tab=collection-centers).\n"
+        + "2. **Staff Roles**: Collection Centers, B2B Partners, Receptionists, Phlebotomists, aur Technicians ke liye alag-alag secure terminal credentials create karein.\n"
+        + "3. **Granular Permissions**: Toggle switches se decide karein ki kon sa staff member Billing edit kar sakta hai, Patient Register kar sakta hai, ya Result Entry kar sakta hai.\n"
+        + "4. **Security Isolation**: Restricted accounts (jaise Receptionist ya Collection Centre) doctor signatures ya lab master settings modify nahi kar sakte."
+      : "To configure Role-Based Access Control (RBAC) and staff permissions:\n\n"
+        + "1. Go to **Dashboard > Settings > RBAC**: [Open RBAC Settings](/dashboard/settings?tab=collection-centers).\n"
+        + "2. **Terminal User Accounts**: Create dedicated logins for Collection Centers, B2B Partners, Front Desk Receptionists, Phlebotomists, and Lab Technicians.\n"
+        + "3. **Granular Module Permissions**: Toggle permissions for Patient Booking, Result Entry, Report Approvals, Invoices, and Inventory independently.\n"
+        + "4. **Strict Security Boundaries**: Role-restricted accounts are prevented from accessing doctor signatures, machine bridges, or financial masters.";
+  }
+
+  // 23. Custom Editor & Narrative Histopathology Reports
+  if (q.includes("custom editor") || q.includes("biopsy") || q.includes("histopathology") || q.includes("cytology") || q.includes("table builder") || q.includes("narrative") || q.includes("rich text")) {
+    return isHindi
+      ? "Custom Editor aur Narrative Biopsy/Histopathology reports banane ke steps:\n\n"
+        + "1. **Test Master Format**: [Open Test Master](/dashboard/tests) me test edit karte samay Layout Format me **'Custom Editor (Rich Text)'** select karein.\n"
+        + "2. **Result Entry**: [Open Reports Management](/dashboard/reports) me Enter Result par jayein. Standard tabular boxes ki jagah rich text clinical editor khulega.\n"
+        + "3. **Table Builder & Styling**: Clinical history, gross examination, microscopic findings aur diagnosis likhein, table insert karein ya pre-saved templates load karein.\n"
+        + "4. **Print Integration**: Narrative report automatically official letterhead aur doctor signature layout me beautifully render hoti hai."
+      : "To create narrative Biopsy, Cytology, or Histopathology reports:\n\n"
+        + "1. Under [Open Test Master](/dashboard/tests), set the test format to **'Custom Editor (Rich Text)'**.\n"
+        + "2. Go to **Dashboard > Reports > Enter Result**: [Open Reports Management](/dashboard/reports).\n"
+        + "3. Use the integrated rich-text table builder to enter clinical history, gross findings, microscopic description, and pathological impressions.\n"
+        + "4. The narrative report formats seamlessly on your diagnostic letterhead alongside doctor digital signatures.";
+  }
+
+  // 24. Outsourced Cases & Batch Printing
+  if (q.includes("outsource") || q.includes("outsourced") || q.includes("reference lab") || q.includes("batch print") || q.includes("bulk print")) {
+    return isHindi
+      ? "Outsourced Cases aur Batch Report Printing ke steps:\n\n"
+        + "1. **Outsourced Cases Management**: Sidebar se **Cases > Outsource** me jayein: [Open Outsourced Cases](/dashboard/cases/outsource). Yahan external reference labs (Thyrocare, Dr Lal, SRL) ko bheje gaye samples, courier airway bill, aur dispatch status track karein.\n"
+        + "2. **Batch Report Printing**: Sidebar me **Reports > Batch Print** par jayein: [Open Batch Print](/dashboard/reports/batch-print).\n"
+        + "3. Date range, department (Biochemistry, Hematology) aur status filter karein, aur **'Print Selected Reports'** dabakar 50+ reports ek sath single click me print karein."
+      : "To manage Outsourced Cases and Batch Report Printing:\n\n"
+        + "1. **Outsourced Test Dispatch**: Go to [Open Outsourced Cases](/dashboard/cases/outsource) to log samples dispatched to external reference laboratories, record tracking numbers, and monitor turnaround times.\n"
+        + "2. **Batch Printing**: Go to **Dashboard > Reports > Batch Print**: [Open Batch Print](/dashboard/reports/batch-print).\n"
+        + "3. Filter by date, collection status, and department, then click **'Print Selected'** to batch-print dozens of patient reports in a single operation.";
+  }
+
+  // 25. Help & Technical Support System
+  if (q.includes("support") || q.includes("ticket") || q.includes("complaint") || q.includes("feature request") || q.includes("bug report") || q.includes("madad") || q.includes("contact")) {
+    return isHindi
+      ? "OnePath Technical Support se contact karne ke steps:\n\n"
+        + "1. **Support Hub**: Sidebar se **Help & Support** me jayein: [Open Help & Support](/dashboard/support).\n"
+        + "2. **Ticket Raise Karein**: Category select karein (Report Issue / Bug, Share Feedback, Request Feature).\n"
+        + "3. **Ticket History**: 'Ticket History' tab me live status (Pending, In Progress, Resolved) track karein.\n"
+        + "4. **Emergency Priority Support**: Urgent assistance ke liye WhatsApp aur dedicated phone support contacts hub me available hain."
+      : "To connect with OnePath Technical Support:\n\n"
+        + "1. Navigate to **Dashboard > Help & Support**: [Open Help & Support](/dashboard/support).\n"
+        + "2. **Submit a Support Ticket**: Choose from Report an Issue, Share Product Feedback, or Request a New LIS Feature.\n"
+        + "3. **Track Status**: Monitor resolution updates in the 'Ticket History' tab.\n"
+        + "4. **Priority Phone & WhatsApp**: Direct 24/7 technical assistance numbers are displayed on the support hub.";
   }
 
   // ABHA ID & ABDM
