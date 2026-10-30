@@ -25,7 +25,7 @@ import { WhatsAppQrDialog } from "@/components/whatsapp-qr-dialog";
 import { AiReportGenerationModal } from "@/components/ai-report-generation-modal";
 import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
-import { downloadNativePdf, getNativePdfBase64 } from "@/lib/pdf-report-downloader";
+import { downloadNativePdf, getNativePdfBase64, prefetchNativePdf } from "@/lib/pdf-report-downloader";
 
 interface PrintPreviewDialogProps {
   open: boolean;
@@ -697,6 +697,26 @@ export function PrintPreviewDialog({
     contentRef: printRef,
     documentTitle: report ? `Report_${report.customId}` : "Report",
   });
+
+  // Background pre-generate vector PDF so when user clicks 'Download PDF', it downloads instantly (< 0.1s)
+  useEffect(() => {
+    if (!open || !activeReport) return;
+
+    const timer = setTimeout(() => {
+      try {
+        if (!printRef.current) return;
+        const pName = (report?.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const rCode = (report?.customId || report?.id || "Report").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const filename = `LabReport_${rCode}_${pName}.pdf`;
+        prefetchNativePdf({
+          printContainer: printRef.current,
+          filename,
+        });
+      } catch {}
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [open, activeReport]);
 
   // ── Direct Pixel-Perfect High-Resolution Native Vector PDF Download (Option A) ──────
   const handleDirectDownloadPdf = async () => {

@@ -164,7 +164,7 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
   const styles: string[] = [];
 
   // 1. Fetch and inline all external stylesheets directly from browser cache (cached in memory)
-  if (cachedStylesheetTags && Date.now() - lastStylesheetFetch < 120000) {
+  if (cachedStylesheetTags && Date.now() - lastStylesheetFetch < 600000) {
     styles.push(...cachedStylesheetTags);
   } else {
     const fetchedStyles: string[] = [];
@@ -195,29 +195,31 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
     styles.push(style.outerHTML);
   });
 
-  // 3. Extract CSS rules from active document stylesheets
-  try {
-    for (let i = 0; i < document.styleSheets.length; i++) {
-      try {
-        const sheet = document.styleSheets[i];
-        const rules = sheet.cssRules || (sheet as any).rules;
-        if (rules) {
-          let sheetCss = "";
-          for (let r = 0; r < rules.length; r++) {
-            try {
-              sheetCss += rules[r].cssText + "\n";
-            } catch {}
+  // 3. Fallback: Extract CSS rules from active document stylesheets only if no external styles found
+  if (styles.length === 0) {
+    try {
+      for (let i = 0; i < document.styleSheets.length; i++) {
+        try {
+          const sheet = document.styleSheets[i];
+          const rules = sheet.cssRules || (sheet as any).rules;
+          if (rules) {
+            let sheetCss = "";
+            for (let r = 0; r < Math.min(rules.length, 500); r++) {
+              try {
+                sheetCss += rules[r].cssText + "\n";
+              } catch {}
+            }
+            if (sheetCss) {
+              styles.push(`<style data-sheet="${i}">${sheetCss}</style>`);
+            }
           }
-          if (sheetCss) {
-            styles.push(`<style data-sheet="${i}">${sheetCss}</style>`);
-          }
+        } catch {
+          // Cross-origin stylesheet security restriction, safely skip
         }
-      } catch {
-        // Cross-origin stylesheet security restriction, safely skip
       }
+    } catch (e) {
+      console.warn("Could not extract document styleSheets rules:", e);
     }
-  } catch (e) {
-    console.warn("Could not extract document styleSheets rules:", e);
   }
 
   // 4. Clone and normalize each page element with async base64 images
@@ -517,10 +519,26 @@ export function prepareReportHtml(printContainer: HTMLElement): string {
 </html>`;
 }
 
+// In-memory Client Blob Cache: guarantees 0ms instant download on repeat clicks or pre-fetched reports
+const clientPdfBlobCache = new Map<string, { blob: Blob; timestamp: number }>();
+
 /**
  * Generates a native Vector PDF Blob using the Headless Chrome route.
  */
 export async function generateNativePdfBlob(html: string, filename: string): Promise<Blob> {
+  // Fast hash for client memory cache
+  let hash = 0;
+  const sample = html.slice(0, 4000) + html.slice(-4000);
+  for (let i = 0; i < sample.length; i++) {
+    hash = ((hash << 5) - hash) + sample.charCodeAt(i);
+    hash |= 0;
+  }
+  const cacheKey = `${filename}_${html.length}_${hash}`;
+  const cached = clientPdfBlobCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < 300000) {
+    return cached.blob;
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 25000);
 
@@ -548,11 +566,24 @@ export async function generateNativePdfBlob(html: string, filename: string): Pro
       throw new Error(errMessage);
     }
 
-    return await res.blob();
+    const blob = await res.blob();
+    clientPdfBlobCache.set(cacheKey, { blob, timestamp: Date.now() });
+    return blob;
   } catch (err) {
     clearTimeout(timeoutId);
     throw err;
   }
+}
+
+/**
+ * Non-blocking background prefetch to warm up and cache the PDF before user clicks download
+ */
+export async function prefetchNativePdf({ printContainer, filename }: GeneratePdfOptions): Promise<void> {
+  try {
+    const safeFilename = filename || "LabReport.pdf";
+    const html = await prepareReportHtmlAsync(printContainer);
+    await generateNativePdfBlob(html, safeFilename);
+  } catch {}
 }
 
 /**

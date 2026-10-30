@@ -884,7 +884,7 @@ function LabAccountContent() {
   const whatsappUsagePercent = Math.min(100, Math.round((whatsappMessagesSent / (whatsappFreeCredits || 1)) * 100));
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-16 animate-fade-in">
+    <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 px-3 sm:px-6 lg:px-8 animate-fade-in">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
         <div>
@@ -962,100 +962,110 @@ function LabAccountContent() {
         </div>
       )}
 
-      {/* Navigation Tabs */}
-      <div className="flex items-center gap-4 sm:gap-6 border-b border-border text-sm font-semibold overflow-x-auto w-full scrollbar-none flex-nowrap pb-1">
-        <button
-          onClick={() => {
-            if (!isCentreSaved) {
-              setActiveTab("CENTRE");
-            } else {
-              setActiveTab("SUBSCRIPTION");
-            }
-          }}
-          className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === "SUBSCRIPTION" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <span>Subscription &amp; Usage</span>
-          {!isCentreSaved && (
-            <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-              <Lock className="h-2.5 w-2.5" /> Locked
-            </span>
-          )}
-          {activeTab === "SUBSCRIPTION" && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
-          )}
-        </button>
+      {/* Smooth Rounded Segmented Tab Switcher */}
+      <div className="w-full overflow-x-auto scrollbar-none pb-1">
+        <div className="inline-flex items-center p-1.5 rounded-2xl bg-muted/75 border border-border/80 shadow-xs backdrop-blur-sm gap-1 min-w-max">
+          <button
+            type="button"
+            onClick={() => {
+              if (!isCentreSaved) {
+                setActiveTab("CENTRE");
+              } else {
+                setActiveTab("SUBSCRIPTION");
+              }
+            }}
+            className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "SUBSCRIPTION"
+                ? "bg-card text-foreground shadow-sm border border-border/70"
+                : "text-muted-foreground hover:text-foreground hover:bg-background/40"
+            }`}
+          >
+            <Sparkles className={`h-4 w-4 ${activeTab === "SUBSCRIPTION" ? "text-primary" : "text-muted-foreground"}`} />
+            <span>Subscription &amp; Usage</span>
+            {!isCentreSaved && (
+              <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                <Lock className="h-2.5 w-2.5" /> Locked
+              </span>
+            )}
+          </button>
 
-        <button
-          onClick={() => {
-            if (isExpired) {
-              toast.warning("Subscription Expired", "Your laboratory trial/subscription has expired. Please choose a subscription plan and complete payment via PayU first to unlock tax invoices.");
-              return;
-            }
-            if (!isCentreSaved) {
-              setActiveTab("CENTRE");
-            } else {
-              setActiveTab("INVOICES");
-            }
-          }}
-          className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap flex items-center gap-1.5 ${
-            isExpired ? "opacity-60 cursor-not-allowed" : ""
-          } ${
-            activeTab === "INVOICES" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <span>GST Tax Invoices ({invoices.length})</span>
-          {isExpired ? (
-            <span className="flex items-center gap-0.5 text-[10px] font-bold text-rose-600 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
-              <Lock className="h-2.5 w-2.5" /> Locked
+          <button
+            type="button"
+            onClick={() => {
+              if (isExpired) {
+                toast.warning("Subscription Expired", "Your laboratory trial/subscription has expired. Please choose a subscription plan and complete payment via PayU first to unlock tax invoices.");
+                return;
+              }
+              if (!isCentreSaved) {
+                setActiveTab("CENTRE");
+              } else {
+                setActiveTab("INVOICES");
+              }
+            }}
+            className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0 ${
+              isExpired ? "opacity-60 cursor-not-allowed" : ""
+            } ${
+              activeTab === "INVOICES"
+                ? "bg-card text-foreground shadow-sm border border-border/70"
+                : "text-muted-foreground hover:text-foreground hover:bg-background/40"
+            }`}
+          >
+            <FileText className={`h-4 w-4 ${activeTab === "INVOICES" ? "text-primary" : "text-muted-foreground"}`} />
+            <span>GST Tax Invoices</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              activeTab === "INVOICES" ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+            }`}>
+              {invoices.length}
             </span>
-          ) : !isCentreSaved ? (
-            <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-              <Lock className="h-2.5 w-2.5" /> Locked
-            </span>
-          ) : null}
-          {activeTab === "INVOICES" && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
-          )}
-        </button>
+            {isExpired ? (
+              <span className="flex items-center gap-0.5 text-[10px] font-bold text-rose-600 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                <Lock className="h-2.5 w-2.5" /> Locked
+              </span>
+            ) : !isCentreSaved ? (
+              <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                <Lock className="h-2.5 w-2.5" /> Locked
+              </span>
+            ) : null}
+          </button>
 
-        <button
-          onClick={() => {
-            if (isExpired) {
-              toast.warning("Subscription Expired", "Your laboratory trial/subscription has expired. Please choose a subscription plan and complete payment via PayU first.");
-              return;
-            }
-            if (!isCentreSaved) {
-              setActiveTab("CENTRE");
-            } else {
-              setActiveTab("DISPATCH");
-            }
-          }}
-          className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap flex items-center gap-1.5 ${
-            isExpired ? "opacity-60 cursor-not-allowed" : ""
-          } ${
-            activeTab === "DISPATCH" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Send className="h-3.5 w-3.5 text-primary" />
-          <span>Auto-Dispatch &amp; Summaries</span>
-          {activeTab === "DISPATCH" && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
-          )}
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (isExpired) {
+                toast.warning("Subscription Expired", "Your laboratory trial/subscription has expired. Please choose a subscription plan and complete payment via PayU first.");
+                return;
+              }
+              if (!isCentreSaved) {
+                setActiveTab("CENTRE");
+              } else {
+                setActiveTab("DISPATCH");
+              }
+            }}
+            className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0 ${
+              isExpired ? "opacity-60 cursor-not-allowed" : ""
+            } ${
+              activeTab === "DISPATCH"
+                ? "bg-card text-foreground shadow-sm border border-border/70"
+                : "text-muted-foreground hover:text-foreground hover:bg-background/40"
+            }`}
+          >
+            <Send className={`h-4 w-4 ${activeTab === "DISPATCH" ? "text-primary" : "text-muted-foreground"}`} />
+            <span>Auto-Dispatch &amp; Summaries</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab("CENTRE")}
-          className={`pb-3 relative transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
-            activeTab === "CENTRE" ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <span>Centre &amp; GST Profile</span>
-          {activeTab === "CENTRE" && (
-            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full animate-fade-in" />
-          )}
-        </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("CENTRE")}
+            className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === "CENTRE"
+                ? "bg-card text-foreground shadow-sm border border-border/70"
+                : "text-muted-foreground hover:text-foreground hover:bg-background/40"
+            }`}
+          >
+            <Building2 className={`h-4 w-4 ${activeTab === "CENTRE" ? "text-primary" : "text-muted-foreground"}`} />
+            <span>Centre &amp; GST Profile</span>
+          </button>
+        </div>
       </div>
 
       {/* ================= TAB 1: SUBSCRIPTION DETAILS ================= */}
@@ -1082,27 +1092,27 @@ function LabAccountContent() {
       {activeTab === "SUBSCRIPTION" && isCentreSaved && (
         <div className="space-y-6 animate-fade-in">
           {/* Active Plan Card */}
-          <div className="bg-card border border-border/90 rounded-2xl p-6 sm:p-8 space-y-6 shadow-sm relative overflow-hidden">
-            <div className="flex items-center justify-between">
+          <div className="bg-card border border-border/90 rounded-2xl p-5 sm:p-8 space-y-6 shadow-sm relative overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <p className="text-xs text-muted-foreground font-medium">Your current active plan is</p>
-                <h2 className="font-display text-2xl font-bold text-foreground mt-0.5">{planName}</h2>
+                <h2 className="font-display text-xl sm:text-2xl font-bold text-foreground mt-0.5">{planName}</h2>
               </div>
-              <span className="text-xs font-bold px-3 py-1 rounded-md bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 whitespace-nowrap shrink-0 self-start sm:self-auto">
                 {planPeriod}
               </span>
             </div>
 
             {/* Plan Metrics Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-4 border-t border-border/70 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 pt-4 border-t border-border/70 text-xs">
               <div>
                 <p className="text-[11px] font-semibold text-muted-foreground">Status</p>
                 {isExpired ? (
-                  <span className="inline-block mt-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-600 border border-rose-500/30">
+                  <span className="inline-block mt-1.5 text-[10px] sm:text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-600 border border-rose-500/30 whitespace-nowrap shrink-0">
                     Expired · Action Required
                   </span>
                 ) : (
-                  <span className="inline-block mt-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                  <span className="inline-block mt-1.5 text-[10px] sm:text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 whitespace-nowrap shrink-0">
                     {planStatus}
                   </span>
                 )}
@@ -1110,23 +1120,23 @@ function LabAccountContent() {
 
               <div>
                 <p className="text-[11px] font-semibold text-muted-foreground">Base Plan Fee</p>
-                <p className="font-bold text-foreground mt-1.5">₹4,999.00 / year</p>
-                <p className="text-[10px] text-muted-foreground">+ 18% GST (₹899.82)</p>
+                <p className="font-bold text-foreground mt-1.5 whitespace-nowrap">₹4,999.00 / year</p>
+                <p className="text-[10px] text-muted-foreground whitespace-nowrap">+ 18% GST (₹899.82)</p>
               </div>
 
               <div>
                 <p className="text-[11px] font-semibold text-muted-foreground">Patient Bill Quota</p>
-                <p className="font-bold text-foreground mt-1.5">{billLimit} bills</p>
-                <p className="text-[10px] text-muted-foreground">Unlimited Diagnostic Tests</p>
+                <p className="font-bold text-foreground mt-1.5 whitespace-nowrap">{billLimit} bills</p>
+                <p className="text-[10px] text-muted-foreground">Unlimited Tests</p>
               </div>
 
               <div>
                 <p className="text-[11px] font-semibold text-muted-foreground">Plan Valid Till</p>
-                <p className={`font-bold mt-1.5 ${isExpired ? "text-rose-600 font-extrabold" : "text-foreground"}`}>
+                <p className={`font-bold mt-1.5 whitespace-nowrap ${isExpired ? "text-rose-600 font-extrabold" : "text-foreground"}`}>
                   {planExpires ? formatDate(planExpires) : "Expired"} {isExpired ? "(Expired)" : ""}
                 </p>
-                <p className="text-[10px] text-muted-foreground">
-                  {isExpired ? "Renew below with PayU" : "Auto-Renewal Enabled"}
+                <p className="text-[10px] text-muted-foreground whitespace-nowrap">
+                  {isExpired ? "Renew with PayU" : "Auto-Renewal Active"}
                 </p>
               </div>
             </div>
@@ -1136,15 +1146,15 @@ function LabAccountContent() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h4 className="font-display font-bold text-sm text-foreground flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-primary" />
+                    <Activity className="h-4 w-4 text-primary shrink-0" />
                     <span>Daily Patient Volume &amp; Over-Limit Billing</span>
                   </h4>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     1–50 patients per day are included <strong>FREE</strong> in both plans. Bills beyond 50/day are billed based on volume tier (30–50 paise/bill) and settled annually.
                   </p>
                 </div>
                 {volumeSaved && (
-                  <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                  <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 whitespace-nowrap shrink-0 self-start sm:self-auto">
                     <CheckCircle2 className="h-3.5 w-3.5" /> Saved
                   </span>
                 )}
@@ -1164,16 +1174,16 @@ function LabAccountContent() {
                           : "bg-muted/20 border-border hover:border-primary/50"
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className={`text-xs font-bold ${isSelected ? "text-primary" : "text-foreground"}`}>
+                      <div className="flex items-center justify-between gap-1">
+                        <span className={`text-xs font-bold whitespace-nowrap truncate ${isSelected ? "text-primary" : "text-foreground"}`}>
                           {tier.label}
                         </span>
-                        {isSelected && <CheckCircle2 className="h-4 w-4 text-primary" />}
+                        {isSelected && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
                       </div>
                       <p className="text-[10px] text-muted-foreground">{tier.subtitle}</p>
                       <div className="pt-0.5">
                         <span
-                          className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wider inline-block"
+                          className="text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider inline-block whitespace-nowrap shrink-0"
                           style={{ color: tier.tagColor, backgroundColor: tier.tagBg }}
                         >
                           {tier.tag}
@@ -1187,51 +1197,51 @@ function LabAccountContent() {
               {/* Live Daily Usage Tracker & Yearly Overage */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Daily Usage Card */}
-                <div className="p-4 bg-muted/40 rounded-xl border border-border flex items-center justify-between gap-4 text-xs">
+                <div className="p-4 bg-muted/40 rounded-xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
+                    <div className="h-9 w-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
                       <TrendingUp className="h-4 w-4" />
                     </div>
                     <div>
                       <span className="font-bold text-foreground">Today's Patient Usage:</span>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
                         <strong>{todayBills}</strong> bills created today · <strong>50 Free</strong> quota base
                       </p>
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Today's Extra:</span>
-                    <p className="font-mono font-bold text-emerald-600">{extraBills} bills (₹{extraCharges})</p>
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-border/50 pt-2 sm:pt-0">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground whitespace-nowrap">Today's Extra:</span>
+                    <p className="font-mono font-bold text-emerald-600 whitespace-nowrap">{extraBills} bills (₹{extraCharges})</p>
                   </div>
                 </div>
 
                 {/* Yearly Cycle Settlement Card */}
-                <div className="p-3.5 sm:p-4 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent rounded-xl border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 text-xs">
+                <div className="p-3.5 sm:p-4 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent rounded-xl border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-700 dark:text-amber-400 shrink-0">
+                    <div className="h-9 w-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-700 dark:text-amber-400 shrink-0">
                       <Receipt className="h-4 w-4" />
                     </div>
                     <div>
                       <span className="font-bold text-foreground">Yearly Volume Over-Quota Due:</span>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
                         Total <strong>{yearlyExtraBills}</strong> extra reports @ ₹{currentTierRate}/report
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto border-t sm:border-t-0 border-amber-500/20 pt-2 sm:pt-0">
-                    <span className="font-mono font-black text-sm text-foreground">₹{yearlyExtraCharges}</span>
+                    <span className="font-mono font-black text-sm text-foreground whitespace-nowrap">₹{yearlyExtraCharges}</span>
                     <button
                       type="button"
                       onClick={() => handlePayUsage()}
                       disabled={initiatingPayment === "usage" || Number(yearlyExtraCharges) <= 0}
-                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs hover:opacity-95 transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-xs hover:opacity-95 transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer whitespace-nowrap shrink-0"
                     >
                       {initiatingPayment === "usage" ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
                       ) : (
-                        <CreditCard className="h-3.5 w-3.5" />
+                        <CreditCard className="h-3.5 w-3.5 shrink-0" />
                       )}
                       <span>Pay with PayU</span>
                     </button>
@@ -1245,32 +1255,30 @@ function LabAccountContent() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h4 className="font-display font-bold text-sm text-foreground flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <MessageSquare className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span>WhatsApp Free Credits &amp; Overlimit Billing</span>
                   </h4>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Included with your plan: <strong>{whatsappFreeCredits.toLocaleString()} Free Messages</strong> ({isCurrent1Year ? "1-Year Plan: 3,500" : "6-Month Plan: 1,500"} free messages for Bills &amp; Reports combined). Messages beyond free quota are billed at <strong>30 paise (₹0.30) per message</strong>.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${
-                    whatsappOverlimitCount > 0 
-                      ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30" 
-                      : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
-                  }`}>
-                    {whatsappOverlimitCount > 0 ? "Overlimit Active (Pay-As-You-Go)" : "Free Quota Active"}
-                  </span>
-                </div>
+                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border whitespace-nowrap shrink-0 self-start sm:self-auto ${
+                  whatsappOverlimitCount > 0 
+                    ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30" 
+                    : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                }`}>
+                  {whatsappOverlimitCount > 0 ? "Overlimit Active (Pay-As-You-Go)" : "Free Quota Active"}
+                </span>
               </div>
 
               {/* Progress bar */}
               <div className="bg-muted/30 border border-border/80 rounded-xl p-4 space-y-2.5">
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
                   <span className="font-bold text-foreground flex items-center gap-1.5">
                     <span>Usage Progress:</span>
-                    <span className="font-mono text-muted-foreground">{whatsappMessagesSent.toLocaleString()} / {whatsappFreeCredits.toLocaleString()} Free Quota</span>
+                    <span className="font-mono text-muted-foreground whitespace-nowrap">{whatsappMessagesSent.toLocaleString()} / {whatsappFreeCredits.toLocaleString()} Free Quota</span>
                   </span>
-                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                     {whatsappRemainingCredits.toLocaleString()} Free Messages Remaining
                   </span>
                 </div>
@@ -1284,60 +1292,60 @@ function LabAccountContent() {
                     style={{ width: `${whatsappUsagePercent}%` }}
                   />
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-muted-foreground">
                   <span>Both Patient Bills + Diagnostic Reports share this unified free quota.</span>
-                  <span>{whatsappUsagePercent}% utilized</span>
+                  <span className="font-semibold whitespace-nowrap">{whatsappUsagePercent}% utilized</span>
                 </div>
               </div>
 
               {/* WhatsApp Metrics & PayU Settlement Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Free Quota Breakdown Card */}
-                <div className="p-4 bg-muted/40 rounded-xl border border-border flex items-center justify-between gap-4 text-xs">
+                <div className="p-4 bg-muted/40 rounded-xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
+                    <div className="h-9 w-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 shrink-0">
                       <MessageSquare className="h-4 w-4" />
                     </div>
                     <div>
                       <span className="font-bold text-foreground">Dispatched Messages:</span>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
                         Total <strong>{whatsappMessagesSent.toLocaleString()}</strong> WhatsApp messages sent
                       </p>
                     </div>
                   </div>
 
-                  <div className="text-right">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground">Remaining Free:</span>
-                    <p className="font-mono font-bold text-emerald-600">{whatsappRemainingCredits.toLocaleString()} msgs</p>
+                  <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-border/50 pt-2 sm:pt-0">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground whitespace-nowrap">Remaining Free:</span>
+                    <p className="font-mono font-bold text-emerald-600 whitespace-nowrap">{whatsappRemainingCredits.toLocaleString()} msgs</p>
                   </div>
                 </div>
 
                 {/* Overlimit Settlement Card */}
-                <div className="p-3.5 sm:p-4 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent rounded-xl border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 text-xs">
+                <div className="p-3.5 sm:p-4 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent rounded-xl border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-700 dark:text-emerald-400 shrink-0">
+                    <div className="h-9 w-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-700 dark:text-emerald-400 shrink-0">
                       <Receipt className="h-4 w-4" />
                     </div>
                     <div>
                       <span className="font-bold text-foreground">Overlimit Bill Due:</span>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
                         <strong>{whatsappOverlimitCount.toLocaleString()}</strong> extra msgs @ ₹0.30/msg
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto border-t sm:border-t-0 border-emerald-500/20 pt-2 sm:pt-0">
-                    <span className="font-mono font-black text-sm text-foreground">₹{whatsappOverlimitCharge}</span>
+                    <span className="font-mono font-black text-sm text-foreground whitespace-nowrap">₹{whatsappOverlimitCharge}</span>
                     <button
                       type="button"
                       onClick={() => handlePayWhatsAppUsage()}
                       disabled={initiatingPayment === "whatsapp" || Number(whatsappOverlimitCharge) <= 0}
-                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs hover:opacity-95 transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs hover:opacity-95 transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer whitespace-nowrap shrink-0"
                     >
                       {initiatingPayment === "whatsapp" ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
                       ) : (
-                        <CreditCard className="h-3.5 w-3.5" />
+                        <CreditCard className="h-3.5 w-3.5 shrink-0" />
                       )}
                       <span>Pay with PayU</span>
                     </button>
@@ -1666,110 +1674,206 @@ function LabAccountContent() {
                 <p className="text-[11px]">Official GST tax invoices are automatically created upon successful payment.</p>
               </div>
             ) : (
-              <div className="table-responsive-container">
-                <table className="w-full text-left text-xs min-w-[760px]">
-                  <thead className="bg-muted/50 text-[11px] font-bold text-muted-foreground uppercase border-b border-border/80">
-                    <tr>
-                      <th className="py-3 px-4 font-bold">INVOICE NO.</th>
-                      <th className="py-3 px-4 font-bold">DATE &amp; TIME</th>
-                      <th className="py-3 px-4 font-bold">DESCRIPTION</th>
-                      <th className="py-3 px-4 font-bold">SAC</th>
-                      <th className="py-3 px-4 font-bold">TAXABLE (₹)</th>
-                      <th className="py-3 px-4 font-bold">GST (18%)</th>
-                      <th className="py-3 px-4 font-bold">TOTAL AMOUNT</th>
-                      <th className="py-3 px-4 font-bold text-right">ACTION</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {invoices.map((inv) => {
-                      const invId = inv.customId || inv.custom_id || inv.id.slice(0, 8);
-                      const hasValidTime = (str?: string) => Boolean(str && !str.includes("00:00:00") && !str.endsWith("T00:00:00.000000Z") && !str.endsWith("T00:00:00Z"));
-                      const rawDateStr = (hasValidTime(inv.invoiceDate || inv.invoice_date)
-                        ? (inv.invoiceDate || inv.invoice_date)
-                        : (inv.createdAt || inv.created_at || inv.invoiceDate || inv.invoice_date)) || new Date().toISOString();
-                      const invDateObj = new Date(rawDateStr);
-                      const baseAmt = inv.baseAmount ?? inv.base_amount ?? 5999.00;
-                      const cgstAmt = inv.cgstAmount ?? inv.cgst_amount ?? Math.round(baseAmt * 0.09 * 100) / 100;
-                      const sgstAmt = inv.sgstAmount ?? inv.sgst_amount ?? Math.round(baseAmt * 0.09 * 100) / 100;
-                      const invAmt = inv.totalAmount ?? inv.total_amount ?? (baseAmt + cgstAmt + sgstAmt);
-                      const isDownloading = downloadingInvoiceId === inv.id;
+              <>
+                {/* Mobile Cards View (Visible on small screens < 768px) */}
+                <div className="md:hidden divide-y divide-border/60">
+                  {invoices.map((inv) => {
+                    const invId = inv.customId || inv.custom_id || inv.id.slice(0, 8);
+                    const hasValidTime = (str?: string) => Boolean(str && !str.includes("00:00:00") && !str.endsWith("T00:00:00.000000Z") && !str.endsWith("T00:00:00Z"));
+                    const rawDateStr = (hasValidTime(inv.invoiceDate || inv.invoice_date)
+                      ? (inv.invoiceDate || inv.invoice_date)
+                      : (inv.createdAt || inv.created_at || inv.invoiceDate || inv.invoice_date)) || new Date().toISOString();
+                    const invDateObj = new Date(rawDateStr);
+                    const baseAmt = inv.baseAmount ?? inv.base_amount ?? 5999.00;
+                    const cgstAmt = inv.cgstAmount ?? inv.cgst_amount ?? Math.round(baseAmt * 0.09 * 100) / 100;
+                    const sgstAmt = inv.sgstAmount ?? inv.sgst_amount ?? Math.round(baseAmt * 0.09 * 100) / 100;
+                    const invAmt = inv.totalAmount ?? inv.total_amount ?? (baseAmt + cgstAmt + sgstAmt);
+                    const isDownloading = downloadingInvoiceId === inv.id;
 
-                      return (
-                        <tr key={inv.id} className="hover:bg-muted/30 transition-colors">
-                          <td className="py-3.5 px-4 font-mono font-bold text-foreground">
-                            CCS/2026-27/{invId}
-                          </td>
-                          <td className="py-3.5 px-4 text-muted-foreground">
-                            <div className="font-semibold text-foreground">
-                              {invDateObj.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground font-mono">
-                              {invDateObj.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 font-medium text-foreground max-w-xs truncate">
-                            {inv.description || "OnePath Pathology LIS Platform License"}
-                          </td>
-                          <td className="py-3.5 px-4 font-mono text-slate-600">
-                            {inv.sacCode || inv.sac_code || "998314"}
-                          </td>
-                          <td className="py-3.5 px-4 font-mono text-slate-800">
-                            ₹{baseAmt.toFixed(2)}
-                          </td>
-                          <td className="py-3.5 px-4 font-mono text-slate-600">
-                            ₹{(cgstAmt + sgstAmt).toFixed(2)}
-                          </td>
-                          <td className="py-3.5 px-4 font-bold text-emerald-600 font-mono">
+                    return (
+                      <div key={inv.id} className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="font-mono font-bold text-xs text-foreground block truncate">
+                              CCS/2026-27/{invId}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <Clock className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{invDateObj.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} • {invDateObj.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}</span>
+                            </span>
+                          </div>
+                          <span className="font-mono font-black text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 whitespace-nowrap shrink-0">
                             ₹{invAmt.toFixed(2)}
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleEmailInvoice(inv)}
-                                disabled={emailingInvoiceId === inv.id}
-                                title="Send official GST Tax Invoice PDF directly to lab email"
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted text-foreground text-xs font-semibold shadow-2xs cursor-pointer disabled:opacity-50 transition-colors"
-                              >
-                                {emailingInvoiceId === inv.id ? (
-                                  <>
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                    <span>Sending...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Mail className="h-3.5 w-3.5 text-primary" />
-                                    <span>Email PDF</span>
-                                  </>
-                                )}
-                              </button>
+                          </span>
+                        </div>
 
-                              <button
-                                type="button"
-                                onClick={() => handleDirectDownloadPdf(inv)}
-                                disabled={isDownloading}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold shadow-2xs hover:brightness-105 cursor-pointer disabled:opacity-50 transition-all"
-                              >
-                                {isDownloading ? (
-                                  <>
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    <span>Downloading...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Download className="h-3.5 w-3.5" />
-                                    <span>Download PDF</span>
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                        <div className="text-xs text-muted-foreground bg-muted/40 p-2.5 rounded-xl space-y-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span>Description:</span>
+                            <span className="font-medium text-foreground truncate max-w-[200px] text-right">{inv.description || "OnePath LIS Platform License"}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Taxable Value:</span>
+                            <span className="font-mono font-medium text-foreground">₹{baseAmt.toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>GST (18%):</span>
+                            <span className="font-mono font-medium text-foreground">₹{(cgstAmt + sgstAmt).toFixed(2)}</span>
+                          </div>
+                        </div>
+
+                        {/* Symmetrical Single-Line Action Buttons */}
+                        <div className="grid grid-cols-2 gap-2 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleEmailInvoice(inv)}
+                            disabled={emailingInvoiceId === inv.id}
+                            title="Send official GST Tax Invoice PDF directly to lab email"
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-card hover:bg-muted text-foreground text-xs font-semibold shadow-2xs cursor-pointer disabled:opacity-50 transition-colors whitespace-nowrap shrink-0"
+                          >
+                            {emailingInvoiceId === inv.id ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
+                                <span className="whitespace-nowrap">Sending...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Mail className="h-3.5 w-3.5 text-primary shrink-0" />
+                                <span className="whitespace-nowrap">Email PDF</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDirectDownloadPdf(inv)}
+                            disabled={isDownloading}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-2xs hover:brightness-105 cursor-pointer disabled:opacity-50 transition-all whitespace-nowrap shrink-0"
+                          >
+                            {isDownloading ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                                <span className="whitespace-nowrap">Downloading...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Download className="h-3.5 w-3.5 shrink-0" />
+                                <span className="whitespace-nowrap">Download PDF</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop Table View (Visible on md+ screens) */}
+                <div className="hidden md:block table-responsive-container">
+                  <table className="w-full text-left text-xs min-w-[760px]">
+                    <thead className="bg-muted/50 text-[11px] font-bold text-muted-foreground uppercase border-b border-border/80">
+                      <tr>
+                        <th className="py-3 px-4 font-bold">INVOICE NO.</th>
+                        <th className="py-3 px-4 font-bold">DATE &amp; TIME</th>
+                        <th className="py-3 px-4 font-bold">DESCRIPTION</th>
+                        <th className="py-3 px-4 font-bold">SAC</th>
+                        <th className="py-3 px-4 font-bold">TAXABLE (₹)</th>
+                        <th className="py-3 px-4 font-bold">GST (18%)</th>
+                        <th className="py-3 px-4 font-bold">TOTAL AMOUNT</th>
+                        <th className="py-3 px-4 font-bold text-right">ACTION</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {invoices.map((inv) => {
+                        const invId = inv.customId || inv.custom_id || inv.id.slice(0, 8);
+                        const hasValidTime = (str?: string) => Boolean(str && !str.includes("00:00:00") && !str.endsWith("T00:00:00.000000Z") && !str.endsWith("T00:00:00Z"));
+                        const rawDateStr = (hasValidTime(inv.invoiceDate || inv.invoice_date)
+                          ? (inv.invoiceDate || inv.invoice_date)
+                          : (inv.createdAt || inv.created_at || inv.invoiceDate || inv.invoice_date)) || new Date().toISOString();
+                        const invDateObj = new Date(rawDateStr);
+                        const baseAmt = inv.baseAmount ?? inv.base_amount ?? 5999.00;
+                        const cgstAmt = inv.cgstAmount ?? inv.cgst_amount ?? Math.round(baseAmt * 0.09 * 100) / 100;
+                        const sgstAmt = inv.sgstAmount ?? inv.sgst_amount ?? Math.round(baseAmt * 0.09 * 100) / 100;
+                        const invAmt = inv.totalAmount ?? inv.total_amount ?? (baseAmt + cgstAmt + sgstAmt);
+                        const isDownloading = downloadingInvoiceId === inv.id;
+
+                        return (
+                          <tr key={inv.id} className="hover:bg-muted/30 transition-colors">
+                            <td className="py-3.5 px-4 font-mono font-bold text-foreground">
+                              CCS/2026-27/{invId}
+                            </td>
+                            <td className="py-3.5 px-4 text-muted-foreground">
+                              <div className="font-semibold text-foreground">
+                                {invDateObj.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                              </div>
+                              <div className="text-[11px] text-muted-foreground font-mono">
+                                {invDateObj.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 font-medium text-foreground max-w-xs truncate">
+                              {inv.description || "OnePath Pathology LIS Platform License"}
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-slate-600">
+                              {inv.sacCode || inv.sac_code || "998314"}
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-slate-800">
+                              ₹{baseAmt.toFixed(2)}
+                            </td>
+                            <td className="py-3.5 px-4 font-mono text-slate-600">
+                              ₹{(cgstAmt + sgstAmt).toFixed(2)}
+                            </td>
+                            <td className="py-3.5 px-4 font-bold text-emerald-600 font-mono">
+                              ₹{invAmt.toFixed(2)}
+                            </td>
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEmailInvoice(inv)}
+                                  disabled={emailingInvoiceId === inv.id}
+                                  title="Send official GST Tax Invoice PDF directly to lab email"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted text-foreground text-xs font-semibold shadow-2xs cursor-pointer disabled:opacity-50 transition-colors whitespace-nowrap shrink-0"
+                                >
+                                  {emailingInvoiceId === inv.id ? (
+                                    <>
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                      <span className="whitespace-nowrap">Sending...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Mail className="h-3.5 w-3.5 text-primary" />
+                                      <span className="whitespace-nowrap">Email PDF</span>
+                                    </>
+                                  )}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDirectDownloadPdf(inv)}
+                                  disabled={isDownloading}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold shadow-2xs hover:brightness-105 cursor-pointer disabled:opacity-50 transition-all whitespace-nowrap shrink-0"
+                                >
+                                  {isDownloading ? (
+                                    <>
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      <span className="whitespace-nowrap">Downloading...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Download className="h-3.5 w-3.5" />
+                                      <span className="whitespace-nowrap">Download PDF</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </div>

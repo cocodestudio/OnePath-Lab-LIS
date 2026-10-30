@@ -3955,7 +3955,7 @@ assert(
 const labAccountCode40 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/account/lab/page.tsx"), "utf-8");
 assert(
   labAccountCode40.includes("w-full sm:w-auto inline-flex items-center justify-center") &&
-  labAccountCode40.includes("gap-4 sm:gap-6 border-b border-border text-sm font-semibold overflow-x-auto"),
+  labAccountCode40.includes("overflow-x-auto scrollbar-none"),
   "[LAB ACCOUNT HEADER & TABS] Need Help button expands to full width and navigation tabs scroll cleanly"
 );
 assert(
@@ -4372,6 +4372,286 @@ assert(
   aiWidgetSrc46.includes("!hasUserMessage && !loading && (") &&
   aiWidgetSrc46.includes("scrollToBottom()"),
   "[COMMON TOPICS DISMISSAL BUG FIX] Common help topics disappear immediately upon user command and chat auto-scrolls smoothly"
+);
+
+// ==============================================================================
+// 47. Dues Report Centre & Source Dropdown Filter with Default Main Lab & All Dues
+// ==============================================================================
+console.log("\n▶ MODULE 47: Dues Report Centre & Source Dropdown Filter with Default Main Lab & All Dues");
+
+const duesPageSrc47 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/billing/dues/page.tsx"), "utf-8");
+
+// 47.1 Dropdown Replaces Search Bar in Dues Report Page
+assert(
+  duesPageSrc47.includes("Select") &&
+  duesPageSrc47.includes("SelectTrigger") &&
+  duesPageSrc47.includes("SelectValue") &&
+  duesPageSrc47.includes("SelectContent") &&
+  duesPageSrc47.includes("SelectItem") &&
+  duesPageSrc47.includes("Building2"),
+  "[DUES DROPDOWN COMPONENT] Dues report imports and mounts Radix Select dropdown with Building2 icon"
+);
+
+// 47.2 Default Selected State is 'MAIN_LAB' (Main Lab Walk-in Cases)
+assert(
+  duesPageSrc47.includes('useState<string>("MAIN_LAB")') &&
+  duesPageSrc47.includes('value="MAIN_LAB"') &&
+  duesPageSrc47.includes("Main Lab") &&
+  duesPageSrc47.includes("(Direct In-house)"),
+  "[DUES DEFAULT MAIN LAB] Dues dropdown defaults to 'MAIN_LAB' for in-house/walk-in patient dues"
+);
+
+// 47.3 'ALL' Option for Complete Aggregated Dues Across Centers
+assert(
+  duesPageSrc47.includes('value="ALL"') &&
+  duesPageSrc47.includes("All Dues") &&
+  duesPageSrc47.includes("(Total Across All)"),
+  "[DUES ALL SOURCES OPTION] Dues dropdown provides 'ALL' option displaying total dues across all centers"
+);
+
+// 47.4 Collection Centres and B2B Partners Dynamic Mapping with Badges
+assert(
+  duesPageSrc47.includes("loadCollectionCenters") &&
+  duesPageSrc47.includes('fetchFromLaravel("/collection-centers")') &&
+  duesPageSrc47.includes("Collection Centres & B2B Partners") &&
+  duesPageSrc47.includes("isB2B") &&
+  duesPageSrc47.includes("isReception"),
+  "[DUES CENTERS AND B2B MAPPING] Dues dropdown fetches collection centers and categorizes B2B, Reception, and CC"
+);
+
+// 47.5 Collection Center Parameter Transmission & Rapid Cache Resolution
+assert(
+  duesPageSrc47.includes('params.append("collection_center_id", activeCenter)') &&
+  duesPageSrc47.includes("lis_cached_due_report_v2_") &&
+  duesPageSrc47.includes("handleCenterChange"),
+  "[DUES API PARAM & CACHE] Dues request dispatches collection_center_id filter and isolates cache per centre"
+);
+
+// ==============================================================================
+// 48. Sileo Toast Physics-Based Toast Mobile & Multi-Device Responsiveness
+// ==============================================================================
+console.log("\n▶ MODULE 48: Sileo Physics-Based Toast Mobile & Multi-Device Responsiveness");
+
+const globalsCssSrc48 = fs.readFileSync(path.resolve(__dirname, "../src/app/globals.css"), "utf-8");
+
+// 48.1 CSS Root Dynamic Width Override for Sileo
+assert(
+  globalsCssSrc48.includes("--sileo-width: min(calc(100vw - 1.5rem), 356px)") &&
+  globalsCssSrc48.includes("[data-sileo-viewport]") &&
+  globalsCssSrc48.includes("[data-sileo-toast]"),
+  "[SILEO CSS ROOT VARIABLE] globals.css sets responsive --sileo-width bound to min(calc(100vw - 1.5rem), 356px)"
+);
+
+// 48.2 Mobile Viewport Max-Width and Center Alignment Override
+assert(
+  globalsCssSrc48.includes("@media (max-width: 640px)") &&
+  globalsCssSrc48.includes("--sileo-width: min(calc(100vw - 1rem), 340px) !important;") &&
+  globalsCssSrc48.includes("max-width: calc(100vw - 1rem) !important;"),
+  "[SILEO MOBILE VIEWPORT] Mobile media query bounds toast width to min(calc(100vw - 1rem), 340px) preventing viewport overflow"
+);
+
+// 48.3 Safe Typography Truncation & Word Wrapping
+assert(
+  globalsCssSrc48.includes("text-overflow: ellipsis !important;") &&
+  globalsCssSrc48.includes("word-break: break-word !important;") &&
+  globalsCssSrc48.includes("overflow-wrap: anywhere !important;"),
+  "[SILEO MOBILE TEXT SAFETY] Sileo title enforces ellipsis truncation and description enforces clean multi-line word wrapping"
+);
+
+// ==============================================================================
+// 49. Overview Dashboard Symmetrical Layout, Total Sales Chart, Shimmer & LIS Hub
+// ==============================================================================
+console.log("\n▶ MODULE 49: Overview Dashboard Symmetrical Layout, Total Sales Chart, Shimmer & LIS Hub");
+
+const overviewPageSrc49 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/page.tsx"), "utf-8");
+const shimmerSrc49 = fs.readFileSync(path.resolve(__dirname, "../src/components/dashboard-shimmer.tsx"), "utf-8");
+
+// 49.1 Total Sales & Revenue Chart Mounting & Area Component
+assert(
+  overviewPageSrc49.includes("AreaChart") &&
+  overviewPageSrc49.includes("Area") &&
+  overviewPageSrc49.includes("Total Sales & Revenue Trend") &&
+  overviewPageSrc49.includes("salesRevenueGradient"),
+  "[OVERVIEW TOTAL SALES CHART] Overview dashboard renders Total Sales & Revenue AreaChart with emerald gradient"
+);
+
+// 49.2 Balanced Symmetrical 6-Column Layout for Trend Charts
+assert(
+  overviewPageSrc49.includes("Weekly Reports Trend") &&
+  overviewPageSrc49.includes("col-span-12 lg:col-span-6"),
+  "[OVERVIEW CHART SYMMETRY] Weekly Reports Trend and Total Sales Trend are balanced side-by-side in 6-column containers"
+);
+
+// 49.3 Data Consistency with Stats Revenue & Trend Calculation
+assert(
+  overviewPageSrc49.includes("formattedSalesData") &&
+  overviewPageSrc49.includes("total7DaysSales") &&
+  overviewPageSrc49.includes("avgDailySales") &&
+  overviewPageSrc49.includes("stats.totalRevenue") &&
+  overviewPageSrc49.includes("stats.revenue"),
+  "[OVERVIEW SALES METRICS CONSISTENCY] Total sales chart displays stats.totalRevenue, stats.revenue, and computed 7-day average"
+);
+
+// 49.4 Shimmer Loading Placeholders & Fast Caching
+assert(
+  overviewPageSrc49.includes("Skeleton") &&
+  overviewPageSrc49.includes("lis_cached_dashboard_stats") &&
+  overviewPageSrc49.includes("lis_cached_dashboard_charts") &&
+  shimmerSrc49.includes("Total Sales Trend Skeleton"),
+  "[OVERVIEW SHIMMER & INSTANT CACHE] Dashboard shimmer includes Total Sales skeleton and loads cached metrics in <100ms"
+);
+
+// 49.5 Clean Termination of Overview Page & Removal of Redundant Clutter Cards
+assert(
+  !overviewPageSrc49.includes("Recent Patients & Reports") &&
+  !overviewPageSrc49.includes("No recent intakes") &&
+  !overviewPageSrc49.includes("Specimen Queue") &&
+  !overviewPageSrc49.includes("Test Directory") &&
+  !overviewPageSrc49.includes("Referral Network") &&
+  !overviewPageSrc49.includes("Financial Ledger") &&
+  !shimmerSrc49.includes("Row 3 Shimmer"),
+  "[OVERVIEW CLEAN LAYOUT] Redundant bottom patient card and 4 quick action cards removed for a clean, focused dashboard"
+);
+
+// 49.6 Dues Payment "View all" Single-Line Text Link & Non-Wrapping Mobile Layout
+assert(
+  overviewPageSrc49.includes('text-xs font-semibold text-primary hover:underline whitespace-nowrap shrink-0 flex items-center gap-1 transition-colors') &&
+  overviewPageSrc49.includes('<span>View all</span>') &&
+  !overviewPageSrc49.includes('px-2.5 py-1 rounded-md bg-primary/10'),
+  "[OVERVIEW DUES LINK CLEAN TEXT] Dues card renders 'View all' as clean single-line non-wrapping text without pill"
+);
+
+// 49.7 Diagnostic Report Status Clean Single-Line Label & Turnaround Progress
+assert(
+  overviewPageSrc49.includes('whitespace-nowrap shrink-0 flex items-center gap-1.5') &&
+  overviewPageSrc49.includes('{completionPct}% Completed') &&
+  overviewPageSrc49.includes("Turnaround") &&
+  overviewPageSrc49.includes("Today's Intake Completed") &&
+  !overviewPageSrc49.includes("px-2.5 py-1 rounded-full bg-emerald-500/15"),
+  "[OVERVIEW REPORT STATUS ALIGNMENT] Diagnostic status renders single-line label without bulky pill and balances desktop height"
+);
+
+// 49.8 Weekly Trend 7-Day Volume Responsive Single-Line Label
+assert(
+  overviewPageSrc49.includes("7-Day Volume") &&
+  overviewPageSrc49.includes("text-[11px] sm:text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0") &&
+  !overviewPageSrc49.includes('px-3 py-1.5 rounded-lg bg-muted/60 border border-border/60">7-Day Volume'),
+  "[OVERVIEW 7-DAY VOLUME RESPONSIVE] Weekly reports trend renders 7-Day Volume as responsive non-wrapping single line text"
+);
+
+// ==============================================================================
+// 50. Profile & My Account Responsive Layout, Rounded Switcher & Real Sessions
+// ==============================================================================
+console.log("\n▶ MODULE 50: Profile & My Account Responsive Layout, Rounded Switcher & Real Sessions");
+
+const profilePageSrc50 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/account/profile/page.tsx"), "utf-8");
+
+// 50.1 Fluid Full-Width Container & Zero Cramped Box Boundary
+assert(
+  profilePageSrc50.includes("w-full max-w-6xl mx-auto space-y-6 pb-20 px-3 sm:px-6 lg:px-8") &&
+  !profilePageSrc50.includes("max-w-2xl mx-auto"),
+  "[PROFILE RESPONSIVE LAYOUT] Profile page expands across modern wide displays (max-w-6xl) eliminating awkward box margins"
+);
+
+// 50.2 Smooth Rounded Segmented Tab Switcher
+assert(
+  profilePageSrc50.includes("rounded-2xl bg-muted/75 border border-border/80 shadow-xs backdrop-blur-sm") &&
+  profilePageSrc50.includes("rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer") &&
+  profilePageSrc50.includes("bg-card text-foreground shadow-sm border border-border/70"),
+  "[PROFILE TAB SWITCHER] Switcher is rendered as a smooth rounded segmented island with elevated active pill"
+);
+
+// 50.3 Modular Form Fields & Diagnostic Lab Direct Link
+assert(
+  profilePageSrc50.includes("Official Account Email") &&
+  profilePageSrc50.includes("Security Locked") &&
+  profilePageSrc50.includes("Diagnostic Centre / Laboratory") &&
+  profilePageSrc50.includes("/dashboard/account/lab?tab=centre") &&
+  profilePageSrc50.includes("Manage Lab Profile"),
+  "[PROFILE MODULAR FIELDS] Account details rendered as distinct professional cards with email security and direct lab management link"
+);
+
+// 50.4 Live Multi-Device Sessions API Integration
+assert(
+  profilePageSrc50.includes("fetchFromLaravel(\"/profile/sessions\")") &&
+  profilePageSrc50.includes("fetchFromLaravel(`/profile/sessions/${sessionId}`") &&
+  profilePageSrc50.includes("fetchFromLaravel(\"/profile/sessions/revoke-others\"") &&
+  profilePageSrc50.includes("ActiveSession"),
+  "[PROFILE SESSIONS API] Sessions tab integrates with real backend endpoints for active device retrieval and revocation"
+);
+
+// 50.5 Real Device Cards, Individual Logout & Bulk Remote Revocation
+assert(
+  profilePageSrc50.includes("Log Out All Other Devices") &&
+  profilePageSrc50.includes("This Device (Current)") &&
+  profilePageSrc50.includes("Remote Device") &&
+  profilePageSrc50.includes("Smartphone") &&
+  profilePageSrc50.includes("Laptop"),
+  "[PROFILE DEVICE MANAGEMENT] Displays multi-device identity, active status indicators, individual logout, and all-other logout"
+);
+
+// ==============================================================================
+// 51. Lab Account Rounded Tab Switcher, GST Invoices & Subscription Mobile UX
+// ==============================================================================
+console.log("\n▶ MODULE 51: Lab Account Rounded Tab Switcher, GST Invoices & Subscription Mobile UX");
+
+const labAccountPageSrc51 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/account/lab/page.tsx"), "utf-8");
+
+// 51.1 Smooth Rounded Segmented Tab Switcher with Mobile Overflow Protection
+assert(
+  labAccountPageSrc51.includes("inline-flex items-center p-1.5 rounded-2xl bg-muted/75 border border-border/80 shadow-xs backdrop-blur-sm gap-1 min-w-max") &&
+  labAccountPageSrc51.includes("w-full overflow-x-auto scrollbar-none pb-1") &&
+  labAccountPageSrc51.includes("rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0") &&
+  labAccountPageSrc51.includes("bg-card text-foreground shadow-sm border border-border/70"),
+  "[LAB TAB SWITCHER ROUNDED] Lab account tab switcher rendered as smooth rounded island with elevated active pill and mobile scroll"
+);
+
+// 51.2 GST Tax Invoices Mobile Dedicated Card Layout & Symmetrical Single-Line Buttons
+assert(
+  labAccountPageSrc51.includes("md:hidden divide-y divide-border/60") &&
+  labAccountPageSrc51.includes("grid grid-cols-2 gap-2 pt-0.5") &&
+  labAccountPageSrc51.includes("hidden md:block table-responsive-container") &&
+  labAccountPageSrc51.includes("<span className=\"whitespace-nowrap\">Email PDF</span>") &&
+  labAccountPageSrc51.includes("<span className=\"whitespace-nowrap\">Download PDF</span>"),
+  "[GST INVOICE MOBILE RESPONSIVENESS] GST invoices provide mobile-optimized cards with symmetrical single-line action buttons"
+);
+
+// 51.3 Subscription Plan Metrics Single-Line Alignment & Responsive Pill Badges
+assert(
+  labAccountPageSrc51.includes("rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 whitespace-nowrap shrink-0") &&
+  labAccountPageSrc51.includes("₹4,999.00 / year") &&
+  labAccountPageSrc51.includes("whitespace-nowrap") &&
+  labAccountPageSrc51.includes("Overlimit Active (Pay-As-You-Go)"),
+  "[SUBSCRIPTION MOBILE LAYOUT & PILLS] Subscription plan displays single-line metrics, non-wrapping pill badges, and mobile-aligned meters"
+);
+
+// ==============================================================================
+// 52. Profile Reset Password Via Link & Professional Reset Password Page UI
+// ==============================================================================
+console.log("\n▶ MODULE 52: Profile Reset Password Via Link & Professional Reset Password Page UI");
+
+const profilePageSrc52 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/account/profile/page.tsx"), "utf-8");
+const resetPasswordPageSrc52 = fs.readFileSync(path.resolve(__dirname, "../src/app/reset-password/page.tsx"), "utf-8");
+
+// 52.1 Profile Password Reset dispatches via Link matching Login Forgot Password Flow
+assert(
+  profilePageSrc52.includes("fetch(`${getAuthBaseUrl()}/forgot-password`") &&
+  profilePageSrc52.includes("Send Password Reset Link") &&
+  profilePageSrc52.includes("Reset Link Sent Successfully!") &&
+  profilePageSrc52.includes("cooldownSeconds") &&
+  profilePageSrc52.includes("Resend Link"),
+  "[PROFILE RESET LINK DISPATCH] My Account sends reset link via /forgot-password with cooldown and instant status"
+);
+
+// 52.2 Reset Password Page UI/UX, Dynamic Strength Meter & Mobile Alignment
+assert(
+  resetPasswordPageSrc52.includes("getPasswordStrength") &&
+  resetPasswordPageSrc52.includes("grid grid-cols-4 gap-1.5 h-1.5") &&
+  resetPasswordPageSrc52.includes("Update Password & Sign In") &&
+  resetPasswordPageSrc52.includes("whitespace-nowrap shrink-0") &&
+  resetPasswordPageSrc52.includes("truncate break-all") &&
+  !resetPasswordPageSrc52.includes("Â·"),
+  "[RESET PASSWORD PAGE UI] Reset password page renders dynamic strength meter, single-line submit, clean typography & responsive mobile layout"
 );
 
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);

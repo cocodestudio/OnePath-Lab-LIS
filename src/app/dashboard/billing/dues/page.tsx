@@ -3,10 +3,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
-  IndianRupee, Calendar, Search, RefreshCw, ChevronDown, ChevronRight, ChevronLeft,
+  IndianRupee, Calendar, RefreshCw, ChevronDown, ChevronRight, ChevronLeft,
   Printer, Clock, CheckCircle2, User, Stethoscope, AlertCircle,
   ZoomIn, ZoomOut,
-  FileText, ArrowLeft, X, Receipt
+  FileText, ArrowLeft, X, Receipt, Building2
 } from "lucide-react";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
@@ -19,6 +19,13 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function formatDisplayDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "—";
@@ -60,6 +67,11 @@ export default function DueReportsPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
+  // Collection Center / Dues Source Filter State (Default: MAIN_LAB)
+  const [selectedCenter, setSelectedCenter] = useState<string>("MAIN_LAB");
+  const [collectionCenters, setCollectionCenters] = useState<any[]>([]);
+  const [isLoadingCenters, setIsLoadingCenters] = useState<boolean>(false);
+
   // Pagination State for high performance
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [perPage, setPerPage] = useState<number>(25);
@@ -80,10 +92,42 @@ export default function DueReportsPage() {
   const [labData, setLabData] = useState<any>(null);
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
 
+  const loadCollectionCenters = useCallback(async () => {
+    try {
+      setIsLoadingCenters(true);
+      // Instant cache read for zero perceived latency
+      const cached = localStorage.getItem("lis_cached_collection_centers");
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const valid = parsed.filter((c: any) => c && (c.id || c.name));
+            if (valid.length > 0) {
+              setCollectionCenters(valid);
+            }
+          }
+        } catch {}
+      }
+
+      const res = await fetchFromLaravel("/collection-centers");
+      const list = Array.isArray(res) ? res : (res?.data || []);
+      const validCenters = (Array.isArray(list) ? list : []).filter((c: any) => c && (c.id || c.name));
+      setCollectionCenters(validCenters);
+      try {
+        localStorage.setItem("lis_cached_collection_centers", JSON.stringify(validCenters));
+      } catch {}
+    } catch (err) {
+      console.error("Failed to load collection centers for dues filter:", err);
+    } finally {
+      setIsLoadingCenters(false);
+    }
+  }, []);
+
   const loadDueBills = useCallback(async (
     force = false,
     pageToLoad?: number,
     limitToLoad?: number,
+    centerToFilter?: string,
     overrideStart?: string,
     overrideEnd?: string
   ) => {
@@ -95,6 +139,7 @@ export default function DueReportsPage() {
 
     const activePage = pageToLoad ?? currentPage;
     const activeLimit = limitToLoad ?? perPage;
+    const activeCenter = centerToFilter !== undefined ? centerToFilter : selectedCenter;
     const activeStart = overrideStart !== undefined ? overrideStart : startDate;
     const activeEnd = overrideEnd !== undefined ? overrideEnd : endDate;
 
@@ -104,6 +149,9 @@ export default function DueReportsPage() {
       params.append("include_b2b", "1");
       params.append("page", String(activePage));
       params.append("limit", String(activeLimit));
+      if (activeCenter) {
+        params.append("collection_center_id", activeCenter);
+      }
       if (activeStart) params.append("start_date", activeStart);
       if (activeEnd) params.append("end_date", activeEnd);
       if (searchQuery.trim()) params.append("search", searchQuery.trim());
@@ -127,9 +175,9 @@ export default function DueReportsPage() {
       }
 
       // Cache client-side for rapid reload
-      if (datePreset === "30days" && activePage === 1 && !searchQuery) {
+      if (datePreset === "all" && activePage === 1 && !searchQuery) {
         try {
-          localStorage.setItem("lis_cached_due_report_v2", JSON.stringify({
+          localStorage.setItem(`lis_cached_due_report_v2_${activeCenter}`, JSON.stringify({
             data: rawList,
             total: res?.total ?? rawList.length,
             last_page: res?.last_page ?? 1,
@@ -147,7 +195,41 @@ export default function DueReportsPage() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [startDate, endDate, datePreset, searchQuery, currentPage, perPage, toast]);
+  }, [startDate, endDate, datePreset, searchQuery, currentPage, perPage, selectedCenter, toast]);
+
+  const handleCenterChange = (newCenter: string) => {
+    setSelectedCenter(newCenter);
+    setCurrentPage(1);
+
+    let foundCache = false;
+    try {
+      const cached =
+        localStorage.getItem(`lis_cached_due_report_v2_${newCenter}`) ||
+        (newCenter === "MAIN_LAB" ? localStorage.getItem("lis_cached_due_report_MAIN_LAB") : null);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const list = Array.isArray(parsed) ? parsed : (parsed?.data || []);
+        if (Array.isArray(list) && list.length > 0) {
+          setBills(list);
+          foundCache = true;
+          if (parsed && typeof parsed.total === "number") {
+            setPaginationInfo({
+              total: parsed.total,
+              last_page: parsed.last_page || 1,
+              current_page: 1,
+            });
+          }
+        }
+      }
+    } catch {}
+
+    if (!foundCache) {
+      setBills([]);
+      setPaginationInfo({ total: 0, last_page: 1, current_page: 1 });
+    }
+
+    loadDueBills(true, 1, undefined, newCenter);
+  };
 
   const applyPreset = (preset: string) => {
     setDatePreset(preset);
@@ -179,16 +261,16 @@ export default function DueReportsPage() {
     }
     setStartDate(s);
     setEndDate(e);
-    loadDueBills(true, 1, undefined, s, e);
+    loadDueBills(true, 1, undefined, selectedCenter, s, e);
   };
 
   // Read cache on mount ONLY for instant zero-latency display
   useEffect(() => {
     try {
       const cached =
-        localStorage.getItem("lis_cached_due_report_v2") ||
+        localStorage.getItem("lis_cached_due_report_v2_MAIN_LAB") ||
         localStorage.getItem("lis_cached_due_report_MAIN_LAB") ||
-        localStorage.getItem("lis_cached_due_report");
+        localStorage.getItem("lis_cached_due_report_v2");
       if (cached) {
         const parsed = JSON.parse(cached);
         const list = Array.isArray(parsed) ? parsed : (parsed?.data || []);
@@ -214,7 +296,8 @@ export default function DueReportsPage() {
       }
     } catch {}
 
-    loadDueBills(false, 1);
+    loadCollectionCenters();
+    loadDueBills(false, 1, undefined, "MAIN_LAB");
 
     // Background fetch lab profile
     fetchFromLaravel("/lab").then((lab) => {
@@ -302,7 +385,7 @@ export default function DueReportsPage() {
         prev.map((b) => (b.id === updatedBill.id ? { ...b, ...updatedBill } : b))
       );
     }
-    loadDueBills(false);
+    loadDueBills(false, undefined, undefined, selectedCenter);
   };
 
   return (
@@ -340,7 +423,7 @@ export default function DueReportsPage() {
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
           <button
             type="button"
-            onClick={() => loadDueBills(true)}
+            onClick={() => loadDueBills(true, undefined, undefined, selectedCenter)}
             disabled={isRefreshing}
             className="flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border bg-card hover:bg-muted text-xs font-semibold text-foreground transition-all cursor-pointer shadow-xs disabled:opacity-60 shrink-0"
           >
@@ -434,31 +517,86 @@ export default function DueReportsPage() {
             ))}
           </div>
 
-          {/* Search box */}
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search patient, reg no, doctor..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-9 pr-8 py-2 rounded-lg border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery("");
-                  setCurrentPage(1);
-                }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+          {/* Collection Centre / Source Dropdown Filter (Replaces Search Bar) */}
+          <div className="w-full sm:w-72">
+            <Select
+              value={selectedCenter}
+              onValueChange={handleCenterChange}
+              disabled={loading && !bills.length && isLoadingCenters}
+            >
+              <SelectTrigger className="h-9 text-xs bg-background border-border shadow-2xs">
+                <div className="flex items-center gap-2 truncate">
+                  <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <SelectValue placeholder="Select Centre / Source" />
+                </div>
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {/* 1. Main Lab (Default) */}
+                <SelectItem value="MAIN_LAB">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground">Main Lab</span>
+                    <span className="text-[10px] text-muted-foreground">(Direct In-house)</span>
+                  </div>
+                </SelectItem>
+
+                {/* 2. All Dues (Across All Centers & Main Lab) */}
+                <SelectItem value="ALL">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground">All Dues</span>
+                    <span className="text-[10px] text-muted-foreground">(Total Across All)</span>
+                  </div>
+                </SelectItem>
+
+                {/* 3. Collection Centres & B2B Partners */}
+                {collectionCenters.length > 0 && (
+                  <>
+                    <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
+                      Collection Centres & B2B Partners ({collectionCenters.length})
+                    </div>
+                    {collectionCenters.map((cc) => {
+                      const displayName =
+                        cc.name ||
+                        cc.center_name ||
+                        cc.centerName ||
+                        cc.lab_name ||
+                        cc.email ||
+                        `Centre #${cc.id}`;
+                      const isB2B = String(cc.role || "").toUpperCase() === "B2B";
+                      const isReception = String(cc.role || "").toUpperCase() === "RECEPTIONIST";
+                      return (
+                        <SelectItem key={cc.id} value={String(cc.id)}>
+                          <div className="flex items-center justify-between gap-2 w-full">
+                            <span className="truncate">{displayName}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {isB2B && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                                  B2B
+                                </span>
+                              )}
+                              {isReception && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                  Reception
+                                </span>
+                              )}
+                              {!isB2B && !isReception && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                  CC
+                                </span>
+                              )}
+                              {cc.phone && (
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  {cc.phone}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </>
+                )}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -840,7 +978,7 @@ export default function DueReportsPage() {
                         const newLimit = Number(e.target.value);
                         setPerPage(newLimit);
                         setCurrentPage(1);
-                        loadDueBills(false, 1, newLimit);
+                        loadDueBills(false, 1, newLimit, selectedCenter);
                       }}
                       className="px-2 py-1 rounded-md border border-border bg-background text-foreground text-xs font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
                     >
@@ -858,7 +996,7 @@ export default function DueReportsPage() {
                     onClick={() => {
                       const newPage = Math.max(1, currentPage - 1);
                       setCurrentPage(newPage);
-                      loadDueBills(false, newPage);
+                      loadDueBills(false, newPage, undefined, selectedCenter);
                     }}
                     disabled={currentPage <= 1 || loading}
                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted font-semibold text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"
@@ -876,7 +1014,7 @@ export default function DueReportsPage() {
                     onClick={() => {
                       const newPage = Math.min(paginationInfo.last_page, currentPage + 1);
                       setCurrentPage(newPage);
-                      loadDueBills(false, newPage);
+                      loadDueBills(false, newPage, undefined, selectedCenter);
                     }}
                     disabled={currentPage >= paginationInfo.last_page || loading}
                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted font-semibold text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-2xs"

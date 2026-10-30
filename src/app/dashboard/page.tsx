@@ -4,10 +4,11 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Users, Clock, CheckCircle2, IndianRupee, RefreshCw, Download,
-  UserPlus, FileSpreadsheet, Printer, ArrowUpRight, TrendingUp, Building2
+  UserPlus, FileSpreadsheet, Printer, ArrowUpRight, TrendingUp,
+  FileText
 } from "lucide-react";
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, PieChart, Pie,
+  ResponsiveContainer, BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, Cell, PieChart, Pie,
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchFromLaravel, getStoredUser, clearApiCache } from "@/lib/api-client";
@@ -505,6 +506,21 @@ export default function DashboardOverviewPage() {
     revenue: item.revenue,
     isToday: item.date === "Today" || item.date.toUpperCase() === new Date().toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
   }));
+  const total7DaysReports = formattedChartData.reduce((acc, curr) => acc + (curr.value || 0), 0);
+
+  const formattedSalesData = chartData.map((item) => ({
+    name: item.date,
+    fullDate: item.fullDate || item.date,
+    revenue: Number(item.revenue || 0),
+    isToday:
+      item.date === "Today" ||
+      item.date.toUpperCase() ===
+        new Date().toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
+  }));
+
+  const total7DaysSales = formattedSalesData.reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+  const avgDailySales =
+    formattedSalesData.length > 0 ? Math.round(total7DaysSales / formattedSalesData.length) : 0;
 
   const pieData = [
     { name: "Completed / Approved", value: stats.completedReports, color: "hsl(160 58% 32%)" },
@@ -615,53 +631,198 @@ export default function DashboardOverviewPage() {
         />
       </div>
 
-      {/* Middle row */}
+      {/* Analytics & Financial Performance Row (Two 6-column symmetrical charts) */}
       <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 lg:col-span-8 bg-card border border-border/70 rounded-xl p-6 shadow-card">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="font-display text-lg font-semibold text-foreground">Weekly Reports Trend</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Last 7 days volume</p>
+        {/* Weekly Reports Trend Card (6 cols) */}
+        <div className="col-span-12 lg:col-span-6 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-4 sm:mb-6">
+              <div className="min-w-0">
+                <h3 className="font-display text-base sm:text-lg font-semibold text-foreground truncate">Weekly Reports Trend</h3>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">Last 7 days volume & daily diagnostic workload</p>
+              </div>
+              <span className="text-[11px] sm:text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0">7-Day Volume</span>
             </div>
-            <span className="text-[11px] font-medium px-3 py-1.5 rounded-lg bg-muted/60 text-muted-foreground border border-border/60">Weekly</span>
+            <div className="h-56 min-w-0 w-full" style={{ minHeight: 224 }}>
+              {isMounted && formattedChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={224} minWidth={0} minHeight={0} debounce={50}>
+                  <BarChart data={formattedChartData} margin={{ top: 4, right: 0, left: -24, bottom: 0 }}>
+                    <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" />
+                    <YAxis fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" allowDecimals={false} />
+                    <Tooltip
+                      cursor={{ fill: "hsl(var(--muted) / 0.45)", radius: 6 }}
+                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "10px", fontSize: "11px", color: "hsl(var(--foreground))", boxShadow: "var(--shadow-elevated)" }}
+                    />
+                    <Bar dataKey="value" name="Reports" radius={[5, 5, 2, 2]} maxBarSize={38}>
+                      {formattedChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.isToday ? "hsl(160 58% 30%)" : "hsl(160 40% 30% / 0.25)"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No data available</div>
+              )}
+            </div>
           </div>
-          <div className="h-56 min-w-0 w-full" style={{ minHeight: 224 }}>
-            {isMounted && formattedChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={224} minWidth={0} minHeight={0} debounce={50}>
-                <BarChart data={formattedChartData} margin={{ top: 4, right: 0, left: -24, bottom: 0 }}>
-                  <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" />
-                  <YAxis fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" allowDecimals={false} />
-                  <Tooltip
-                    cursor={{ fill: "hsl(var(--muted) / 0.45)", radius: 6 }}
-                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "10px", fontSize: "11px", color: "hsl(var(--foreground))", boxShadow: "var(--shadow-elevated)" }}
-                  />
-                  <Bar dataKey="value" name="Reports" radius={[5, 5, 2, 2]} maxBarSize={38}>
-                    {formattedChartData.map((entry, i) => (
-                      <Cell key={i} fill={entry.isToday ? "hsl(160 58% 30%)" : "hsl(160 40% 30% / 0.25)"} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No data available</div>
-            )}
+
+          {/* 4 Diagnostic Metrics Footer Strip */}
+          <div className="mt-4 pt-3.5 border-t border-border/50 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">7-Day Reports</span>
+              <p className="font-bold text-foreground mt-0.5 tnum">{total7DaysReports}</p>
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Today Total</span>
+              <p className="font-bold text-foreground mt-0.5 tnum">{stats.todayReports}</p>
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Done Today</span>
+              <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 tnum">{stats.todayCompletedReports}</p>
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">In Review</span>
+              <p className="font-bold text-amber-600 dark:text-amber-400 mt-0.5 tnum">{stats.todayPendingReports}</p>
+            </div>
           </div>
         </div>
 
-        <div className="col-span-12 lg:col-span-4 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col justify-between">
+        {/* Total Sales & Revenue Trend Card (6 cols) */}
+        <div className="col-span-12 lg:col-span-6 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="font-display text-lg font-semibold text-foreground">Payments due</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <IndianRupee className="h-4 w-4" />
+                  </div>
+                  <h3 className="font-display text-lg font-semibold text-foreground">Total Sales & Revenue Trend</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">Last 7 days revenue collection & daily trajectory</p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold">
+                  <span className="text-[10px] uppercase font-semibold text-muted-foreground">Total Sales:</span>
+                  <span>₹{Number(stats.totalRevenue || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/60 text-muted-foreground border border-border/60 text-[11px] font-medium">
+                  <span className="text-[10px] uppercase font-semibold text-muted-foreground">Today:</span>
+                  <span className="font-semibold text-foreground">₹{Number(stats.revenue || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="h-56 min-w-0 w-full" style={{ minHeight: 224 }}>
+              {isMounted && formattedSalesData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={224} minWidth={0} minHeight={0} debounce={50}>
+                  <AreaChart data={formattedSalesData} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="salesRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(160 58% 36%)" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="hsl(160 58% 36%)" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis
+                      dataKey="name"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      className="text-muted-foreground"
+                    />
+                    <YAxis
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      className="text-muted-foreground"
+                      tickFormatter={(val) => `₹${val >= 1000 ? `${(val / 1000).toFixed(0)}k` : val}`}
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "10px",
+                        fontSize: "11px",
+                        color: "hsl(var(--foreground))",
+                        boxShadow: "var(--shadow-elevated)",
+                      }}
+                      formatter={(value: any) => [`₹${Number(value || 0).toLocaleString("en-IN")}`, "Daily Sales"]}
+                      labelFormatter={(label) => `Day: ${label}`}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="revenue"
+                      name="Daily Sales"
+                      stroke="hsl(160 58% 36%)"
+                      strokeWidth={2.5}
+                      fillOpacity={1}
+                      fill="url(#salesRevenueGradient)"
+                      dot={{ r: 3, fill: "hsl(160 58% 36%)", strokeWidth: 0 }}
+                      activeDot={{ r: 5, fill: "hsl(160 62% 40%)", stroke: "#ffffff", strokeWidth: 2 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex flex-col justify-between py-2">
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-44" />
+                    <Skeleton className="h-3 w-28" />
+                  </div>
+                  <div className="h-32 flex items-end justify-between gap-3 px-2">
+                    {[30, 55, 40, 75, 50, 70, 85].map((h, i) => (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                        <Skeleton className="w-full max-w-[36px]" style={{ height: `${h}%` }} />
+                        <Skeleton className="h-2 w-6" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Quick Financial Summary */}
+          <div className="mt-4 pt-3.5 border-t border-border/50 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Total Revenue</span>
+              <p className="font-bold text-foreground mt-0.5 tnum">₹{Number(stats.totalRevenue || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p>
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Today's Revenue</span>
+              <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 tnum">₹{Number(stats.revenue || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p>
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">7-Day Sales</span>
+              <p className="font-bold text-foreground mt-0.5 tnum">₹{total7DaysSales.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p>
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Daily Avg</span>
+              <p className="font-bold text-foreground mt-0.5 tnum">₹{avgDailySales.toLocaleString("en-IN", { maximumFractionDigits: 0 })}/day</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Operational Throughput & Financial Receivables Row (Two 6-column symmetrical cards) */}
+      <div className="grid grid-cols-12 gap-4">
+        {/* Payments Due Card (6 cols) */}
+        <div className="col-span-12 lg:col-span-6 bg-card border border-border/70 rounded-xl p-5 sm:p-6 shadow-card flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="min-w-0">
+                <h3 className="font-display text-base sm:text-lg font-semibold text-foreground truncate">Payments due</h3>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">Outstanding patient balances & collection dues</p>
+              </div>
               <Link
                 href="/dashboard/billing/dues"
-                className="text-[11px] font-semibold text-primary hover:text-secondary flex items-center gap-1 transition-colors"
+                className="text-xs font-semibold text-primary hover:underline whitespace-nowrap shrink-0 flex items-center gap-1 transition-colors"
               >
-                View all <ArrowUpRight className="h-3 w-3" />
+                <span>View all</span>
+                <ArrowUpRight className="h-3 w-3" />
               </Link>
             </div>
-            <p className="text-xs text-muted-foreground mb-3.5">For all time</p>
 
-            <div className="overflow-x-auto -mx-2">
+            <div className="overflow-x-auto -mx-2 mt-3">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-border/60 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -733,102 +894,119 @@ export default function DashboardOverviewPage() {
             </div>
           </div>
 
-          {dueBills.length > 0 && (
-            <div className="pt-3 border-t border-border/50 mt-3 text-center">
-              <Link
-                href="/dashboard/billing/dues"
-                className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1"
-              >
-                View all due accounts in Due report <ArrowUpRight className="h-3 w-3" />
-              </Link>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Bottom row */}
-      <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 lg:col-span-8 bg-card border border-border/70 rounded-xl shadow-card overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border/60">
-            <h3 className="font-display text-lg font-semibold text-foreground">Recent Patients & Reports</h3>
-            <Link href="/dashboard/reports" className="text-[11px] font-semibold text-primary hover:text-secondary flex items-center gap-1 transition-colors">
-              View all <ArrowUpRight className="h-3 w-3" />
+          <div className="pt-3 border-t border-border/50 mt-3 text-center">
+            <Link
+              href="/dashboard/billing/dues"
+              className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1"
+            >
+              <span>View all due accounts in Due report</span>
+              <ArrowUpRight className="h-3 w-3" />
             </Link>
           </div>
-          <div className="table-responsive-container">
-            <table className="w-full min-w-[580px] text-left">
-              <thead>
-                <tr className="border-b border-border/50 bg-muted/30">
-                  {["Patient ID", "Name", "Test Type", "Status", ""].map((h) => (
-                    <th key={h} className="px-4 sm:px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {recentReports.length > 0 ? recentReports.map((rep) => {
-                  const hasAbnormal = rep.results?.some((r) => r.isAbnormal);
-                  const testTypeString = rep.results?.map((r) => r.test?.name || "Test").filter(Boolean).join(", ") || "Diagnostic Panel";
-                  let pill = "bg-accent text-accent-foreground";
-                  let statusLabel = rep.status === "PENDING" ? "In Review" : (rep.status === "FINAL" ? "Final" : (rep.status === "APPROVED" ? "Approved" : rep.status));
-                  if (rep.status === "PENDING") pill = "bg-gold/15 text-gold";
-                  if (rep.status === "APPROVED" || rep.status === "FINAL") pill = "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400";
-                  if (hasAbnormal) { pill = "bg-destructive/12 text-destructive"; statusLabel = "Critical"; }
-                  const pid = rep.patient?.customId || (rep.patient as any)?.custom_id || "—";
-                  const pName = rep.patient?.name || "Unknown Patient";
-
-                  return (
-                    <tr key={rep.id} className="border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors">
-                      <td className="px-4 sm:px-6 py-3.5 font-mono text-[11px] text-muted-foreground">{pid}</td>
-                      <td className="px-4 sm:px-6 py-3.5 text-sm font-semibold text-foreground whitespace-nowrap">{pName}</td>
-                      <td className="px-4 sm:px-6 py-3.5 text-xs text-muted-foreground max-w-[200px] truncate">{testTypeString}</td>
-                      <td className="px-4 sm:px-6 py-3.5">
-                        <span className={`inline-block whitespace-nowrap px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-wider ${pill}`}>{statusLabel}</span>
-                      </td>
-                      <td className="px-4 sm:px-6 py-3.5 text-right">
-                        <Link href={`/dashboard/reports/${rep.id}/edit`} className="text-[11px] font-semibold text-primary hover:text-secondary transition-colors">Open</Link>
-                      </td>
-                    </tr>
-                  );
-                }) : (
-                  <tr><td colSpan={5} className="text-center py-12 text-xs text-muted-foreground">No recent intakes</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
         </div>
 
-        <div className="col-span-12 lg:col-span-4 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col">
-          <h3 className="font-display text-lg font-semibold text-foreground">Report Status</h3>
-          <p className="text-xs text-muted-foreground mb-4">Completion overview</p>
-          <div className="relative flex-1 flex items-center justify-center min-h-[150px] min-w-0">
-            {isMounted && stats.totalReports > 0 ? (
-              <>
-                <ResponsiveContainer width="100%" height={150} minWidth={0} minHeight={0} debounce={50}>
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={48} outerRadius={66} paddingAngle={3} dataKey="value" strokeWidth={0}>
-                      {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="font-display text-2xl font-semibold text-foreground leading-none tnum">{stats.totalReports}</span>
-                  <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground mt-1">Total</span>
-                </div>
-              </>
-            ) : (
-              <p className="text-xs text-muted-foreground">No reports</p>
-            )}
-          </div>
-          <div className="mt-4 space-y-2.5">
-            {pieData.map((d) => (
-              <div key={d.name} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                  <span className="text-muted-foreground">{d.name}</span>
-                </div>
-                <span className="font-semibold tnum text-foreground">{d.value}</span>
+        {/* Report Status & Diagnostic Operations Card (6 cols) */}
+        <div className="col-span-12 lg:col-span-6 bg-card border border-border/70 rounded-xl p-5 sm:p-6 shadow-card flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="min-w-0">
+                <h3 className="font-display text-base sm:text-lg font-semibold text-foreground truncate">Diagnostic Report Status</h3>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">Laboratory completion & clinical throughput</p>
               </div>
-            ))}
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap shrink-0 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>{completionPct}% Completed</span>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center mt-2">
+              {/* Donut Chart & Completion Bar */}
+              <div className="flex flex-col items-center justify-center">
+                <div className="relative flex items-center justify-center w-full min-h-[160px] min-w-0">
+                  {isMounted && stats.totalReports > 0 ? (
+                    <>
+                      <ResponsiveContainer width="100%" height={160} minWidth={0} minHeight={0} debounce={50}>
+                        <PieChart>
+                          <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                            {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="font-display text-2xl font-semibold text-foreground leading-none tnum">{stats.totalReports}</span>
+                        <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground mt-1">Total Reports</span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No reports recorded</p>
+                  )}
+                </div>
+
+                {/* Progress bar under donut */}
+                <div className="w-full max-w-[200px] mt-1 space-y-1">
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
+                    <span>Turnaround</span>
+                    <span className="text-foreground">{completionPct}%</span>
+                  </div>
+                  <div className="w-full bg-muted/60 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, Math.max(0, completionPct))}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Breakdown & Quick Action Links */}
+              <div className="space-y-2.5">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/30 border border-border/40">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "hsl(160 58% 32%)" }} />
+                      <span className="text-muted-foreground font-medium">Completed / Approved</span>
+                    </div>
+                    <span className="font-bold tnum text-foreground">{stats.completedReports}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/30 border border-border/40">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "hsl(36 72% 50%)" }} />
+                      <span className="text-muted-foreground font-medium">Pending In-Review</span>
+                    </div>
+                    <span className="font-bold tnum text-foreground">{stats.pendingReports}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/20 border border-border/30">
+                    <span className="text-muted-foreground font-medium">Today's Intake Completed</span>
+                    <span className="font-bold tnum text-foreground">{stats.todayCompletedReports} / {stats.todayReports}</span>
+                  </div>
+                </div>
+
+                {/* 2 Quick Navigation Shortcuts */}
+                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                  <Link
+                    href="/dashboard/reports"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold transition-colors"
+                  >
+                    <FileText className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">All Reports</span>
+                  </Link>
+                  <Link
+                    href="/dashboard/patients"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-muted/60 hover:bg-muted text-foreground text-xs font-semibold border border-border/60 transition-colors"
+                  >
+                    <UserPlus className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">New Booking</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-border/50 mt-3 flex items-center justify-between text-xs text-muted-foreground">
+            <span>Overall Turnaround Health</span>
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Operational Active
+            </span>
           </div>
         </div>
       </div>

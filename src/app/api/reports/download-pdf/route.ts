@@ -53,7 +53,13 @@ function findChromeExecutable(): string {
   throw new Error("No compatible Chrome, Chromium, or Edge executable found on the host system.");
 }
 
+// In-memory cache for compiled static CSS so disk is not read on every download request
+let cachedStaticCss: string | null = null;
 function getLocalStaticCss(): string {
+  if (cachedStaticCss !== null) {
+    return cachedStaticCss;
+  }
+
   try {
     const candidates = [
       path.join(process.cwd(), ".next", "static", "css"),
@@ -77,12 +83,16 @@ function getLocalStaticCss(): string {
           }
         };
         readDirRecursive(cssDir);
-        if (combined.trim().length > 0) return combined;
+        if (combined.trim().length > 0) {
+          cachedStaticCss = combined;
+          return combined;
+        }
       }
     }
   } catch (e) {
     console.warn("Could not read local static CSS directory:", e);
   }
+  cachedStaticCss = "";
   return "";
 }
 
@@ -125,60 +135,97 @@ function releaseSlot() {
   }
 }
 
+// Warm Chromium Instance Pool: Keeps browser hot for instant page generation, auto-closes after 90s idle
+let warmBrowser: any = null;
+let warmBrowserIdleTimer: NodeJS.Timeout | null = null;
+
+function resetWarmBrowserTimer() {
+  if (warmBrowserIdleTimer) {
+    clearTimeout(warmBrowserIdleTimer);
+  }
+  // Auto-close after 90 seconds of inactivity to release all RAM (0 MB idle footprint)
+  warmBrowserIdleTimer = setTimeout(async () => {
+    if (warmBrowser) {
+      try {
+        await warmBrowser.close();
+      } catch {}
+      warmBrowser = null;
+    }
+  }, 90000);
+}
+
+async function getOrLaunchBrowser(): Promise<any> {
+  if (warmBrowser && warmBrowser.isConnected && warmBrowser.isConnected()) {
+    resetWarmBrowserTimer();
+    return warmBrowser;
+  }
+
+  if (warmBrowser) {
+    try {
+      await warmBrowser.close();
+    } catch {}
+    warmBrowser = null;
+  }
+
+  let chromePath: string | undefined;
+  let launchArgs = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-zygote",
+    "--font-render-hinting=none",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-sync",
+    "--disable-default-apps",
+    "--no-default-browser-check",
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-breakpad",
+    "--disable-component-extensions-with-background-pages",
+    "--disable-ipc-flooding-protection",
+    "--mute-audio",
+    "--hide-scrollbars",
+  ];
+
+  try {
+    chromePath = findChromeExecutable();
+  } catch (e) {
+    try {
+      const chromium = (await import("@sparticuz/chromium")).default;
+      const arch = process.arch === "arm64" ? "arm64" : "x64";
+      const packUrl = `https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.${arch}.tar`;
+      chromePath = await chromium.executablePath(packUrl);
+      launchArgs = [...chromium.args, "--font-render-hinting=none"];
+    } catch (e2: any) {
+      console.error("Sparticuz chromium launch error:", e2);
+      throw new Error(e2?.message || "No compatible Chrome, Chromium, or Edge executable found on the host system.");
+    }
+  }
+
+  warmBrowser = await puppeteer.launch({
+    executablePath: chromePath,
+    headless: true,
+    args: launchArgs,
+  });
+
+  resetWarmBrowserTimer();
+  return warmBrowser;
+}
+
 /**
  * Isolated Chromium Vector PDF Renderer.
  * Preserves 100% of pristine A4 typography, borders, logos, and vector alignment.
  */
 async function renderPdfWithChrome(html: string): Promise<Buffer> {
-  let browser: any = null;
   const release = await acquireSlot();
+  let page: any = null;
 
   try {
-    let chromePath: string | undefined;
-    let launchArgs = [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--no-first-run",
-      "--no-zygote",
-      "--font-render-hinting=none",
-      "--disable-extensions",
-      "--disable-background-networking",
-      "--disable-sync",
-      "--disable-default-apps",
-      "--no-default-browser-check",
-      "--disable-background-timer-throttling",
-      "--disable-backgrounding-occluded-windows",
-      "--disable-breakpad",
-      "--disable-component-extensions-with-background-pages",
-      "--disable-ipc-flooding-protection",
-      "--mute-audio",
-      "--hide-scrollbars",
-    ];
-
-    try {
-      chromePath = findChromeExecutable();
-    } catch (e) {
-      try {
-        const chromium = (await import("@sparticuz/chromium")).default;
-        const arch = process.arch === "arm64" ? "arm64" : "x64";
-        const packUrl = `https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.${arch}.tar`;
-        chromePath = await chromium.executablePath(packUrl);
-        launchArgs = [...chromium.args, "--font-render-hinting=none"];
-      } catch (e2: any) {
-        console.error("Sparticuz chromium launch error:", e2);
-        throw new Error(e2?.message || "No compatible Chrome, Chromium, or Edge executable found on the host system.");
-      }
-    }
-
-    browser = await puppeteer.launch({
-      executablePath: chromePath,
-      headless: true,
-      args: launchArgs,
-    });
-
-    const page = await browser.newPage();
+    const browser = await getOrLaunchBrowser();
+    page = await browser.newPage();
 
     // Emulate crisp high-DPI A4 screen viewport
     await page.setViewport({
@@ -199,17 +246,16 @@ async function renderPdfWithChrome(html: string): Promise<Buffer> {
       await page.addStyleTag({ content: localCss });
     }
 
-    // Wait for fonts to be ready
+    // Fast font readiness check without arbitrary artificial delays
     await page.evaluate(async () => {
-      if (document.fonts) {
+      if (document.fonts && document.fonts.status !== "loaded") {
         try {
           await Promise.race([
             document.fonts.ready,
-            new Promise((r) => setTimeout(r, 600)),
+            new Promise((r) => setTimeout(r, 150)),
           ]);
         } catch {}
       }
-      await new Promise((r) => setTimeout(r, 30));
     });
 
     // Export pure vector PDF matching A4 exactly (210mm x 297mm)
@@ -227,11 +273,10 @@ async function renderPdfWithChrome(html: string): Promise<Buffer> {
 
     return Buffer.from(rawBuffer);
   } finally {
-    if (browser) {
+    if (page) {
       try {
-        await browser.close();
+        await page.close();
       } catch {}
-      browser = null;
     }
     release();
   }
