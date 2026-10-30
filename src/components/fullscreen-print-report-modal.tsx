@@ -30,7 +30,7 @@ import { AiReportGenerationModal } from "@/components/ai-report-generation-modal
 import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
 import { getReportPackage } from "@/lib/packages";
-import { downloadNativePdf, getNativePdfBase64, prefetchNativePdf } from "@/lib/pdf-report-downloader";
+import { downloadNativePdf, getNativePdfBase64 } from "@/lib/pdf-report-downloader";
 
 interface FullscreenPrintReportModalProps {
   open: boolean;
@@ -429,26 +429,6 @@ export function FullscreenPrintReportModal({
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [open, handlePrint]);
-
-  // Background pre-generate vector PDF so when user clicks 'Download PDF', it downloads instantly (< 0.1s)
-  useEffect(() => {
-    if (!open || !activeReportData) return;
-
-    const timer = setTimeout(() => {
-      try {
-        if (!printRef.current) return;
-        const pName = (report?.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
-        const rCode = (report?.customId || report?.id || "Report").replace(/[^a-zA-Z0-9_-]/g, "_");
-        const filename = `LabReport_${rCode}_${pName}.pdf`;
-        prefetchNativePdf({
-          printContainer: printRef.current,
-          filename,
-        });
-      } catch {}
-    }, 600);
-
-    return () => clearTimeout(timer);
-  }, [open, activeReportData]);
 
   // ── Direct Pixel-Perfect High-Resolution Native Vector PDF Download (Option A) ──────
   const handleDirectDownloadPdf = async () => {

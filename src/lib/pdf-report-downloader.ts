@@ -195,31 +195,29 @@ export async function prepareReportHtmlAsync(printContainer: HTMLElement): Promi
     styles.push(style.outerHTML);
   });
 
-  // 3. Fallback: Extract CSS rules from active document stylesheets only if no external styles found
-  if (styles.length === 0) {
-    try {
-      for (let i = 0; i < document.styleSheets.length; i++) {
-        try {
-          const sheet = document.styleSheets[i];
-          const rules = sheet.cssRules || (sheet as any).rules;
-          if (rules) {
-            let sheetCss = "";
-            for (let r = 0; r < Math.min(rules.length, 500); r++) {
-              try {
-                sheetCss += rules[r].cssText + "\n";
-              } catch {}
-            }
-            if (sheetCss) {
-              styles.push(`<style data-sheet="${i}">${sheetCss}</style>`);
-            }
+  // 3. Extract CSS rules from active document stylesheets
+  try {
+    for (let i = 0; i < document.styleSheets.length; i++) {
+      try {
+        const sheet = document.styleSheets[i];
+        const rules = sheet.cssRules || (sheet as any).rules;
+        if (rules) {
+          let sheetCss = "";
+          for (let r = 0; r < rules.length; r++) {
+            try {
+              sheetCss += rules[r].cssText + "\n";
+            } catch {}
           }
-        } catch {
-          // Cross-origin stylesheet security restriction, safely skip
+          if (sheetCss) {
+            styles.push(`<style data-sheet="${i}">${sheetCss}</style>`);
+          }
         }
+      } catch {
+        // Cross-origin stylesheet security restriction, safely skip
       }
-    } catch (e) {
-      console.warn("Could not extract document styleSheets rules:", e);
     }
+  } catch (e) {
+    console.warn("Could not extract document styleSheets rules:", e);
   }
 
   // 4. Clone and normalize each page element with async base64 images

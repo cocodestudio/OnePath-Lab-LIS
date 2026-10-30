@@ -211,6 +211,10 @@ async function getOrLaunchBrowser(): Promise<any> {
     args: launchArgs,
   });
 
+  warmBrowser.on("disconnected", () => {
+    warmBrowser = null;
+  });
+
   resetWarmBrowserTimer();
   return warmBrowser;
 }
@@ -246,16 +250,17 @@ async function renderPdfWithChrome(html: string): Promise<Buffer> {
       await page.addStyleTag({ content: localCss });
     }
 
-    // Fast font readiness check without arbitrary artificial delays
+    // Wait for fonts to be ready and layout to settle
     await page.evaluate(async () => {
-      if (document.fonts && document.fonts.status !== "loaded") {
+      if (document.fonts) {
         try {
           await Promise.race([
             document.fonts.ready,
-            new Promise((r) => setTimeout(r, 150)),
+            new Promise((r) => setTimeout(r, 600)),
           ]);
         } catch {}
       }
+      await new Promise((r) => setTimeout(r, 30));
     });
 
     // Export pure vector PDF matching A4 exactly (210mm x 297mm)
