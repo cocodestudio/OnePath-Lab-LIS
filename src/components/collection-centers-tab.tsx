@@ -7,7 +7,7 @@ import {
   Loader2, Sparkles, MapPin, CheckCircle2, UserCheck, ArrowLeft,
   X, Lock, Shield, Sliders, Briefcase, Filter, Layers, Users,
   ClipboardList, CheckSquare, Square, FileText, Receipt, Barcode,
-  Activity, Settings
+  Activity, Settings, MoreVertical, Ban, CheckCircle
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
@@ -167,6 +167,21 @@ export function CollectionCentersTab() {
   const [rateTier, setRateTier] = useState<string>("HIGH");
   const [showPassword, setShowPassword] = useState(false);
 
+  // OTP Verification State for adding RBAC Account
+  const [isOtpSent, setIsOtpSent] = useState(false);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
+
   // Edit Form State
   const [editingCenter, setEditingCenter] = useState<CollectionCenter | null>(null);
   const [editName, setEditName] = useState("");
@@ -178,8 +193,21 @@ export function CollectionCentersTab() {
   const [editPassword, setEditPassword] = useState("");
   const [showEditPassword, setShowEditPassword] = useState(false);
 
-  // Delete State
+  // Delete & Status Action State
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
+  const [togglingStatusId, setTogglingStatusId] = useState<string | number | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | number | null>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-rbac-menu]")) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
 
   useEffect(() => {
     loadCenters();
@@ -237,10 +265,65 @@ export function CollectionCentersTab() {
     }
   };
 
+  const handleRequestOtp = async (isResend = false) => {
+    if (!name.trim()) {
+      setToast({ text: "Please enter staff / branch name", type: "error" });
+      return;
+    }
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setToast({ text: "Please enter a valid email address", type: "error" });
+      return;
+    }
+    if (!password || password.length < 6) {
+      setToast({ text: "Password must be at least 6 characters", type: "error" });
+      return;
+    }
+
+    try {
+      setIsSendingOtp(true);
+      const res = await fetchFromLaravel("/collection-centers/send-otp", {
+        method: "POST",
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          role,
+        }),
+      });
+
+      setIsOtpSent(true);
+      setShowOtpModal(false);
+      setResendCooldown(30);
+      setToast({
+        text: isResend
+          ? `New verification code resent to ${email.trim()}`
+          : res?.message || `6-digit verification code sent to ${email.trim()}`,
+        type: "success",
+      });
+    } catch (err: any) {
+      console.error("Failed to send OTP:", err);
+      const rawMsg = err?.message || "";
+      if (rawMsg.toLowerCase().includes("too many attempts") || rawMsg.includes("429")) {
+        setToast({ text: "Too many attempts. Please wait a moment before requesting another code.", type: "error" });
+      } else {
+        setToast({ text: rawMsg || "Failed to send verification code to staff email", type: "error" });
+      }
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
   const handleCreateCenter = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password) {
-      setToast({ text: "Please fill in all required fields", type: "error" });
+    if (!isOtpSent) {
+      await handleRequestOtp(false);
+    } else {
+      await handleVerifyAndCreateCenter();
+    }
+  };
+
+  const handleVerifyAndCreateCenter = async () => {
+    if (!otpCode.trim() || otpCode.trim().length !== 6) {
+      setToast({ text: "Please enter the 6-digit verification code", type: "error" });
       return;
     }
 
@@ -268,6 +351,7 @@ export function CollectionCentersTab() {
           permissions,
           rate_tier: selectedRateTier,
           rate_list_id: selectedRateListId,
+          otp: otpCode.trim(),
         }),
       });
 
@@ -275,7 +359,10 @@ export function CollectionCentersTab() {
         role === "B2B" ? "B2B Partner" : role === "RECEPTIONIST" ? "Receptionist" : "Collection Center";
       setToast({ text: res?.message || `${roleLabel} created successfully!`, type: "success" });
 
-      // Reset form
+      // Reset form & OTP states
+      setIsOtpSent(false);
+      setShowOtpModal(false);
+      setOtpCode("");
       setName("");
       setEmail("");
       setPassword("");
@@ -288,7 +375,12 @@ export function CollectionCentersTab() {
       setViewMode("LIST");
       loadCenters();
     } catch (err: any) {
-      setToast({ text: err?.message || "Error creating account", type: "error" });
+      const rawMsg = err?.message || "";
+      if (rawMsg.toLowerCase().includes("too many attempts") || rawMsg.includes("429")) {
+        setToast({ text: "Too many attempts. Please wait a moment before trying again.", type: "error" });
+      } else {
+        setToast({ text: rawMsg || "Error creating account", type: "error" });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -380,6 +472,44 @@ export function CollectionCentersTab() {
     }
   };
 
+  const handleToggleStatus = async (c: CollectionCenter) => {
+    const isCurrentlyActive = c.status === "active";
+    const newStatus = isCurrentlyActive ? "suspended" : "active";
+    const actionLabel = isCurrentlyActive ? "suspend" : "unsuspend";
+
+    try {
+      setTogglingStatusId(c.id);
+      await fetchFromLaravel(`/collection-centers/${c.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          status: newStatus,
+        }),
+      });
+
+      // Optimistically update centers in state
+      setCenters((prev) =>
+        prev.map((item) =>
+          item.id === c.id ? { ...item, status: newStatus } : item
+        )
+      );
+
+      setToast({
+        text: isCurrentlyActive
+          ? `Account "${c.name}" suspended. Active sessions revoked.`
+          : `Account "${c.name}" reactivated successfully.`,
+        type: "success",
+      });
+    } catch (err: any) {
+      console.error("Failed to toggle status:", err);
+      setToast({
+        text: err?.message || `Failed to ${actionLabel} account`,
+        type: "error",
+      });
+    } finally {
+      setTogglingStatusId(null);
+    }
+  };
+
   const copyCredentials = (c: CollectionCenter) => {
     const credText = `OnePath Lab Terminal Credentials:\nName: ${c.name}\nRole: ${c.role}\nLogin Email: ${c.email}\nPortal URL: ${window.location.origin}/login`;
     navigator.clipboard.writeText(credText);
@@ -427,14 +557,6 @@ export function CollectionCentersTab() {
                 </p>
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setViewMode("LIST")}
-              className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer self-start sm:self-auto shrink-0"
-            >
-              Cancel
-            </button>
           </div>
 
           {/* Full-width Form Body */}
@@ -568,10 +690,11 @@ export function CollectionCentersTab() {
                     <input
                       type="email"
                       required
+                      disabled={isOtpSent}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder={role === "RECEPTIONIST" ? "receptionist@lab.com" : role === "B2B" ? "partner@clinic.com" : "branch@lab.com"}
-                      className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none transition-colors"
+                      className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none transition-colors disabled:opacity-85 disabled:bg-muted/30"
                     />
                   </div>
 
@@ -581,11 +704,12 @@ export function CollectionCentersTab() {
                       <input
                         type={showPassword ? "text" : "password"}
                         required
+                        disabled={isOtpSent}
                         minLength={6}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full px-4 py-2.5 pr-11 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none transition-colors"
+                        className="w-full px-4 py-2.5 pr-11 rounded-xl bg-background border border-border text-sm font-semibold focus:border-primary outline-none transition-colors disabled:opacity-85 disabled:bg-muted/30"
                       />
                       <button
                         type="button"
@@ -596,6 +720,89 @@ export function CollectionCentersTab() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Inline Email Verification OTP Section when isOtpSent is TRUE */}
+                  {isOtpSent && (
+                    <div className="p-3.5 sm:p-4 rounded-xl bg-primary/5 border-2 border-primary/40 space-y-3 animate-fade-in shadow-xs">
+                      <div className="flex items-start justify-between gap-2 border-b border-primary/20 pb-2.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="h-7 w-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                            <Mail className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold text-foreground block leading-tight truncate">
+                              Staff Email Authorization
+                            </span>
+                            <span className="text-[10.5px] text-muted-foreground block truncate">
+                              6-digit OTP code sent to <strong className="text-primary">{email}</strong>
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsOtpSent(false);
+                            setShowOtpModal(false);
+                            setOtpCode("");
+                          }}
+                          className="text-[10px] font-bold px-2 py-1 rounded-md border border-border bg-card text-muted-foreground hover:text-foreground transition-colors cursor-pointer shrink-0"
+                          title="Change Email or Password"
+                        >
+                          Change
+                        </button>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-foreground flex items-center justify-between">
+                          <span>Enter 6-Digit Verification Code *</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">10 min expiry</span>
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          autoFocus
+                          placeholder="• • • • • •"
+                          value={otpCode}
+                          onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                          className="w-full px-4 py-2.5 rounded-xl bg-background border-2 border-primary focus:border-primary text-center text-xl font-mono font-bold tracking-[8px] outline-none transition-all shadow-inner text-foreground"
+                        />
+                        <div className="flex items-center justify-between text-[11px] pt-1 px-0.5">
+                          <span className="text-muted-foreground text-[10.5px]">Didn't get code?</span>
+                          {resendCooldown > 0 ? (
+                            <span className="text-muted-foreground font-mono font-semibold text-[10.5px]">
+                              Resend in {resendCooldown}s
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={isSendingOtp}
+                              onClick={() => handleRequestOtp(true)}
+                              className="text-primary hover:underline font-bold text-[10.5px] cursor-pointer disabled:opacity-50"
+                            >
+                              {isSendingOtp ? "Resending..." : "Resend Code"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={isSubmitting || otpCode.trim().length !== 6}
+                        onClick={handleVerifyAndCreateCenter}
+                        className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-xs hover:opacity-95 active:scale-95 transition-all inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSubmitting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        )}
+                        <span>Verify & Create Account</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/15 flex items-start gap-2.5">
@@ -607,92 +814,40 @@ export function CollectionCentersTab() {
               </div>
             </div>
 
-            {/* Card 3: Granular Permissions Checklist (Give Access) */}
-            <div className="p-5 rounded-2xl bg-muted/30 border border-border/80 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
-                <div>
-                  <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-primary" />
-                    <span>Module Privileges & Operational Permissions (Give Access)</span>
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Tick or untick specific modules to customize exactly what this staff member or branch is allowed to perform.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setPermissions(ROLE_DEFAULT_PERMISSIONS[role] || [])}
-                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground transition-colors cursor-pointer shrink-0 whitespace-nowrap"
-                  >
-                    Reset to {role} Defaults
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPermissions(ALL_PERMISSIONS.map(p => p.key))}
-                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
-                  >
-                    Select All
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {ALL_PERMISSIONS.map((perm) => {
-                  const isChecked = permissions.includes(perm.key);
-                  const Icon = perm.icon;
-                  return (
-                    <div
-                      key={perm.key}
-                      onClick={() => togglePermission(perm.key, false)}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer select-none flex flex-col justify-between ${
-                        isChecked
-                          ? "bg-primary/5 border-primary/40 shadow-2xs"
-                          : "bg-background border-border/70 opacity-75 hover:opacity-100 hover:border-border"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`mt-0.5 shrink-0 ${isChecked ? "text-primary" : "text-muted-foreground"}`}>
-                          {isChecked ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className={`text-xs font-bold leading-tight ${isChecked ? "text-foreground" : "text-muted-foreground"}`}>
-                            {perm.label}
-                          </p>
-                          <p className="text-[10.5px] text-muted-foreground mt-1 line-clamp-2 leading-snug">
-                            {perm.description}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-2.5 pt-2 border-t border-border/40 flex items-center justify-between text-[9.5px] font-mono text-muted-foreground">
-                        <span>{perm.category}</span>
-                        <span className={`font-bold ${isChecked ? "text-primary" : "text-muted-foreground/60"}`}>
-                          {isChecked ? "GRANTED" : "REVOKED"}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
             {/* Bottom Actions */}
             <div className="pt-4 border-t border-border/70 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3">
               <button
                 type="button"
-                onClick={() => setViewMode("LIST")}
+                onClick={() => {
+                  setViewMode("LIST");
+                  setIsOtpSent(false);
+                  setShowOtpModal(false);
+                  setOtpCode("");
+                }}
                 className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-border bg-card text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer text-center"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isSendingOtp || (isOtpSent && otpCode.trim().length !== 6)}
                 className="w-full sm:w-auto justify-center px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-xs shadow-md hover:opacity-95 active:scale-95 transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-50 text-center"
               >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {isSubmitting || isSendingOtp ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : isOtpSent ? (
+                  <CheckCircle2 className="h-4 w-4" />
+                ) : (
+                  <Mail className="h-4 w-4" />
+                )}
                 <span>
-                  Create {role === "RECEPTIONIST" ? "Receptionist" : role === "B2B" ? "B2B Partner" : "Collection Center"}
+                  {isSendingOtp
+                    ? "Sending Verification OTP..."
+                    : isSubmitting
+                    ? "Verifying & Creating..."
+                    : isOtpSent
+                    ? "Verify & Create Account"
+                    : `Send OTP & Create ${role === "RECEPTIONIST" ? "Receptionist" : role === "B2B" ? "B2B Partner" : "Collection Center"}`}
                 </span>
               </button>
             </div>
@@ -726,14 +881,6 @@ export function CollectionCentersTab() {
                 </p>
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={() => { setViewMode("LIST"); setEditingCenter(null); }}
-              className="px-4 py-2 rounded-xl border border-border bg-card text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer self-start sm:self-auto shrink-0"
-            >
-              Cancel
-            </button>
           </div>
 
           {/* Full-width Form Body */}
@@ -869,74 +1016,6 @@ export function CollectionCentersTab() {
                     </button>
                   </div>
                 </div>
-              </div>
-            </div>
-
-            {/* Card 3: Granular Permissions Checklist (Give Access) */}
-            <div className="p-5 rounded-2xl bg-muted/30 border border-border/80 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
-                <div>
-                  <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-primary" />
-                    <span>Module Privileges & Operational Permissions (Give Access)</span>
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Tick or untick specific modules to update operational access for this account.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setEditPermissions(ROLE_DEFAULT_PERMISSIONS[editRole] || [])}
-                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground transition-colors cursor-pointer shrink-0 whitespace-nowrap"
-                  >
-                    Reset to {editRole} Defaults
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditPermissions(ALL_PERMISSIONS.map(p => p.key))}
-                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
-                  >
-                    Select All
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                {ALL_PERMISSIONS.map((perm) => {
-                  const isChecked = editPermissions.includes(perm.key);
-                  return (
-                    <div
-                      key={perm.key}
-                      onClick={() => togglePermission(perm.key, true)}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer select-none flex flex-col justify-between ${
-                        isChecked
-                          ? "bg-primary/5 border-primary/40 shadow-2xs"
-                          : "bg-background border-border/70 opacity-75 hover:opacity-100 hover:border-border"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`mt-0.5 shrink-0 ${isChecked ? "text-primary" : "text-muted-foreground"}`}>
-                          {isChecked ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className={`text-xs font-bold leading-tight ${isChecked ? "text-foreground" : "text-muted-foreground"}`}>
-                            {perm.label}
-                          </p>
-                          <p className="text-[10.5px] text-muted-foreground mt-1 line-clamp-2 leading-snug">
-                            {perm.description}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-2.5 pt-2 border-t border-border/40 flex items-center justify-between text-[9.5px] font-mono text-muted-foreground">
-                        <span>{perm.category}</span>
-                        <span className={`font-bold ${isChecked ? "text-primary" : "text-muted-foreground/60"}`}>
-                          {isChecked ? "GRANTED" : "REVOKED"}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             </div>
 
@@ -1115,7 +1194,6 @@ export function CollectionCentersTab() {
                     <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
                       <th className="py-3 px-5">Staff / Partner Name</th>
                       <th className="py-3 px-4">Role & Terminal</th>
-                      <th className="py-3 px-4">Granted Permissions</th>
                       <th className="py-3 px-4">Login User ID (Email)</th>
                       <th className="py-3 px-4">Phone</th>
                       <th className="py-3 px-4">Status</th>
@@ -1190,14 +1268,6 @@ export function CollectionCentersTab() {
                             )}
                           </td>
 
-                          {/* Granted Permissions Badge */}
-                          <td className="py-4 px-4">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10.5px] font-bold bg-muted/60 text-foreground border border-border">
-                              <ShieldCheck className="h-3 w-3 text-primary" />
-                              <span>{activePermsCount} Modules Active</span>
-                            </span>
-                          </td>
-
                           {/* Login Email */}
                           <td className="py-4 px-4 font-mono text-foreground">
                             <div className="flex items-center gap-2">
@@ -1247,29 +1317,77 @@ export function CollectionCentersTab() {
                             {dateStr}
                           </td>
 
-                          {/* Actions */}
+                          {/* Actions: 3-Dots Dropdown Menu */}
                           <td className="py-4 px-5 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                            <div className="relative inline-block" data-rbac-menu>
                               <button
                                 type="button"
-                                onClick={() => openEditView(c)}
-                                className="px-3 py-1.5 rounded-lg border border-border bg-card text-xs font-bold text-foreground hover:bg-muted/70 transition-colors shadow-2xs cursor-pointer inline-flex items-center gap-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuId(openMenuId === c.id ? null : c.id);
+                                }}
+                                className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer shadow-2xs"
+                                title="Actions"
                               >
-                                <span>Edit</span>
+                                <MoreVertical className="h-4 w-4" />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteCenter(c.id, c.name)}
-                                disabled={deletingId === c.id}
-                                className="p-1.5 rounded-lg border border-border/80 bg-card text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
-                                title="Remove Account"
-                              >
-                                {deletingId === c.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-destructive" />
-                                ) : (
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                )}
-                              </button>
+
+                              {openMenuId === c.id && (
+                                <div className="absolute right-0 top-full mt-1.5 z-30 w-48 rounded-xl bg-card border border-border shadow-xl p-1.5 space-y-1 animate-scale-in text-left">
+                                  {/* Edit Account */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenMenuId(null);
+                                      openEditView(c);
+                                    }}
+                                    className="w-full px-3 py-2 rounded-lg text-xs font-semibold text-foreground hover:bg-muted transition-colors flex items-center gap-2 cursor-pointer text-left"
+                                  >
+                                    <Sliders className="h-3.5 w-3.5 text-primary shrink-0" />
+                                    <span>Edit Details</span>
+                                  </button>
+
+                                  {/* Suspend / Unsuspend Account */}
+                                  <button
+                                    type="button"
+                                    disabled={togglingStatusId === c.id}
+                                    onClick={() => {
+                                      setOpenMenuId(null);
+                                      handleToggleStatus(c);
+                                    }}
+                                    className={`w-full px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer text-left ${
+                                      isActive
+                                        ? "text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+                                        : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
+                                    }`}
+                                  >
+                                    {togglingStatusId === c.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                                    ) : isActive ? (
+                                      <Ban className="h-3.5 w-3.5 shrink-0" />
+                                    ) : (
+                                      <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+                                    )}
+                                    <span>{isActive ? "Suspend Account" : "Unsuspend Account"}</span>
+                                  </button>
+
+                                  <div className="border-t border-border/60 my-1" />
+
+                                  {/* Delete Account */}
+                                  <button
+                                    type="button"
+                                    disabled={deletingId === c.id}
+                                    onClick={() => {
+                                      setOpenMenuId(null);
+                                      handleDeleteCenter(c.id, c.name);
+                                    }}
+                                    className="w-full px-3 py-2 rounded-lg text-xs font-semibold text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-2 cursor-pointer text-left"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                                    <span>Delete Account</span>
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>

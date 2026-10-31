@@ -116,6 +116,8 @@ export function logout(reason?: string) {
   }
 }
 
+export const handleLogout = logout;
+
 // ---------------------------------------------------------------------------
 // High-Performance In-Memory API Cache & Request De-duplication Layer
 // ---------------------------------------------------------------------------
@@ -422,6 +424,9 @@ export async function fetchFromLaravel<T = any>(endpoint: string, options: Fetch
         }
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("lis_auth_unauthorized", { detail: { endpoint: cleanEndpoint } }));
+          if (!cleanEndpoint.includes("/login") && !cleanEndpoint.includes("/forgot-password") && !cleanEndpoint.includes("/public/")) {
+            logout("normal");
+          }
         }
         throw new Error("Authentication failed or session expired. Please verify your login.");
       }

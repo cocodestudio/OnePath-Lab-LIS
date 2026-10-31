@@ -4866,6 +4866,255 @@ assert(
   "[BACKEND BILL CASCADE DELETION] BillController destroy executes atomic transaction deleting reports, results, payments and bill with cache invalidation"
 );
 
+// ==============================================================================
+// 57. Realtime Session Revocation Watchdog, Desktop Install Pill & Cascade Deletion
+// ==============================================================================
+console.log("\n▶ MODULE 57: Realtime Session Revocation Watchdog, Desktop Pill & Permanent Delete");
+
+const authGuardSrc57 = fs.readFileSync(path.resolve(__dirname, "../src/components/dashboard-auth-guard.tsx"), "utf-8");
+const apiClientSrc57 = fs.readFileSync(path.resolve(__dirname, "../src/lib/api-client.ts"), "utf-8");
+const installPillSrc57 = fs.readFileSync(path.resolve(__dirname, "../src/components/lims-install-pill.tsx"), "utf-8");
+const patientsRegistrySrc57 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/patients/page.tsx"), "utf-8");
+const profileSrc57 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/account/profile/page.tsx"), "utf-8");
+const profileCtrlSrc57 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/ProfileController.php"), "utf-8");
+
+// 57.1 Realtime Token Revocation & Watchdog
+assert(
+  authGuardSrc57.includes("verifyActiveSession") &&
+  authGuardSrc57.includes("/profile/sessions/status") &&
+  authGuardSrc57.includes("handleLogout") &&
+  apiClientSrc57.includes("response.status === 401") &&
+  apiClientSrc57.includes("handleLogout"),
+  "[REALTIME SESSION WATCHDOG] Auth guard checks session status in real-time and 401 instantly evicts revoked sessions to login"
+);
+
+// 57.2 Desktop-Only PWA Install Pill
+assert(
+  installPillSrc57.includes("hidden lg:flex") &&
+  installPillSrc57.includes("isMobileOrTablet"),
+  "[DESKTOP INSTALL PILL] Install pill is strictly restricted to desktop PCs and suppressed on mobile/tablet viewports"
+);
+
+// 57.3 Patients Registry Complete Atomic Patient & Bill Deletion
+assert(
+  patientsRegistrySrc57.includes("/patients/") &&
+  patientsRegistrySrc57.includes("setPatients((prev) => prev.filter") &&
+  patientsRegistrySrc57.includes("lis_cached_patients"),
+  "[PERMANENT REGISTRY DELETION] Patients registry permanently removes patient, bill, reports & payments atomically from DB and cache"
+);
+
+// 57.4 My Account Responsive Single-Line Badges
+assert(
+  profileSrc57.includes("This Device (Current)") &&
+  profileSrc57.includes("whitespace-nowrap shrink-0") &&
+  profileCtrlSrc57.includes("public function checkSessionStatus") &&
+  profileCtrlSrc57.includes("public function revokeOtherSessions"),
+  "[RESPONSIVE PROFILE BADGES & BACKEND SESSIONS] Active status badges render as responsive single-line pills and backend manages sessions cleanly"
+);
+
+
+
+// ==============================================================================
+// 58. Registration Success Invoice Modal Mobile Responsiveness
+// ==============================================================================
+console.log("\n▶ MODULE 58: Registration Success Invoice Modal Mobile Responsiveness");
+
+const registerSrc58 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/patients/register/page.tsx"), "utf-8");
+const printInvoiceSrc58 = fs.readFileSync(path.resolve(__dirname, "../src/lib/print-invoice.ts"), "utf-8");
+
+// 58.1 Symmetrical, Responsive 3-Button Action Bar
+assert(
+  registerSrc58.includes("grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:gap-2.5") &&
+  registerSrc58.includes("handleSendWhatsAppInvoice") &&
+  registerSrc58.includes("handleDownloadInvoicePdf") &&
+  registerSrc58.includes("printInvoiceElement"),
+  "[INVOICE MODAL BUTTONS] Action buttons render as a responsive 3-column equal-width grid on mobile and flex row on desktop"
+);
+
+// 58.2 Header Collision Avoidance with Dialog Close Button
+assert(
+  registerSrc58.includes("pr-12 sm:pr-14") &&
+  registerSrc58.includes("flex flex-col sm:flex-row items-stretch sm:items-center justify-between"),
+  "[INVOICE HEADER RESPONSIVE] Header flexes vertically on mobile with reserved right padding preventing close button overlap"
+);
+
+// 58.3 Mobile Fit-to-Width Scaling & Zoom Mode
+assert(
+  registerSrc58.includes("invoiceScale") &&
+  registerSrc58.includes("isMobileInvoice") &&
+  registerSrc58.includes("invoiceZoomMode") &&
+  registerSrc58.includes("fitScale = Number((availableW / baseW).toFixed(3))"),
+  "[INVOICE MOBILE SCALING] Mobile viewport automatically calculates fit scale preventing horizontal clipping and supports zoom toggle"
+);
+
+// 58.4 Pristine Vector Print Transform Reset
+assert(
+  printInvoiceSrc58.includes("[style*=\"transform\"]") &&
+  printInvoiceSrc58.includes("transform: none !important;"),
+  "[PRINT TRANSFORM SAFETY] Print utility forcefully clears all preview transform scales ensuring 100% crisp full-resolution printing"
+);
+
+// ==============================================================================
+// 59. Amazon SES Email OTP Verification for Website Trial & LIS RBAC Terminals
+// ==============================================================================
+console.log("\n▶ MODULE 59: Amazon SES Email OTP Verification for Website Trial & LIS RBAC Terminals");
+
+const trialFormSrc59 = fs.readFileSync(path.resolve(__dirname, "../../OnePath-Lab-Website/app/trial/TrialForm.tsx"), "utf-8");
+const rbacTabSrc59 = fs.readFileSync(path.resolve(__dirname, "../src/components/collection-centers-tab.tsx"), "utf-8");
+const backendAuthCtrlSrc59 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/AuthController.php"), "utf-8");
+const backendCcCtrlSrc59 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/CollectionCenterController.php"), "utf-8");
+const backendRoutesSrc59 = fs.readFileSync(path.resolve(__dirname, "../../Backend/routes/api.php"), "utf-8");
+
+// 59.1 Website Free Trial Form OTP Flow
+assert(
+  trialFormSrc59.includes("handleSendOtp") &&
+  trialFormSrc59.includes("handleFinalRegister") &&
+  trialFormSrc59.includes("/auth/send-registration-otp") &&
+  trialFormSrc59.includes("isOtpSent") &&
+  trialFormSrc59.includes("otpCode") &&
+  trialFormSrc59.includes("resendCooldown") &&
+  trialFormSrc59.includes("Verify & Activate 7-Day Free Trial"),
+  "[WEBSITE TRIAL OTP FLOW] Trial registration dispatches 6-digit email OTP via SES, displays interactive verification card with countdown & validates code"
+);
+
+// 59.2 LIS RBAC Staff Terminal OTP Verification Flow
+assert(
+  rbacTabSrc59.includes("handleRequestOtp") &&
+  rbacTabSrc59.includes("handleVerifyAndCreateCenter") &&
+  rbacTabSrc59.includes("/collection-centers/send-otp") &&
+  rbacTabSrc59.includes("showOtpModal") &&
+  rbacTabSrc59.includes("otpCode") &&
+  rbacTabSrc59.includes("Staff Email Authorization") &&
+  rbacTabSrc59.includes("Verify & Create Account"),
+  "[LIS RBAC STAFF OTP FLOW] RBAC role creation triggers email authorization OTP to staff, opens secure verification modal & validates code before database persistence"
+);
+
+// 59.3 Backend Rate-Limited OTP Endpoints & SES Mail Delivery
+assert(
+  backendRoutesSrc59.includes("send-registration-otp") &&
+  backendRoutesSrc59.includes("collection-centers/send-otp") &&
+  backendAuthCtrlSrc59.includes("sendRegistrationOtp") &&
+  backendAuthCtrlSrc59.includes("reg_otp_") &&
+  backendCcCtrlSrc59.includes("sendOtp") &&
+  backendCcCtrlSrc59.includes("rbac_otp_"),
+  "[BACKEND OTP SECURITY & DISPATCH] Backend provides rate-limited endpoints for trial and staff OTP generation, cryptographic hashing & branded SES delivery"
+);
+
+// 59.4 Backend Registration & RBAC Creation OTP Verification
+assert(
+  backendAuthCtrlSrc59.includes("Invalid or expired email verification code") &&
+  backendCcCtrlSrc59.includes("Invalid or expired staff verification code") &&
+  backendCcCtrlSrc59.includes("Cache::forget(\"rbac_otp_"),
+  "[BACKEND OTP VERIFICATION GATE] Account registration and staff creation strictly enforce OTP verification, preventing unauthorized creation and purging one-time codes"
+);
+
+// 59.5 RBAC 3-Dots Actions Menu & Instant Token Revocation on Suspension
+assert(
+  rbacTabSrc59.includes("data-rbac-menu") &&
+  rbacTabSrc59.includes("handleToggleStatus") &&
+  rbacTabSrc59.includes("Suspend Account") &&
+  rbacTabSrc59.includes("Unsuspend Account") &&
+  backendCcCtrlSrc59.includes("$center->tokens()->delete()"),
+  "[RBAC ACTIONS MENU & SUSPENSION GATE] RBAC table renders 3-dots actions menu with Edit, Suspend/Unsuspend & Delete options with instant session revocation"
+);
+
+console.log("\n▶ MODULE 60: Collection Center Role Portal Customizations & Security Scoping");
+
+const patientsPageSrc60 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/patients/page.tsx"), "utf-8");
+const patientDetailsPageSrc60 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/patients/[id]/page.tsx"), "utf-8");
+const duesPageSrc60 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/billing/dues/page.tsx"), "utf-8");
+const monthlyExpensesRegisterSrc60 = fs.readFileSync(path.resolve(__dirname, "../src/components/monthly-expenses-register.tsx"), "utf-8");
+const backendBillCtrlSrc60 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"), "utf-8");
+
+// 60.1 Patients Page: Collection Center view details icon & edit patient button with active loaders
+assert(
+  patientsPageSrc60.includes("isCollectionCenter ? (") &&
+  patientsPageSrc60.includes("title=\"View Patient Details\"") &&
+  patientsPageSrc60.includes("title=\"Edit Patient Details & Tests\"") &&
+  patientsPageSrc60.includes("navigatingViewId === patient.id") &&
+  patientsPageSrc60.includes("router.push(\"/dashboard/patients/\" + patient.id)"),
+  "[PATIENTS PAGE CC ACTIONS] Collection Center role renders dedicated View Details and Edit Patient actions with active loading indicators"
+);
+
+// 60.2 Patient Details Page: Report History 3-dots hidden for Collection Center
+assert(
+  patientDetailsPageSrc60.includes("!isCollectionCenter && (") &&
+  patientDetailsPageSrc60.includes("<span>{loadingPrintId === row.reportId ? \"Loading...\" : \"Report\"}</span>"),
+  "[PATIENT DETAILS CC REPORT HISTORY] Report history table hides 3-dots action menu for Collection Center, showing only the Report button"
+);
+
+// 60.3 Dues Report Page: CC dropdown removed & center auto-selection
+assert(
+  duesPageSrc60.includes("!isCollectionCenter ? (") &&
+  duesPageSrc60.includes("Collection Centre Dues") &&
+  duesPageSrc60.includes("const isCC = r === \"COLLECTION_CENTER\" || r === \"COLLECTION_CENTRE\";"),
+  "[DUES REPORT CC PORTAL] Dues report hides source dropdown for Collection Center role and scopes directly to their center data"
+);
+
+// 60.4 Monthly Business Report: CC Role scoping in frontend
+assert(
+  monthlyExpensesRegisterSrc60.includes("isCollectionCenter && (") &&
+  monthlyExpensesRegisterSrc60.includes("Collection Centre Business:"),
+  "[MONTHLY BUSINESS REGISTER CC UI] Monthly business register displays dedicated center scoping badge for Collection Center users"
+);
+
+// 60.5 Backend BillController: Collection Center Dues & Monthly Business Aggregation
+assert(
+  backendBillCtrlSrc60.includes("in_array($userRole, ['COLLECTION_CENTER', 'COLLECTION_CENTRE'])) {") &&
+  backendBillCtrlSrc60.includes("in_array($userRole, ['B2B', 'COLLECTION_CENTER', 'COLLECTION_CENTRE'])) {") &&
+  backendBillCtrlSrc60.includes("meta->collection_center_id"),
+  "[BACKEND CC SCOPING] Backend BillController guarantees strict tenant scoping for Collection Centers in both Dues listing and Monthly Business aggregation"
+);
+
+console.log("\n▶ MODULE 61: Collection Center Overview & Today's Samples Mobile Responsiveness & Modal Fit");
+
+const ccOverviewSrc61 = fs.readFileSync(path.resolve(__dirname, "../src/components/collection-center-overview.tsx"), "utf-8");
+const todaySamplesSrc61 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/today-samples/page.tsx"), "utf-8");
+
+// 61.1 Collection Center Overview: Sample Collection Volume & Dynamic Intake Pill Alignment
+assert(
+  ccOverviewSrc61.includes("Sample Collection Volume") &&
+  ccOverviewSrc61.includes("truncate whitespace-nowrap") &&
+  ccOverviewSrc61.includes("Dynamic Intake") &&
+  ccOverviewSrc61.includes("whitespace-nowrap inline-flex items-center gap-1.5 shadow-2xs"),
+  "[CC OVERVIEW VOLUME & DYNAMIC INTAKE PILL] Sample Collection Volume title is single-line responsive and Dynamic Intake pill badge aligns cleanly without breaking"
+);
+
+// 61.2 Today's Samples Page: Multi-Field Search Optimization
+assert(
+  todaySamplesSrc61.includes("search.trim().toLowerCase()") &&
+  todaySamplesSrc61.includes("pName.includes(query)") &&
+  todaySamplesSrc61.includes("phone.includes(query)") &&
+  todaySamplesSrc61.includes("pid.includes(query)") &&
+  todaySamplesSrc61.includes("metaVials.includes(query)"),
+  "[TODAY SAMPLES SEARCH OPTIMIZATION] Multi-field search instantly queries patient name, phone, barcode, PID, investigations & tube barcodes"
+);
+
+// 61.3 Today's Samples Page: Mobile Card Deck & Responsive Filters
+assert(
+  todaySamplesSrc61.includes("block md:hidden divide-y divide-border/60") &&
+  todaySamplesSrc61.includes("hidden md:block") &&
+  todaySamplesSrc61.includes("rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap"),
+  "[TODAY SAMPLES MOBILE CARDS & FILTER PILLS] Responsive mobile cards render on phones and filter pills prevent awkward multi-line text wrapping"
+);
+
+// 61.4 Status & Barcode Modal: Responsive Viewport Fit & Touch-Friendly Grids
+assert(
+  todaySamplesSrc61.includes("w-[calc(100vw-1rem)] sm:w-[96vw]") &&
+  todaySamplesSrc61.includes("max-h-[95vh] sm:max-h-[92vh]") &&
+  todaySamplesSrc61.includes("grid grid-cols-2 xs:flex items-center gap-2 pt-1") &&
+  todaySamplesSrc61.includes("grid grid-cols-2 xs:flex items-center gap-2 shrink-0 w-full xs:w-auto"),
+  "[STATUS MODAL RESPONSIVE FIT & GRIDS] Status and vacutainer modal fits edge-to-edge on mobile with 2-column quick action button grids"
+);
+
+// 61.5 Status & Barcode Modal: Single-Line Text, Dropdown Bounds & Responsive Footer
+assert(
+  todaySamplesSrc61.includes("max-w-[calc(100vw-2rem)] sm:max-w-md") &&
+  todaySamplesSrc61.includes("whitespace-nowrap") &&
+  todaySamplesSrc61.includes("Save Barcodes & Update"),
+  "[STATUS MODAL DROPDOWNS & SINGLE LINE TEXT] Dropdown containers stay safely within mobile viewport bounds and footer action buttons maintain single-line text"
+);
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 

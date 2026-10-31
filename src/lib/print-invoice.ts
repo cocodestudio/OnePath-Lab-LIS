@@ -73,6 +73,12 @@ export function printInvoiceElement(element: HTMLElement | null, pageTitle = "Me
             margin: 0 auto !important;
             width: 100% !important;
             max-width: 794px !important;
+            transform: none !important;
+            -webkit-transform: none !important;
+          }
+          [style*="transform"] {
+            transform: none !important;
+            -webkit-transform: none !important;
           }
           .no-print {
             display: none !important;

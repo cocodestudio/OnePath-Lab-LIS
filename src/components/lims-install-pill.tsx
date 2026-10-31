@@ -11,8 +11,16 @@ export function LimsInstallPill() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   useEffect(() => {
-    // 1. Check if user permanently closed/dismissed the install button
+    // 1. Check if user permanently closed/dismissed the install button or is on mobile/tablet
     try {
+      const isMobileOrTablet =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Tablet/i.test(navigator.userAgent) ||
+        (typeof window !== "undefined" && window.innerWidth < 1024);
+      if (isMobileOrTablet) {
+        setIsVisible(false);
+        return;
+      }
+
       const dismissed = localStorage.getItem(STORAGE_KEY);
       if (dismissed === "true") {
         return;
@@ -126,7 +134,7 @@ export function LimsInstallPill() {
   }
 
   return (
-    <div className="fixed bottom-5 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 animate-fade-in pointer-events-auto">
+    <div className="hidden lg:flex fixed bottom-6 left-1/2 -translate-x-1/2 z-40 animate-fade-in pointer-events-auto">
       <div className="inline-flex items-center gap-2 pl-4 pr-2 py-2 rounded-full bg-card/95 hover:bg-card border border-border/90 shadow-xl backdrop-blur-md text-xs sm:text-sm font-semibold text-foreground transition-all duration-200 hover:shadow-2xl">
         
         {/* Native Browser Install Action */}

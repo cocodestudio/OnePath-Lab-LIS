@@ -393,18 +393,22 @@ export function CollectionCenterOverview({ user }: Props) {
       {/* ── Charts Grid (Bar Chart + Donut Chart) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Chart 1: Bar Chart of Sample Intake (7 Columns) */}
-        <div className="lg:col-span-7 p-6 rounded-2xl bg-card border border-border/80 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-display font-bold text-base text-foreground flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-primary" />
-                <span>Sample Collection Volume (Last 7 Days)</span>
+        <div className="lg:col-span-7 p-4 sm:p-6 rounded-2xl bg-card border border-border/80 shadow-xs space-y-4">
+          <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-2.5 sm:gap-4">
+            <div className="min-w-0 flex-1">
+              <h3 className="font-display font-bold text-sm sm:text-base text-foreground flex items-center gap-2 min-w-0">
+                <BarChart3 className="h-4 w-4 text-primary shrink-0" />
+                <span className="truncate whitespace-nowrap">Sample Collection Volume</span>
+                <span className="hidden sm:inline text-xs font-normal text-muted-foreground whitespace-nowrap">(Last 7 Days)</span>
               </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Real-time daily intake of patient vials from this center</p>
+              <p className="text-xs text-muted-foreground mt-0.5 truncate">Real-time daily intake of patient vials from this center</p>
             </div>
-            <span className="text-[11px] font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-lg">
-              Dynamic Intake
-            </span>
+            <div className="flex items-center shrink-0">
+              <span className="text-[10px] sm:text-[11px] font-bold text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 sm:py-1 rounded-full whitespace-nowrap inline-flex items-center gap-1.5 shadow-2xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+                <span>Dynamic Intake</span>
+              </span>
+            </div>
           </div>
 
           <div className="h-[250px] w-full pt-2" style={{ minHeight: 240 }}>
@@ -452,13 +456,13 @@ export function CollectionCenterOverview({ user }: Props) {
         </div>
 
         {/* Chart 2: Sample Lifecycle Stages Donut Breakdown (5 Columns) */}
-        <div className="lg:col-span-5 p-6 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-5 p-4 sm:p-6 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col justify-between space-y-4">
           <div>
-            <h3 className="font-display font-bold text-base text-foreground flex items-center gap-2">
-              <Activity className="h-4 w-4 text-primary" />
-              <span>Sample Processing Lifecycle</span>
+            <h3 className="font-display font-bold text-sm sm:text-base text-foreground flex items-center gap-2 min-w-0">
+              <Activity className="h-4 w-4 text-primary shrink-0" />
+              <span className="truncate whitespace-nowrap">Sample Processing Lifecycle</span>
             </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">Real-time status of collected patient specimens</p>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">Real-time status of collected patient specimens</p>
           </div>
 
           <div className="flex flex-col items-center justify-center my-auto py-3">

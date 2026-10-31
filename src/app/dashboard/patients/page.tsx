@@ -348,8 +348,9 @@ export default function PatientsPage() {
     return null;
   });
 
-  const isB2B = currentUser?.role === "B2B" || currentUser?.role === "COLLECTION_CENTER" || currentUser?.role === "COLLECTION_CENTRE" || currentUser?.role === "RECEPTIONIST";
-  const isCollectionCenter = currentUser?.role === "COLLECTION_CENTER" || currentUser?.role === "COLLECTION_CENTRE";
+  const userRole = String(currentUser?.role || "").toUpperCase();
+  const isB2B = userRole === "B2B" || userRole === "COLLECTION_CENTER" || userRole === "COLLECTION_CENTRE" || userRole === "RECEPTIONIST";
+  const isCollectionCenter = userRole === "COLLECTION_CENTER" || userRole === "COLLECTION_CENTRE";
 
   const canEditDemographics = (() => {
     // If not a Collection Centre (e.g. Admin, Receptionist, etc.), keep existing edit rights
@@ -479,6 +480,7 @@ export default function PatientsPage() {
   const [editAddress, setEditAddress] = useState("");
   const [saving, setSaving] = useState(false);
   const [navigatingEditId, setNavigatingEditId] = useState<string | null>(null);
+  const [navigatingViewId, setNavigatingViewId] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
 
@@ -604,29 +606,54 @@ export default function PatientsPage() {
       } catch (_) {}
     }
 
-    if (!billId) {
-      toast.error("No Bill Found", `No active bill record found for ${formatPatientListDisplayName(patient.name, patient.designation)}.`);
-      return;
-    }
-
     setDeleteBillDialog({
       isOpen: true,
       patient,
-      billId: String(billId),
-      billCustomId: billCustomId ? String(billCustomId) : `BILL-${String(billId).slice(0, 8)}`,
+      billId: billId ? String(billId) : null,
+      billCustomId: billCustomId ? String(billCustomId) : (billId ? `BILL-${String(billId).slice(0, 8)}` : (patient.custom_id || patient.customId || "RECORD")),
       amount: amount != null ? Number(amount) : null,
       isDeleting: false,
     });
   };
 
   const handleConfirmDeleteBill = async () => {
-    if (!deleteBillDialog.billId) return;
+    if (!deleteBillDialog.patient?.id && !deleteBillDialog.billId) return;
     setDeleteBillDialog((prev) => ({ ...prev, isDeleting: true }));
+    const patId = deleteBillDialog.patient?.id;
+    const bId = deleteBillDialog.billId;
+
     try {
-      const res = await fetchFromLaravel(`/bills/${deleteBillDialog.billId}`, {
-        method: "DELETE",
-      });
-      toast.success("Bill Deleted", res?.message || "Bill and associated records permanently deleted.");
+      let res: any = null;
+      // 1. Delete patient and all associated bills, reports, tests, and payments atomically from DB
+      if (patId) {
+        res = await fetchFromLaravel(`/patients/${patId}`, {
+          method: "DELETE",
+        });
+      } else if (bId) {
+        res = await fetchFromLaravel(`/bills/${bId}?delete_patient=1`, {
+          method: "DELETE",
+        });
+      }
+
+      toast.success("Record Deleted", res?.message || "Patient, bill, and all associated records permanently removed.");
+
+      // 2. Optimistically remove from client state immediately
+      if (patId) {
+        setPatients((prev) => prev.filter((p) => p.id !== patId));
+        setSearchResults((prev) => (prev ? prev.filter((p) => p.id !== patId) : null));
+
+        // 3. Update localStorage cache so refresh never revives the deleted record
+        try {
+          const cached = localStorage.getItem("lis_cached_patients");
+          if (cached) {
+            const list = JSON.parse(cached);
+            if (Array.isArray(list)) {
+              localStorage.setItem("lis_cached_patients", JSON.stringify(list.filter((p: any) => p.id !== patId)));
+            }
+          }
+        } catch (_) {}
+      }
+
       setDeleteBillDialog({
         isOpen: false,
         patient: null,
@@ -635,10 +662,12 @@ export default function PatientsPage() {
         amount: null,
         isDeleting: false,
       });
+
+      // 4. Invalidate and re-fetch from server
       await fetchPatients(true);
     } catch (err: any) {
-      console.error("Failed to delete bill:", err);
-      toast.error("Delete Failed", err?.message || "Could not delete bill. Please try again.");
+      console.error("Failed to delete patient/bill record:", err);
+      toast.error("Delete Failed", err?.message || "Could not delete record. Please try again.");
       setDeleteBillDialog((prev) => ({ ...prev, isDeleting: false }));
     }
   };
@@ -1118,65 +1147,29 @@ export default function PatientsPage() {
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                          {isCollectionCenter ? (
+                            <>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer data-[state=open]:bg-muted"
-                                title="Patient Options"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44 p-1">
-                              <DropdownMenuItem
-                                className="cursor-pointer gap-2 py-2 text-xs font-medium"
-                                onClick={() => { try { sessionStorage.setItem("patient_detail_cache_" + patient.id, JSON.stringify(patient)); } catch (_) {} router.push("/dashboard/patients/" + patient.id); }}
-                              >
-                                <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span>View History</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="cursor-pointer gap-2 py-2 text-xs font-medium"
-                                onClick={() => handlePrintPatientReport(patient)}
-                                disabled={loadingPrintId === patient.id}
-                              >
-                                {loadingPrintId === patient.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                ) : (
-                                  <Printer className="h-3.5 w-3.5 text-muted-foreground" />
-                                )}
-                                <span>{loadingPrintId === patient.id ? "Loading..." : "Print Report"}</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                className="h-8 w-8 text-muted-foreground hover:text-primary cursor-pointer hover:bg-primary/10"
+                                title="View Patient Details"
+                                disabled={navigatingViewId === patient.id}
                                 onClick={() => {
-                                  const reportId = patient.reports?.[0]?.id || patient.report_id || patient.reportId;
-                                  if (reportId) {
-                                    router.push(`/dashboard/reports/${reportId}/edit`);
-                                  } else {
-                                    router.push(`/dashboard/reports?search=${encodeURIComponent(patient.custom_id || patient.customId || patient.name)}`);
-                                  }
+                                  setNavigatingViewId(patient.id);
+                                  try {
+                                    sessionStorage.setItem("patient_detail_cache_" + patient.id, JSON.stringify(patient));
+                                  } catch (_) {}
+                                  router.push("/dashboard/patients/" + patient.id);
                                 }}
                               >
-                                <Edit3 className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span>Enter Result</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="cursor-pointer gap-2 py-2 text-xs font-medium text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/30"
-                                onClick={() => handleInitiateDeleteBill(patient)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                <span>Delete Bill</span>
-                              </DropdownMenuItem></DropdownMenuContent>
-                          </DropdownMenu>
-                          {(() => {
-                            if (currentUser?.role === 'TECHNICIAN' || currentUser?.role === 'DOCTOR') {
-                              return null;
-                            }
+                                {navigatingViewId === patient.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </Button>
 
-                            return (
                               <Link
                                 href={`/dashboard/patients/register?edit=${patient.id}`}
                                 onClick={() => {
@@ -1189,7 +1182,7 @@ export default function PatientsPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 text-muted-foreground hover:text-primary cursor-pointer"
+                                  className="h-8 w-8 text-muted-foreground hover:text-primary cursor-pointer hover:bg-primary/10"
                                   title="Edit Patient Details & Tests"
                                   disabled={navigatingEditId === patient.id}
                                 >
@@ -1200,26 +1193,123 @@ export default function PatientsPage() {
                                   )}
                                 </Button>
                               </Link>
-                            );
-                          })()}
-                          {!isB2B && (currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'admin' || !currentUser?.role) && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={`h-8 w-8 cursor-pointer ${
-                                patient.meta?.sample_status === 'REJECTED'
-                                  ? 'text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30'
-                                  : 'text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10'
-                              }`}
-                              onClick={() => {
-                                setRejectPatient(patient);
-                                setRejectReason(patient.meta?.rejection_reason || "Hemolyzed / Hemolytic Sample");
-                                setCustomRejectReason("");
-                              }}
-                              title={patient.meta?.sample_status === 'REJECTED' ? "Update Sample Rejection" : "Reject Laboratory Sample"}
-                            >
-                              <Ban className="h-3.5 w-3.5" />
-                            </Button>
+                            </>
+                          ) : (
+                            <>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer data-[state=open]:bg-muted"
+                                    title="Patient Options"
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-44 p-1">
+                                  <DropdownMenuItem
+                                    className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                    disabled={navigatingViewId === patient.id}
+                                    onClick={() => {
+                                      setNavigatingViewId(patient.id);
+                                      try { sessionStorage.setItem("patient_detail_cache_" + patient.id, JSON.stringify(patient)); } catch (_) {}
+                                      router.push("/dashboard/patients/" + patient.id);
+                                    }}
+                                  >
+                                    {navigatingViewId === patient.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                    ) : (
+                                      <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                                    )}
+                                    <span>{navigatingViewId === patient.id ? "Loading..." : "View History"}</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                    onClick={() => handlePrintPatientReport(patient)}
+                                    disabled={loadingPrintId === patient.id}
+                                  >
+                                    {loadingPrintId === patient.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                    ) : (
+                                      <Printer className="h-3.5 w-3.5 text-muted-foreground" />
+                                    )}
+                                    <span>{loadingPrintId === patient.id ? "Loading..." : "Print Report"}</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                    onClick={() => {
+                                      const reportId = patient.reports?.[0]?.id || patient.report_id || patient.reportId;
+                                      if (reportId) {
+                                        router.push(`/dashboard/reports/${reportId}/edit`);
+                                      } else {
+                                        router.push(`/dashboard/reports?search=${encodeURIComponent(patient.custom_id || patient.customId || patient.name)}`);
+                                      }
+                                    }}
+                                  >
+                                    <Edit3 className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span>Enter Result</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="cursor-pointer gap-2 py-2 text-xs font-medium text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/30"
+                                    onClick={() => handleInitiateDeleteBill(patient)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <span>Delete Bill</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                              {(() => {
+                                if (currentUser?.role === 'TECHNICIAN' || currentUser?.role === 'DOCTOR') {
+                                  return null;
+                                }
+
+                                return (
+                                  <Link
+                                    href={`/dashboard/patients/register?edit=${patient.id}`}
+                                    onClick={() => {
+                                      setNavigatingEditId(patient.id);
+                                      try {
+                                        sessionStorage.setItem(`edit_patient_cache_${patient.id}`, JSON.stringify(patient));
+                                      } catch (_) {}
+                                    }}
+                                  >
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-muted-foreground hover:text-primary cursor-pointer"
+                                      title="Edit Patient Details & Tests"
+                                      disabled={navigatingEditId === patient.id}
+                                    >
+                                      {navigatingEditId === patient.id ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                      ) : (
+                                        <Edit2 className="h-3.5 w-3.5" />
+                                      )}
+                                    </Button>
+                                  </Link>
+                                );
+                              })()}
+                              {!isB2B && (currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'admin' || !currentUser?.role) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className={`h-8 w-8 cursor-pointer ${
+                                    patient.meta?.sample_status === 'REJECTED'
+                                      ? 'text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30'
+                                      : 'text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10'
+                                  }`}
+                                  onClick={() => {
+                                    setRejectPatient(patient);
+                                    setRejectReason(patient.meta?.rejection_reason || "Hemolyzed / Hemolytic Sample");
+                                    setCustomRejectReason("");
+                                  }}
+                                  title={patient.meta?.sample_status === 'REJECTED' ? "Update Sample Rejection" : "Reject Laboratory Sample"}
+                                >
+                                  <Ban className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>

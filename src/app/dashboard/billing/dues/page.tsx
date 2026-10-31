@@ -56,6 +56,15 @@ function formatDateOnly(d: Date): string {
 export default function DueReportsPage() {
   const toast = useToast();
 
+  // User & Role State
+  const [currentUser, setCurrentUser] = useState<any>(() => getStoredUser());
+  useEffect(() => {
+    const u = getStoredUser();
+    if (u) setCurrentUser(u);
+  }, []);
+  const userRole = String(currentUser?.role || "").toUpperCase();
+  const isCollectionCenter = userRole === "COLLECTION_CENTER" || userRole === "COLLECTION_CENTRE";
+
   // Date range defaults: All Time by default so all outstanding dues across centres are immediately visible
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
@@ -139,7 +148,9 @@ export default function DueReportsPage() {
 
     const activePage = pageToLoad ?? currentPage;
     const activeLimit = limitToLoad ?? perPage;
-    const activeCenter = centerToFilter !== undefined ? centerToFilter : selectedCenter;
+    const activeCenter = isCollectionCenter
+      ? String(currentUser?.id || "ALL")
+      : (centerToFilter !== undefined ? centerToFilter : selectedCenter);
     const activeStart = overrideStart !== undefined ? overrideStart : startDate;
     const activeEnd = overrideEnd !== undefined ? overrideEnd : endDate;
 
@@ -266,10 +277,16 @@ export default function DueReportsPage() {
 
   // Read cache on mount ONLY for instant zero-latency display
   useEffect(() => {
+    const user = getStoredUser();
+    const r = String(user?.role || "").toUpperCase();
+    const isCC = r === "COLLECTION_CENTER" || r === "COLLECTION_CENTRE";
+    const initialCenter = isCC ? String(user?.id || "ALL") : "MAIN_LAB";
+
     try {
       const cached =
-        localStorage.getItem("lis_cached_due_report_v2_MAIN_LAB") ||
-        localStorage.getItem("lis_cached_due_report_MAIN_LAB") ||
+        localStorage.getItem(`lis_cached_due_report_v2_${initialCenter}`) ||
+        (!isCC ? localStorage.getItem("lis_cached_due_report_v2_MAIN_LAB") : null) ||
+        (!isCC ? localStorage.getItem("lis_cached_due_report_MAIN_LAB") : null) ||
         localStorage.getItem("lis_cached_due_report_v2");
       if (cached) {
         const parsed = JSON.parse(cached);
@@ -296,8 +313,10 @@ export default function DueReportsPage() {
       }
     } catch {}
 
-    loadCollectionCenters();
-    loadDueBills(false, 1, undefined, "MAIN_LAB");
+    if (!isCC) {
+      loadCollectionCenters();
+    }
+    loadDueBills(false, 1, undefined, initialCenter);
 
     // Background fetch lab profile
     fetchFromLaravel("/lab").then((lab) => {
@@ -517,87 +536,94 @@ export default function DueReportsPage() {
             ))}
           </div>
 
-          {/* Collection Centre / Source Dropdown Filter (Replaces Search Bar) */}
-          <div className="w-full sm:w-72">
-            <Select
-              value={selectedCenter}
-              onValueChange={handleCenterChange}
-              disabled={loading && !bills.length && isLoadingCenters}
-            >
-              <SelectTrigger className="h-9 text-xs bg-background border-border shadow-2xs">
-                <div className="flex items-center gap-2 truncate">
-                  <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                  <SelectValue placeholder="Select Centre / Source" />
-                </div>
-              </SelectTrigger>
-              <SelectContent className="max-h-72">
-                {/* 1. Main Lab (Default) */}
-                <SelectItem value="MAIN_LAB">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground">Main Lab</span>
-                    <span className="text-[10px] text-muted-foreground">(Direct In-house)</span>
+          {/* Collection Centre / Source Dropdown Filter (Hidden for COLLECTION_CENTER role) */}
+          {!isCollectionCenter ? (
+            <div className="w-full sm:w-72">
+              <Select
+                value={selectedCenter}
+                onValueChange={handleCenterChange}
+                disabled={loading && !bills.length && isLoadingCenters}
+              >
+                <SelectTrigger className="h-9 text-xs bg-background border-border shadow-2xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <SelectValue placeholder="Select Centre / Source" />
                   </div>
-                </SelectItem>
-
-                {/* 2. All Dues (Across All Centers & Main Lab) */}
-                <SelectItem value="ALL">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground">All Dues</span>
-                    <span className="text-[10px] text-muted-foreground">(Total Across All)</span>
-                  </div>
-                </SelectItem>
-
-                {/* 3. Collection Centres & B2B Partners */}
-                {collectionCenters.length > 0 && (
-                  <>
-                    <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
-                      Collection Centres & B2B Partners ({collectionCenters.length})
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {/* 1. Main Lab (Default) */}
+                  <SelectItem value="MAIN_LAB">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground">Main Lab</span>
+                      <span className="text-[10px] text-muted-foreground">(Direct In-house)</span>
                     </div>
-                    {collectionCenters.map((cc) => {
-                      const displayName =
-                        cc.name ||
-                        cc.center_name ||
-                        cc.centerName ||
-                        cc.lab_name ||
-                        cc.email ||
-                        `Centre #${cc.id}`;
-                      const isB2B = String(cc.role || "").toUpperCase() === "B2B";
-                      const isReception = String(cc.role || "").toUpperCase() === "RECEPTIONIST";
-                      return (
-                        <SelectItem key={cc.id} value={String(cc.id)}>
-                          <div className="flex items-center justify-between gap-2 w-full">
-                            <span className="truncate">{displayName}</span>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {isB2B && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                                  B2B
-                                </span>
-                              )}
-                              {isReception && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                                  Reception
-                                </span>
-                              )}
-                              {!isB2B && !isReception && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                                  CC
-                                </span>
-                              )}
-                              {cc.phone && (
-                                <span className="text-[10px] text-muted-foreground font-mono">
-                                  {cc.phone}
-                                </span>
-                              )}
+                  </SelectItem>
+
+                  {/* 2. All Dues (Across All Centers & Main Lab) */}
+                  <SelectItem value="ALL">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground">All Dues</span>
+                      <span className="text-[10px] text-muted-foreground">(Total Across All)</span>
+                    </div>
+                  </SelectItem>
+
+                  {/* 3. Collection Centres & B2B Partners */}
+                  {collectionCenters.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
+                        Collection Centres & B2B Partners ({collectionCenters.length})
+                      </div>
+                      {collectionCenters.map((cc) => {
+                        const displayName =
+                          cc.name ||
+                          cc.center_name ||
+                          cc.centerName ||
+                          cc.lab_name ||
+                          cc.email ||
+                          `Centre #${cc.id}`;
+                        const isB2B = String(cc.role || "").toUpperCase() === "B2B";
+                        const isReception = String(cc.role || "").toUpperCase() === "RECEPTIONIST";
+                        return (
+                          <SelectItem key={cc.id} value={String(cc.id)}>
+                            <div className="flex items-center justify-between gap-2 w-full">
+                              <span className="truncate">{displayName}</span>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {isB2B && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                                    B2B
+                                  </span>
+                                )}
+                                {isReception && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                                    Reception
+                                  </span>
+                                )}
+                                {!isB2B && !isReception && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                    CC
+                                  </span>
+                                )}
+                                {cc.phone && (
+                                  <span className="text-[10px] text-muted-foreground font-mono">
+                                    {cc.phone}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-xs font-semibold text-primary shrink-0">
+              <Building2 className="w-3.5 h-3.5 shrink-0" />
+              <span>Collection Centre Dues</span>
+            </div>
+          )}
         </div>
 
         {/* Custom Date Range Pickers (Matching Screenshot 1) */}

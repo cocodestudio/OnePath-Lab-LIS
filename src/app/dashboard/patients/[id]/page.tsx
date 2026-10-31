@@ -8,7 +8,7 @@ import {
   Printer, Download, MoreVertical, Edit3, Edit, Receipt, Copy, Check,
   Loader2, AlertCircle, X
 } from "lucide-react";
-import { fetchFromLaravel } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,15 @@ export default function PatientDetailsPage() {
   const router = useRouter();
   const toast = useToast();
   const rawId = (params?.id as string) || "";
+
+  // User & Role State
+  const [currentUser, setCurrentUser] = useState<any>(() => getStoredUser());
+  useEffect(() => {
+    const u = getStoredUser();
+    if (u) setCurrentUser(u);
+  }, []);
+  const userRole = String(currentUser?.role || "").toUpperCase();
+  const isCollectionCenter = userRole === "COLLECTION_CENTER" || userRole === "COLLECTION_CENTRE";
 
   // Patient & Loading state
   const [patient, setPatient] = useState<any>(null);
@@ -592,99 +601,101 @@ export default function PatientDetailsPage() {
                             </Button>
                           )}
 
-                          {/* 3-Dots Dropdown Menu */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer data-[state=open]:bg-muted"
-                                title="Actions"
-                              >
-                                {activeRowAction?.rowId === row.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                                ) : (
-                                  <MoreVertical className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44 p-1 rounded-xl shadow-xl">
-                              {/* 1. View Bill */}
-                              <DropdownMenuItem
-                                className="cursor-pointer gap-2 py-2 text-xs font-medium"
-                                disabled={activeRowAction?.rowId === row.id && activeRowAction?.action === "bill"}
-                                onClick={async () => {
-                                  setActiveRowAction({ rowId: row.id, action: "bill" });
-                                  try {
-                                    if (row.billDbId) {
-                                      await handleOpenBill(row.billDbId);
-                                    } else {
-                                      router.push(`/dashboard/billing?search=${encodeURIComponent(row.billId)}`);
+                          {/* 3-Dots Dropdown Menu (Hidden for COLLECTION_CENTER role) */}
+                          {!isCollectionCenter && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer data-[state=open]:bg-muted"
+                                  title="Actions"
+                                >
+                                  {activeRowAction?.rowId === row.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                  ) : (
+                                    <MoreVertical className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-44 p-1 rounded-xl shadow-xl">
+                                {/* 1. View Bill */}
+                                <DropdownMenuItem
+                                  className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                  disabled={activeRowAction?.rowId === row.id && activeRowAction?.action === "bill"}
+                                  onClick={async () => {
+                                    setActiveRowAction({ rowId: row.id, action: "bill" });
+                                    try {
+                                      if (row.billDbId) {
+                                        await handleOpenBill(row.billDbId);
+                                      } else {
+                                        router.push(`/dashboard/billing?search=${encodeURIComponent(row.billId)}`);
+                                      }
+                                    } finally {
+                                      setActiveRowAction(null);
                                     }
-                                  } finally {
-                                    setActiveRowAction(null);
-                                  }
-                                }}
-                              >
-                                {activeRowAction?.rowId === row.id && activeRowAction?.action === "bill" ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                ) : (
-                                  <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
-                                )}
-                                <span>
-                                  {activeRowAction?.rowId === row.id && activeRowAction?.action === "bill"
-                                    ? "Loading Bill..."
-                                    : "View Bill"}
-                                </span>
-                              </DropdownMenuItem>
+                                  }}
+                                >
+                                  {activeRowAction?.rowId === row.id && activeRowAction?.action === "bill" ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                  ) : (
+                                    <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
+                                  )}
+                                  <span>
+                                    {activeRowAction?.rowId === row.id && activeRowAction?.action === "bill"
+                                      ? "Loading Bill..."
+                                      : "View Bill"}
+                                  </span>
+                                </DropdownMenuItem>
 
-                              {/* 2. Enter Result */}
-                              <DropdownMenuItem
-                                className="cursor-pointer gap-2 py-2 text-xs font-medium"
-                                disabled={activeRowAction?.rowId === row.id && activeRowAction?.action === "result"}
-                                onClick={() => {
-                                  setActiveRowAction({ rowId: row.id, action: "result" });
-                                  if (row.reportId) {
-                                    router.push(`/dashboard/reports/${row.reportId}/edit`);
-                                  } else {
-                                    router.push(`/dashboard/reports?search=${encodeURIComponent(patCustomId)}`);
-                                  }
-                                }}
-                              >
-                                {activeRowAction?.rowId === row.id && activeRowAction?.action === "result" ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                ) : (
-                                  <Edit3 className="h-3.5 w-3.5 text-muted-foreground" />
-                                )}
-                                <span>
-                                  {activeRowAction?.rowId === row.id && activeRowAction?.action === "result"
-                                    ? "Opening Editor..."
-                                    : "Enter Result"}
-                                </span>
-                              </DropdownMenuItem>
+                                {/* 2. Enter Result */}
+                                <DropdownMenuItem
+                                  className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                  disabled={activeRowAction?.rowId === row.id && activeRowAction?.action === "result"}
+                                  onClick={() => {
+                                    setActiveRowAction({ rowId: row.id, action: "result" });
+                                    if (row.reportId) {
+                                      router.push(`/dashboard/reports/${row.reportId}/edit`);
+                                    } else {
+                                      router.push(`/dashboard/reports?search=${encodeURIComponent(patCustomId)}`);
+                                    }
+                                  }}
+                                >
+                                  {activeRowAction?.rowId === row.id && activeRowAction?.action === "result" ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                  ) : (
+                                    <Edit3 className="h-3.5 w-3.5 text-muted-foreground" />
+                                  )}
+                                  <span>
+                                    {activeRowAction?.rowId === row.id && activeRowAction?.action === "result"
+                                      ? "Opening Editor..."
+                                      : "Enter Result"}
+                                  </span>
+                                </DropdownMenuItem>
 
-                              {/* 3. Edit Patient */}
-                              <DropdownMenuItem
-                                className="cursor-pointer gap-2 py-2 text-xs font-medium"
-                                disabled={activeRowAction?.rowId === row.id && activeRowAction?.action === "edit"}
-                                onClick={() => {
-                                  setActiveRowAction({ rowId: row.id, action: "edit" });
-                                  router.push(`/dashboard/patients/register?edit=${patient?.id || rawId}`);
-                                }}
-                              >
-                                {activeRowAction?.rowId === row.id && activeRowAction?.action === "edit" ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                ) : (
-                                  <Edit className="h-3.5 w-3.5 text-muted-foreground" />
-                                )}
-                                <span>
-                                  {activeRowAction?.rowId === row.id && activeRowAction?.action === "edit"
-                                    ? "Loading Patient..."
-                                    : "Edit Patient"}
-                                </span>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                                {/* 3. Edit Patient */}
+                                <DropdownMenuItem
+                                  className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                  disabled={activeRowAction?.rowId === row.id && activeRowAction?.action === "edit"}
+                                  onClick={() => {
+                                    setActiveRowAction({ rowId: row.id, action: "edit" });
+                                    router.push(`/dashboard/patients/register?edit=${patient?.id || rawId}`);
+                                  }}
+                                >
+                                  {activeRowAction?.rowId === row.id && activeRowAction?.action === "edit" ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                  ) : (
+                                    <Edit className="h-3.5 w-3.5 text-muted-foreground" />
+                                  )}
+                                  <span>
+                                    {activeRowAction?.rowId === row.id && activeRowAction?.action === "edit"
+                                      ? "Loading Patient..."
+                                      : "Edit Patient"}
+                                  </span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
                       </td>
                     </tr>

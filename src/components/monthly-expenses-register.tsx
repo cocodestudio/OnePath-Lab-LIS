@@ -9,9 +9,10 @@ import {
   Printer,
   RefreshCw,
   FileSpreadsheet,
-  AlertCircle
+  AlertCircle,
+  Building2
 } from "lucide-react";
-import { fetchFromLaravel } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
 import { printInvoiceElement } from "@/lib/print-invoice";
 
@@ -51,6 +52,15 @@ export function MonthlyExpensesRegister({
   const [labInfo, setLabInfo] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
+
+  // User & Role detection
+  const [currentUser, setCurrentUser] = useState<any>(() => getStoredUser());
+  useEffect(() => {
+    const u = getStoredUser();
+    if (u) setCurrentUser(u);
+  }, []);
+  const userRole = String(currentUser?.role || "").toUpperCase();
+  const isCollectionCenter = userRole === "COLLECTION_CENTER" || userRole === "COLLECTION_CENTRE";
 
   // Available year list: current year ± 3 years
   const availableYears = useMemo(() => {
@@ -172,6 +182,14 @@ export function MonthlyExpensesRegister({
 
   return (
     <div className="space-y-4 animate-fade-in text-foreground">
+      {/* ── Collection Centre Scoping Pill ── */}
+      {isCollectionCenter && (
+        <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary/10 border border-primary/20 text-xs font-semibold text-primary">
+          <Building2 className="w-4 h-4 shrink-0" />
+          <span>Collection Centre Business: <strong className="font-bold">{currentUser?.name || "Your Centre"}</strong></span>
+        </div>
+      )}
+
       {/* ── Compact Month & Year Selector Toolbar (Responsive Sequence on Mobile) ── */}
       <div className="bg-card border border-border/80 rounded-xl p-3 sm:p-4 shadow-xs">
         <form onSubmit={handleShowClick} className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">

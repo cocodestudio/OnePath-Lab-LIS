@@ -856,6 +856,29 @@ function RegisterPatientPage() {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [invoiceScale, setInvoiceScale] = useState<number>(1);
+  const [isMobileInvoice, setIsMobileInvoice] = useState(false);
+  const [invoiceZoomMode, setInvoiceZoomMode] = useState<"fit" | "actual">("fit");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const updateScale = () => {
+      const w = window.innerWidth;
+      const isMob = w < 768;
+      setIsMobileInvoice(isMob);
+      if (isMob) {
+        const availableW = Math.max(260, Math.min(w - 24, 760));
+        const baseW = billSettings?.size === "A5" ? 559 : 794;
+        const fitScale = Number((availableW / baseW).toFixed(3));
+        setInvoiceScale(fitScale);
+      } else {
+        setInvoiceScale(1);
+      }
+    };
+    updateScale();
+    window.addEventListener("resize", updateScale);
+    return () => window.removeEventListener("resize", updateScale);
+  }, [isPrintModalOpen, billSettings?.size]);
 
   const handleDownloadInvoicePdf = async () => {
     if (!successDetails?.billId || !registerPrintRef.current) return;
@@ -6046,70 +6069,107 @@ function RegisterPatientPage() {
 
       {/* 2. Direct Medical Invoice Print Modal */}
       <Dialog open={isPrintModalOpen} onOpenChange={setIsPrintModalOpen}>
-        <DialogContent className="max-w-4xl w-[96vw] sm:w-full max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl print:max-h-none print:max-w-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0">
+        <DialogContent className="max-w-4xl w-[calc(100vw-1rem)] sm:w-full max-h-[94vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl print:max-h-none print:max-w-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0 animate-in fade-in-0 zoom-in-95 duration-200">
           <DialogTitle className="sr-only">Print Invoice</DialogTitle>
-          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-border/80 bg-card shrink-0 print:hidden">
-            <div className="flex items-center gap-2.5 sm:gap-3">
-              <div className="h-9 w-9 rounded-lg gradient-primary text-primary-foreground flex items-center justify-center shrink-0">
-                <Printer className="h-5 w-5" />
+
+          {/* Modal Header: Responsive layout, avoiding Close X button overlap */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-3.5 sm:px-6 py-3 sm:py-3.5 border-b border-border/80 bg-card shrink-0 gap-2.5 sm:gap-4 print:hidden pr-12 sm:pr-14">
+            {/* Left: Invoice Title & Patient Info */}
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 pr-2 sm:pr-0">
+              <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl gradient-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-xs">
+                <Printer className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
               </div>
-              <div className="min-w-0">
-                <h3 className="font-display text-sm sm:text-base font-bold text-foreground truncate">
-                  Invoice {successDetails?.billCustomId}
-                </h3>
-                <p className="text-[10px] sm:text-[11px] text-muted-foreground truncate">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <h3 className="font-display text-sm sm:text-base font-bold text-foreground truncate">
+                    Invoice {successDetails?.billCustomId}
+                  </h3>
+                  <span className="font-mono bg-primary/10 text-primary text-[10px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0">
+                    RECEIPT
+                  </span>
+                </div>
+                <p className="text-[11px] sm:text-xs text-muted-foreground truncate">
                   Patient: <strong className="text-foreground">{successDetails?.patientName}</strong>
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+
+            {/* Right: The 3 Action Buttons (Full width 3-column grid & equal height on mobile, cleanly aligned without collision) */}
+            <div className="grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={handleSendWhatsAppInvoice}
                 disabled={isSendingWhatsApp}
-                className="px-3 sm:px-3.5 py-2 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                className="h-9 sm:h-9 px-2 sm:px-3.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 whitespace-nowrap min-w-0 w-full sm:w-auto"
                 title="Send Invoice PDF directly to Patient on WhatsApp"
               >
                 {isSendingWhatsApp ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
                 ) : (
-                  <MessageSquare className="h-3.5 w-3.5" />
+                  <MessageSquare className="h-3.5 w-3.5 shrink-0" />
                 )}
-                <span className="hidden sm:inline">{isSendingWhatsApp ? "Sending..." : "Send on WhatsApp"}</span>
-                <span className="sm:hidden">WhatsApp</span>
+                <span className="truncate">{isSendingWhatsApp ? "Sending..." : "WhatsApp"}</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleDownloadInvoicePdf}
                 disabled={isDownloadingPdf}
-                className="gradient-primary text-primary-foreground font-bold text-xs px-3 sm:px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm hover:-translate-y-px transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                className="h-9 sm:h-9 gradient-primary text-primary-foreground font-bold text-xs px-2 sm:px-3.5 rounded-xl flex items-center justify-center gap-1.5 shadow-xs hover:-translate-y-px transition-all cursor-pointer disabled:opacity-50 whitespace-nowrap min-w-0 w-full sm:w-auto"
                 title="Download pristine high-resolution vector PDF"
               >
                 {isDownloadingPdf ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
                 ) : (
-                  <Download className="h-3.5 w-3.5" />
+                  <Download className="h-3.5 w-3.5 shrink-0" />
                 )}
-                <span className="hidden sm:inline">{isDownloadingPdf ? "Downloading..." : "Download PDF"}</span>
-                <span className="sm:hidden">PDF</span>
+                <span className="truncate">{isDownloadingPdf ? "Saving..." : "Download"}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => printInvoiceElement(registerPrintRef.current, `Invoice_${successDetails?.billCustomId || "Receipt"}`)}
-                className="bg-card hover:bg-muted text-foreground border border-border/80 font-bold text-xs px-3 sm:px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-xs hover:-translate-y-px transition-all cursor-pointer shrink-0"
+                className="h-9 sm:h-9 bg-card hover:bg-muted text-foreground border border-border/80 font-bold text-xs px-2 sm:px-3.5 rounded-xl flex items-center justify-center gap-1.5 shadow-xs hover:-translate-y-px transition-all cursor-pointer whitespace-nowrap min-w-0 w-full sm:w-auto"
                 title="Open browser print dialog"
               >
-                <Printer className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="hidden sm:inline">Print</span>
-                <span className="sm:hidden">Print</span>
+                <Printer className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="truncate">Print</span>
               </button>
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 bg-zinc-100 dark:bg-zinc-900/60 flex justify-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">
-            <div ref={registerPrintRef} className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 bg-white max-w-full print:shadow-none print:ring-0 print:border-none print:p-0 print:m-0 print:w-full">
+          {/* Subheader Toolbar on Mobile: Fit vs Actual Size Toggle */}
+          {isMobileInvoice && (
+            <div className="flex items-center justify-between px-3.5 py-1.5 bg-muted/30 border-b border-border/60 text-[11px] text-muted-foreground print:hidden">
+              <span className="truncate">Scale: {invoiceZoomMode === "fit" ? `${Math.round(invoiceScale * 100)}% (Fit)` : "100% (Original)"}</span>
+              <button
+                type="button"
+                onClick={() => setInvoiceZoomMode((prev) => (prev === "fit" ? "actual" : "fit"))}
+                className="px-2.5 py-1 rounded-md bg-card hover:bg-muted text-foreground border border-border font-semibold shadow-2xs transition-colors cursor-pointer text-[10.5px] shrink-0"
+              >
+                {invoiceZoomMode === "fit" ? "🔍 100% Actual" : "📱 Fit Width"}
+              </button>
+            </div>
+          )}
+
+          <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-6 bg-zinc-100 dark:bg-zinc-900/60 flex flex-col items-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">
+            <div
+              style={{
+                width: isMobileInvoice && invoiceZoomMode === "fit" && invoiceScale < 1 ? `${Math.round((billSettings?.size === "A5" ? 559 : 794) * invoiceScale)}px` : undefined,
+                height: isMobileInvoice && invoiceZoomMode === "fit" && invoiceScale < 1 ? `${Math.round((billSettings?.size === "A5" ? 794 : 1123) * invoiceScale)}px` : undefined,
+                overflow: "visible",
+                flexShrink: 0,
+              }}
+              className="transition-all duration-150"
+            >
+              <div
+                ref={registerPrintRef}
+                style={{
+                  transform: isMobileInvoice && invoiceZoomMode === "fit" && invoiceScale < 1 ? `scale(${invoiceScale})` : undefined,
+                  transformOrigin: "top left",
+                }}
+                className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 bg-white print:shadow-none print:ring-0 print:border-none print:p-0 print:m-0 print:w-full print:transform-none"
+              >
               <InvoiceSheet
                 settings={billSettings}
                 invoice={{
@@ -6176,6 +6236,7 @@ function RegisterPatientPage() {
                   })),
                 }}
               />
+            </div>
             </div>
           </div>
         </DialogContent>

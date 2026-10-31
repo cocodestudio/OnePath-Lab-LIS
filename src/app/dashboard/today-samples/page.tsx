@@ -454,15 +454,40 @@ export default function TodaySamplesPage() {
   }).length;
   const dueCount = Math.max(0, totalCount - paidCount);
 
-  // Filtered samples
+  // Filtered samples (Optimized for instant multi-field search)
   const filteredSamples = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
     return reports.filter((r) => {
-      const pName = r.patient?.name || "";
-      const phone = r.patient?.phone || "";
-      const id = r.custom_id || r.customId || "";
-      const query = search.toLowerCase();
-      const matchesSearch = pName.toLowerCase().includes(query) || phone.toLowerCase().includes(query) || id.toLowerCase().includes(query);
-      if (!matchesSearch) return false;
+      if (query) {
+        const p = r.patient || {};
+        const pName = (p.name || "").toLowerCase();
+        const phone = (p.phone || "").toLowerCase();
+        const id = (r.custom_id || r.customId || "").toLowerCase();
+        const pid = (p.custom_id || p.customId || "").toLowerCase();
+        const tests = (r.tests || (Array.isArray(r.results) ? r.results.map((res: any) => res.test?.name).join(" ") : "")).toLowerCase();
+        const doc = (p.ref_doctor || p.refDoctor || "").toLowerCase();
+        const coll = (p.collected_at || p.collectedAt || "").toLowerCase();
+
+        let metaVials = "";
+        try {
+          const m = typeof p.meta === "string" ? JSON.parse(p.meta) : (p.meta || {});
+          const vb = typeof m.vial_barcodes === "string" ? JSON.parse(m.vial_barcodes) : (m.vial_barcodes || {});
+          metaVials = Object.values(vb).join(" ").toLowerCase();
+        } catch {}
+
+        const matchesSearch =
+          pName.includes(query) ||
+          phone.includes(query) ||
+          id.includes(query) ||
+          pid.includes(query) ||
+          tests.includes(query) ||
+          doc.includes(query) ||
+          coll.includes(query) ||
+          metaVials.includes(query);
+
+        if (!matchesSearch) return false;
+      }
 
       const isB2B = currentUserRole === "B2B";
       const b2bPrice = r.b2b_price !== undefined ? Number(r.b2b_price) : (r.b2bPrice !== undefined ? Number(r.b2bPrice) : null);
@@ -633,53 +658,53 @@ export default function TodaySamplesPage() {
   return (
     <div className="space-y-6 animate-fade-in pb-10">
       {/* ── Header Deck ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/80 p-6 rounded-2xl shadow-xs">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/80 p-4 sm:p-6 rounded-2xl shadow-xs">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20 whitespace-nowrap shrink-0">
               Collection Center Intake
             </span>
-            <span className="text-xs text-muted-foreground font-mono">
+            <span className="text-xs text-muted-foreground font-mono whitespace-nowrap shrink-0">
               Today's Intake: {totalCount} Samples
             </span>
           </div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+          <h1 className="font-display text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground truncate">
             Sample Intake &amp; Phlebotomy Log
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2 sm:line-clamp-none">
             Receive receptionist-registered patients, tag color vacutainer barcodes, and update sample collection stage.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto shrink-0">
           <button
             type="button"
             onClick={() => loadData(true)}
             disabled={loading}
-            className="px-3.5 py-2.5 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground text-xs font-bold shadow-xs hover:bg-muted/60 transition-colors flex items-center gap-2 cursor-pointer"
+            className="px-3.5 py-2.5 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground text-xs font-bold shadow-xs hover:bg-muted/60 transition-colors flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin text-primary" : ""}`} />
-            <span>Refresh</span>
+            <RefreshCw className={`h-4 w-4 shrink-0 ${loading ? "animate-spin text-primary" : ""}`} />
+            <span className="whitespace-nowrap">Refresh</span>
           </button>
 
           <Link
             href="/dashboard/patients/register"
-            className="px-5 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center gap-2 ring-inset-top cursor-pointer"
+            className="px-4 sm:px-5 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-2 ring-inset-top cursor-pointer whitespace-nowrap"
           >
-            <PlusCircle className="h-4 w-4" />
-            <span>New Sample Entry</span>
+            <PlusCircle className="h-4 w-4 shrink-0" />
+            <span className="whitespace-nowrap">New Sample Entry</span>
           </Link>
         </div>
       </div>
 
       {/* ── Filter Pills & Search Row ── */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4">
         {/* Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full custom-scrollbar">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full custom-scrollbar no-scrollbar">
           <button
             type="button"
             onClick={() => setStageFilter("ALL")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               stageFilter === "ALL"
                 ? "bg-primary text-primary-foreground shadow-xs"
                 : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -691,7 +716,7 @@ export default function TodaySamplesPage() {
           <button
             type="button"
             onClick={() => setStageFilter("REGISTERED")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               stageFilter === "REGISTERED"
                 ? "bg-amber-500 text-white shadow-xs"
                 : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -703,7 +728,7 @@ export default function TodaySamplesPage() {
           <button
             type="button"
             onClick={() => setStageFilter("COLLECTED")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               stageFilter === "COLLECTED"
                 ? "bg-sky-500 text-white shadow-xs"
                 : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -715,7 +740,7 @@ export default function TodaySamplesPage() {
           <button
             type="button"
             onClick={() => setStageFilter("TRANSIT")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               stageFilter === "TRANSIT"
                 ? "bg-blue-600 text-white shadow-xs"
                 : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -727,7 +752,7 @@ export default function TodaySamplesPage() {
           <button
             type="button"
             onClick={() => setStageFilter("READY")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               stageFilter === "READY"
                 ? "bg-emerald-600 text-white shadow-xs"
                 : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -739,7 +764,7 @@ export default function TodaySamplesPage() {
           <button
             type="button"
             onClick={() => setStageFilter("PAID")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               stageFilter === "PAID"
                 ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
                 : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -751,7 +776,7 @@ export default function TodaySamplesPage() {
           <button
             type="button"
             onClick={() => setStageFilter("DUE")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               stageFilter === "DUE"
                 ? "bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30"
                 : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -761,22 +786,185 @@ export default function TodaySamplesPage() {
           </button>
         </div>
 
-        {/* Search */}
-        <div className="relative w-full md:w-72 shrink-0">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        {/* Search Bar with Instant Clear */}
+        <div className="relative w-full md:w-80 shrink-0">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search patient, barcode, phone..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl bg-card border border-border text-xs focus:border-primary outline-none shadow-xs"
+            placeholder="Search patient, barcode, test, phone..."
+            className="w-full pl-10 pr-9 py-2 rounded-xl bg-card border border-border text-xs focus:border-primary outline-none shadow-xs transition-colors"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground rounded-md transition-colors cursor-pointer"
+              title="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* ── Samples Table ── */}
+      {/* ── Samples List / Table ── */}
       <div className="rounded-2xl bg-card border border-border/80 shadow-xs overflow-hidden">
-        <div className="table-responsive-container">
+        {/* Mobile Cards View (Visible on < md) */}
+        <div className="block md:hidden divide-y divide-border/60">
+          {loading ? (
+            Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} className="p-4 space-y-3 animate-fade-in">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="h-4 w-32 rounded shimmer-gradient" />
+                  <div className="h-5 w-24 rounded-full shimmer-gradient" />
+                </div>
+                <div className="h-3 w-48 rounded shimmer-gradient" />
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-20 rounded-full shimmer-gradient" />
+                  <div className="h-6 w-16 rounded-full shimmer-gradient" />
+                </div>
+                <div className="h-9 w-full rounded-xl shimmer-gradient" />
+              </div>
+            ))
+          ) : filteredSamples.length === 0 ? (
+            <div className="py-12 text-center text-muted-foreground p-4">
+              <FlaskConical className="h-9 w-9 mx-auto text-muted-foreground/40 mb-2" />
+              <p className="font-bold text-foreground text-sm">No samples found</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {search ? `No samples matching "${search}"` : "No intake samples available."}
+              </p>
+            </div>
+          ) : (
+            paginatedSamples.map((item: any, idx: number) => {
+              const sampleBarcode = item.custom_id || item.customId || `OP-${item.id.slice(0, 8)}`;
+              const p = item.patient || {};
+              const testsStr = item.tests || (Array.isArray(item.results) ? item.results.map((r: any) => r.test?.name).filter(Boolean).join(", ") : "Diagnostic Test Panel");
+              const isRejected = isReportRejected(item);
+              const isApproved = isReportApproved(item);
+              const isTransit = isReportTransit(item);
+              const isCollected = isReportCollected(item);
+
+              const isB2BUser = currentUserRole === "B2B";
+              const rawB2bPrice = item.b2b_price !== undefined ? Number(item.b2b_price) : (item.b2bPrice !== undefined ? Number(item.b2bPrice) : null);
+              const billTotal = Number(item.bill?.total || item.bill?.totalAmount || 0);
+              const billPaid = Number(item.bill?.paid_amount || item.bill?.paidAmount || 0);
+              const billDue = Math.max(0, billTotal - billPaid);
+              const isPaid = billDue <= 0 && billTotal > 0;
+              const isB2bCleared = Boolean(item.is_b2b_paid || item.isB2bPaid || isPaid);
+              const displayB2bAmount = rawB2bPrice !== null ? rawB2bPrice : billTotal;
+
+              const colTime = item.created_at || item.createdAt
+                ? new Date(item.created_at || item.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+                : "Just now";
+
+              return (
+                <div key={item.id || idx} className="p-4 space-y-3 hover:bg-muted/30 transition-colors">
+                  {/* Top: Patient & Barcode */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-sm text-foreground truncate">{p.name || "Patient"}</p>
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                        {p.age ? <span>{p.age}y</span> : null}
+                        {p.gender ? <span>· {p.gender}</span> : null}
+                        {p.phone ? <span>· {p.phone}</span> : null}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="font-mono text-xs font-bold bg-muted/60 px-2 py-0.5 rounded-lg border border-border text-foreground whitespace-nowrap">
+                        {sampleBarcode}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => copyBarcode(sampleBarcode)}
+                        className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        title="Copy Barcode"
+                      >
+                        {copiedBarcode === sampleBarcode ? (
+                          <Check className="h-3.5 w-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Middle: Tests & Time */}
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <p className="font-medium text-foreground truncate flex-1" title={testsStr}>
+                      {testsStr || "General Panel"}
+                    </p>
+                    <span suppressHydrationWarning className="text-muted-foreground text-[11px] whitespace-nowrap shrink-0">
+                      {colTime}
+                    </span>
+                  </div>
+
+                  {/* Badges: Stage & Payment */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Stage Badge */}
+                    {isRejected ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 whitespace-nowrap shrink-0">
+                        <AlertCircle className="h-3 w-3 shrink-0" /> Sample Rejected
+                      </span>
+                    ) : isApproved ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 whitespace-nowrap shrink-0">
+                        <CheckCircle2 className="h-3 w-3 shrink-0" /> Approved
+                      </span>
+                    ) : isTransit ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 whitespace-nowrap shrink-0">
+                        <Clock className="h-3 w-3 shrink-0" /> Central Hub
+                      </span>
+                    ) : isCollected ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 whitespace-nowrap shrink-0">
+                        <FlaskConical className="h-3 w-3 shrink-0" /> Collected
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 whitespace-nowrap shrink-0">
+                        <Clock className="h-3 w-3 shrink-0" /> Registered
+                      </span>
+                    )}
+
+                    {/* Payment Badge */}
+                    {isB2BUser ? (
+                      isB2bCleared ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 whitespace-nowrap shrink-0">
+                          ₹{displayB2bAmount.toFixed(0)} Paid
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 whitespace-nowrap shrink-0">
+                          ₹{displayB2bAmount.toFixed(0)} B2B Rate
+                        </span>
+                      )
+                    ) : isPaid ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 whitespace-nowrap shrink-0">
+                        ₹{billTotal} PAID
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 whitespace-nowrap shrink-0">
+                        ₹{billDue} DUE 🔒
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Action Button: Status / Barcodes */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenStatusModal(item)}
+                    className="w-full py-2 px-3 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground font-bold text-xs shadow-xs hover:shadow transition-all cursor-pointer flex items-center justify-center gap-2 group whitespace-nowrap shrink-0"
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5 group-hover:rotate-45 transition-transform shrink-0" />
+                    <span className="whitespace-nowrap">Status / Barcodes</span>
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop Table View (Visible on >= md) */}
+        <div className="hidden md:block table-responsive-container">
           <table className="w-full min-w-[780px] text-left border-collapse">
             <thead>
               <tr className="border-b border-border/70 bg-muted/40 text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground">
@@ -856,7 +1044,7 @@ export default function TodaySamplesPage() {
                       {/* Barcode & ID */}
                       <td className="py-4 px-5">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold bg-muted/60 px-2.5 py-1 rounded-lg border border-border text-foreground">
+                          <span className="font-mono text-xs font-bold bg-muted/60 px-2.5 py-1 rounded-lg border border-border text-foreground whitespace-nowrap">
                             {sampleBarcode}
                           </span>
                           <button
@@ -877,7 +1065,7 @@ export default function TodaySamplesPage() {
                       {/* Patient */}
                       <td className="py-4 px-4">
                         <p className="font-bold text-foreground">{p.name || "Patient"}</p>
-                        <p className="text-[11px] text-muted-foreground">
+                        <p className="text-[11px] text-muted-foreground whitespace-nowrap">
                           {p.age ? `${p.age}y` : ""} {p.gender ? `· ${p.gender}` : ""} {p.phone ? `· ${p.phone}` : ""}
                         </p>
                       </td>
@@ -889,68 +1077,68 @@ export default function TodaySamplesPage() {
                       </td>
 
                       {/* Collection Time */}
-                      <td suppressHydrationWarning className="py-4 px-4 text-muted-foreground text-[11px]">
+                      <td suppressHydrationWarning className="py-4 px-4 text-muted-foreground text-[11px] whitespace-nowrap">
                         {colTime}
                       </td>
 
                       {/* Sample Stage Badge (Dynamic: Default Registered -> Collected -> Central Lab -> Approved) */}
-                      <td className="py-4 px-4">
+                      <td className="py-4 px-4 whitespace-nowrap">
                         {isRejected ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                            <AlertCircle className="h-3 w-3" /> Sample Rejected
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 whitespace-nowrap shrink-0">
+                            <AlertCircle className="h-3 w-3 shrink-0" /> Sample Rejected
                           </span>
                         ) : isApproved ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                            <CheckCircle2 className="h-3 w-3" /> Approved
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 whitespace-nowrap shrink-0">
+                            <CheckCircle2 className="h-3 w-3 shrink-0" /> Approved
                           </span>
                         ) : isTransit ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                            <Clock className="h-3 w-3" /> Central Hub
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 whitespace-nowrap shrink-0">
+                            <Clock className="h-3 w-3 shrink-0" /> Central Hub
                           </span>
                         ) : isCollected ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
-                            <FlaskConical className="h-3 w-3" /> Collected
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 whitespace-nowrap shrink-0">
+                            <FlaskConical className="h-3 w-3 shrink-0" /> Collected
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                            <Clock className="h-3 w-3" /> Registered
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 whitespace-nowrap shrink-0">
+                            <Clock className="h-3 w-3 shrink-0" /> Registered
                           </span>
                         )}
                       </td>
 
                       {/* Payment Clearance / Status Badge */}
-                      <td className="py-4 px-4">
+                      <td className="py-4 px-4 whitespace-nowrap">
                         {isB2BUser ? (
                           isB2bCleared ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20" title="B2B Assigned Rate Cleared">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 whitespace-nowrap shrink-0" title="B2B Assigned Rate Cleared">
                               ₹{displayB2bAmount.toFixed(0)} Paid
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20" title="Assigned B2B Rate">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 whitespace-nowrap shrink-0" title="Assigned B2B Rate">
                               ₹{displayB2bAmount.toFixed(0)} B2B Rate
                             </span>
                           )
                         ) : isPaid ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 whitespace-nowrap shrink-0">
                             ₹{billTotal} PAID
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20" title="Report Locked for PayU">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 whitespace-nowrap shrink-0" title="Report Locked for PayU">
                             ₹{billDue} DUE 🔒
                           </span>
                         )}
                       </td>
 
                       {/* Status & Barcode Action Button (Replaced old Actions Column) */}
-                      <td className="py-4 px-5 text-right">
+                      <td className="py-4 px-5 text-right whitespace-nowrap">
                         <button
                           type="button"
                           onClick={() => handleOpenStatusModal(item)}
-                          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground font-bold text-xs shadow-xs hover:shadow transition-all cursor-pointer group"
+                          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground font-bold text-xs shadow-xs hover:shadow transition-all cursor-pointer group whitespace-nowrap shrink-0"
                           title="Open Specimen Status & Tube Barcode Window"
                         >
-                          <SlidersHorizontal className="h-3.5 w-3.5 group-hover:rotate-45 transition-transform" />
-                          <span>Status / Barcodes</span>
+                          <SlidersHorizontal className="h-3.5 w-3.5 group-hover:rotate-45 transition-transform shrink-0" />
+                          <span className="whitespace-nowrap">Status / Barcodes</span>
                         </button>
                       </td>
                     </tr>
@@ -1059,39 +1247,39 @@ export default function TodaySamplesPage() {
 
       {/* ── State of the Art Status & Specimen Barcoding Window (Horizontal Full-Width Premium UI/UX) ── */}
       <Dialog open={!!statusModalReport} onOpenChange={() => setStatusModalReport(null)}>
-        <DialogContent className="max-w-6xl w-[96vw] max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-3xl bg-card border border-border/90 shadow-2xl animate-scale-in">
+        <DialogContent className="max-w-6xl w-[calc(100vw-1rem)] sm:w-[96vw] max-h-[95vh] sm:max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl sm:rounded-3xl bg-card border border-border/90 shadow-2xl animate-scale-in">
           <DialogTitle className="sr-only">Specimen Status &amp; Tube Barcoding Station</DialogTitle>
 
           {statusModalReport && (() => {
             const isModalApproved = Boolean(isReportApproved(statusModalReport));
 
             return (
-              <form onSubmit={handleSaveStatusAndBarcodes} className="flex flex-col h-full max-h-[92vh] overflow-hidden">
+              <form onSubmit={handleSaveStatusAndBarcodes} className="flex flex-col h-full max-h-[95vh] sm:max-h-[92vh] overflow-hidden">
                 {/* Modal Header */}
-                <div className="px-6 py-4 border-b border-border/80 bg-card flex items-center justify-between pr-14 shrink-0">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl gradient-primary text-primary-foreground flex items-center justify-center shadow-xs shrink-0">
-                      <SlidersHorizontal className="h-5 w-5" />
+                <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-border/80 bg-card flex items-center justify-between pr-12 sm:pr-14 shrink-0">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl gradient-primary text-primary-foreground flex items-center justify-center shadow-xs shrink-0">
+                      <SlidersHorizontal className="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-display text-base font-bold text-foreground">
+                        <h3 className="font-display text-sm sm:text-base font-bold text-foreground truncate">
                           Specimen Status &amp; Vacutainer Barcoding Station
                         </h3>
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20 whitespace-nowrap shrink-0">
                           LIS Triage
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 line-clamp-1 sm:line-clamp-none">
                         Tag physical color vacutainers, scan vial barcodes, and advance specimen processing stage.
                       </p>
                     </div>
                   </div>
 
                   {/* Header quick patient pill */}
-                  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/60 border border-border/70 text-xs">
-                    <User className="h-3.5 w-3.5 text-primary" />
-                    <span className="font-bold text-foreground">{statusModalReport.patient?.name || "Patient"}</span>
+                  <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/60 border border-border/70 text-xs shrink-0 whitespace-nowrap">
+                    <User className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <span className="font-bold text-foreground truncate max-w-[120px]">{statusModalReport.patient?.name || "Patient"}</span>
                     <span className="text-muted-foreground">•</span>
                     <span className="font-mono text-muted-foreground text-[11px] font-bold">
                       {statusModalReport.patient?.custom_id || statusModalReport.patient?.customId || "PID"}
@@ -1104,66 +1292,66 @@ export default function TodaySamplesPage() {
                 </div>
 
                 {/* Modal Scrollable Body - Horizontal 2-Column Split */}
-                <div className="flex-1 overflow-y-auto p-6 bg-background custom-scrollbar">
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 bg-background custom-scrollbar">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-start">
                     {/* ── Left Column (5 Cols): Patient Profile & Specimen Stage Controls ── */}
                     <div className="lg:col-span-5 space-y-4">
                       {/* Patient & Clinical Profile Card */}
-                      <div className="p-4 rounded-2xl bg-card border border-border/80 shadow-xs space-y-3">
-                        <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
-                          <div className="flex items-center gap-2.5">
+                      <div className="p-3.5 sm:p-4 rounded-2xl bg-card border border-border/80 shadow-xs space-y-3">
+                        <div className="flex items-center justify-between border-b border-border/60 pb-2.5 gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
                             <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
                               <User className="h-4 w-4" />
                             </div>
-                            <div>
-                              <p className="text-xs font-bold text-foreground">{statusModalReport.patient?.name || "Patient"}</p>
-                              <p className="text-[10px] text-muted-foreground font-mono">
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-foreground truncate">{statusModalReport.patient?.name || "Patient"}</p>
+                              <p className="text-[10px] text-muted-foreground font-mono truncate">
                                 PID: {statusModalReport.patient?.custom_id || statusModalReport.patient?.customId || "PID-—"}
                               </p>
                             </div>
                           </div>
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 whitespace-nowrap shrink-0">
                             #{statusModalReport.custom_id || statusModalReport.customId}
                           </span>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 text-xs">
                           <div>
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Age &amp; Gender</span>
-                            <span className="font-bold text-foreground mt-0.5 block">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block whitespace-nowrap">Age &amp; Gender</span>
+                            <span className="font-bold text-foreground mt-0.5 block whitespace-nowrap truncate">
                               {statusModalReport.patient?.age ? `${statusModalReport.patient.age} Y` : "N/A"} · {statusModalReport.patient?.gender || "N/A"}
                             </span>
                           </div>
                           <div>
-                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Phone</span>
-                            <span className="font-mono font-bold text-foreground mt-0.5 block">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block whitespace-nowrap">Phone</span>
+                            <span className="font-mono font-bold text-foreground mt-0.5 block whitespace-nowrap truncate">
                               {statusModalReport.patient?.phone || "N/A"}
                             </span>
                           </div>
                         </div>
 
                         <div className="pt-2 border-t border-border/60 text-xs">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Ref Doctor</span>
-                          <span className="font-bold text-foreground mt-0.5 block">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block whitespace-nowrap">Ref Doctor</span>
+                          <span className="font-bold text-foreground mt-0.5 block truncate">
                             {statusModalReport.patient?.ref_doctor || statusModalReport.patient?.refDoctor || "Self"}
                           </span>
                         </div>
 
                         <div className="pt-2 border-t border-border/60 space-y-1.5">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block whitespace-nowrap">
                             Assigned Investigations
                           </span>
                           <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar">
                             {(statusModalReport.results || []).map((r: any, idx: number) => (
                               <span
                                 key={idx}
-                                className="px-2 py-0.5 rounded-md bg-muted/80 border border-border/70 text-[10px] font-medium text-foreground truncate max-w-[200px]"
+                                className="px-2 py-0.5 rounded-md bg-muted/80 border border-border/70 text-[10px] font-medium text-foreground truncate max-w-[200px] whitespace-nowrap shrink-0"
                               >
                                 {r.test?.name || "Test"}
                               </span>
                             ))}
                             {statusModalReport.package_name && (
-                              <span className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/25 text-[10px] font-bold text-primary">
+                              <span className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/25 text-[10px] font-bold text-primary whitespace-nowrap shrink-0">
                                 Package: {statusModalReport.package_name}
                               </span>
                             )}
@@ -1176,10 +1364,10 @@ export default function TodaySamplesPage() {
                         <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 space-y-1.5 shadow-xs animate-fade-in">
                           <div className="flex items-center gap-2">
                             <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                            <h4 className="font-bold text-xs text-foreground">
+                            <h4 className="font-bold text-xs text-foreground whitespace-nowrap">
                               Report Finalized &amp; Authorized
                             </h4>
-                            <span className="ml-auto px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-mono font-extrabold uppercase">
+                            <span className="ml-auto px-2 py-0.5 rounded-full bg-emerald-500 text-white text-[9px] font-mono font-extrabold uppercase whitespace-nowrap shrink-0">
                               {statusModalReport.status || "APPROVED"}
                             </span>
                           </div>
@@ -1190,19 +1378,19 @@ export default function TodaySamplesPage() {
                       )}
 
                       {/* Specimen Lifecycle Stage Controller */}
-                      <div className="p-4 rounded-2xl bg-card border border-border/80 shadow-xs space-y-4">
-                        <div className="flex items-center justify-between">
+                      <div className="p-3.5 sm:p-4 rounded-2xl bg-card border border-border/80 shadow-xs space-y-4">
+                        <div className="flex items-center justify-between gap-2">
                           <div>
                             <h4 className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                              <Activity className="h-3.5 w-3.5 text-primary" />
-                              <span>Specimen Collection Stage</span>
+                              <Activity className="h-3.5 w-3.5 text-primary shrink-0" />
+                              <span className="whitespace-nowrap">Specimen Collection Stage</span>
                             </h4>
                             <p className="text-[11px] text-muted-foreground mt-0.5">
                               Advance collection stage as samples move through triage.
                             </p>
                           </div>
                           {isModalApproved && (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/30 text-[10px] font-bold">
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/30 text-[10px] font-bold whitespace-nowrap shrink-0">
                               Locked
                             </span>
                           )}
@@ -1211,8 +1399,8 @@ export default function TodaySamplesPage() {
                         {/* Premium Stage Dropdown (Radix Select) */}
                         <div className="space-y-1.5">
                           <label className="text-[11px] font-bold text-foreground/80 flex items-center justify-between">
-                            <span>Stage Selector</span>
-                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                            <span className="whitespace-nowrap">Stage Selector</span>
+                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${
                               modalStage === "COLLECTED"
                                 ? "bg-sky-500/10 text-sky-600 border-sky-500/30"
                                 : modalStage === "IN_TRANSIT"
@@ -1228,16 +1416,16 @@ export default function TodaySamplesPage() {
                             onValueChange={(val: any) => !isModalApproved && setModalStage(val)}
                             disabled={isModalApproved}
                           >
-                            <SelectTrigger className="h-11 rounded-xl bg-background border-border text-xs font-semibold shadow-2xs hover:border-primary/50 transition-colors cursor-pointer">
+                            <SelectTrigger className="h-10 sm:h-11 rounded-xl bg-background border-border text-xs font-semibold shadow-2xs hover:border-primary/50 transition-colors cursor-pointer whitespace-nowrap">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent className="max-w-md">
+                            <SelectContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
                               <SelectItem value="REGISTERED" className="text-xs py-2.5 cursor-pointer">
                                 <div className="flex items-center gap-2.5">
                                   <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
                                   <div>
-                                    <p className="font-bold text-foreground">1. Registered (Reception Intake)</p>
-                                    <p className="text-[10px] text-muted-foreground">Default intake logged; phlebotomy tube draw pending</p>
+                                    <p className="font-bold text-foreground whitespace-nowrap sm:whitespace-normal">1. Registered (Reception Intake)</p>
+                                    <p className="text-[10px] text-muted-foreground line-clamp-1 sm:line-clamp-none">Default intake logged; phlebotomy tube draw pending</p>
                                   </div>
                                 </div>
                               </SelectItem>
@@ -1245,8 +1433,8 @@ export default function TodaySamplesPage() {
                                 <div className="flex items-center gap-2.5">
                                   <span className="w-2.5 h-2.5 rounded-full bg-sky-500 shrink-0" />
                                   <div>
-                                    <p className="font-bold text-foreground">2. Collected (Phlebotomy Complete)</p>
-                                    <p className="text-[10px] text-muted-foreground">Sample drawn &amp; tagged with container barcodes</p>
+                                    <p className="font-bold text-foreground whitespace-nowrap sm:whitespace-normal">2. Collected (Phlebotomy Complete)</p>
+                                    <p className="text-[10px] text-muted-foreground line-clamp-1 sm:line-clamp-none">Sample drawn &amp; tagged with container barcodes</p>
                                   </div>
                                 </div>
                               </SelectItem>
@@ -1254,8 +1442,8 @@ export default function TodaySamplesPage() {
                                 <div className="flex items-center gap-2.5">
                                   <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
                                   <div>
-                                    <p className="font-bold text-foreground">3. Central Hub / In Transit</p>
-                                    <p className="text-[10px] text-muted-foreground">Dispatched in cooler box to Central Pathology Lab</p>
+                                    <p className="font-bold text-foreground whitespace-nowrap sm:whitespace-normal">3. Central Hub / In Transit</p>
+                                    <p className="text-[10px] text-muted-foreground line-clamp-1 sm:line-clamp-none">Dispatched in cooler box to Central Pathology Lab</p>
                                   </div>
                                 </div>
                               </SelectItem>
@@ -1264,11 +1452,11 @@ export default function TodaySamplesPage() {
                         </div>
 
                         {/* Visual Step Progress Cards */}
-                        <div className={`grid grid-cols-3 gap-2 ${isModalApproved ? "opacity-60 pointer-events-none cursor-not-allowed" : ""}`}>
+                        <div className={`grid grid-cols-3 gap-1.5 sm:gap-2 ${isModalApproved ? "opacity-60 pointer-events-none cursor-not-allowed" : ""}`}>
                           {/* Step 1: Registered */}
                           <div
                             onClick={() => setModalStage("REGISTERED")}
-                            className={`p-2.5 rounded-xl border cursor-pointer select-none transition-all flex flex-col justify-between gap-1 text-center ${
+                            className={`p-2 sm:p-2.5 rounded-xl border cursor-pointer select-none transition-all flex flex-col justify-between gap-1 text-center ${
                               modalStage === "REGISTERED"
                                 ? "bg-amber-500/15 border-amber-500 shadow-2xs ring-1 ring-amber-500/40"
                                 : "bg-muted/30 border-border/70 hover:bg-muted/60"
@@ -1277,14 +1465,14 @@ export default function TodaySamplesPage() {
                             <div className="flex items-center justify-center">
                               <span className={`w-2 h-2 rounded-full ${modalStage === "REGISTERED" ? "bg-amber-500" : "bg-muted-foreground"}`} />
                             </div>
-                            <p className="text-[11px] font-bold text-foreground">1. Registered</p>
-                            <span className="text-[9px] text-muted-foreground">Intake</span>
+                            <p className="text-[10px] sm:text-[11px] font-bold text-foreground whitespace-nowrap">1. Registered</p>
+                            <span className="text-[9px] text-muted-foreground whitespace-nowrap">Intake</span>
                           </div>
 
                           {/* Step 2: Collected */}
                           <div
                             onClick={() => setModalStage("COLLECTED")}
-                            className={`p-2.5 rounded-xl border cursor-pointer select-none transition-all flex flex-col justify-between gap-1 text-center ${
+                            className={`p-2 sm:p-2.5 rounded-xl border cursor-pointer select-none transition-all flex flex-col justify-between gap-1 text-center ${
                               modalStage === "COLLECTED"
                                 ? "bg-sky-500/15 border-sky-500 shadow-2xs ring-1 ring-sky-500/40"
                                 : "bg-muted/30 border-border/70 hover:bg-muted/60"
@@ -1293,14 +1481,14 @@ export default function TodaySamplesPage() {
                             <div className="flex items-center justify-center">
                               <span className={`w-2 h-2 rounded-full ${modalStage === "COLLECTED" ? "bg-sky-500" : "bg-muted-foreground"}`} />
                             </div>
-                            <p className="text-[11px] font-bold text-foreground">2. Collected</p>
-                            <span className="text-[9px] text-muted-foreground">Phlebotomy</span>
+                            <p className="text-[10px] sm:text-[11px] font-bold text-foreground whitespace-nowrap">2. Collected</p>
+                            <span className="text-[9px] text-muted-foreground whitespace-nowrap">Phlebotomy</span>
                           </div>
 
                           {/* Step 3: In Transit */}
                           <div
                             onClick={() => setModalStage("IN_TRANSIT")}
-                            className={`p-2.5 rounded-xl border cursor-pointer select-none transition-all flex flex-col justify-between gap-1 text-center ${
+                            className={`p-2 sm:p-2.5 rounded-xl border cursor-pointer select-none transition-all flex flex-col justify-between gap-1 text-center ${
                               modalStage === "IN_TRANSIT"
                                 ? "bg-blue-500/15 border-blue-500 shadow-2xs ring-1 ring-blue-500/40"
                                 : "bg-muted/30 border-border/70 hover:bg-muted/60"
@@ -1309,32 +1497,32 @@ export default function TodaySamplesPage() {
                             <div className="flex items-center justify-center">
                               <span className={`w-2 h-2 rounded-full ${modalStage === "IN_TRANSIT" ? "bg-blue-500" : "bg-muted-foreground"}`} />
                             </div>
-                            <p className="text-[11px] font-bold text-foreground">3. Central Hub</p>
-                            <span className="text-[9px] text-muted-foreground">Testing</span>
+                            <p className="text-[10px] sm:text-[11px] font-bold text-foreground whitespace-nowrap">3. Central Hub</p>
+                            <span className="text-[9px] text-muted-foreground whitespace-nowrap">Testing</span>
                           </div>
                         </div>
 
                         {/* Quick 1-Click Action Buttons */}
                         {!isModalApproved && (
-                          <div className="flex items-center gap-2 pt-1">
+                          <div className="grid grid-cols-2 xs:flex items-center gap-2 pt-1">
                             {modalStage !== "COLLECTED" && (
                               <button
                                 type="button"
                                 onClick={() => setModalStage("COLLECTED")}
-                                className="flex-1 py-2 px-3 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                className="flex-1 py-2 px-2.5 sm:px-3 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
                               >
-                                <CheckCheck className="h-3.5 w-3.5" />
-                                <span>Mark Collected</span>
+                                <CheckCheck className="h-3.5 w-3.5 shrink-0" />
+                                <span className="whitespace-nowrap">Mark Collected</span>
                               </button>
                             )}
                             {modalStage !== "IN_TRANSIT" && (
                               <button
                                 type="button"
                                 onClick={() => setModalStage("IN_TRANSIT")}
-                                className="flex-1 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                                className="flex-1 py-2 px-2.5 sm:px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
                               >
-                                <Send className="h-3.5 w-3.5" />
-                                <span>Dispatch to Hub</span>
+                                <Send className="h-3.5 w-3.5 shrink-0" />
+                                <span className="whitespace-nowrap">Dispatch to Hub</span>
                               </button>
                             )}
                           </div>
@@ -1345,18 +1533,18 @@ export default function TodaySamplesPage() {
                     {/* ── Right Column (7 Cols): Vacutainers & Multi-Vial Barcode Management ── */}
                     <div className="lg:col-span-7 space-y-4">
                       {/* Vacutainers Header & Controls */}
-                      <div className="p-4 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="p-3.5 sm:p-4 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col xs:flex-row xs:items-center justify-between gap-3">
                         <div>
                           <h4 className="font-bold text-xs text-foreground uppercase tracking-wider flex items-center gap-2">
-                            <TestTube2 className="h-4 w-4 text-primary" />
-                            <span>Specimen Vacutainers &amp; Barcodes ({activeTubeTypes.length})</span>
+                            <TestTube2 className="h-4 w-4 text-primary shrink-0" />
+                            <span className="whitespace-nowrap">Specimen Vacutainers &amp; Barcodes ({activeTubeTypes.length})</span>
                           </h4>
                           <p className="text-[11px] text-muted-foreground mt-0.5">
                             Color vacutainers triage. Scan vial barcodes or auto-generate.
                           </p>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="grid grid-cols-2 xs:flex items-center gap-2 shrink-0 w-full xs:w-auto">
                           {/* Add Vacutainer Select Dropdown */}
                           <Select
                             value=""
@@ -1366,13 +1554,13 @@ export default function TodaySamplesPage() {
                               }
                             }}
                           >
-                            <SelectTrigger className="h-9 px-3 rounded-xl bg-background border border-border text-xs font-bold text-foreground shadow-2xs hover:border-primary/50 cursor-pointer">
+                            <SelectTrigger className="w-full xs:w-auto h-9 px-3 rounded-xl bg-background border border-border text-xs font-bold text-foreground shadow-2xs hover:border-primary/50 cursor-pointer justify-center xs:justify-start whitespace-nowrap">
                               <div className="flex items-center gap-1.5">
-                                <Plus className="h-3.5 w-3.5 text-primary" />
-                                <span>Add Tube</span>
+                                <Plus className="h-3.5 w-3.5 text-primary shrink-0" />
+                                <span className="whitespace-nowrap">Add Tube</span>
                               </div>
                             </SelectTrigger>
-                            <SelectContent className="max-h-72">
+                            <SelectContent className="max-h-72 max-w-[calc(100vw-2rem)] sm:max-w-xs">
                               {Object.keys(TUBE_CONFIG).map((k) => {
                                 const t = TUBE_CONFIG[k];
                                 const isAdded = activeTubeTypes.includes(k);
@@ -1383,10 +1571,10 @@ export default function TodaySamplesPage() {
                                         className="w-3.5 h-3.5 rounded-full shrink-0 shadow-2xs border border-white/50"
                                         style={{ backgroundColor: t.capColor }}
                                       />
-                                      <span className="font-bold">{t.title}</span>
-                                      <span className="text-[10px] text-muted-foreground">({t.capName})</span>
+                                      <span className="font-bold whitespace-nowrap">{t.title}</span>
+                                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">({t.capName})</span>
                                       {isAdded && (
-                                        <span className="text-[10px] font-semibold text-muted-foreground ml-auto">Added</span>
+                                        <span className="text-[10px] font-semibold text-muted-foreground ml-auto pl-2 whitespace-nowrap">Added</span>
                                       )}
                                     </div>
                                   </SelectItem>
@@ -1399,11 +1587,11 @@ export default function TodaySamplesPage() {
                           <button
                             type="button"
                             onClick={handleAutoFillAllBarcodes}
-                            className="px-3 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-bold text-xs transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                            className="w-full xs:w-auto px-3 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs whitespace-nowrap shrink-0"
                             title="Auto-fill barcodes for all empty vacutainer tubes"
                           >
-                            <Sparkles className="h-3.5 w-3.5" />
-                            <span>Auto Fill All</span>
+                            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                            <span className="whitespace-nowrap">Auto Fill All</span>
                           </button>
                         </div>
                       </div>
@@ -1429,11 +1617,11 @@ export default function TodaySamplesPage() {
                           return (
                             <div
                               key={tubeKey}
-                              className="bg-card border border-border/80 rounded-2xl p-4 space-y-3 shadow-xs hover:border-primary/40 hover:shadow-sm transition-all"
+                              className="bg-card border border-border/80 rounded-2xl p-3.5 sm:p-4 space-y-3 shadow-xs hover:border-primary/40 hover:shadow-sm transition-all"
                             >
                               {/* Tube Card Header */}
                               <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-2.5">
+                                <div className="flex items-center gap-2.5 min-w-0">
                                   <span
                                     className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 shadow-sm ring-2 ring-white/80 dark:ring-zinc-800"
                                     style={{
@@ -1441,25 +1629,25 @@ export default function TodaySamplesPage() {
                                       boxShadow: `0 2px 4px ${tube.capColor}40`,
                                     }}
                                   />
-                                  <div>
-                                    <h5 className="font-bold text-xs text-foreground leading-tight">
+                                  <div className="min-w-0">
+                                    <h5 className="font-bold text-xs text-foreground leading-tight truncate">
                                       {tube.title}
                                     </h5>
-                                    <span className="text-[10px] text-muted-foreground">
+                                    <span className="text-[10px] text-muted-foreground whitespace-nowrap truncate block">
                                       {tube.capName} · {tube.specimenType}
                                     </span>
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-1.5">
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 ${tube.badgeBg} ${tube.badgeBorder} ${tube.badgeText}`}>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shrink-0 whitespace-nowrap ${tube.badgeBg} ${tube.badgeBorder} ${tube.badgeText}`}>
                                     {tube.tubeType}
                                   </span>
                                   {activeTubeTypes.length > 1 && (
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveTubeType(tubeKey)}
-                                      className="text-muted-foreground hover:text-destructive p-1 rounded-md transition-colors cursor-pointer"
+                                      className="text-muted-foreground hover:text-destructive p-1 rounded-md transition-colors cursor-pointer shrink-0"
                                       title="Remove tube"
                                     >
                                       <Trash2 className="h-3 w-3" />
@@ -1469,7 +1657,7 @@ export default function TodaySamplesPage() {
                               </div>
 
                               {/* Specs Pill */}
-                              <div className="p-2 rounded-xl bg-muted/40 border border-border/60 text-[10px] text-muted-foreground flex items-center justify-between gap-2">
+                              <div className="p-2 rounded-xl bg-muted/40 border border-border/60 text-[10px] text-muted-foreground flex items-center justify-between gap-2 whitespace-nowrap overflow-hidden">
                                 <span className="truncate">Additive: <strong className="text-foreground/80">{tube.additive}</strong></span>
                                 <span className="truncate max-w-[120px] text-right font-medium">{tube.department}</span>
                               </div>
@@ -1477,15 +1665,15 @@ export default function TodaySamplesPage() {
                               {/* Barcode Input & Auto Generate */}
                               <div className="space-y-1.5">
                                 <div className="flex items-center justify-between">
-                                  <label className="text-[11px] font-bold text-foreground">
+                                  <label className="text-[11px] font-bold text-foreground whitespace-nowrap">
                                     Barcode Number
                                   </label>
                                   <button
                                     type="button"
                                     onClick={() => handleAutoGenerateTubeBarcode(tubeKey)}
-                                    className="text-[10px] font-bold text-primary hover:underline cursor-pointer flex items-center gap-1"
+                                    className="text-[10px] font-bold text-primary hover:underline cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
                                   >
-                                    <Sparkles className="h-2.5 w-2.5" /> Auto Fill
+                                    <Sparkles className="h-2.5 w-2.5 shrink-0" /> <span className="whitespace-nowrap">Auto Fill</span>
                                   </button>
                                 </div>
 
@@ -1519,7 +1707,7 @@ export default function TodaySamplesPage() {
                                   <BarcodeSVG value={currentBarcodeVal} width={1.05} height={24} fontSize={8} />
                                 </div>
                               ) : (
-                                <div className="p-2.5 rounded-xl border border-dashed border-border/80 text-center text-[10px] text-muted-foreground">
+                                <div className="p-2.5 rounded-xl border border-dashed border-border/80 text-center text-[10px] text-muted-foreground whitespace-nowrap">
                                   Awaiting tube scan for {tube.tubeType}
                                 </div>
                               )}
@@ -1532,30 +1720,30 @@ export default function TodaySamplesPage() {
                 </div>
 
                 {/* Modal Footer Controls */}
-                <div className="px-6 py-4 border-t border-border/80 bg-muted/30 backdrop-blur-xs flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-                  <div className="flex items-center gap-3 text-xs">
-                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card border border-border shadow-2xs">
-                      <span className={`w-2.5 h-2.5 rounded-full ${
+                <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border/80 bg-muted/30 backdrop-blur-xs flex flex-col xs:flex-row items-stretch xs:items-center justify-between gap-2.5 sm:gap-3 shrink-0">
+                  <div className="flex items-center justify-between xs:justify-start gap-2 sm:gap-3 text-xs w-full xs:w-auto">
+                    <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-card border border-border shadow-2xs whitespace-nowrap shrink-0 text-xs">
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
                         modalStage === "COLLECTED" ? "bg-sky-500 animate-pulse" : modalStage === "IN_TRANSIT" ? "bg-blue-500 animate-pulse" : "bg-amber-500 animate-pulse"
                       }`} />
-                      <span className="text-muted-foreground font-semibold">Active Stage:</span>
-                      <span className="font-bold text-foreground">
+                      <span className="text-muted-foreground font-semibold whitespace-nowrap">Active Stage:</span>
+                      <span className="font-bold text-foreground whitespace-nowrap">
                         {modalStage === "COLLECTED" ? "Sample Collected" : modalStage === "IN_TRANSIT" ? "Central Hub Transit" : "Registered"}
                       </span>
                     </div>
-                    <div className="hidden sm:flex items-center gap-1.5 text-muted-foreground font-medium text-[11px]">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                      <span>{Object.values(tubeBarcodeInputs).filter(Boolean).length} / {activeTubeTypes.length} tubes barcoded</span>
+                    <div className="flex items-center gap-1.5 text-muted-foreground font-medium text-[11px] whitespace-nowrap shrink-0">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <span>{Object.values(tubeBarcodeInputs).filter(Boolean).length} / {activeTubeTypes.length} barcoded</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                  <div className="grid grid-cols-2 xs:flex items-center gap-2 sm:gap-2.5 w-full xs:w-auto justify-end">
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       onClick={() => setStatusModalReport(null)}
-                      className="h-10 px-4 rounded-xl text-xs font-semibold cursor-pointer"
+                      className="h-10 px-4 rounded-xl text-xs font-semibold cursor-pointer whitespace-nowrap justify-center"
                     >
                       Cancel
                     </Button>
@@ -1563,20 +1751,20 @@ export default function TodaySamplesPage() {
                       type="submit"
                       size="sm"
                       disabled={savingStatusModal || isModalApproved}
-                      className={`h-10 px-6 rounded-xl font-bold text-xs gap-2 shadow-md ring-inset-top ${
+                      className={`h-10 px-3.5 sm:px-6 rounded-xl font-bold text-xs gap-1.5 sm:gap-2 shadow-md ring-inset-top whitespace-nowrap justify-center ${
                         isModalApproved
                           ? "bg-muted text-muted-foreground border border-border cursor-not-allowed"
                           : "gradient-primary text-primary-foreground cursor-pointer hover:-translate-y-px active:scale-95 transition-all"
                       }`}
                     >
                       {savingStatusModal ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
                       ) : isModalApproved ? (
-                        <Lock className="h-4 w-4 text-amber-500" />
+                        <Lock className="h-4 w-4 text-amber-500 shrink-0" />
                       ) : (
-                        <CheckCircle2 className="h-4 w-4" />
+                        <CheckCircle2 className="h-4 w-4 shrink-0" />
                       )}
-                      <span>{isModalApproved ? "Status Locked (Report Approved)" : "Save Barcodes & Update Stage"}</span>
+                      <span className="whitespace-nowrap">{isModalApproved ? "Status Locked" : "Save Barcodes & Update"}</span>
                     </Button>
                   </div>
                 </div>

@@ -508,7 +508,7 @@ function ProfileContent() {
                   <h2 className="font-display text-lg sm:text-xl font-bold text-foreground truncate">
                     {profile?.name || "Laboratory Account"}
                   </h2>
-                  <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[11px] font-bold">
+                  <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[11px] font-bold whitespace-nowrap shrink-0">
                     {roleDisplay}
                   </span>
                 </div>
@@ -690,7 +690,7 @@ function ProfileContent() {
                         <Smartphone className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         <span className="font-mono">{profile?.phone || "Not configured"}</span>
                       </div>
-                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-bold flex items-center gap-1 shrink-0">
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0">
                         <Check className="h-3 w-3" />
                         Verified
                       </span>
@@ -717,7 +717,7 @@ function ProfileContent() {
                       <Building2 className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />
                       <span className="truncate">{labName}</span>
                     </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shrink-0">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 whitespace-nowrap shrink-0">
                       Registered
                     </span>
                   </div>
@@ -744,7 +744,7 @@ function ProfileContent() {
                     <KeyRound className="h-4 w-4 text-primary" />
                     <span>Account Password</span>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 whitespace-nowrap shrink-0">
                     Encrypted Link
                   </span>
                 </div>
@@ -822,7 +822,7 @@ function ProfileContent() {
                     <Laptop className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                     <span>Active Device Sessions</span>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold border border-emerald-500/20">
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold border border-emerald-500/20 whitespace-nowrap shrink-0">
                     {sessions.length} Active
                   </span>
                 </div>
@@ -859,7 +859,7 @@ function ProfileContent() {
                 <h2 className="font-display text-lg sm:text-xl font-bold text-foreground">
                   Active Browser & Device Sessions
                 </h2>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/20">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/20 whitespace-nowrap shrink-0">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   {sessions.length} Active
                 </span>
@@ -923,17 +923,17 @@ function ProfileContent() {
                     {/* Session Details */}
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-bold text-sm text-foreground truncate">
+                        <h4 className="font-bold text-sm text-foreground truncate max-w-[140px] xs:max-w-[200px] sm:max-w-xs md:max-w-md">
                           {session.name}
                         </h4>
                         {session.is_current ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold border border-emerald-500/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            This Device (Current)
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] sm:text-[11px] font-bold border border-emerald-500/20 whitespace-nowrap shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                            <span>This Device (Current)</span>
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-md bg-muted text-muted-foreground text-[10px] font-semibold border border-border/50">
-                            Remote Device
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-semibold border border-border/60 whitespace-nowrap shrink-0">
+                            <span>Remote Device</span>
                           </span>
                         )}
                       </div>
