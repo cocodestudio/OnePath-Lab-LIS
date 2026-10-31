@@ -66,7 +66,7 @@ function ProfileContent() {
       descOrType?: string | "success" | "error" | "warning",
       typeOverride: "success" | "error" | "warning" = "success"
     ) => {
-      let title = titleOrText;
+      const title = titleOrText;
       let description: string | undefined = undefined;
       let type: "success" | "error" | "warning" = "success";
 

@@ -565,7 +565,7 @@ export function AiGuideWidget() {
           FLOATING CHATBOX WINDOW (Responsive on PC, Tablets and Mobile)
       ========================================================================= */}
       <div
-        className={`fixed inset-x-2 bottom-2 sm:inset-x-auto sm:bottom-6 sm:left-4 md:left-[268px] z-50 w-auto sm:w-[460px] md:w-[480px] max-w-[calc(100vw-16px)] sm:max-w-[500px] h-[calc(100dvh-16px)] sm:h-[620px] max-h-[calc(100dvh-16px)] sm:max-h-[740px] flex flex-col rounded-2xl border border-slate-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden origin-bottom-left transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`fixed inset-x-2 bottom-2 sm:inset-x-auto sm:bottom-6 sm:left-4 md:left-[268px] z-50 w-auto sm:w-[460px] md:w-[480px] max-w-[calc(100vw-16px)] sm:max-w-[500px] h-[calc(100dvh-16px)] sm:h-[620px] max-h-[calc(100dvh-16px)] sm:max-h-[740px] flex flex-col rounded-2xl border border-slate-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden origin-bottom-left transition-all duration-300 ease-out ${
           isOpen
             ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
             : "opacity-0 scale-90 translate-y-4 pointer-events-none"
