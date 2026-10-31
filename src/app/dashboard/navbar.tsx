@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { getStoredUser, logout, fetchFromLaravel } from "@/lib/api-client";
 import { isSubscriptionExpired } from "@/lib/subscription";
+import { formatPatientListDisplayName } from "@/lib/patient-title-helper";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog";
@@ -235,23 +236,18 @@ export default function Navbar() {
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const [pRes, rRes, bRes] = await Promise.allSettled([
-          fetchFromLaravel(`/patients?search=${encodeURIComponent(q)}`, { skipCache: true }),
-          fetchFromLaravel(`/reports?search=${encodeURIComponent(q)}`, { skipCache: true }),
-          fetchFromLaravel(`/bills?search=${encodeURIComponent(q)}`, { skipCache: true }),
-        ]);
+        // High performance targeted single query for instant patient search (< 50ms)
+        const pRes = await fetchFromLaravel(`/patients?search=${encodeURIComponent(q)}&per_page=12`, { skipCache: true });
 
         // Discard stale responses if user continued typing
         if (activeSearchQueryRef.current !== q) return;
 
-        const patients = pRes.status === "fulfilled" ? (Array.isArray(pRes.value) ? pRes.value : pRes.value?.data || []) : [];
-        const reports = rRes.status === "fulfilled" ? (Array.isArray(rRes.value) ? rRes.value : rRes.value?.data || []) : [];
-        const bills = bRes.status === "fulfilled" ? (Array.isArray(bRes.value) ? bRes.value : bRes.value?.data || []) : [];
+        const patients = Array.isArray(pRes) ? pRes : (pRes?.data || []);
 
         setSearchResults({
-          patients: patients.slice(0, 8),
-          reports: reports.slice(0, 6),
-          bills: bills.slice(0, 5),
+          patients: patients.slice(0, 10),
+          reports: [],
+          bills: [],
         });
       } catch (err) {
         console.error("Global search error:", err);
@@ -260,7 +256,7 @@ export default function Navbar() {
           setIsSearching(false);
         }
       }
-    }, 200);
+    }, 250);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
@@ -379,9 +375,7 @@ export default function Navbar() {
     }
   };
 
-  const hasResults = isCollectionCenter
-    ? searchResults.reports.length > 0
-    : (searchResults.patients.length > 0 || searchResults.reports.length > 0 || searchResults.bills.length > 0);
+  const hasResults = searchResults.patients.length > 0;
 
   return (
     <header className="flex h-[68px] items-center justify-between pl-16 pr-3 sm:px-6 lg:px-8 glass border-b border-border/60 shrink-0 sticky top-0 z-30 gap-2 sm:gap-6">
@@ -425,6 +419,22 @@ export default function Navbar() {
                 setSearchQuery(e.target.value);
                 setIsSearchOpen(true);
               }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  if (searchResults.patients.length > 0) {
+                    const topP = searchResults.patients[0];
+                    setIsSearchOpen(false);
+                    setSearchQuery("");
+                    try {
+                      sessionStorage.setItem(`patient_detail_cache_${topP.id}`, JSON.stringify(topP));
+                    } catch (_) {}
+                    router.push(`/dashboard/patients/${topP.id}`);
+                  } else if (searchQuery.trim()) {
+                    setIsSearchOpen(false);
+                    router.push(`/dashboard/patients?search=${encodeURIComponent(searchQuery.trim())}`);
+                  }
+                }
+              }}
               onFocus={() => {
                 if (!isLocked) setIsSearchOpen(true);
               }}
@@ -459,26 +469,26 @@ export default function Navbar() {
               {isSearching ? (
                 <div className="py-10 flex flex-col items-center justify-center text-muted-foreground gap-2">
                   <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                  <p className="text-xs font-semibold">Searching patient records & reports...</p>
+                  <p className="text-xs font-semibold">Searching patient records...</p>
                 </div>
               ) : !hasResults ? (
                 <div className="py-10 text-center text-muted-foreground space-y-1">
                   <Search className="h-7 w-7 mx-auto opacity-30" />
                   <p className="text-xs font-bold text-foreground">No matches found</p>
-                  <p className="text-[11px]">No patient, report or invoice matched &quot;{searchQuery}&quot;</p>
+                  <p className="text-[11px]">No patient matched &quot;{searchQuery}&quot;</p>
                 </div>
               ) : (
                 <div className="p-2 space-y-3">
                   
-                  {/* Patients Section - Hidden for Collection Center */}
-                  {!isCollectionCenter && searchResults.patients.length > 0 && (
+                  {/* Patients Only Section */}
+                  {searchResults.patients.length > 0 && (
                     <div className="space-y-1">
                       <div className="px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
                           <Users className="h-3 w-3 text-primary" />
                           <span>Patients ({searchResults.patients.length})</span>
                         </div>
-                        <span className="text-[9.5px] font-normal lowercase text-muted-foreground/75">click to edit patient</span>
+                        <span className="text-[9.5px] font-normal lowercase text-muted-foreground/75">click to view patient history</span>
                       </div>
                       <div className="divide-y divide-border/40 rounded-xl overflow-hidden bg-card/60">
                         {searchResults.patients.map((p: any) => {
@@ -490,8 +500,7 @@ export default function Navbar() {
                             p.abha_number ||
                             p.abhaNumber
                           );
-                          const prefix = p.designation || p.title ? `${p.designation || p.title} ` : "";
-                          const pName = p.name || p.full_name || p.fullName || "Patient";
+                          const pNameFormatted = formatPatientListDisplayName(p.name || p.full_name || p.fullName, p.designation || p.title);
                           const gender = p.gender || "Male";
                           const ageStr = p.age ? `${p.age} Year` : "";
                           const demographic = [gender, ageStr].filter(Boolean).join(", ");
@@ -500,12 +509,12 @@ export default function Navbar() {
                           return (
                             <Link
                               key={p.id}
-                              href={`/dashboard/patients/register?edit=${p.id}`}
+                              href={`/dashboard/patients/${p.id}`}
                               onClick={() => {
                                 setIsSearchOpen(false);
                                 setSearchQuery("");
                                 try {
-                                  sessionStorage.setItem(`edit_patient_cache_${p.id}`, JSON.stringify(p));
+                                  sessionStorage.setItem(`patient_detail_cache_${p.id}`, JSON.stringify(p));
                                 } catch (_) {}
                               }}
                               className="block p-2.5 sm:p-3 hover:bg-muted/70 transition-colors cursor-pointer text-left group"
@@ -528,7 +537,7 @@ export default function Navbar() {
                                   </span>
                                 )}
                                 <p className="font-bold text-foreground text-xs sm:text-[13px] truncate group-hover:text-primary transition-colors">
-                                  {prefix}{pName}{demographic ? ` , ${demographic}` : ""}
+                                  {pNameFormatted}{demographic ? ` , ${demographic}` : ""}
                                 </p>
                               </div>
 
@@ -558,75 +567,6 @@ export default function Navbar() {
                             </Link>
                           );
                         })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Reports Section */}
-                  {searchResults.reports.length > 0 && (
-                    <div className="space-y-1 pt-1 border-t border-border/60">
-                      <div className="px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                        <FileText className="h-3 w-3 text-blue-500" />
-                        <span>Diagnostic Reports ({searchResults.reports.length})</span>
-                      </div>
-                      <div className="space-y-0.5">
-                        {searchResults.reports.map((r: any) => (
-                          <Link
-                            key={r.id}
-                            href={(isCollectionCenter || isB2B) ? `/dashboard/reports` : `/dashboard/reports/${r.id}/edit`}
-                            onClick={() => setIsSearchOpen(false)}
-                            className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted/60 transition-colors text-xs"
-                          >
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-primary">
-                                  {r.custom_id || r.customId}
-                                </span>
-                                <span className="text-[10px] font-bold uppercase px-1.5 py-0.2 rounded bg-muted text-muted-foreground">
-                                  {r.status}
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-muted-foreground mt-0.5">
-                                Patient: {r.patient?.name || r.patient?.full_name || r.patient?.fullName || "Patient"}
-                              </p>
-                            </div>
-                            <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">
-                              {(isCollectionCenter || isB2B || isReceptionist) ? "View Reports →" : "Enter Results →"}
-                            </span>
-                          </Link>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Billing Invoices Section - Hidden for Collection Center */}
-                  {!isCollectionCenter && searchResults.bills.length > 0 && (
-                    <div className="space-y-1 pt-1 border-t border-border/60">
-                      <div className="px-2.5 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                        <Receipt className="h-3 w-3 text-emerald-500" />
-                        <span>Invoices ({searchResults.bills.length})</span>
-                      </div>
-                      <div className="space-y-0.5">
-                        {searchResults.bills.map((b: any) => (
-                          <Link
-                            key={b.id}
-                            href={`/dashboard/billing`}
-                            onClick={() => setIsSearchOpen(false)}
-                            className="flex items-center justify-between p-2.5 rounded-xl hover:bg-muted/60 transition-colors text-xs"
-                          >
-                            <div>
-                              <span className="font-mono font-bold text-foreground">
-                                {b.custom_id || b.customId}
-                              </span>
-                              <p className="text-[11px] text-muted-foreground">
-                                Total: ₹{Number(b.grand_total || b.grandTotal || 0).toFixed(2)} · Status: {b.payment_status || b.paymentStatus}
-                              </p>
-                            </div>
-                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
-                              View Invoice →
-                            </span>
-                          </Link>
-                        ))}
                       </div>
                     </div>
                   )}

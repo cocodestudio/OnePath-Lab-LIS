@@ -179,6 +179,8 @@ export default function ReportsListPage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [sourceFilter, setSourceFilter] = useState<"ALL" | "MAIN_LAB" | "B2B" | "COLLECTION_CENTER">("ALL");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -353,6 +355,46 @@ export default function ReportsListPage() {
   const [isFetching, setIsFetching] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // High-performance debounced live search (350ms) across database
+  useEffect(() => {
+    const q = search.trim();
+    if (!q || q.length < 2) {
+      setSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+
+    let isStale = false;
+    setIsSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        params.append("search", q);
+        params.append("limit", "50");
+        params.append("sort", sortOrder);
+        const res = await fetchFromLaravel(`/reports?${params.toString()}`);
+        if (!isStale) {
+          let list: any[] = [];
+          if (Array.isArray(res)) list = res;
+          else if (Array.isArray(res?.data)) list = res.data;
+          else if (Array.isArray(res?.reports)) list = res.reports;
+          setSearchResults(list);
+        }
+      } catch (err) {
+        console.error("Reports live search error:", err);
+      } finally {
+        if (!isStale) {
+          setIsSearching(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      isStale = true;
+      clearTimeout(timer);
+    };
+  }, [search, sortOrder]);
 
   const activeDateRef = useRef(filterDate);
   activeDateRef.current = filterDate;
@@ -942,19 +984,47 @@ export default function ReportsListPage() {
     }
   };
 
-  const filteredReports = safeReports.filter((r: any) => {
+  // Merge live search results with in-memory reports
+  const candidateReports = useMemo(() => {
+    if (searchResults && search.trim().length >= 2) {
+      const map = new Map<string, any>();
+      searchResults.forEach((r: any) => {
+        if (r?.id) map.set(String(r.id), r);
+      });
+      safeReports.forEach((r: any) => {
+        if (r?.id && !map.has(String(r.id))) {
+          map.set(String(r.id), r);
+        }
+      });
+      return Array.from(map.values());
+    }
+    return safeReports;
+  }, [safeReports, searchResults, search]);
+
+  const filteredReports = candidateReports.filter((r: any) => {
     if (!r) return false;
     const patName = formatPatientListDisplayName(r.patient?.name, r.patient?.designation);
     const rawPatName = r.patient?.name || "";
-    const patId = r.patient?.custom_id || r.patient?.customId || "";
-    const repId = r.custom_id || r.customId || "";
+    const patPhone = String(r.patient?.phone || "");
+    const cleanPhone = patPhone.replace(/\D/g, "");
+    const patId = String(r.patient?.custom_id || r.patient?.customId || r.patient?.id || "");
+    const repId = String(r.custom_id || r.customId || r.id || "");
+    const billId = String(r.bill?.custom_id || r.bill?.customId || "");
+    const vialBarcode = String(r.patient?.vial_barcode || r.patient?.vialBarcode || r.vial_barcode || "");
     const repDate = getRecordLocalDate(r.createdAt || r.created_at);
 
-    const matchesSearch =
-      patName.toLowerCase().includes(search.toLowerCase()) ||
-      rawPatName.toLowerCase().includes(search.toLowerCase()) ||
-      patId.toLowerCase().includes(search.toLowerCase()) ||
-      repId.toLowerCase().includes(search.toLowerCase());
+    const q = search.toLowerCase().trim();
+    const cleanQ = q.replace(/\D/g, "");
+
+    const matchesSearch = !q ||
+      patName.toLowerCase().includes(q) ||
+      rawPatName.toLowerCase().includes(q) ||
+      patPhone.includes(q) ||
+      (cleanQ.length >= 3 && cleanPhone.includes(cleanQ)) ||
+      patId.toLowerCase().includes(q) ||
+      repId.toLowerCase().includes(q) ||
+      billId.toLowerCase().includes(q) ||
+      vialBarcode.toLowerCase().includes(q);
 
     const isRepRejected = r.status === "REJECTED" || r.meta?.sample_status === "REJECTED" || r.patient?.meta?.sample_status === "REJECTED";
 
@@ -975,9 +1045,11 @@ export default function ReportsListPage() {
     const repSource = getReportSource(r);
     const matchesSource = sourceFilter === "ALL" || repSource === sourceFilter;
     const rawDateStr = String(r.createdAt || r.created_at || "");
+    
+    // When searching, bypass date restriction!
     const matchesDate = dateMode === "range"
-      ? ((!startDate || repDate >= startDate) && (!endDate || repDate <= endDate))
-      : (filterDate ? (repDate === filterDate || rawDateStr.startsWith(filterDate) || true) : true);
+      ? (q.length > 0 || ((!startDate || repDate >= startDate) && (!endDate || repDate <= endDate)))
+      : (q.length > 0 || (filterDate ? (repDate === filterDate || rawDateStr.startsWith(filterDate)) : true));
 
     return matchesSearch && matchesStatus && matchesSource && matchesDate;
   });
@@ -1069,8 +1141,8 @@ export default function ReportsListPage() {
           <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.2em] mb-1.5">
             {isCollectionCenter ? "Diagnostic Archives" : isReceptionist ? "Patient Reports" : "Diagnostics"}
           </p>
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-foreground">Reports</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Reports</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             {isCollectionCenter || isReceptionist
               ? "View authorized clinical reports and print diagnostic sheets for your patients."
               : "Enter test results, review findings, and issue diagnostic patient reports."}
@@ -1128,8 +1200,27 @@ export default function ReportsListPage() {
           <div className="space-y-1.5 flex-1 min-w-[200px]">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Search</label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-              <Input placeholder="Patient, ID, report…" className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+              {isSearching ? (
+                <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
+              ) : (
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
+              )}
+              <Input
+                placeholder="Search report ID, patient name, phone, PID, barcode, invoice ID…"
+                className={`pl-9 ${search ? "pr-9" : "pr-3"} h-9 text-xs`}
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => { setSearch(""); setSearchResults(null); setCurrentPage(1); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
           

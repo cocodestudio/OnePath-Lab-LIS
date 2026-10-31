@@ -450,7 +450,7 @@ function BatchPrintContent() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-display text-sm sm:text-base font-bold text-foreground">
+                <h1 className="font-display text-base sm:text-lg font-bold text-foreground">
                   Batch Print Studio
                 </h1>
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-primary/10 text-primary border border-primary/20">

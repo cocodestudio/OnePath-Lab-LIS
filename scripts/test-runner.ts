@@ -4458,6 +4458,22 @@ assert(
   "[SILEO MOBILE TEXT SAFETY] Sileo title enforces ellipsis truncation and description enforces clean multi-line word wrapping"
 );
 
+// 48.4 Fluid Mobile Viewport Responsive Scale & Symmetrical Margins
+assert(
+  globalsCssSrc48.includes("scale(0.94) !important;") &&
+  globalsCssSrc48.includes("scale(0.90) !important;") &&
+  globalsCssSrc48.includes("scale(0.84) !important;"),
+  "[SILEO RESPONSIVE SCALING] Viewport scales proportionally on mobile devices maintaining symmetrical left/right margins"
+);
+
+// 48.5 Intelligent Intent Detection & Negative Coordinate Prevention
+const toastSrc48 = fs.readFileSync(path.resolve(__dirname, "../src/components/ui/toast.tsx"), "utf-8");
+assert(
+  toastSrc48.includes("Reset Link Sent") &&
+  toastSrc48.includes("derivedTitle") &&
+  toastSrc48.includes("input.length > 24"),
+  "[SILEO INTENT EXTRACTION] Toast normalizer extracts concise title and bounds title width to prevent coordinate overflow");
+
 // ==============================================================================
 // 49. Overview Dashboard Symmetrical Layout, Total Sales Chart, Shimmer & LIS Hub
 // ==============================================================================
@@ -4553,12 +4569,12 @@ assert(
   "[PROFILE RESPONSIVE LAYOUT] Profile page expands across modern wide displays (max-w-6xl) eliminating awkward box margins"
 );
 
-// 50.2 Smooth Rounded Segmented Tab Switcher
+// 50.2 Sleek Compact Premium Segmented Tab Switcher
 assert(
-  profilePageSrc50.includes("rounded-2xl bg-muted/75 border border-border/80 shadow-xs backdrop-blur-sm") &&
-  profilePageSrc50.includes("rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer") &&
-  profilePageSrc50.includes("bg-card text-foreground shadow-sm border border-border/70"),
-  "[PROFILE TAB SWITCHER] Switcher is rendered as a smooth rounded segmented island with elevated active pill"
+  profilePageSrc50.includes("rounded-xl bg-muted/70 border border-border/70 shadow-2xs backdrop-blur-sm") &&
+  profilePageSrc50.includes("rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer") &&
+  profilePageSrc50.includes("bg-card text-foreground shadow-xs border border-border/70 font-bold"),
+  "[PROFILE TAB SWITCHER] Switcher is rendered as a sleek compact premium segmented island with elevated active pill"
 );
 
 // 50.3 Modular Form Fields & Diagnostic Lab Direct Link
@@ -4597,13 +4613,13 @@ console.log("\n▶ MODULE 51: Lab Account Rounded Tab Switcher, GST Invoices & S
 
 const labAccountPageSrc51 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/account/lab/page.tsx"), "utf-8");
 
-// 51.1 Smooth Rounded Segmented Tab Switcher with Mobile Overflow Protection
+// 51.1 Sleek Compact Premium Segmented Tab Switcher with Mobile Overflow Protection
 assert(
-  labAccountPageSrc51.includes("inline-flex items-center p-1.5 rounded-2xl bg-muted/75 border border-border/80 shadow-xs backdrop-blur-sm gap-1 min-w-max") &&
+  labAccountPageSrc51.includes("inline-flex items-center p-1 rounded-xl bg-muted/70 border border-border/70 shadow-2xs backdrop-blur-sm gap-1 min-w-max") &&
   labAccountPageSrc51.includes("w-full overflow-x-auto scrollbar-none pb-1") &&
-  labAccountPageSrc51.includes("rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0") &&
-  labAccountPageSrc51.includes("bg-card text-foreground shadow-sm border border-border/70"),
-  "[LAB TAB SWITCHER ROUNDED] Lab account tab switcher rendered as smooth rounded island with elevated active pill and mobile scroll"
+  labAccountPageSrc51.includes("rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0") &&
+  labAccountPageSrc51.includes("bg-card text-foreground shadow-xs border border-border/70 font-bold"),
+  "[LAB TAB SWITCHER ROUNDED] Lab account tab switcher rendered as sleek compact premium island with elevated active pill and mobile scroll"
 );
 
 // 51.2 GST Tax Invoices Mobile Dedicated Card Layout & Symmetrical Single-Line Buttons
@@ -4652,6 +4668,202 @@ assert(
   resetPasswordPageSrc52.includes("truncate break-all") &&
   !resetPasswordPageSrc52.includes("Â·"),
   "[RESET PASSWORD PAGE UI] Reset password page renders dynamic strength meter, single-line submit, clean typography & responsive mobile layout"
+);
+
+// ==============================================================================
+// 53. Fast, Scalable Universal Search Across Patients, Reports, and Billing
+// ==============================================================================
+console.log("\n▶ MODULE 53: Fast, Scalable Universal Search Across Patients, Reports, and Billing");
+
+const patientsPageSrc53 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/patients/page.tsx"), "utf-8");
+const reportsPageSrc53 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/reports/page.tsx"), "utf-8");
+const billingPageSrc53 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/billing/page.tsx"), "utf-8");
+
+// 53.1 Patients Page Debounced Live Search & Cross-Date Discovery
+assert(
+  patientsPageSrc53.includes('params.append("search", q)') &&
+  patientsPageSrc53.includes('candidatePatients') &&
+  patientsPageSrc53.includes('matchesDate = q.length > 0') &&
+  patientsPageSrc53.includes('vial_barcode') &&
+  patientsPageSrc53.includes('isSearching'),
+  "[PATIENTS SEARCH ENGINE] Patients page debounces search, queries backend across all dates, and searches by name, PID, phone & barcode"
+);
+
+// 53.2 Reports Page Debounced Live Search & Multi-Field Resolution
+assert(
+  reportsPageSrc53.includes('params.append("search", q)') &&
+  reportsPageSrc53.includes('candidateReports') &&
+  reportsPageSrc53.includes('q.length > 0') &&
+  reportsPageSrc53.includes('billId') &&
+  reportsPageSrc53.includes('vialBarcode'),
+  "[REPORTS SEARCH ENGINE] Reports page debounces live search, queries backend across dates, and resolves report ID, patient name, phone, PID, barcode & invoice ID"
+);
+
+// 53.3 Billing Page Debounced Live Search & Comprehensive Matchers
+assert(
+  billingPageSrc53.includes('params.append("search", q)') &&
+  billingPageSrc53.includes('candidateBills') &&
+  billingPageSrc53.includes('matchesDate = q.length > 0') &&
+  billingPageSrc53.includes('barcode') &&
+  billingPageSrc53.includes('uhid'),
+  "[BILLING SEARCH ENGINE] Billing page debounces live search, bypasses single-day restriction on query, and searches invoice ID, patient, phone, PID & barcode"
+);
+
+// 53.4 Backend Controllers Multi-Entity Search Query Coverage
+const backendPatientCtrlSrc53 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/PatientController.php"), "utf-8");
+const backendReportCtrlSrc53 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/ReportController.php"), "utf-8");
+const backendBillCtrlSrc53 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"), "utf-8");
+
+assert(
+  backendPatientCtrlSrc53.includes("reports") &&
+  backendReportCtrlSrc53.includes("bill") &&
+  backendBillCtrlSrc53.includes("vial_barcode") &&
+  backendBillCtrlSrc53.includes("reports"),
+  "[BACKEND SEARCH INTEGRITY] Controllers execute multi-entity joined searches across reports, bills, patients, barcodes & phones"
+);
+
+
+// ==============================================================================
+// 54. Top Global Search Optimization, Direct Patient Details & Lab Report History
+// ==============================================================================
+console.log("\n▶ MODULE 54: Top Global Search Optimization, Direct Patient Details & Lab Report History");
+
+const navbarSrc54 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/navbar.tsx"), "utf-8");
+const patientDetailsPageSrc54 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/patients/[id]/page.tsx"), "utf-8");
+const patientCtrlSrc54 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/PatientController.php"), "utf-8");
+
+// 54.1 Top Global Search Targeted Patient Query & Fast Navigation
+assert(
+  navbarSrc54.includes('/patients?search=') &&
+  navbarSrc54.includes('/dashboard/patients/') &&
+  navbarSrc54.includes('Search by Phone Number, Name, Patient ID, UHID, ABHA') &&
+  !navbarSrc54.includes('Diagnostic Reports (') &&
+  !navbarSrc54.includes('Invoices ('),
+  "[GLOBAL PATIENT SEARCH] Navbar executes single fast /patients query, isolates results to patients only, and navigates to /dashboard/patients/[id]"
+);
+
+// 54.2 Dedicated Patient Details & History Page Architecture
+assert(
+  patientDetailsPageSrc54.includes("Patient History") &&
+  patientDetailsPageSrc54.includes("Age/Gender") &&
+  patientDetailsPageSrc54.includes("formatPatientListDisplayName") &&
+  !patientDetailsPageSrc54.includes("Merge Patient") &&
+  !patientDetailsPageSrc54.includes("Link ABHA"),
+  "[PATIENT DETAILS ARCHITECTURE] Patient Details page renders focused demographics, Age/Gender, eliminates duplicate titles & maintains clean clinical view"
+);
+
+// 54.3 Lab Report History Table & Multi-Action Dropdown Menu
+assert(
+  patientDetailsPageSrc54.includes("Lab Report History") &&
+  patientDetailsPageSrc54.includes("Bill Date") &&
+  patientDetailsPageSrc54.includes("Bill Id") &&
+  patientDetailsPageSrc54.includes("Referral") &&
+  patientDetailsPageSrc54.includes("View Bill") &&
+  patientDetailsPageSrc54.includes("Enter Result") &&
+  patientDetailsPageSrc54.includes("FullscreenPrintReportModal") &&
+  patientDetailsPageSrc54.includes("InvoiceSheet"),
+  "[LAB REPORT HISTORY TABLE] Renders 8-column clinical history with sortable headers, Report modal, View Bill invoice sheet & Enter Result navigation"
+);
+
+// 54.4 Backend Controller Multi-Entity Patient & Bill Search
+assert(
+  patientCtrlSrc54.includes("orWhereHas('bills'") &&
+  patientCtrlSrc54.includes("orWhereHas('reports'") &&
+  patientCtrlSrc54.includes("orWhere('uhid', $id)"),
+  "[BACKEND SEARCH & SHOW RESOLUTION] PatientController resolves patients by bill custom ID, report custom ID, UHID & eager-loads full financial history"
+);
+
+
+// ==============================================================================
+// 55. LIMS Desktop & Mobile PWA Installation, Floating Pill UX & Persistent Dismissal
+// ==============================================================================
+console.log("\n▶ MODULE 55: LIMS Desktop & Mobile PWA Installation, Floating Pill UX & Persistent Dismissal");
+
+const manifestPath = path.resolve(__dirname, "../public/manifest.json");
+const swPath = path.resolve(__dirname, "../public/sw.js");
+const layoutSrc55 = fs.readFileSync(path.resolve(__dirname, "../src/app/layout.tsx"), "utf-8");
+const dashboardLayoutSrc55 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/layout.tsx"), "utf-8");
+const installPillSrc55 = fs.readFileSync(path.resolve(__dirname, "../src/components/lims-install-pill.tsx"), "utf-8");
+
+// 55.1 Manifest & Service Worker PWA Spec
+assert(
+  fs.existsSync(manifestPath) && fs.existsSync(swPath),
+  "[PWA ASSETS SPEC] manifest.json and sw.js exist in public directory satisfying PWA installability"
+);
+
+const manifestData = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+assert(
+  manifestData.display === "standalone" &&
+  manifestData.start_url === "/dashboard" &&
+  Array.isArray(manifestData.icons) &&
+  manifestData.icons.length > 0,
+  "[PWA MANIFEST VALIDATION] Web app manifest specifies standalone mode, start_url and high-res application icons"
+);
+
+// 55.2 Root Layout Linking & Dashboard Integration
+assert(
+  layoutSrc55.includes('manifest: "/manifest.json"') &&
+  dashboardLayoutSrc55.includes("<LimsInstallPill />"),
+  "[PWA INTEGRATION] Root layout links to manifest.json and Dashboard layout mounts LimsInstallPill"
+);
+
+// 55.3 Install Pill State Logic: Standalone Suppression & Persistent Dismissal
+assert(
+  installPillSrc55.includes("display-mode: standalone") &&
+  installPillSrc55.includes("onepath_lims_pwa_dismissed") &&
+  installPillSrc55.includes("beforeinstallprompt") &&
+  installPillSrc55.includes("appinstalled") &&
+  installPillSrc55.includes("Install OnePath Lab"),
+  "[PWA INSTALL PILL LOGIC] Pill checks standalone mode, captures beforeinstallprompt, auto-hides on appinstalled, and permanently persists dismissal on close"
+);
+
+// ==============================================================================
+// 56. Patient History Loaders, Demographics, and Registry Permanent Bill Deletion
+// ==============================================================================
+console.log("\n▶ MODULE 56: Patient History Loaders, Demographics & Registry Bill Deletion");
+
+const patientDetailsSrc56 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/patients/[id]/page.tsx"), "utf-8");
+const patientsRegistrySrc56 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/patients/page.tsx"), "utf-8");
+const billCtrlSrc56 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"), "utf-8");
+
+// 56.1 Patient History Action Loaders
+assert(
+  patientDetailsSrc56.includes("activeRowAction") &&
+  patientDetailsSrc56.includes("Loading Bill...") &&
+  patientDetailsSrc56.includes("Opening Editor...") &&
+  patientDetailsSrc56.includes("Loading Patient...") &&
+  patientDetailsSrc56.includes("loadingPrintId === row.reportId") && patientDetailsSrc56.includes("Loading..."),
+  "[PATIENT HISTORY LOADERS] Active loaders rendered on 3-dots trigger, menu items & Report button for responsive feedback"
+);
+
+// 56.2 Demographics: Phone Number & Referred By
+assert(
+  patientDetailsSrc56.includes("Phone Number") &&
+  patientDetailsSrc56.includes("Referred By") &&
+  patientDetailsSrc56.includes("patPhone") &&
+  patientDetailsSrc56.includes("ref_doctor"),
+  "[PATIENT HISTORY DEMOGRAPHICS] Top card consistently displays Phone Number and Referred By doctor alongside Age/Gender"
+);
+
+// 56.3 Patients Registry Delete Bill Action & Confirmation Dialog
+assert(
+  patientsRegistrySrc56.includes("Delete Bill") &&
+  patientsRegistrySrc56.includes("handleInitiateDeleteBill") &&
+  patientsRegistrySrc56.includes("handleConfirmDeleteBill") &&
+  patientsRegistrySrc56.includes("deleteBillDialog") &&
+  patientsRegistrySrc56.includes("Delete Bill Permanently?"),
+  "[PATIENTS REGISTRY DELETE BILL] 3-dots menu offers Delete Bill with confirmation dialog and permanent removal"
+);
+
+// 56.4 Backend BillController Transactional Cascading Deletion
+assert(
+  billCtrlSrc56.includes("public function destroy(Request $request, string $id)") &&
+  billCtrlSrc56.includes("\DB::transaction") &&
+  billCtrlSrc56.includes("$report->results()->delete()") &&
+  billCtrlSrc56.includes("$bill->payments()->delete()") &&
+  billCtrlSrc56.includes("$bill->delete()") &&
+  billCtrlSrc56.includes("lis_dues_all_"),
+  "[BACKEND BILL CASCADE DELETION] BillController destroy executes atomic transaction deleting reports, results, payments and bill with cache invalidation"
 );
 
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);

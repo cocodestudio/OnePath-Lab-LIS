@@ -234,7 +234,7 @@ export default function DoctorsOverviewPage() {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground truncate">
+              <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground truncate">
                 Doctor Referrals & Revenue
               </h1>
               <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border transition-colors shrink-0 ${
@@ -245,7 +245,7 @@ export default function DoctorsOverviewPage() {
                 {caseType === "outsource" ? "Outsource Scope" : "Main Lab Scope"}
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 line-clamp-1 sm:line-clamp-none">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-1 sm:line-clamp-none">
               {caseType === "outsource"
                 ? "Monitor outsource cases referral performance, partner lab incentives, and commissions"
                 : "Monitor in-house doctor sales performance, commission payouts, and net laboratory revenue"}

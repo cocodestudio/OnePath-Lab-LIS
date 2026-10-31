@@ -4,6 +4,7 @@ import SubscriptionGate from "@/components/subscription-gate";
 import { DashboardScroller } from "@/components/dashboard-scroller";
 import { AiGuideWidget } from "@/components/ai-guide-widget";
 import { DashboardAuthGuard } from "@/components/dashboard-auth-guard";
+import { LimsInstallPill } from "@/components/lims-install-pill";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -18,6 +19,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       <SubscriptionGate />
       <AiGuideWidget />
+      <LimsInstallPill />
     </div>
   );
 }

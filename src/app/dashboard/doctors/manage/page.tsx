@@ -540,14 +540,14 @@ export default function ManageDoctorsPage() {
           </Link>
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+              <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
                 Manage Doctors & Discounts
               </h1>
               <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60">
                 Commission Matrix
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Set global commission rules or customize test-wise discounts per clinician
             </p>
           </div>

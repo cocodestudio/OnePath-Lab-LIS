@@ -643,10 +643,10 @@ export default function TodaySamplesPage() {
               Today's Intake: {totalCount} Samples
             </span>
           </div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
             Sample Intake &amp; Phlebotomy Log
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Receive receptionist-registered patients, tag color vacutainer barcodes, and update sample collection stage.
           </p>
         </div>

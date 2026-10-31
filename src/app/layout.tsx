@@ -103,6 +103,7 @@ export const metadata: Metadata = {
     icon: "/favicon.ico",
     apple: "/onepath-logo.png",
   },
+  manifest: "/manifest.json",
 };
 
 const jsonLd = {
@@ -163,6 +164,11 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__pwaInstallPrompt=e;});`
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

@@ -270,7 +270,7 @@ export default function PackagesPage() {
               Clinical Bundles & Profiles
             </p>
           </div>
-          <h1 className="font-display text-xl sm:text-3xl font-bold tracking-tight text-foreground mt-1 flex flex-wrap items-center gap-2 sm:gap-2.5">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-1 flex flex-wrap items-center gap-2 sm:gap-2.5">
             <Boxes className="h-6 w-6 sm:h-7 sm:w-7 text-primary shrink-0" />
             <span>Diagnostic Packages</span>
             <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">

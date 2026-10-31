@@ -1318,14 +1318,14 @@ function SettingsContent() {
       <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-md pb-4 pt-1 border-b border-border/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 sm:gap-2.5 flex-nowrap min-w-0">
-            <h1 className="font-display text-lg sm:text-2xl font-bold text-foreground tracking-tight whitespace-nowrap truncate">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground tracking-tight whitespace-nowrap truncate">
               Lab & Stationery Settings
             </h1>
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-primary/10 text-primary uppercase tracking-wider shrink-0 whitespace-nowrap self-center">
               LIS Pro
             </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Fine-tune letterhead margins, medical report layouts, and invoice-cum-receipt billing templates with instant preview.
           </p>
 

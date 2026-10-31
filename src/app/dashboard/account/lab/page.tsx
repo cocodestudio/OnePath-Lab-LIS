@@ -889,12 +889,12 @@ function LabAccountContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
         <div>
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="font-display text-xl sm:text-2xl font-bold text-foreground">Lab Account &amp; Billing</h1>
+            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Lab Account &amp; Billing</h1>
             <span className="font-mono text-xs font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full border border-primary/20 whitespace-nowrap">
               Lab ID #: {customLabId}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Manage your pathology software subscription, daily patient volume, GST tax invoices, and diagnostic centre profile.
           </p>
         </div>
@@ -962,9 +962,9 @@ function LabAccountContent() {
         </div>
       )}
 
-      {/* Smooth Rounded Segmented Tab Switcher */}
+      {/* Sleek Compact Premium Segmented Tab Switcher */}
       <div className="w-full overflow-x-auto scrollbar-none pb-1">
-        <div className="inline-flex items-center p-1.5 rounded-2xl bg-muted/75 border border-border/80 shadow-xs backdrop-blur-sm gap-1 min-w-max">
+        <div className="inline-flex items-center p-1 rounded-xl bg-muted/70 border border-border/70 shadow-2xs backdrop-blur-sm gap-1 min-w-max">
           <button
             type="button"
             onClick={() => {
@@ -974,16 +974,16 @@ function LabAccountContent() {
                 setActiveTab("SUBSCRIPTION");
               }
             }}
-            className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === "SUBSCRIPTION"
-                ? "bg-card text-foreground shadow-sm border border-border/70"
+                ? "bg-card text-foreground shadow-xs border border-border/70 font-bold"
                 : "text-muted-foreground hover:text-foreground hover:bg-background/40"
             }`}
           >
-            <Sparkles className={`h-4 w-4 ${activeTab === "SUBSCRIPTION" ? "text-primary" : "text-muted-foreground"}`} />
+            <Sparkles className={`h-3.5 w-3.5 ${activeTab === "SUBSCRIPTION" ? "text-primary" : "text-muted-foreground"}`} />
             <span>Subscription &amp; Usage</span>
             {!isCentreSaved && (
-              <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+              <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20">
                 <Lock className="h-2.5 w-2.5" /> Locked
               </span>
             )}
@@ -1002,27 +1002,27 @@ function LabAccountContent() {
                 setActiveTab("INVOICES");
               }
             }}
-            className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
               isExpired ? "opacity-60 cursor-not-allowed" : ""
             } ${
               activeTab === "INVOICES"
-                ? "bg-card text-foreground shadow-sm border border-border/70"
+                ? "bg-card text-foreground shadow-xs border border-border/70 font-bold"
                 : "text-muted-foreground hover:text-foreground hover:bg-background/40"
             }`}
           >
-            <FileText className={`h-4 w-4 ${activeTab === "INVOICES" ? "text-primary" : "text-muted-foreground"}`} />
+            <FileText className={`h-3.5 w-3.5 ${activeTab === "INVOICES" ? "text-primary" : "text-muted-foreground"}`} />
             <span>GST Tax Invoices</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
               activeTab === "INVOICES" ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
             }`}>
               {invoices.length}
             </span>
             {isExpired ? (
-              <span className="flex items-center gap-0.5 text-[10px] font-bold text-rose-600 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+              <span className="flex items-center gap-0.5 text-[9px] font-bold text-rose-600 bg-rose-500/10 px-1 py-0.2 rounded border border-rose-500/20">
                 <Lock className="h-2.5 w-2.5" /> Locked
               </span>
             ) : !isCentreSaved ? (
-              <span className="flex items-center gap-0.5 text-[10px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+              <span className="flex items-center gap-0.5 text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1 py-0.2 rounded border border-amber-500/20">
                 <Lock className="h-2.5 w-2.5" /> Locked
               </span>
             ) : null}
@@ -1041,28 +1041,28 @@ function LabAccountContent() {
                 setActiveTab("DISPATCH");
               }
             }}
-            className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
               isExpired ? "opacity-60 cursor-not-allowed" : ""
             } ${
               activeTab === "DISPATCH"
-                ? "bg-card text-foreground shadow-sm border border-border/70"
+                ? "bg-card text-foreground shadow-xs border border-border/70 font-bold"
                 : "text-muted-foreground hover:text-foreground hover:bg-background/40"
             }`}
           >
-            <Send className={`h-4 w-4 ${activeTab === "DISPATCH" ? "text-primary" : "text-muted-foreground"}`} />
+            <Send className={`h-3.5 w-3.5 ${activeTab === "DISPATCH" ? "text-primary" : "text-muted-foreground"}`} />
             <span>Auto-Dispatch &amp; Summaries</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("CENTRE")}
-            className={`flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === "CENTRE"
-                ? "bg-card text-foreground shadow-sm border border-border/70"
+                ? "bg-card text-foreground shadow-xs border border-border/70 font-bold"
                 : "text-muted-foreground hover:text-foreground hover:bg-background/40"
             }`}
           >
-            <Building2 className={`h-4 w-4 ${activeTab === "CENTRE" ? "text-primary" : "text-muted-foreground"}`} />
+            <Building2 className={`h-3.5 w-3.5 ${activeTab === "CENTRE" ? "text-primary" : "text-muted-foreground"}`} />
             <span>Centre &amp; GST Profile</span>
           </button>
         </div>

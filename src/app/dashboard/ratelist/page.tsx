@@ -713,12 +713,12 @@ export default function RateListPage() {
                 <Tag className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
                   B2B Wholesale Rate List
                 </h1>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Exclusively negotiated B2B test investigation rates applicable to your diagnostic account.
             </p>
           </div>
@@ -1125,12 +1125,12 @@ export default function RateListPage() {
               <SlidersHorizontal className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+              <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
                 Rate List Master
               </h1>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Create unlimited custom named rate lists (e.g. SPECIAL TAJ, SARA CLINIC), customize per-test prices, and assign them directly to B2B partners.
           </p>
         </div>

@@ -708,10 +708,10 @@ export default function OutsourceCasesPage() {
               External Diagnostic Dispatch
             </span>
           </div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-foreground mt-1">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-1">
             Outsource Cases
           </h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Manage outsourced patient investigations, dispatch to partner labs, and view generated bills.
           </p>
         </div>

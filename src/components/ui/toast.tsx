@@ -104,6 +104,7 @@ export function normalizeToastOptions(
   descriptionOrOptions?: string | SileoButton | Partial<SileoOptions>
 ): SileoOptions {
   const defaultFill = "#1e2536";
+  const defaultRoundness = 18;
 
   if (typeof input === "string") {
     if (typeof descriptionOrOptions === "string") {
@@ -112,6 +113,7 @@ export function normalizeToastOptions(
         description: descriptionOrOptions,
         position: "top-center",
         fill: defaultFill,
+        roundness: defaultRoundness,
       };
     }
     if (typeof descriptionOrOptions === "object" && descriptionOrOptions !== null) {
@@ -121,26 +123,76 @@ export function normalizeToastOptions(
           button: descriptionOrOptions as SileoButton,
           position: "top-center",
           fill: defaultFill,
+          roundness: defaultRoundness,
         };
       }
       return {
+        roundness: defaultRoundness,
+        fill: defaultFill,
         ...descriptionOrOptions,
         title: input,
         position: (descriptionOrOptions as SileoOptions).position || "top-center",
-        fill: (descriptionOrOptions as SileoOptions).fill || defaultFill,
       };
     }
+
+    // Defensive check for single long strings (e.g. "Password reset link sent to user@domain.com")
+    // When a single long sentence is passed without description, route it to description so
+    // Sileo's pill header doesn't overflow or produce negative pillX coordinates.
+    if (input.length > 24) {
+      let derivedTitle = "Notification";
+      if (/reset\s*link|password\s*reset/i.test(input)) {
+        derivedTitle = "Reset Link Sent";
+      } else if (/session|logged\s*out|revoked/i.test(input)) {
+        derivedTitle = "Session Terminated";
+      } else if (/failed|error|unable/i.test(input)) {
+        derivedTitle = "Action Failed";
+      } else if (/success|updated|saved|created/i.test(input)) {
+        derivedTitle = "Success";
+      } else if (/warning|caution/i.test(input)) {
+        derivedTitle = "Notice";
+      }
+
+      return {
+        title: derivedTitle,
+        description: input,
+        position: "top-center",
+        fill: defaultFill,
+        roundness: defaultRoundness,
+      };
+    }
+
     return {
       title: input,
       position: "top-center",
       fill: defaultFill,
+      roundness: defaultRoundness,
     };
   }
 
   if (typeof input === "object" && input !== null) {
     const raw = input as any;
-    const title = raw.title || raw.text || raw.message || "";
-    const description = raw.description || raw.desc;
+    let title = raw.title || raw.text || raw.message || "";
+    let description = raw.description || raw.desc;
+
+    // Same defensive check for object input without description
+    if (typeof title === "string" && title.length > 24 && !description) {
+      let derivedTitle = "Notification";
+      if (/reset\s*link|password\s*reset/i.test(title)) {
+        derivedTitle = "Reset Link Sent";
+      } else if (/session|logged\s*out|revoked/i.test(title)) {
+        derivedTitle = "Session Terminated";
+      } else if (/failed|error|unable/i.test(title)) {
+        derivedTitle = "Action Failed";
+      } else if (/success|updated|saved|created/i.test(title)) {
+        derivedTitle = "Success";
+      } else if (/warning|caution/i.test(title)) {
+        derivedTitle = "Notice";
+      }
+
+      description = title;
+      title = derivedTitle;
+    }
+
     const duration = typeof raw.duration === "number" ? raw.duration : undefined;
     const position = raw.position || "top-center";
     const button = raw.button;
@@ -148,7 +200,7 @@ export function normalizeToastOptions(
     const fill = raw.fill || defaultFill;
     const styles = raw.styles;
     const autopilot = raw.autopilot;
-    const roundness = raw.roundness;
+    const roundness = raw.roundness ?? defaultRoundness;
 
     return {
       ...raw,
@@ -169,6 +221,7 @@ export function normalizeToastOptions(
     title: String(input || ""),
     position: "top-center",
     fill: defaultFill,
+    roundness: defaultRoundness,
   };
 }
 

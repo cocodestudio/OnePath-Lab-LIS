@@ -303,7 +303,7 @@ export default function ReferAndEarnPage() {
               <span>Referral Program &bull; Unlimited Plan Extensions</span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
               Invite Pathology Labs &amp; Earn{" "}
               <span className="text-primary dark:text-emerald-400 font-extrabold">3 Months Free Validity</span>
             </h1>

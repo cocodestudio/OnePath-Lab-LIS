@@ -306,11 +306,11 @@ export default function B2bWalletsPage() {
             <div className="h-9 w-9 rounded-xl gradient-primary text-primary-foreground flex items-center justify-center shadow-xs">
               <Wallet className="h-5 w-5" />
             </div>
-            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
               B2B Partner Wallets
             </h1>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Real-time prepaid wallet balances, ledger history, and direct manual deposits for your diagnostic B2B partners.
           </p>
         </div>

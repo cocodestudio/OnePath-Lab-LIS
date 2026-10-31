@@ -544,10 +544,10 @@ export default function DashboardOverviewPage() {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold text-primary uppercase tracking-[0.2em] mb-1.5">Overview</p>
-          <h1 suppressHydrationWarning className="font-display text-3xl font-semibold tracking-tight text-foreground">
+          <h1 suppressHydrationWarning className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
             Welcome back, {labDisplayName}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">Here's what's happening today in your laboratory.</p>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">Here's what's happening today in your laboratory.</p>
         </div>
         <div className="flex gap-2.5">
           <button

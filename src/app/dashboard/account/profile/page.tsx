@@ -60,15 +60,33 @@ function ProfileContent() {
   const [savingField, setSavingField] = useState(false);
   const { success: toastSuccess, error: toastError, warning: toastWarning } = useToast();
 
-  const showToast = React.useCallback((text: string, type: "success" | "error" | "warning" = "success") => {
-    if (type === "success") {
-      toastSuccess(text);
-    } else if (type === "warning") {
-      toastWarning(text);
-    } else {
-      toastError(text);
-    }
-  }, [toastSuccess, toastError, toastWarning]);
+  const showToast = React.useCallback(
+    (
+      titleOrText: string,
+      descOrType?: string | "success" | "error" | "warning",
+      typeOverride: "success" | "error" | "warning" = "success"
+    ) => {
+      let title = titleOrText;
+      let description: string | undefined = undefined;
+      let type: "success" | "error" | "warning" = "success";
+
+      if (descOrType === "success" || descOrType === "error" || descOrType === "warning") {
+        type = descOrType;
+      } else if (typeof descOrType === "string") {
+        description = descOrType;
+        type = typeOverride;
+      }
+
+      if (type === "success") {
+        toastSuccess(title, description);
+      } else if (type === "warning") {
+        toastWarning(title, description);
+      } else {
+        toastError(title, description);
+      }
+    },
+    [toastSuccess, toastError, toastWarning]
+  );
 
   // Password reset via secure email link state
   const [isResetOpen, setIsResetOpen] = useState(false);
@@ -295,7 +313,7 @@ function ProfileContent() {
 
       setResetLinkSent(true);
       setCooldownSeconds(60);
-      showToast(`Password reset link sent to ${targetEmail}`);
+      showToast("Reset Link Sent", `Password reset link sent to ${targetEmail}`, "success");
     } catch (err: any) {
       setResetError(err.message || "Network error. Please check your connection and try again.");
     } finally {
@@ -404,42 +422,42 @@ function ProfileContent() {
               <User className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="font-display text-xl sm:text-2xl font-bold text-foreground tracking-tight">
+              <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
                 My Account
               </h1>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                 Manage personal profile, registered diagnostic centre, and multi-device active sessions.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Smooth Rounded Tab Switcher */}
-        <div className="inline-flex items-center p-1.5 rounded-2xl bg-muted/75 border border-border/80 shadow-xs backdrop-blur-sm self-start sm:self-auto gap-1">
+        {/* Sleek Compact Premium Segmented Tab Switcher */}
+        <div className="inline-flex items-center p-1 rounded-xl bg-muted/70 border border-border/70 shadow-2xs backdrop-blur-sm self-start sm:self-auto gap-1">
           <button
             type="button"
             onClick={() => setActiveTab("PROFILE")}
-            className={`flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer ${activeTab === "PROFILE"
-              ? "bg-card text-foreground shadow-sm border border-border/70"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${activeTab === "PROFILE"
+              ? "bg-card text-foreground shadow-xs border border-border/70 font-bold"
               : "text-muted-foreground hover:text-foreground hover:bg-background/40"
               }`}
           >
-            <User className={`h-4 w-4 ${activeTab === "PROFILE" ? "text-primary" : "text-muted-foreground"}`} />
+            <User className={`h-3.5 w-3.5 ${activeTab === "PROFILE" ? "text-primary" : "text-muted-foreground"}`} />
             <span>Profile</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab("SESSIONS")}
-            className={`flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 cursor-pointer ${activeTab === "SESSIONS"
-              ? "bg-card text-foreground shadow-sm border border-border/70"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${activeTab === "SESSIONS"
+              ? "bg-card text-foreground shadow-xs border border-border/70 font-bold"
               : "text-muted-foreground hover:text-foreground hover:bg-background/40"
               }`}
           >
-            <Laptop className={`h-4 w-4 ${activeTab === "SESSIONS" ? "text-primary" : "text-muted-foreground"}`} />
+            <Laptop className={`h-3.5 w-3.5 ${activeTab === "SESSIONS" ? "text-primary" : "text-muted-foreground"}`} />
             <span>Sessions</span>
             {sessions.length > 0 && (
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${activeTab === "SESSIONS"
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${activeTab === "SESSIONS"
                   ? "bg-primary/15 text-primary"
                   : "bg-muted text-muted-foreground"
                   }`}

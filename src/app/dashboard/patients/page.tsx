@@ -20,7 +20,7 @@ import {
   MapPin, Phone, Stethoscope, Building, UserCheck, CheckCircle2, RefreshCw,
   ChevronLeft, ChevronRight, Calendar, Tag, Lock, Barcode, Copy, Check, TestTube2,
   ShieldCheck, Mail, Activity, Scale, Ruler, Printer, Sparkles, Layers,
-  MoreVertical, FileText, Edit3
+  MoreVertical, FileText, Edit3, Trash2, AlertTriangle
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
@@ -317,6 +317,8 @@ export default function PatientsPage() {
   });
 
   const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
   const [filterDate, setFilterDate] = useState(() => getTodayStr());
   const [dateMode, setDateMode] = useState<"single" | "range">("single");
   const [startDate, setStartDate] = useState(() => getTodayStr());
@@ -385,6 +387,21 @@ export default function PatientsPage() {
 
   const [barcodeModalPatient, setBarcodeModalPatient] = useState<Patient | null>(null);
   const [copiedBarcode, setCopiedBarcode] = useState<string | null>(null);
+  const [deleteBillDialog, setDeleteBillDialog] = useState<{
+    isOpen: boolean;
+    patient: Patient | null;
+    billId: string | null;
+    billCustomId: string | null;
+    amount: number | null;
+    isDeleting: boolean;
+  }>({
+    isOpen: false,
+    patient: null,
+    billId: null,
+    billCustomId: null,
+    amount: null,
+    isDeleting: false,
+  });
 
   const handleCopyBarcode = (val: string) => {
     try {
@@ -566,6 +583,104 @@ export default function PatientsPage() {
     fetchPatients(false);
   }, [dateMode, filterDate, startDate, endDate, fetchPatients]);
 
+  const handleInitiateDeleteBill = async (patient: Patient) => {
+    let billId = patient.bills?.[0]?.id || (patient as any).bill_id || (patient as any).billId;
+    let billCustomId = patient.bills?.[0]?.custom_id || patient.bills?.[0]?.customId;
+    let amount = patient.bills?.[0]?.total ?? patient.bills?.[0]?.grand_total;
+
+    if (!billId && patient.reports?.[0]?.bill_id) {
+      billId = patient.reports[0].bill_id;
+    }
+
+    if (!billId) {
+      try {
+        const res = await fetchFromLaravel(`/bills?patient_id=${patient.id}&limit=1`);
+        const list = Array.isArray(res) ? res : res?.data;
+        if (list && list.length > 0) {
+          billId = list[0].id;
+          billCustomId = list[0].custom_id || list[0].customId;
+          amount = list[0].total ?? list[0].grand_total;
+        }
+      } catch (_) {}
+    }
+
+    if (!billId) {
+      toast.error("No Bill Found", `No active bill record found for ${formatPatientListDisplayName(patient.name, patient.designation)}.`);
+      return;
+    }
+
+    setDeleteBillDialog({
+      isOpen: true,
+      patient,
+      billId: String(billId),
+      billCustomId: billCustomId ? String(billCustomId) : `BILL-${String(billId).slice(0, 8)}`,
+      amount: amount != null ? Number(amount) : null,
+      isDeleting: false,
+    });
+  };
+
+  const handleConfirmDeleteBill = async () => {
+    if (!deleteBillDialog.billId) return;
+    setDeleteBillDialog((prev) => ({ ...prev, isDeleting: true }));
+    try {
+      const res = await fetchFromLaravel(`/bills/${deleteBillDialog.billId}`, {
+        method: "DELETE",
+      });
+      toast.success("Bill Deleted", res?.message || "Bill and associated records permanently deleted.");
+      setDeleteBillDialog({
+        isOpen: false,
+        patient: null,
+        billId: null,
+        billCustomId: null,
+        amount: null,
+        isDeleting: false,
+      });
+      await fetchPatients(true);
+    } catch (err: any) {
+      console.error("Failed to delete bill:", err);
+      toast.error("Delete Failed", err?.message || "Could not delete bill. Please try again.");
+      setDeleteBillDialog((prev) => ({ ...prev, isDeleting: false }));
+    }
+  };
+
+    // High-performance debounced live search (350ms) querying backend across all dates
+  useEffect(() => {
+    const q = search.trim();
+    if (!q || q.length < 2) {
+      setSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+
+    let isStale = false;
+    setIsSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        params.append("search", q);
+        params.append("per_page", "50");
+        params.append("sort", "created_at");
+        params.append("direction", "desc");
+        const res = await fetchFromLaravel(`/patients?${params.toString()}`);
+        if (!isStale) {
+          const list = Array.isArray(res) ? res : (res?.data || []);
+          setSearchResults(list);
+        }
+      } catch (err) {
+        console.error("Patient live search error:", err);
+      } finally {
+        if (!isStale) {
+          setIsSearching(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      isStale = true;
+      clearTimeout(timer);
+    };
+  }, [search]);
+
   useEffect(() => {
     const handleSync = () => {
       fetchPatients(false);
@@ -598,26 +713,56 @@ export default function PatientsPage() {
 
   const safePatients = Array.isArray(patients) ? patients : [];
 
-  const filteredPatients = safePatients.filter((p: any) => {
+  // Merge live search results with matching in-memory patients
+  const candidatePatients = useMemo(() => {
+    if (searchResults && search.trim().length >= 2) {
+      const map = new Map<string, any>();
+      searchResults.forEach((p: any) => {
+        if (p?.id) map.set(String(p.id), p);
+      });
+      safePatients.forEach((p: any) => {
+        if (p?.id && !map.has(String(p.id))) {
+          map.set(String(p.id), p);
+        }
+      });
+      return Array.from(map.values());
+    }
+    return safePatients;
+  }, [safePatients, searchResults, search]);
+
+  const filteredPatients = candidatePatients.filter((p: any) => {
     if (!p) return false;
     const patName = formatPatientListDisplayName(p.name, p.designation);
     const rawPatName = p.name || "";
-    const patPhone = p.phone || "";
-    const patId = p.custom_id || p.customId || "";
+    const patPhone = String(p.phone || "");
+    const cleanPhone = patPhone.replace(/\D/g, "");
+    const patId = String(p.custom_id || p.customId || p.id || "");
     const patDate = getRecordLocalDate(p.created_at || p.createdAt);
+    const patUhid = String(p.uhid || "");
+    const patBarcode = String(p.vial_barcode || p.vialBarcode || p.meta?.vial_barcode || "");
 
-    const patAbhaAddress = p.abha_address || p.abhaAddress || "";
-    const patAbhaNumber = p.abha_number || p.abhaNumber || "";
+    const patAbhaAddress = String(p.abha_address || p.abhaAddress || "");
+    const patAbhaNumber = String(p.abha_number || p.abhaNumber || "");
 
-    const matchesSearch =
-      patName.toLowerCase().includes(search.toLowerCase()) ||
-      rawPatName.toLowerCase().includes(search.toLowerCase()) ||
-      patPhone.includes(search) ||
-      patId.toLowerCase().includes(search.toLowerCase()) ||
-      patAbhaAddress.toLowerCase().includes(search.toLowerCase()) ||
-      patAbhaNumber.toLowerCase().includes(search.toLowerCase());
+    const q = search.toLowerCase().trim();
+    const cleanQ = q.replace(/\D/g, "");
 
-    const matchesDate = dateMode === "range"
+    const matchesSearch = !q ||
+      patName.toLowerCase().includes(q) ||
+      rawPatName.toLowerCase().includes(q) ||
+      patPhone.includes(q) ||
+      (cleanQ.length >= 3 && cleanPhone.includes(cleanQ)) ||
+      patId.toLowerCase().includes(q) ||
+      patUhid.toLowerCase().includes(q) ||
+      patBarcode.toLowerCase().includes(q) ||
+      patAbhaAddress.toLowerCase().includes(q) ||
+      patAbhaNumber.toLowerCase().includes(q) ||
+      (Array.isArray(p.reports) && p.reports.some((r: any) => String(r.custom_id || "").toLowerCase().includes(q)));
+
+    // When searching, bypass date restriction so historical records across all dates are displayed!
+    const matchesDate = q.length > 0
+      ? true
+      : dateMode === "range"
       ? ((!startDate || patDate >= startDate) && (!endDate || patDate <= endDate))
       : (filterDate ? (patDate === filterDate || (p.meta?.sample_date && getRecordLocalDate(p.meta.sample_date) === filterDate)) : true);
 
@@ -743,25 +888,31 @@ export default function PatientsPage() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">Patients Registry</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Directory of all registered laboratory patients & demographics.</p>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Patients Registry</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">Directory of all registered laboratory patients & demographics.</p>
         </div>
       </div>
 
       {/* Filter / Search Ribbon */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 bg-card border border-border/80 p-3.5 rounded-xl shadow-xs">
         <div className="relative flex-1 w-full min-w-[220px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          {isSearching ? (
+            <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
+          ) : (
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          )}
           <Input
-            placeholder="Search patients by name, PID, or phone number…"
+            placeholder="Search patients by name, PID, phone, barcode, UHID, lab ID…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-            className="pl-9 h-9 text-xs bg-background"
+            className={`pl-9 ${search ? "pr-9" : "pr-3"} h-9 text-xs bg-background`}
           />
           {search && (
             <button
-              onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+              type="button"
+              onClick={() => { setSearch(""); setSearchResults(null); setCurrentPage(1); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
+              title="Clear search"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -897,7 +1048,17 @@ export default function PatientsPage() {
                           </div>
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <p className="font-semibold text-foreground">{patName}</p>
+                              <Link
+                                href={`/dashboard/patients/${patient.id}`}
+                                className="font-semibold text-foreground hover:text-primary transition-colors cursor-pointer"
+                                onClick={() => {
+                                  try {
+                                    sessionStorage.setItem(`patient_detail_cache_${patient.id}`, JSON.stringify(patient));
+                                  } catch (_) {}
+                                }}
+                              >
+                                {patName}
+                              </Link>
                               {patient.meta?.sample_status === 'REJECTED' && (
                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-500/10 text-rose-600 border border-rose-500/20">
                                   <AlertOctagon className="h-2.5 w-2.5" />
@@ -971,10 +1132,10 @@ export default function PatientsPage() {
                             <DropdownMenuContent align="end" className="w-44 p-1">
                               <DropdownMenuItem
                                 className="cursor-pointer gap-2 py-2 text-xs font-medium"
-                                onClick={() => setViewPatient(patient)}
+                                onClick={() => { try { sessionStorage.setItem("patient_detail_cache_" + patient.id, JSON.stringify(patient)); } catch (_) {} router.push("/dashboard/patients/" + patient.id); }}
                               >
                                 <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span>View Details</span>
+                                <span>View History</span>
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="cursor-pointer gap-2 py-2 text-xs font-medium"
@@ -1002,7 +1163,13 @@ export default function PatientsPage() {
                                 <Edit3 className="h-3.5 w-3.5 text-muted-foreground" />
                                 <span>Enter Result</span>
                               </DropdownMenuItem>
-                            </DropdownMenuContent>
+                              <DropdownMenuItem
+                                className="cursor-pointer gap-2 py-2 text-xs font-medium text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/30"
+                                onClick={() => handleInitiateDeleteBill(patient)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>Delete Bill</span>
+                              </DropdownMenuItem></DropdownMenuContent>
                           </DropdownMenu>
                           {(() => {
                             if (currentUser?.role === 'TECHNICIAN' || currentUser?.role === 'DOCTOR') {
@@ -1824,7 +1991,82 @@ export default function PatientsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Fullscreen Print Report Modal */}
+            {/* Delete Bill Confirmation Modal */}
+      <Dialog
+        open={deleteBillDialog.isOpen}
+        onOpenChange={(open) => {
+          if (!deleteBillDialog.isDeleting) {
+            setDeleteBillDialog((prev) => ({ ...prev, isOpen: open }));
+          }
+        }}
+      >
+        <DialogContent className="max-w-md p-6 rounded-2xl bg-card border border-border/80 shadow-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-bold text-foreground">
+                  Delete Bill Permanently?
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  This action cannot be undone.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="py-3 text-xs text-muted-foreground space-y-2">
+            <p>
+              Are you sure you want to delete bill <span className="font-semibold text-foreground font-mono">#{deleteBillDialog.billCustomId}</span> for patient <span className="font-semibold text-foreground">{deleteBillDialog.patient?.name}</span>?
+            </p>
+            {deleteBillDialog.amount != null && (
+              <p className="text-xs">
+                Bill Amount: <span className="font-semibold text-foreground">₹{deleteBillDialog.amount}</span>
+              </p>
+            )}
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400">
+              Warning: Deleting this bill will also remove associated test reports, results, and payment records from the database.
+            </div>
+          </div>
+
+          <DialogFooter className="flex items-center justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={deleteBillDialog.isDeleting}
+              onClick={() => setDeleteBillDialog({ isOpen: false, patient: null, billId: null, billCustomId: null, amount: null, isDeleting: false })}
+              className="h-8 text-xs font-semibold rounded-lg"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={deleteBillDialog.isDeleting}
+              onClick={handleConfirmDeleteBill}
+              className="h-8 text-xs font-semibold rounded-lg gap-1.5"
+            >
+              {deleteBillDialog.isDeleting ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Deleting...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Delete Permanently</span>
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+{/* Fullscreen Print Report Modal */}
       {printReport && (
         <FullscreenPrintReportModal
           open={showPrintModal}

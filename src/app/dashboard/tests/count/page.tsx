@@ -143,13 +143,13 @@ export default function TestsCountPage() {
               <BarChart3 className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight text-foreground flex items-center gap-2 flex-wrap">
+              <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2 flex-wrap">
                 <span>Tests Usage &amp; Booking Counts</span>
                 <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 shrink-0">
                   Live Analytics
                 </span>
               </h1>
-              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
                 Monitor laboratory test frequencies, popularity rankings, and volume across patient registrations.
               </p>
             </div>

@@ -330,6 +330,8 @@ export default function BillingPage() {
     return [];
   });
   const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<any[] | null>(null);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [sourceFilter, setSourceFilter] = useState("ALL");
   const [staffUsers, setStaffUsers] = useState<any[]>([]);
@@ -536,7 +538,44 @@ export default function BillingPage() {
     }
   }, [bills.length, labData]);
 
+  // High-performance debounced live search (350ms) querying backend across all dates
   useEffect(() => {
+    const q = search.trim();
+    if (!q || q.length < 2) {
+      setSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+
+    let isStale = false;
+    setIsSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        params.append("search", q);
+        params.append("limit", "50");
+        const res = await fetchFromLaravel(`/bills?${params.toString()}`);
+        if (!isStale) {
+          const rawList = Array.isArray(res) ? res : (res?.data || []);
+          const billsList = rawList.map((b: any) => normalizeBillObj(b));
+          setSearchResults(billsList);
+        }
+      } catch (err) {
+        console.error("Bills live search error:", err);
+      } finally {
+        if (!isStale) {
+          setIsSearching(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      isStale = true;
+      clearTimeout(timer);
+    };
+  }, [search]);
+
+    useEffect(() => {
     fetchBills(false);
     fetchAvailableTests(false);
   }, [dateMode, filterDate, startDate, endDate, fetchBills]);
@@ -906,7 +945,24 @@ export default function BillingPage() {
   // Calculations & Filters
   const safeBills = Array.isArray(bills) ? bills : [];
 
-  const filteredBills = safeBills.filter((b) => {
+  // Merge live search results with in-memory bills
+  const candidateBills = useMemo(() => {
+    if (searchResults && search.trim().length >= 2) {
+      const map = new Map<string, any>();
+      searchResults.forEach((b: any) => {
+        if (b?.id) map.set(String(b.id), b);
+      });
+      safeBills.forEach((b: any) => {
+        if (b?.id && !map.has(String(b.id))) {
+          map.set(String(b.id), b);
+        }
+      });
+      return Array.from(map.values());
+    }
+    return safeBills;
+  }, [safeBills, searchResults, search]);
+
+  const filteredBills = candidateBills.filter((b) => {
     if (!b) return false;
     const patName = formatPatientListDisplayName(b.patient?.name, b.patient?.designation);
     const rawPatName = b.patient?.name || "";
@@ -915,15 +971,28 @@ export default function BillingPage() {
     const phone = b.patient?.phone || "";
     const billDate = getRecordLocalDate(b.createdAt || b.created_at);
 
-    const matchesSearch =
-      patName.toLowerCase().includes(search.toLowerCase()) ||
-      rawPatName.toLowerCase().includes(search.toLowerCase()) ||
-      patId.toLowerCase().includes(search.toLowerCase()) ||
-      billId.toLowerCase().includes(search.toLowerCase()) ||
-      phone.includes(search);
+    const q = search.toLowerCase().trim();
+    const cleanQ = q.replace(/\D/g, "");
+    const barcode = String(b.patient?.vial_barcode || (b.patient as any)?.vialBarcode || "");
+    const uhid = String(b.patient?.uhid || "");
+    const cleanPhone = String(phone || "").replace(/\D/g, "");
+
+    const matchesSearch = !q ||
+      patName.toLowerCase().includes(q) ||
+      rawPatName.toLowerCase().includes(q) ||
+      patId.toLowerCase().includes(q) ||
+      billId.toLowerCase().includes(q) ||
+      phone.includes(q) ||
+      (cleanQ.length >= 3 && cleanPhone.includes(cleanQ)) ||
+      barcode.toLowerCase().includes(q) ||
+      uhid.toLowerCase().includes(q) ||
+      (Array.isArray(b.reports) && b.reports.some((r: any) => String(r.custom_id || "").toLowerCase().includes(q)));
 
     const matchesStatus = statusFilter === "ALL" || b.status === statusFilter;
-    const matchesDate = dateMode === "range"
+    // When searching, bypass date restriction!
+    const matchesDate = q.length > 0
+      ? true
+      : dateMode === "range"
       ? ((!startDate || billDate >= startDate) && (!endDate || billDate <= endDate))
       : (filterDate ? billDate === filterDate : true);
 
@@ -1315,14 +1384,28 @@ export default function BillingPage() {
       <div className="flex flex-col gap-3 bg-card/70 p-4 rounded-xl border border-border/80 shadow-sm">
         {/* Row 1: Search */}
         <div className="relative w-full">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 pointer-events-none" />
+          {isSearching ? (
+            <Loader2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
+          ) : (
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60 pointer-events-none" />
+          )}
           <input
             type="text"
-            placeholder="Search patient, phone, PID, or invoice ID…"
+            placeholder="Search patient name, phone, PID, invoice ID, barcode, UHID, report ID…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-background border border-border/90 rounded-lg text-xs outline-none focus:border-primary transition-all text-foreground"
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+            className={`w-full pl-9 ${search ? "pr-9" : "pr-4"} py-2 bg-background border border-border/90 rounded-lg text-xs outline-none focus:border-primary transition-all text-foreground`}
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => { setSearch(""); setSearchResults(null); setCurrentPage(1); }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
+              title="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Row 2: Date filter + Status & Source filters */}

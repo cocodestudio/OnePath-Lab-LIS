@@ -737,10 +737,10 @@ export default function ManageInventoryPage() {
               <Sliders className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-foreground">
+              <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
                 Manage Laboratory Inventory
               </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                 Purchase inward entries, consumption logging, physical count reconciliation &amp; vendor catalog
               </p>
             </div>
