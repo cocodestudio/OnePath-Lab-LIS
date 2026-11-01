@@ -157,6 +157,56 @@ function detectTubesForReport(report: any): string[] {
   return Array.from(detected);
 }
 
+function getReportDistinctTestNames(report: any): string[] {
+  if (!report) return [];
+
+  const testNames = new Set<string>();
+
+  // 1. Pre-formatted tests string
+  if (typeof report.tests === "string" && report.tests.trim()) {
+    report.tests.split(",").forEach((t: string) => {
+      const clean = t.trim();
+      if (clean) testNames.add(clean);
+    });
+  }
+
+  // 2. Pre-formatted tests array
+  if (Array.isArray(report.tests) && report.tests.length > 0) {
+    report.tests.forEach((t: any) => {
+      const name = typeof t === "string" ? t.trim() : (t?.name || "").trim();
+      if (name) testNames.add(name);
+    });
+  }
+
+  // 3. Extract top-level root tests from results (never leaf parameters)
+  if (Array.isArray(report.results) && report.results.length > 0) {
+    report.results.forEach((r: any) => {
+      const t = r?.test;
+      if (!t) return;
+      const rootTest = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t);
+      const testName = (rootTest?.name || t?.name || "").trim();
+      if (testName) {
+        testNames.add(testName);
+      }
+    });
+  }
+
+  // 4. Fallback from patient metadata
+  const p = report.patient || {};
+  let pMeta = p.meta || {};
+  if (typeof pMeta === "string") {
+    try { pMeta = JSON.parse(pMeta); } catch {}
+  }
+  if (testNames.size === 0 && typeof pMeta?.tests === "string") {
+    pMeta.tests.split(",").forEach((t: string) => {
+      const clean = t.trim();
+      if (clean) testNames.add(clean);
+    });
+  }
+
+  return Array.from(testNames);
+}
+
 export default function TodaySamplesPage() {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
@@ -1247,21 +1297,22 @@ export default function TodaySamplesPage() {
 
       {/* ── State of the Art Status & Specimen Barcoding Window (Horizontal Full-Width Premium UI/UX) ── */}
       <Dialog open={!!statusModalReport} onOpenChange={() => setStatusModalReport(null)}>
-        <DialogContent className="max-w-6xl w-[calc(100vw-1rem)] sm:w-[96vw] max-h-[95vh] sm:max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl sm:rounded-3xl bg-card border border-border/90 shadow-2xl animate-scale-in">
+        <DialogContent className="w-full max-w-full sm:max-w-6xl sm:w-[96vw] h-[100dvh] sm:h-[92vh] max-h-[100dvh] sm:max-h-[92vh] p-0 m-0 border-0 sm:border border-border/80 rounded-none sm:rounded-3xl overflow-hidden flex flex-col bg-background shadow-2xl [&>button.absolute]:hidden">
           <DialogTitle className="sr-only">Specimen Status &amp; Tube Barcoding Station</DialogTitle>
 
           {statusModalReport && (() => {
             const isModalApproved = Boolean(isReportApproved(statusModalReport));
+            const distinctTests = getReportDistinctTestNames(statusModalReport);
 
             return (
-              <form onSubmit={handleSaveStatusAndBarcodes} className="flex flex-col h-full max-h-[95vh] sm:max-h-[92vh] overflow-hidden">
+              <form onSubmit={handleSaveStatusAndBarcodes} className="flex flex-col h-full max-h-[100dvh] sm:max-h-[92vh] overflow-hidden">
                 {/* Modal Header */}
-                <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-border/80 bg-card flex items-center justify-between pr-12 sm:pr-14 shrink-0">
-                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-border/80 bg-card flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                     <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl gradient-primary text-primary-foreground flex items-center justify-center shadow-xs shrink-0">
                       <SlidersHorizontal className="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <h3 className="font-display text-sm sm:text-base font-bold text-foreground truncate">
                           Specimen Status &amp; Vacutainer Barcoding Station
@@ -1276,18 +1327,29 @@ export default function TodaySamplesPage() {
                     </div>
                   </div>
 
-                  {/* Header quick patient pill */}
-                  <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/60 border border-border/70 text-xs shrink-0 whitespace-nowrap">
-                    <User className="h-3.5 w-3.5 text-primary shrink-0" />
-                    <span className="font-bold text-foreground truncate max-w-[120px]">{statusModalReport.patient?.name || "Patient"}</span>
-                    <span className="text-muted-foreground">•</span>
-                    <span className="font-mono text-muted-foreground text-[11px] font-bold">
-                      {statusModalReport.patient?.custom_id || statusModalReport.patient?.customId || "PID"}
-                    </span>
-                    <span className="text-muted-foreground">•</span>
-                    <span className="font-mono text-primary text-[11px] font-bold">
-                      {statusModalReport.custom_id || statusModalReport.customId}
-                    </span>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    {/* Header quick patient pill */}
+                    <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/60 border border-border/70 text-xs shrink-0 whitespace-nowrap">
+                      <User className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <span className="font-bold text-foreground truncate max-w-[120px]">{statusModalReport.patient?.name || "Patient"}</span>
+                      <span className="text-muted-foreground">•</span>
+                      <span className="font-mono text-muted-foreground text-[11px] font-bold">
+                        {statusModalReport.patient?.custom_id || statusModalReport.patient?.customId || "PID"}
+                      </span>
+                      <span className="text-muted-foreground">•</span>
+                      <span className="font-mono text-primary text-[11px] font-bold">
+                        {statusModalReport.custom_id || statusModalReport.customId}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setStatusModalReport(null)}
+                      className="p-1.5 sm:p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer shrink-0"
+                      title="Close Station"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
                   </div>
                 </div>
 
@@ -1339,19 +1401,26 @@ export default function TodaySamplesPage() {
 
                         <div className="pt-2 border-t border-border/60 space-y-1.5">
                           <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block whitespace-nowrap">
-                            Assigned Investigations
+                            Assigned Investigations ({distinctTests.length})
                           </span>
-                          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto custom-scrollbar">
-                            {(statusModalReport.results || []).map((r: any, idx: number) => (
-                              <span
-                                key={idx}
-                                className="px-2 py-0.5 rounded-md bg-muted/80 border border-border/70 text-[10px] font-medium text-foreground truncate max-w-[200px] whitespace-nowrap shrink-0"
-                              >
-                                {r.test?.name || "Test"}
+                          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar">
+                            {distinctTests.length > 0 ? (
+                              distinctTests.map((tName: string, idx: number) => (
+                                <span
+                                  key={idx}
+                                  className="px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 text-[11px] font-semibold text-primary truncate max-w-[240px] whitespace-nowrap shrink-0 shadow-2xs"
+                                  title={tName}
+                                >
+                                  {tName}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground italic">
+                                {statusModalReport.package_name || "Diagnostic Test Panel"}
                               </span>
-                            ))}
+                            )}
                             {statusModalReport.package_name && (
-                              <span className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/25 text-[10px] font-bold text-primary whitespace-nowrap shrink-0">
+                              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 whitespace-nowrap shrink-0 shadow-2xs">
                                 Package: {statusModalReport.package_name}
                               </span>
                             )}
@@ -1720,8 +1789,8 @@ export default function TodaySamplesPage() {
                 </div>
 
                 {/* Modal Footer Controls */}
-                <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border/80 bg-muted/30 backdrop-blur-xs flex flex-col xs:flex-row items-stretch xs:items-center justify-between gap-2.5 sm:gap-3 shrink-0">
-                  <div className="flex items-center justify-between xs:justify-start gap-2 sm:gap-3 text-xs w-full xs:w-auto">
+                <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-border/80 bg-muted/30 backdrop-blur-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
+                  <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 text-xs w-full sm:w-auto">
                     <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-card border border-border shadow-2xs whitespace-nowrap shrink-0 text-xs">
                       <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${
                         modalStage === "COLLECTED" ? "bg-sky-500 animate-pulse" : modalStage === "IN_TRANSIT" ? "bg-blue-500 animate-pulse" : "bg-amber-500 animate-pulse"
@@ -1737,13 +1806,13 @@ export default function TodaySamplesPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 xs:flex items-center gap-2 sm:gap-2.5 w-full xs:w-auto justify-end">
+                  <div className="flex flex-col-reverse xs:flex-row items-stretch xs:items-center gap-2 sm:gap-2.5 w-full sm:w-auto justify-end">
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
                       onClick={() => setStatusModalReport(null)}
-                      className="h-10 px-4 rounded-xl text-xs font-semibold cursor-pointer whitespace-nowrap justify-center"
+                      className="h-10 px-4 rounded-xl text-xs font-semibold cursor-pointer w-full xs:w-auto justify-center"
                     >
                       Cancel
                     </Button>
@@ -1751,7 +1820,7 @@ export default function TodaySamplesPage() {
                       type="submit"
                       size="sm"
                       disabled={savingStatusModal || isModalApproved}
-                      className={`h-10 px-3.5 sm:px-6 rounded-xl font-bold text-xs gap-1.5 sm:gap-2 shadow-md ring-inset-top whitespace-nowrap justify-center ${
+                      className={`h-11 xs:h-10 px-5 sm:px-6 rounded-xl font-bold text-xs gap-2 shadow-md ring-inset-top w-full xs:w-auto justify-center ${
                         isModalApproved
                           ? "bg-muted text-muted-foreground border border-border cursor-not-allowed"
                           : "gradient-primary text-primary-foreground cursor-pointer hover:-translate-y-px active:scale-95 transition-all"
@@ -1764,7 +1833,9 @@ export default function TodaySamplesPage() {
                       ) : (
                         <CheckCircle2 className="h-4 w-4 shrink-0" />
                       )}
-                      <span className="whitespace-nowrap">{isModalApproved ? "Status Locked" : "Save Barcodes & Update"}</span>
+                      <span className="whitespace-nowrap">
+                        {isModalApproved ? "Status Locked (Report Approved)" : "Save Barcodes & Update"}
+                      </span>
                     </Button>
                   </div>
                 </div>

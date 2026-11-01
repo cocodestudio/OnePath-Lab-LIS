@@ -5098,21 +5098,168 @@ assert(
   "[TODAY SAMPLES MOBILE CARDS & FILTER PILLS] Responsive mobile cards render on phones and filter pills prevent awkward multi-line text wrapping"
 );
 
-// 61.4 Status & Barcode Modal: Responsive Viewport Fit & Touch-Friendly Grids
+// 61.4 Status & Barcode Modal: Responsive Fullscreen Mobile Viewport Fit & Distinct Root Tests
 assert(
-  todaySamplesSrc61.includes("w-[calc(100vw-1rem)] sm:w-[96vw]") &&
-  todaySamplesSrc61.includes("max-h-[95vh] sm:max-h-[92vh]") &&
-  todaySamplesSrc61.includes("grid grid-cols-2 xs:flex items-center gap-2 pt-1") &&
-  todaySamplesSrc61.includes("grid grid-cols-2 xs:flex items-center gap-2 shrink-0 w-full xs:w-auto"),
-  "[STATUS MODAL RESPONSIVE FIT & GRIDS] Status and vacutainer modal fits edge-to-edge on mobile with 2-column quick action button grids"
+  todaySamplesSrc61.includes("w-full max-w-full sm:max-w-6xl sm:w-[96vw]") &&
+  todaySamplesSrc61.includes("h-[100dvh] sm:h-[92vh]") &&
+  todaySamplesSrc61.includes("getReportDistinctTestNames") &&
+  todaySamplesSrc61.includes("rootTest = t.parent?.parent ? t.parent.parent : (t.parent ? t.parent : t)"),
+  "[STATUS MODAL RESPONSIVE FIT & DISTINCT TESTS] Status modal opens edge-to-edge on mobile like print report and displays distinct root test names instead of raw parameter list"
 );
 
 // 61.5 Status & Barcode Modal: Single-Line Text, Dropdown Bounds & Responsive Footer
 assert(
   todaySamplesSrc61.includes("max-w-[calc(100vw-2rem)] sm:max-w-md") &&
-  todaySamplesSrc61.includes("whitespace-nowrap") &&
+  todaySamplesSrc61.includes("flex-col-reverse xs:flex-row") &&
   todaySamplesSrc61.includes("Save Barcodes & Update"),
-  "[STATUS MODAL DROPDOWNS & SINGLE LINE TEXT] Dropdown containers stay safely within mobile viewport bounds and footer action buttons maintain single-line text"
+  "[STATUS MODAL DROPDOWNS & RESPONSIVE FOOTER] Dropdown containers stay safely within mobile viewport bounds and footer action buttons prevent overflow on narrow viewports"
+);
+
+console.log("\n▶ MODULE 62: Cases Referral Overview: Self Referral Revenue & Direct Walk-in Inclusion");
+
+const doctorsOverviewSrc62 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/doctors/page.tsx"), "utf-8");
+const backendDocCtrlSrc62 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/DoctorController.php"), "utf-8");
+
+// 62.1 Doctors Overview: Self Direct Walk-in Badge
+assert(
+  doctorsOverviewSrc62.includes('doc.id === "self_referral" || doc.name.toLowerCase() === "self"') &&
+  doctorsOverviewSrc62.includes("Direct Walk-in") &&
+  doctorsOverviewSrc62.includes("Historical"),
+  "[DOCTORS OVERVIEW SELF BADGE] Referral overview table renders a distinct 'Direct Walk-in' emerald badge for Self instead of Historical"
+);
+
+// 62.2 Doctors Overview: Rates Configuration Suppression for Self
+assert(
+  doctorsOverviewSrc62.includes('doc.id !== "self_referral" && doc.name.toLowerCase() !== "self"') &&
+  doctorsOverviewSrc62.includes("Set Rates"),
+  "[DOCTORS OVERVIEW SET RATES SUPPRESSION] Set Rates button is cleanly suppressed for Self referral while preserved for referring clinicians"
+);
+
+// 62.3 Backend DoctorController: Self Detection & Direct Walk-in Unified Inclusion
+assert(
+  backendDocCtrlSrc62.includes("public function isSelfReferral(?string $docName): bool") &&
+  backendDocCtrlSrc62.includes("public function scopeSelfPatients($query)") &&
+  backendDocCtrlSrc62.includes("'id' => 'self_referral'") &&
+  backendDocCtrlSrc62.includes("'name' => 'Self'") &&
+  backendDocCtrlSrc62.includes("'specialty' => 'Direct Walk-in'"),
+  "[BACKEND SELF REFERRAL INCLUSION] DoctorController unifies Self direct walk-in revenue alongside clinicians with 0% commission and 100% lab net share"
+);
+
+// 62.4 Backend DoctorController: Self Statement & Patients Resolution
+assert(
+  backendDocCtrlSrc62.includes("$isSelf = ($idOrName === 'self_referral') || $this->isSelfReferral($idOrName)") &&
+  backendDocCtrlSrc62.includes("'id' => $doctor?->id ?: ($isSelf ? 'self_referral' : null)") &&
+  backendDocCtrlSrc62.includes("Doctor Statement (Main Lab)"),
+  "[BACKEND SELF STATEMENT & PATIENTS] DoctorController resolves statements and patient cases for Self without 404 error"
+);
+
+// 62.5 Doctors Overview: Actions Right Alignment
+assert(
+  doctorsOverviewSrc62.includes('<th className="py-3 px-4 sm:px-6 text-right">Actions</th>') &&
+  doctorsOverviewSrc62.includes('<td className="py-3.5 px-4 sm:px-6 text-right">') &&
+  doctorsOverviewSrc62.includes('className="flex items-center justify-end gap-1.5"'),
+  "[DOCTORS OVERVIEW ACTIONS ALIGNMENT] Referral actions column is right-aligned with justify-end, ensuring Self and doctor buttons align cleanly to the right"
+);
+
+console.log("\n▶ MODULE 63: WhatsApp & In-App Browser Breakout Engine");
+
+const inAppBrowserLibSrc63 = fs.readFileSync(path.resolve(__dirname, "../src/lib/inapp-browser.ts"), "utf-8");
+const inAppBannerSrc63 = fs.readFileSync(path.resolve(__dirname, "../src/components/inapp-browser-banner.tsx"), "utf-8");
+const doctorPortalSrc63 = fs.readFileSync(path.resolve(__dirname, "../src/app/doctor-portal/page.tsx"), "utf-8");
+const publicReportSrc63 = fs.readFileSync(path.resolve(__dirname, "../src/app/r/[id]/page.tsx"), "utf-8");
+
+// 63.1 In-App Browser Detection & Android Intent Protocol
+assert(
+  inAppBrowserLibSrc63.includes("export function detectInAppBrowser") &&
+  inAppBrowserLibSrc63.includes("isWhatsApp = /WhatsApp/i.test(ua)") &&
+  inAppBrowserLibSrc63.includes("export function buildAndroidChromeIntent") &&
+  inAppBrowserLibSrc63.includes("intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome"),
+  "[IN-APP BROWSER DETECT & INTENT] inapp-browser.ts accurately detects WhatsApp/WebViews and constructs Android Chrome Intent protocols"
+);
+
+// 63.2 External Browser Breakout & Auto-Breakout Trigger
+assert(
+  inAppBrowserLibSrc63.includes("export function openInExternalBrowser") &&
+  inAppBrowserLibSrc63.includes("export function triggerAutoBreakout") &&
+  inAppBrowserLibSrc63.includes("op_auto_breakout_done"),
+  "[EXTERNAL BROWSER BREAKOUT] openInExternalBrowser and triggerAutoBreakout automatically escape WhatsApp WebViews to Chrome"
+);
+
+// 63.3 InAppBrowserBanner Floating UI Component
+assert(
+  inAppBannerSrc63.includes("export function InAppBrowserBanner") &&
+  inAppBannerSrc63.includes("Open in Chrome") &&
+  inAppBannerSrc63.includes("WhatsApp's in-app browser blocks PDF downloads"),
+  "[IN-APP BANNER COMPONENT] InAppBrowserBanner renders responsive banner with 1-click Open in Chrome, Copy Link and three-dots guide"
+);
+
+// 63.4 Doctor Portal & Public Report Page Integration
+assert(
+  doctorPortalSrc63.includes("<InAppBrowserBanner />") &&
+  doctorPortalSrc63.includes("detectInAppBrowser") &&
+  publicReportSrc63.includes("<InAppBrowserBanner />"),
+  "[DOCTOR PORTAL & REPORT INTEGRATION] Doctor Portal and Public Report pages mount InAppBrowserBanner and provide instant breakout from WhatsApp"
+);
+
+// 63.5 RBAC Settings: Account List Toolbar 'Add Role' Button Renaming, Refresh Icon Removal & Right-Alignment
+const rbacTabSrc63 = fs.readFileSync(path.resolve(__dirname, "../src/components/collection-centers-tab.tsx"), "utf-8");
+assert(
+  rbacTabSrc63.includes("<span>Add Role</span>") &&
+  !rbacTabSrc63.includes('title="Refresh Accounts"') &&
+  rbacTabSrc63.includes("justify-between sm:justify-end") &&
+  rbacTabSrc63.includes("Right-aligned 'Add Role' button without refresh icon"),
+  "[RBAC TOOLBAR CLEANUP] 'Add Role / Terminal' button renamed to 'Add Role', refresh button removed, and right-aligned cleanly in RBAC list toolbar"
+);
+
+// ===============================================================================
+// SUITE 64: RAPID CARD FLAG SUPPRESSION & MULTI-TENANT TEST INTERPRETATION RESILIENCE
+// ===============================================================================
+console.log("\n--- Suite 64: Rapid Card Flag Suppression & Multi-Tenant Test Interpretation Resilience ---");
+
+const editReportSrc64 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/reports/[id]/edit/page.tsx"), "utf-8");
+const reportSheetSrc64 = fs.readFileSync(path.resolve(__dirname, "../src/components/report-sheet.tsx"), "utf-8");
+
+// 64.1 Rapid Card Test Flag Suppression Helper & Logic
+assert(
+  editReportSrc64.includes("const isRapidCardTest = (test?: Test | null, mainTestName?: string): boolean =>") &&
+  editReportSrc64.includes("immunochromatograph") &&
+  editReportSrc64.includes("lateral flow") &&
+  editReportSrc64.includes("/\\b(card|rapid|ict)\\b/i.test(name)") &&
+  editReportSrc64.includes("!/\\b(cardiac|cardio|cardiovascular|cardiology|myocardial)\\b/i.test(name)"),
+  "[RAPID CARD HELPER] isRapidCardTest accurately detects rapid card tests and protects cardiac/cardiology profiles from false matches"
+);
+
+// 64.2 Rapid Card Tests Render Dash Instead of NORMAL Flag
+assert(
+  editReportSrc64.includes("const isRapidCard = isRapidCardTest(item.test, group.mainTestName);") &&
+  editReportSrc64.includes("{isRapidCard ? (") &&
+  editReportSrc64.includes('<span className="text-xs text-muted-foreground/40 font-mono">—</span>'),
+  "[RAPID CARD FLAG SUPPRESSION] Rapid card test results (e.g. Negative) render '—' instead of 'NORMAL' badge on Enter Results page"
+);
+
+// 64.3 Multi-Tenant Report Sheet Recursive JSON Unpacking
+assert(
+  reportSheetSrc64.includes("while (typeof raw === \"string\")") &&
+  reportSheetSrc64.includes("raw = JSON.parse(raw);") &&
+  reportSheetSrc64.includes("hasExplicitInterpSetting = true;") &&
+  reportSheetSrc64.includes("printedInterps = raw;"),
+  "[REPORT SHEET RECURSIVE UNPACKING] buildReportBlocks safely unpacks nested/double-serialized printed_interpretations JSON strings"
+);
+
+// 64.4 Multi-Tenant Comprehensive Interpretation Hierarchy Resolution
+assert(
+  reportSheetSrc64.includes("mainTestObj?.interpretation ||") &&
+  reportSheetSrc64.includes("firstTestObj?.parent?.interpretation ||") &&
+  reportSheetSrc64.includes("itemsList.find((i) => i.test?.parent?.interpretation)") &&
+  reportSheetSrc64.includes("allPossibleIds.some((id) => printedInterps.includes(id))"),
+  "[MULTI-TENANT INTERPRETATION RESOLUTION] Report sheet resolves interpretations from main test, parent test, and all parameter variations across tenant accounts"
+);
+
+// 64.5 Enter Results Page Interp State Default Merging
+assert(
+  editReportSrc64.includes("const merged = Array.from(new Set([...parsed, ...defaultInterpIds]));") &&
+  editReportSrc64.includes("group.hasInterpretation = true;"),
+  "[ENTER RESULTS INTERP MERGE] Newly added tests with interpretations automatically check Add Interpretation by default without dropping existing selections"
 );
 
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);

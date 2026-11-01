@@ -705,12 +705,18 @@ export function buildReportBlocks(
   let printedInterps: string[] = [];
   let hasExplicitInterpSetting = false;
   try {
-    const raw = report.printedInterpretations ?? (report as any).printed_interpretations;
+    let raw = report.printedInterpretations ?? (report as any).printed_interpretations;
     if (raw !== undefined && raw !== null) {
-      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-      if (Array.isArray(parsed)) {
+      while (typeof raw === "string") {
+        try {
+          raw = JSON.parse(raw);
+        } catch {
+          break;
+        }
+      }
+      if (Array.isArray(raw)) {
         hasExplicitInterpSetting = true;
-        printedInterps = parsed;
+        printedInterps = raw;
       }
     }
   } catch (e) {}
@@ -1375,19 +1381,40 @@ export function buildReportBlocks(
       }
 
       // Clinical Interpretation
-      const directInterp = mainTestObj.interpretation || firstTestObj.interpretation || itemsList.find(i => i.test?.interpretation)?.test?.interpretation;
+      const directInterp =
+        mainTestObj?.interpretation ||
+        firstTestObj?.interpretation ||
+        firstTestObj?.parent?.interpretation ||
+        firstTestObj?.parent?.parent?.interpretation ||
+        itemsList.find((i) => i.test?.interpretation)?.test?.interpretation ||
+        itemsList.find((i) => i.test?.parent?.interpretation)?.test?.parent?.interpretation;
       const interpContent = getClinicalInterpretation(mainTestName, directInterp, category);
       const hasInterpText = Boolean(interpContent && interpContent.trim() !== "" && interpContent !== "<p><br></p>");
+
+      const allPossibleIds = [
+        mainTestObj?.id,
+        (mainTestObj as any)?.testCode,
+        (mainTestObj as any)?.test_code,
+        firstTestObj?.id,
+        (firstTestObj as any)?.testCode,
+        (firstTestObj as any)?.test_code,
+        firstTestObj?.parent_id,
+        (firstTestObj as any)?.parentId,
+        firstTestObj?.parent?.id,
+        ...itemsList.map((i) => i.test?.id),
+        ...itemsList.map((i) => i.test?.parent_id),
+        ...itemsList.map((i) => (i.test as any)?.parentId),
+        ...itemsList.map((i) => i.test?.parent?.id),
+      ].filter(Boolean) as string[];
 
       const isInterpEnabled = !opts?.hideInterpretation && hasInterpText && (
         reportSettings.fieldsToShow.interpretation !== false
       ) && (
         !hasExplicitInterpSetting ||
         printedInterps.length === 0 ||
-        printedInterps.includes(mainTestObj.id) ||
-        printedInterps.includes(firstTestObj.id) ||
-        printedInterps.includes(itemsList[0]?.test?.id) ||
-        printedInterps.includes("ALL")
+        printedInterps.includes("ALL") ||
+        allPossibleIds.some((id) => printedInterps.includes(id)) ||
+        printedInterps.some((pi) => typeof pi === "string" && pi.toLowerCase() === mainTestName.toLowerCase())
       );
 
       if (isInterpEnabled) {

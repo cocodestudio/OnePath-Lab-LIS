@@ -1105,7 +1105,7 @@ export function CollectionCentersTab() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-between sm:justify-start">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 w-full lg:w-auto justify-between sm:justify-end">
                 {/* Filter Pills */}
                 <div className="p-1 bg-background rounded-xl border border-border flex items-center gap-1 overflow-x-auto max-w-full scrollbar-none shrink-0">
                   <button
@@ -1146,26 +1146,15 @@ export function CollectionCentersTab() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-between sm:justify-start">
-                  <button
-                    type="button"
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors shadow-xs cursor-pointer shrink-0"
-                    title="Refresh Accounts"
-                  >
-                    <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("ADD")}
-                    className="flex-1 sm:flex-initial justify-center px-3.5 sm:px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
-                  >
-                    <PlusCircle className="h-4 w-4 shrink-0" />
-                    <span>Add Role / Terminal</span>
-                  </button>
-                </div>
+                {/* Right-aligned 'Add Role' button without refresh icon */}
+                <button
+                  type="button"
+                  onClick={() => setViewMode("ADD")}
+                  className="w-full sm:w-auto justify-center px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-md hover:opacity-95 active:scale-95 transition-all flex items-center gap-2 cursor-pointer shrink-0"
+                >
+                  <PlusCircle className="h-4 w-4 shrink-0" />
+                  <span>Add Role</span>
+                </button>
               </div>
             </div>
 
@@ -1183,7 +1172,7 @@ export function CollectionCentersTab() {
                 </div>
                 <h4 className="text-base font-bold text-foreground">No Accounts Found</h4>
                 <p className="text-xs text-muted-foreground max-w-md mt-1.5 leading-relaxed">
-                  Click the <strong>"Add Role / Terminal"</strong> button above to register Front-Desk Receptionists, Collection Centers, or B2B partners.
+                  Click the <strong>"Add Role"</strong> button above to register Front-Desk Receptionists, Collection Centers, or B2B partners.
                 </p>
               </div>
             ) : (

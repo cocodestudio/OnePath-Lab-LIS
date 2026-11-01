@@ -11,6 +11,8 @@ import {
 import { PaginatedReportPreview, PrintSettings } from "@/components/report-sheet";
 import { downloadNativePdf } from "@/lib/pdf-report-downloader";
 import { getCleanLetterheadUrl } from "@/lib/api-client";
+import { InAppBrowserBanner } from "@/components/inapp-browser-banner";
+import { detectInAppBrowser, openInExternalBrowser } from "@/lib/inapp-browser";
 
 function getDoctorPortalApiBase(): string {
   if (typeof window !== "undefined") {
@@ -267,7 +269,14 @@ function DoctorPortalContent() {
       });
     } catch (err: any) {
       console.error("PDF download error:", err);
-      alert(err?.message || "Failed to download PDF. Please try again.");
+      const isWA = detectInAppBrowser().isInApp;
+      if (isWA) {
+        if (confirm("WhatsApp's in-app browser blocked this PDF download. Tap OK to open Doctor Portal in Chrome / your default browser to download your reports seamlessly.")) {
+          openInExternalBrowser();
+        }
+      } else {
+        alert(err?.message || "Failed to download PDF. Please try again.");
+      }
     } finally {
       setDownloadingId(null);
       setRenderReportData(null);
@@ -277,8 +286,10 @@ function DoctorPortalContent() {
   // ── Auth Error Screen (for external visitors with missing or invalid token) ──
   if (!isVerifying && authError) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
-        <div className="max-w-md w-full p-8 rounded-3xl bg-card border border-border/80 shadow-2xl text-center space-y-4">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+        <InAppBrowserBanner />
+        <div className="flex-1 flex items-center justify-center p-4">
+          <div className="max-w-md w-full p-8 rounded-3xl bg-card border border-border/80 shadow-2xl text-center space-y-4">
           <div className="w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">
             <Lock className="w-7 h-7" />
           </div>
@@ -306,8 +317,9 @@ function DoctorPortalContent() {
           </div>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   // ── Loading Screen ──
   if (isVerifying) {
@@ -327,6 +339,7 @@ function DoctorPortalContent() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-foreground pb-20">
+      <InAppBrowserBanner />
       {/* ── Top Header Navigation (Call Lab & Refresh Removed as requested) ── */}
       <header className="sticky top-0 z-40 bg-card/95 backdrop-blur-md border-b border-border/80 shadow-xs">
         <div className="w-full px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-3">

@@ -566,7 +566,7 @@ export default function DoctorsOverviewPage() {
                 <th className="py-3 px-3 text-center">Comm. %</th>
                 <th className="py-3 px-4 text-right">Doctor Cut</th>
                 <th className="py-3 px-4 text-right">Lab Net Revenue</th>
-                <th className="py-3 px-4 text-center">Actions</th>
+                <th className="py-3 px-4 sm:px-6 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60 text-xs">
@@ -598,8 +598,8 @@ export default function DoctorsOverviewPage() {
                     <td className="py-3.5 px-4 text-right">
                       <Skeleton className="h-4 w-16 rounded ml-auto" />
                     </td>
-                    <td className="py-3.5 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
+                    <td className="py-3.5 px-4 sm:px-6 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         <Skeleton className="h-7 w-16 rounded-lg" />
                         <Skeleton className="h-7 w-7 rounded-lg" />
                       </div>
@@ -633,11 +633,15 @@ export default function DoctorsOverviewPage() {
                             <span className="font-bold text-foreground truncate block">
                               {doc.name}
                             </span>
-                            {!doc.is_registered && (
+                            {doc.id === "self_referral" || doc.name.toLowerCase() === "self" ? (
+                              <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/20">
+                                Direct Walk-in
+                              </span>
+                            ) : !doc.is_registered ? (
                               <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold border border-amber-500/20">
                                 Historical
                               </span>
-                            )}
+                            ) : null}
                           </div>
                           <div className="text-[11px] text-muted-foreground truncate flex items-center gap-1.5 mt-0.5">
                             {doc.specialty && <span>{doc.specialty}</span>}
@@ -708,8 +712,8 @@ export default function DoctorsOverviewPage() {
                     </td>
 
                     {/* Actions: View Patients (Separate Page) + Set Rates + Print Statement */}
-                    <td className="py-3.5 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
+                    <td className="py-3.5 px-4 sm:px-6 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         {/* View Patients Separate Page Link */}
                         <Link
                           href={getDoctorPatientsUrl(doc)}
@@ -726,17 +730,19 @@ export default function DoctorsOverviewPage() {
                           </Button>
                         </Link>
 
-                        <Link href={`/dashboard/doctors/manage?selected_doctor=${encodeURIComponent(doc.name)}`}>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 px-2.5 text-xs font-semibold rounded-lg gap-1.5 border-border hover:bg-muted/80 text-foreground cursor-pointer transition-colors"
-                            title="Configure Rates & Discounts for this Doctor"
-                          >
-                            <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
-                            <span>Set Rates</span>
-                          </Button>
-                        </Link>
+                        {doc.id !== "self_referral" && doc.name.toLowerCase() !== "self" && (
+                          <Link href={`/dashboard/doctors/manage?selected_doctor=${encodeURIComponent(doc.name)}`}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 px-2.5 text-xs font-semibold rounded-lg gap-1.5 border-border hover:bg-muted/80 text-foreground cursor-pointer transition-colors"
+                              title="Configure Rates & Discounts for this Doctor"
+                            >
+                              <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+                              <span>Set Rates</span>
+                            </Button>
+                          </Link>
+                        )}
 
                         {/* Direct 1-Click Print PDF Statement */}
                         <Button

@@ -790,17 +790,25 @@ function ResultEntryContent() {
 
       if (data.printedInterpretations !== undefined && data.printedInterpretations !== null) {
         try {
-          const raw = data.printedInterpretations;
-          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-          setPrintedInterpretations(Array.isArray(parsed) ? parsed : defaultInterpIds);
+          let raw = data.printedInterpretations;
+          while (typeof raw === 'string') {
+            try { raw = JSON.parse(raw); } catch { break; }
+          }
+          const parsed = Array.isArray(raw) ? raw : [];
+          const merged = Array.from(new Set([...parsed, ...defaultInterpIds]));
+          setPrintedInterpretations(merged.length > 0 ? merged : defaultInterpIds);
         } catch (e) {
           setPrintedInterpretations(defaultInterpIds);
         }
       } else if (data.printed_interpretations !== undefined && data.printed_interpretations !== null) {
         try {
-          const raw = data.printed_interpretations;
-          const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-          setPrintedInterpretations(Array.isArray(parsed) ? parsed : defaultInterpIds);
+          let raw = data.printed_interpretations;
+          while (typeof raw === 'string') {
+            try { raw = JSON.parse(raw); } catch { break; }
+          }
+          const parsed = Array.isArray(raw) ? raw : [];
+          const merged = Array.from(new Set([...parsed, ...defaultInterpIds]));
+          setPrintedInterpretations(merged.length > 0 ? merged : defaultInterpIds);
         } catch (e) {
           setPrintedInterpretations(defaultInterpIds);
         }
@@ -1110,6 +1118,38 @@ function ResultEntryContent() {
     if (range.min !== null && num < range.min) return { abnormal: true, flag: "LOW" };
     if (range.max !== null && num > range.max) return { abnormal: true, flag: "HIGH" };
     return { abnormal: false, flag: "NORMAL" };
+  };
+
+  const isRapidCardTest = (test?: Test | null, mainTestName?: string): boolean => {
+    if (!test) return false;
+    const name = `${test.name || ""} ${mainTestName || ""}`.toLowerCase();
+    const method = String((test as any)?.method || "").toLowerCase();
+    const category = String((test as any)?.category || "").toLowerCase();
+
+    // Explicit method check
+    if (
+      method.includes("immunochromatograph") ||
+      method.includes("lateral flow") ||
+      /\b(card|rapid|ict)\b/i.test(method)
+    ) {
+      return true;
+    }
+
+    // Explicit category check
+    if (/\b(rapid|card)\b/i.test(category)) {
+      return true;
+    }
+
+    // Name check with whole-word regex to avoid "cardiac" or "cardiovascular"
+    // Matches: "Rapid Card", "Card Test", "Dengue Card", "Malaria Rapid", "ICT", etc.
+    if (
+      /\b(rapid\s*card|card\s*test|rapid\s*test|antigen\s*card|antibody\s*card|strip\s*test)\b/i.test(name) ||
+      (/\b(card|rapid|ict)\b/i.test(name) && !/\b(cardiac|cardio|cardiovascular|cardiology|myocardial)\b/i.test(name))
+    ) {
+      return true;
+    }
+
+    return false;
   };
 
   const toggleInterpretation = (testId: string) => {
@@ -1729,6 +1769,9 @@ function ResultEntryContent() {
       }
 
       const group = map.get(mtId)!;
+      if (hasInterp) {
+        group.hasInterpretation = true;
+      }
 
       const isSubgroup = Boolean(t.parent && t.parent.id !== mt.id && (t.parent.name || "").trim().toLowerCase() !== mtName.trim().toLowerCase());
       const sectionKey = isSubgroup 
@@ -2219,6 +2262,7 @@ function ResultEntryContent() {
                                   const isCalculated = calculatedParamIds.has(item.id) || (canAutoCalc && isParamFormulaCalculated(item.test));
                                   const isTextType = (item.test.valueType || item.test.value_type) === "Text";
                                   const isTextRange = (item.test.rangeType || item.test.range_type) === "TEXT" || !!(item.test.textRefRange || item.test.text_ref_range);
+                                  const isRapidCard = isRapidCardTest(item.test, group.mainTestName);
                                   const patGender = report?.patient?.gender || "both";
                                   const patAge = report?.patient?.age ?? 25;
                                   const range = getRefRange(item.test, patGender, patAge);
@@ -2449,7 +2493,9 @@ function ResultEntryContent() {
 
                                             {/* Flag Badge */}
                                             <td className="px-6 py-3.5 text-right">
-                                              {abnormal ? (
+                                              {isRapidCard ? (
+                                                <span className="text-xs text-muted-foreground/40 font-mono">—</span>
+                                              ) : abnormal ? (
                                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold bg-destructive text-destructive-foreground">
                                                   {flag}
                                                 </span>
