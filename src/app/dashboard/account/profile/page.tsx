@@ -14,6 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
+import { AccountTwoFactorTab } from "@/components/account-two-factor-tab";
 
 interface UserProfile {
   id: number;
@@ -42,7 +43,7 @@ interface ActiveSession {
 }
 
 function ProfileContent() {
-  const [activeTab, setActiveTab] = useState<"PROFILE" | "SESSIONS">("PROFILE");
+  const [activeTab, setActiveTab] = useState<"PROFILE" | "SESSIONS" | "2FA">("PROFILE");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [labData, setLabData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -349,7 +350,7 @@ function ProfileContent() {
 
   if (loading && !profile) {
     return (
-      <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 px-3 sm:px-6 lg:px-8 animate-fade-in">
+      <div className="w-full max-w-full space-y-6 pb-20 px-3 sm:px-5 lg:px-6 animate-fade-in">
         <div className="flex items-center justify-between border-b border-border/60 pb-4">
           <div className="space-y-2">
             <div className="h-7 w-48 rounded-lg shimmer-gradient" />
@@ -413,7 +414,7 @@ function ProfileContent() {
             : "Laboratory Staff";
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-6 pb-20 px-3 sm:px-6 lg:px-8 overflow-x-hidden animate-fade-in">
+    <div className="w-full max-w-full space-y-6 pb-20 px-3 sm:px-5 lg:px-6 overflow-x-hidden animate-fade-in">
       {/* Header with Title and Smooth Rounded Segmented Tab Switcher */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/60">
         <div>
@@ -465,6 +466,17 @@ function ProfileContent() {
                 {sessions.length}
               </span>
             )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("2FA")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer ${activeTab === "2FA"
+              ? "bg-card text-foreground shadow-xs border border-border/70 font-bold"
+              : "text-muted-foreground hover:text-foreground hover:bg-background/40"
+              }`}
+          >
+            <ShieldCheck className={`h-3.5 w-3.5 ${activeTab === "2FA" ? "text-primary" : "text-muted-foreground"}`} />
+            <span>2FA</span>
           </button>
         </div>
       </div>
@@ -640,7 +652,7 @@ function ProfileContent() {
                 </div>
 
                 {/* Field 3: Mobile Number */}
-                <div className="p-4 rounded-xl bg-background/50 border border-border/70 hover:border-border transition-colors space-y-2">
+                <div id="profile-phone-section" className="p-4 rounded-xl bg-background/50 border border-border/70 hover:border-border transition-colors space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-semibold text-muted-foreground">Mobile Phone Number</label>
                     {editingField !== "phone" && (
@@ -1005,6 +1017,24 @@ function ProfileContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ================= TAB 3: 2FA SECURITY ================= */}
+      {activeTab === "2FA" && (
+        <AccountTwoFactorTab
+          userEmail={profile?.email || ""}
+          userPhone={profile?.phone || ""}
+          onSwitchToProfileTabAndEditPhone={() => {
+            setActiveTab("PROFILE");
+            setEditingField("phone");
+            setEditPhone(profile?.phone || "");
+            setTimeout(() => {
+              const phoneEl = document.getElementById("profile-phone-section");
+              phoneEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 100);
+          }}
+          showToast={showToast}
+        />
       )}
 
       {/* Reset Password via Secure Email Link Modal */}

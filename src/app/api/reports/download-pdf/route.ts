@@ -101,10 +101,29 @@ export const maxDuration = 60;
 
 // Disk Cache Directory for pre-generated vector PDFs (Approach A)
 const CACHE_DIR = path.join(process.cwd(), ".cache", "reports-pdf");
+let lastCachePruneTime = 0;
 function ensureCacheDir() {
   try {
     if (!fs.existsSync(CACHE_DIR)) {
       fs.mkdirSync(CACHE_DIR, { recursive: true });
+    }
+    const now = Date.now();
+    // Prune stale cache entries older than 30 days at most once every 6 hours
+    if (now - lastCachePruneTime > 6 * 3600 * 1000) {
+      lastCachePruneTime = now;
+      const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+      const files = fs.readdirSync(CACHE_DIR);
+      for (const file of files) {
+        if (file.endsWith(".pdf")) {
+          const filePath = path.join(CACHE_DIR, file);
+          try {
+            const stat = fs.statSync(filePath);
+            if (now - stat.mtimeMs > MAX_AGE_MS) {
+              fs.unlinkSync(filePath);
+            }
+          } catch {}
+        }
+      }
     }
   } catch {}
 }
@@ -230,6 +249,24 @@ async function renderPdfWithChrome(html: string): Promise<Buffer> {
   try {
     const browser = await getOrLaunchBrowser();
     page = await browser.newPage();
+
+    // Security Hardening: Prevent SSRF and Local File Inclusion (SEC-09)
+    await page.setRequestInterception(true);
+    page.on("request", (interceptedReq: any) => {
+      const url = (interceptedReq.url() || "").toLowerCase();
+      if (
+        url.startsWith("file:") ||
+        url.includes("169.254.169.254") ||
+        url.includes("127.0.0.1") ||
+        url.includes("localhost") ||
+        url.startsWith("gopher:") ||
+        url.startsWith("ftp:")
+      ) {
+        interceptedReq.abort();
+      } else {
+        interceptedReq.continue();
+      }
+    });
 
     // Emulate crisp high-DPI A4 screen viewport
     await page.setViewport({

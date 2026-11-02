@@ -508,13 +508,13 @@ export default function B2BRevenuePage() {
   };
 
   return (
-    <div className="space-y-7 animate-fade-in pb-16">
+    <div className="w-full max-w-full overflow-x-hidden space-y-6 sm:space-y-7 animate-fade-in pb-16">
       {/* ── Top Header ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800 mb-2">
-            <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse" />
-            <span>B2B Commercial Ledger & Settlements</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800 mb-2 whitespace-nowrap">
+            <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse shrink-0" />
+            <span className="whitespace-nowrap">B2B Commercial Ledger & Settlements</span>
           </div>
           <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
             Revenue & Financial Analytics
@@ -524,23 +524,23 @@ export default function B2BRevenuePage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0 w-full sm:w-auto">
           <button
             onClick={loadData}
             disabled={isSyncing}
-            className="flex items-center gap-2 h-10 px-3.5 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground text-xs font-bold shadow-xs hover:bg-muted/60 transition-colors cursor-pointer"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 h-10 px-3.5 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground text-xs font-bold shadow-xs hover:bg-muted/60 transition-colors cursor-pointer whitespace-nowrap"
           >
-            <RefreshCw className={`h-4 w-4 ${isSyncing || loading ? "animate-spin text-purple-600" : ""}`} />
+            <RefreshCw className={`h-4 w-4 shrink-0 ${isSyncing || loading ? "animate-spin text-purple-600" : ""}`} />
             <span>Sync Ledger</span>
           </button>
 
           {/* User Requested: "Generate B2B Statement" button with instant CSV/Excel download */}
           <Button
             onClick={handleDownloadB2BStatementCSV}
-            className="h-10 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md gap-2 cursor-pointer hover:-translate-y-px active:scale-[0.98] transition-all"
+            className="flex-1 sm:flex-none h-10 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md gap-2 cursor-pointer hover:-translate-y-px active:scale-[0.98] transition-all whitespace-nowrap"
             title="Download formatted .csv file in Excel format for the selected period"
           >
-            <Download className="h-4 w-4" />
+            <Download className="h-4 w-4 shrink-0" />
             <span>Generate B2B Statement</span>
           </Button>
         </div>
@@ -550,11 +550,11 @@ export default function B2BRevenuePage() {
       <div className="bg-card border border-border/80 rounded-2xl p-4 shadow-2xs space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Quick Date Switcher Buttons (Specific Date, Weekly, Monthly, Yearly, Custom) */}
-          <div className="flex items-center gap-1.5 p-1 bg-muted/50 rounded-xl border border-border/60 self-start flex-wrap">
+          <div className="flex items-center gap-1.5 p-1 bg-muted/50 rounded-xl border border-border/60 overflow-x-auto no-scrollbar w-full sm:w-auto shrink-0 max-w-full">
             <button
               type="button"
               onClick={() => setDateFilter("SPECIFIC_DATE")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 dateFilter === "SPECIFIC_DATE"
                   ? "bg-purple-600 text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -565,7 +565,7 @@ export default function B2BRevenuePage() {
             <button
               type="button"
               onClick={() => setDateFilter("WEEKLY")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 dateFilter === "WEEKLY"
                   ? "bg-purple-600 text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -576,7 +576,7 @@ export default function B2BRevenuePage() {
             <button
               type="button"
               onClick={() => setDateFilter("MONTHLY")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 dateFilter === "MONTHLY"
                   ? "bg-purple-600 text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -587,7 +587,7 @@ export default function B2BRevenuePage() {
             <button
               type="button"
               onClick={() => setDateFilter("YEARLY")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 dateFilter === "YEARLY"
                   ? "bg-purple-600 text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -598,7 +598,7 @@ export default function B2BRevenuePage() {
             <button
               type="button"
               onClick={() => setDateFilter("CUSTOM")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 dateFilter === "CUSTOM"
                   ? "bg-purple-600 text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -738,12 +738,12 @@ export default function B2BRevenuePage() {
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <span className="text-xs text-muted-foreground font-semibold">Status:</span>
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+          <span className="text-xs text-muted-foreground font-semibold whitespace-nowrap">Status:</span>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 px-3 rounded-xl border border-border bg-background text-xs font-semibold text-foreground outline-none focus:border-purple-600"
+            className="h-9 px-3 rounded-xl border border-border bg-background text-xs font-semibold text-foreground outline-none focus:border-purple-600 cursor-pointer flex-1 sm:flex-none"
           >
             <option value="ALL">All Statuses</option>
             <option value="FINAL">Final</option>
@@ -756,12 +756,12 @@ export default function B2BRevenuePage() {
 
       {/* ── Requisition Ledger Table with Pagination ── */}
       <div className="bg-card border border-border/70 rounded-2xl shadow-2xs overflow-hidden">
-        <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-4 border-b border-border/60 flex items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-bold text-foreground">B2B Requisition Financial Ledger</h3>
             <p className="text-xs text-muted-foreground">Showing {filteredReports.length} records for {periodLabel}</p>
           </div>
-          <span className="text-xs font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/40 px-3 py-1 rounded-full">
+          <span className="text-xs font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/40 px-3 py-1 rounded-full whitespace-nowrap inline-flex items-center shrink-0">
             Ledger Active
           </span>
         </div>
@@ -821,49 +821,55 @@ export default function B2BRevenuePage() {
 
                   return (
                     <tr key={r.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-6 py-3.5 font-mono font-bold text-purple-600">
+                      <td className="px-6 py-3.5 font-mono font-bold text-purple-600 whitespace-nowrap">
                         {r.custom_id || r.customId || "REQ"}
                       </td>
                       <td className="px-6 py-3.5 text-muted-foreground whitespace-nowrap">
                         {r.created_at || r.createdAt ? new Date(r.created_at || r.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "N/A"}
                       </td>
-                      <td className="px-6 py-3.5">
-                        <p className="font-bold text-foreground">{r.patient?.name || "Patient"}</p>
-                        <p className="text-[11px] text-muted-foreground">{r.patient?.custom_id || r.patient?.customId || "ID: N/A"}</p>
+                      <td className="px-6 py-3.5 whitespace-nowrap">
+                        <div className="min-w-0">
+                          <p className="font-bold text-foreground whitespace-nowrap truncate max-w-[220px]" title={r.patient?.name || "Patient"}>
+                            {r.patient?.name || "Patient"}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground whitespace-nowrap font-mono">
+                            {r.patient?.custom_id || r.patient?.customId || "ID: N/A"}
+                          </p>
+                        </div>
                       </td>
-                      <td className="px-6 py-3.5">
-                        <span className="inline-flex px-2 py-0.5 rounded-md bg-muted text-[10px] font-semibold text-foreground">
+                      <td className="px-6 py-3.5 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-muted text-[10px] font-semibold text-foreground whitespace-nowrap border border-border/60">
                           {Array.isArray(r.results) ? `${r.results.length} tests` : "Standard Panel"}
                         </span>
                       </td>
-                      <td className="px-6 py-3.5 text-right font-mono font-bold text-foreground">
+                      <td className="px-6 py-3.5 text-right font-mono font-bold text-foreground whitespace-nowrap">
                         ₹{fin.totalMrp.toLocaleString("en-IN")}
                       </td>
-                      <td className="px-6 py-3.5 text-right font-mono text-muted-foreground">
+                      <td className="px-6 py-3.5 text-right font-mono text-muted-foreground whitespace-nowrap">
                         ₹{fin.labMargin.toLocaleString("en-IN")}
                       </td>
-                      <td className="px-6 py-3.5 text-right font-mono font-bold text-purple-600">
+                      <td className="px-6 py-3.5 text-right font-mono font-bold text-purple-600 whitespace-nowrap">
                         ₹{fin.b2bMargin.toLocaleString("en-IN")}
                       </td>
-                      <td className="px-6 py-3.5">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                      <td className="px-6 py-3.5 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase whitespace-nowrap ${
                           isPaid
-                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60"
                             : fin.paid > 0
-                            ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300"
-                            : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                            ? "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/60"
+                            : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/60"
                         }`}>
                           {isPaid ? "Paid" : fin.paid > 0 ? "Partial" : "Due"}
                         </span>
                       </td>
-                      <td className="px-6 py-3.5">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                      <td className="px-6 py-3.5 whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase whitespace-nowrap ${
                           isFinal
-                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                            : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60"
+                            : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/60"
                         }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${isFinal ? "bg-emerald-500" : "bg-amber-500"}`} />
-                          {r.status || "PENDING"}
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isFinal ? "bg-emerald-500" : "bg-amber-500"}`} />
+                          <span>{r.status || "PENDING"}</span>
                         </span>
                       </td>
                     </tr>
@@ -876,7 +882,7 @@ export default function B2BRevenuePage() {
 
         {/* ── Table Pagination Bar ── */}
         {filteredReports.length > 0 && (
-          <div className="px-6 py-3.5 border-t border-border/60 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="px-4 sm:px-6 py-3.5 border-t border-border/60 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <span>Showing</span>
               <span className="font-bold text-foreground">

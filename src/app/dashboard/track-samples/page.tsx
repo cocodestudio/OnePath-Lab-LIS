@@ -89,12 +89,12 @@ export default function TrackSamplesPage() {
   const [searchType, setSearchType] = useState("all");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [fullscreenReport, setFullscreenReport] = useState<any | null>(null);
 
   // High-performance client-side cache to minimize server requests
   const queryCache = useRef<Map<string, any[]>>(new Map());
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   const activePlaceholder = useMemo(() => {
     return SEARCH_CRITERIA.find((c) => c.value === searchType)?.placeholder || "Search sample...";
@@ -102,10 +102,10 @@ export default function TrackSamplesPage() {
 
   const executeFetch = useCallback(async (query: string, type: string, force = false) => {
     const trimmed = query.trim();
-    // Minimum 3 chars to avoid hammering DB on partial input
-    if (!trimmed || trimmed.length < 2) {
+    if (!trimmed) {
       setSearchResults([]);
       setIsSearching(false);
+      setHasSearched(false);
       return;
     }
 
@@ -113,14 +113,16 @@ export default function TrackSamplesPage() {
     if (!force && queryCache.current.has(cacheKey)) {
       setSearchResults(queryCache.current.get(cacheKey)!);
       setIsSearching(false);
+      setHasSearched(true);
       return;
     }
 
     try {
       setIsSearching(true);
-      // limit=20: track-samples is a lookup screen, 20 results is plenty — reduces server load significantly
-      const url = `/reports?search=${encodeURIComponent(trimmed)}&search_type=${encodeURIComponent(type)}&limit=20`;
-      const res = await fetchFromLaravel(url, { cacheTtlMs: 60000 });
+      setHasSearched(true);
+      // track_sample=1 ensures receptionist and lab staff can track any patient specimen across the laboratory
+      const url = `/reports?search=${encodeURIComponent(trimmed)}&search_type=${encodeURIComponent(type)}&limit=25&track_sample=1`;
+      const res = await fetchFromLaravel(url, { cacheTtlMs: force ? 0 : 30000 });
       const list = Array.isArray(res) ? res : (res?.data || []);
       queryCache.current.set(cacheKey, list);
       setSearchResults(list);
@@ -132,29 +134,16 @@ export default function TrackSamplesPage() {
     }
   }, []);
 
-  // Debounced live fetch when user types or changes criteria
-  useEffect(() => {
-    if (!search.trim()) {
-      setSearchResults([]);
-      setIsSearching(false);
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-      return;
-    }
-
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
-
-    debounceTimer.current = setTimeout(() => {
-      executeFetch(search, searchType);
-    }, 320);
-
-    return () => {
-      if (debounceTimer.current) clearTimeout(debounceTimer.current);
-    };
-  }, [search, searchType, executeFetch]);
-
-  const handleManualSearch = () => {
-    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+  const handleManualSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!search.trim()) return;
     executeFetch(search, searchType, true);
+  };
+
+  const handleClearSearch = () => {
+    setSearch("");
+    setSearchResults([]);
+    setHasSearched(false);
   };
 
   const copyText = (val: string) => {
@@ -270,19 +259,19 @@ export default function TrackSamplesPage() {
       </div>
 
       {/* ── Search Bar with Dropdown (Full Width, Zero Conflicting Results) ── */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
+      <form onSubmit={handleManualSearch} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full">
         {/* Dropdown for Search Criteria */}
-        <div className="sm:w-56 shrink-0">
+        <div className="w-full sm:w-56 shrink-0">
           <Select
             value={searchType}
             onValueChange={(val) => {
               setSearchType(val);
-              if (search.trim()) {
-                executeFetch(search, val);
+              if (search.trim() && hasSearched) {
+                executeFetch(search, val, true);
               }
             }}
           >
-            <SelectTrigger className="h-11 bg-card border-border text-xs font-semibold shadow-xs rounded-xl">
+            <SelectTrigger className="h-11 bg-card border-border text-xs font-semibold shadow-xs rounded-xl w-full">
               <SelectValue placeholder="Search by..." />
             </SelectTrigger>
             <SelectContent>
@@ -297,14 +286,11 @@ export default function TrackSamplesPage() {
 
         {/* Search Input Box */}
         <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleManualSearch();
-            }}
             placeholder={activePlaceholder}
             className="w-full pl-10 pr-10 h-11 text-sm bg-card border-border shadow-xs rounded-xl"
             autoFocus
@@ -312,10 +298,7 @@ export default function TrackSamplesPage() {
           {search && (
             <button
               type="button"
-              onClick={() => {
-                setSearch("");
-                setSearchResults([]);
-              }}
+              onClick={handleClearSearch}
               className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 transition-colors cursor-pointer"
               title="Clear search"
             >
@@ -326,19 +309,18 @@ export default function TrackSamplesPage() {
 
         {/* Instant Search Button */}
         <Button
-          type="button"
-          onClick={handleManualSearch}
+          type="submit"
           disabled={isSearching || !search.trim()}
-          className="h-11 px-5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-xs hover:brightness-105 active:scale-95 transition-all flex items-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
+          className="w-full sm:w-auto h-11 px-6 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-xs hover:brightness-105 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
         >
           {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           <span>Search</span>
         </Button>
-      </div>
+      </form>
 
       {/* ── State 1: Search Empty (Minimal, Clean Placeholder) ── */}
-      {!search.trim() ? (
-        <div className="rounded-2xl border border-dashed border-border/80 bg-card p-12 text-center space-y-3 shadow-xs">
+      {!hasSearched && !search.trim() ? (
+        <div className="rounded-2xl border border-dashed border-border/80 bg-card p-8 sm:p-12 text-center space-y-3 shadow-xs">
           <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
             <Search className="h-6 w-6 text-primary" />
           </div>
@@ -347,13 +329,13 @@ export default function TrackSamplesPage() {
               Search to Track Sample
             </h3>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              Select a search criteria (Name, Phone, PID, Barcode, etc.) and enter details above to track the sample journey.
+              Enter patient name, phone number, PID, barcode, or report ID and click Search to track sample status.
             </p>
           </div>
         </div>
       ) : isSearching ? (
         /* Loading state */
-        <div className="rounded-2xl border border-border/80 bg-card p-12 text-center space-y-3 shadow-xs">
+        <div className="rounded-2xl border border-border/80 bg-card p-8 sm:p-12 text-center space-y-3 shadow-xs">
           <Loader2 className="h-7 w-7 text-primary animate-spin mx-auto" />
           <p className="text-xs text-muted-foreground font-medium">
             Searching for &ldquo;{search}&rdquo;...
@@ -361,7 +343,7 @@ export default function TrackSamplesPage() {
         </div>
       ) : searchResults.length === 0 ? (
         /* ── State 2: No Results Found ── */
-        <div className="rounded-2xl border border-dashed border-border/80 bg-card p-12 text-center space-y-3 shadow-xs">
+        <div className="rounded-2xl border border-dashed border-border/80 bg-card p-8 sm:p-12 text-center space-y-3 shadow-xs">
           <div className="w-12 h-12 rounded-2xl bg-muted text-muted-foreground flex items-center justify-center mx-auto">
             <AlertCircle className="h-6 w-6 text-muted-foreground" />
           </div>
@@ -377,10 +359,7 @@ export default function TrackSamplesPage() {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => {
-              setSearch("");
-              setSearchResults([]);
-            }}
+            onClick={handleClearSearch}
             className="text-xs cursor-pointer"
           >
             Clear Search
@@ -418,18 +397,18 @@ export default function TrackSamplesPage() {
             return (
               <div
                 key={rep.id}
-                className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden space-y-6 p-6"
+                className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden space-y-6 p-4 sm:p-6"
               >
                 {/* 1. Patient Header & Action Bar */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/70 pb-5">
                   <div className="flex items-center gap-3.5">
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold text-lg shrink-0">
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold text-base sm:text-lg shrink-0">
                       {p.name ? p.name.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
                     </div>
 
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2.5 flex-wrap">
-                        <h2 className="text-lg font-bold text-foreground">
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-base sm:text-lg font-bold text-foreground">
                           {p.designation ? `${p.designation} ` : ""}{p.name || "Patient"}
                         </h2>
                         <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-muted border border-border text-foreground">
@@ -449,30 +428,21 @@ export default function TrackSamplesPage() {
                     </div>
                   </div>
 
-                  {/* Actions: Print Report Button */}
-                  <div className="flex items-center gap-2.5 self-start sm:self-center">
+                  {/* Actions: Print Report Button (No direct icon link, full width on mobile) */}
+                  <div className="w-full sm:w-auto flex items-center">
                     <Button
                       type="button"
                       size="sm"
                       onClick={() => setFullscreenReport(rep)}
-                      className={`text-xs font-bold gap-2 cursor-pointer shadow-xs ${
+                      className={`w-full sm:w-auto h-10 sm:h-9 text-xs font-bold gap-2 justify-center cursor-pointer shadow-xs ${
                         isApproved
                           ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                           : "gradient-primary text-primary-foreground"
                       }`}
                     >
-                      <Printer className="h-4 w-4" />
+                      <Printer className="h-4 w-4 shrink-0" />
                       <span>{isApproved ? "Print Approved Report" : "Print / Preview Report"}</span>
                     </Button>
-
-                    <Link
-                      href={`/dashboard/reports/${rep.id}`}
-                      target="_blank"
-                      className="p-2 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                      title="Open full report in new tab"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </Link>
                   </div>
                 </div>
 
@@ -496,8 +466,8 @@ export default function TrackSamplesPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="py-2">
-                      <div className="relative">
+                    <div className="py-2 overflow-x-auto sm:overflow-visible">
+                      <div className="relative min-w-[280px] sm:min-w-0">
                         {/* Background line */}
                         <div className="absolute top-4 left-6 right-6 h-1 bg-muted rounded-full" />
 
@@ -510,9 +480,9 @@ export default function TrackSamplesPage() {
                         />
 
                         {/* 4 Steps */}
-                        <div className="relative z-10 grid grid-cols-4 gap-2">
+                        <div className="relative z-10 grid grid-cols-4 gap-1 sm:gap-2">
                           {/* Step 1 */}
-                          <div className="flex flex-col items-center text-center space-y-1.5">
+                          <div className="flex flex-col items-center text-center space-y-1">
                             <div
                               className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
                                 currentStep >= 1
@@ -522,12 +492,12 @@ export default function TrackSamplesPage() {
                             >
                               {currentStep > 1 ? <Check className="h-4 w-4 stroke-[2.5]" /> : "1"}
                             </div>
-                            <span className="text-[11px] font-bold text-foreground">Registered</span>
-                            <span className="text-[10px] text-muted-foreground hidden sm:block">Front Desk</span>
+                            <span className="text-[10px] sm:text-[11px] font-bold text-foreground">Registered</span>
+                            <span className="text-[9px] sm:text-[10px] text-muted-foreground hidden sm:block">Front Desk</span>
                           </div>
 
                           {/* Step 2 */}
-                          <div className="flex flex-col items-center text-center space-y-1.5">
+                          <div className="flex flex-col items-center text-center space-y-1">
                             <div
                               className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
                                 currentStep >= 2
@@ -537,12 +507,12 @@ export default function TrackSamplesPage() {
                             >
                               {currentStep > 2 ? <Check className="h-4 w-4 stroke-[2.5]" /> : "2"}
                             </div>
-                            <span className="text-[11px] font-bold text-foreground">Collected</span>
-                            <span className="text-[10px] text-muted-foreground hidden sm:block">Phlebotomy</span>
+                            <span className="text-[10px] sm:text-[11px] font-bold text-foreground">Collected</span>
+                            <span className="text-[9px] sm:text-[10px] text-muted-foreground hidden sm:block">Phlebotomy</span>
                           </div>
 
                           {/* Step 3 */}
-                          <div className="flex flex-col items-center text-center space-y-1.5">
+                          <div className="flex flex-col items-center text-center space-y-1">
                             <div
                               className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
                                 currentStep >= 3
@@ -552,12 +522,12 @@ export default function TrackSamplesPage() {
                             >
                               {currentStep > 3 ? <Check className="h-4 w-4 stroke-[2.5]" /> : "3"}
                             </div>
-                            <span className="text-[11px] font-bold text-foreground">Testing</span>
-                            <span className="text-[10px] text-muted-foreground hidden sm:block">Lab Processing</span>
+                            <span className="text-[10px] sm:text-[11px] font-bold text-foreground">Testing</span>
+                            <span className="text-[9px] sm:text-[10px] text-muted-foreground hidden sm:block">Lab Processing</span>
                           </div>
 
                           {/* Step 4 */}
-                          <div className="flex flex-col items-center text-center space-y-1.5">
+                          <div className="flex flex-col items-center text-center space-y-1">
                             <div
                               className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
                                 currentStep >= 4
@@ -567,8 +537,8 @@ export default function TrackSamplesPage() {
                             >
                               {currentStep >= 4 ? <CheckCircle2 className="h-4 w-4" /> : "4"}
                             </div>
-                            <span className="text-[11px] font-bold text-foreground">Approved</span>
-                            <span className="text-[10px] text-muted-foreground hidden sm:block">Pathologist Verified</span>
+                            <span className="text-[10px] sm:text-[11px] font-bold text-foreground">Approved</span>
+                            <span className="text-[9px] sm:text-[10px] text-muted-foreground hidden sm:block">Verified</span>
                           </div>
                         </div>
                       </div>
@@ -579,12 +549,12 @@ export default function TrackSamplesPage() {
                 {/* 3. Patient Details & Specimen Tubes Info Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border/70">
                   {/* Left: Demographics & Medical Info */}
-                  <div className="p-4 rounded-xl bg-muted/30 border border-border/70 space-y-3">
+                  <div className="p-3.5 sm:p-4 rounded-xl bg-muted/30 border border-border/70 space-y-3">
                     <span className="text-xs font-bold text-foreground block border-b border-border/50 pb-1.5">
                       Demographics &amp; Contact Info
                     </span>
 
-                    <div className="grid grid-cols-2 gap-2.5 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                       <div>
                         <span className="text-[10px] text-muted-foreground block">Phone</span>
                         <div className="flex items-center gap-1.5 mt-0.5">
@@ -624,7 +594,7 @@ export default function TrackSamplesPage() {
                       </div>
 
                       {(abhaNumber || abhaAddress) && (
-                        <div className="col-span-2 p-2 rounded-lg bg-primary/5 border border-primary/15 flex items-center justify-between text-xs">
+                        <div className="col-span-1 sm:col-span-2 p-2 rounded-lg bg-primary/5 border border-primary/15 flex items-center justify-between text-xs">
                           <div>
                             <span className="text-[9px] font-bold uppercase text-primary block">ABHA ID</span>
                             <span className="font-mono font-semibold text-foreground">{abhaNumber || abhaAddress}</span>
@@ -636,12 +606,12 @@ export default function TrackSamplesPage() {
                   </div>
 
                   {/* Right: Tests Ordered & Specimen Tubes */}
-                  <div className="p-4 rounded-xl bg-muted/30 border border-border/70 space-y-3">
+                  <div className="p-3.5 sm:p-4 rounded-xl bg-muted/30 border border-border/70 space-y-3">
                     <span className="text-xs font-bold text-foreground block border-b border-border/50 pb-1.5">
                       Diagnostic Tests &amp; Specimen Tubes
                     </span>
 
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       <div>
                         <span className="text-[10px] text-muted-foreground block">Tests Ordered</span>
                         <p className="text-xs font-semibold text-foreground mt-0.5 line-clamp-2">

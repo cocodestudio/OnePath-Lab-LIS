@@ -273,11 +273,11 @@ export default function WalletPage() {
   const isBalanceNegative = walletBalance < 0;
 
   return (
-    <div className="space-y-7 animate-fade-in pb-12 max-w-7xl mx-auto">
+    <div className="w-full max-w-full overflow-x-hidden space-y-5 sm:space-y-7 animate-fade-in pb-12 max-w-7xl mx-auto">
 
       {/* Payment Result Banners from PayU Callback */}
       {paymentStatus === "success" && (
-        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 flex items-center justify-between gap-3 shadow-xs animate-fade-in">
+        <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-fade-in">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
               <CheckCheck className="h-5 w-5" />
@@ -298,7 +298,7 @@ export default function WalletPage() {
               window.history.replaceState({}, "", "/dashboard/wallet");
               window.dispatchEvent(new Event("b2b_wallet_updated"));
             }}
-            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer self-start sm:self-auto"
           >
             Dismiss
           </button>
@@ -306,7 +306,7 @@ export default function WalletPage() {
       )}
 
       {paymentStatus === "failed" && (
-        <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive flex items-center justify-between gap-3 shadow-xs animate-fade-in">
+        <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/30 text-destructive flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-fade-in">
           <div className="flex items-center gap-3">
             <AlertCircle className="h-5 w-5 shrink-0" />
             <div>
@@ -319,7 +319,7 @@ export default function WalletPage() {
           <button
             type="button"
             onClick={() => window.history.replaceState({}, "", "/dashboard/wallet")}
-            className="px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs font-bold cursor-pointer"
+            className="px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs font-bold cursor-pointer self-start sm:self-auto"
           >
             Dismiss
           </button>
@@ -329,9 +329,9 @@ export default function WalletPage() {
       {/* ── Main Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-purple-600 uppercase tracking-[0.2em]">B2B Franchisee Console</span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200/60">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-semibold text-purple-600 uppercase tracking-[0.2em] whitespace-nowrap">B2B Franchisee Console</span>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200/60 whitespace-nowrap inline-flex items-center">
               PayU Automated Ledger
             </span>
           </div>
@@ -347,27 +347,27 @@ export default function WalletPage() {
           type="button"
           onClick={() => loadWalletData(false)}
           disabled={refreshing}
-          className="flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-foreground text-xs font-semibold hover:bg-accent transition-all cursor-pointer shadow-xs shrink-0"
+          className="flex items-center justify-center gap-2 h-10 px-4 rounded-xl border border-border bg-card text-foreground text-xs font-semibold hover:bg-accent transition-all cursor-pointer shadow-xs shrink-0 w-full sm:w-auto"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-purple-600" : ""}`} />
-          <span>{refreshing ? "Syncing..." : "Refresh Balance"}</span>
+          <span className="whitespace-nowrap">{refreshing ? "Syncing..." : "Refresh Balance"}</span>
         </button>
       </div>
 
       {/* ── Sub-Tab Navigation Bar ── */}
-      <div className="flex items-center gap-2 border-b border-border/80 pb-px">
+      <div className="flex items-center gap-2 border-b border-border/80 pb-px overflow-x-auto no-scrollbar -mx-1 px-1 sm:mx-0 sm:px-0">
         <button
           type="button"
           onClick={() => setActiveTab("recharge")}
-          className={`flex items-center gap-2.5 px-5 py-3 rounded-t-xl text-xs font-bold transition-all cursor-pointer border-b-2 -mb-px ${
+          className={`flex items-center gap-2 px-3.5 sm:px-5 py-3 rounded-t-xl text-xs font-bold transition-all cursor-pointer border-b-2 -mb-px shrink-0 whitespace-nowrap ${
             activeTab === "recharge"
               ? "border-purple-600 text-purple-600 bg-purple-50/50 dark:bg-purple-950/30"
               : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
           }`}
         >
-          <Wallet className="h-4 w-4" />
-          <span>Wallet & Add Funds</span>
-          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-muted text-foreground">
+          <Wallet className="h-4 w-4 shrink-0" />
+          <span className="whitespace-nowrap">Wallet & Add Funds</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-muted text-foreground whitespace-nowrap inline-flex items-center">
             ₹{walletBalance.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
           </span>
         </button>
@@ -375,15 +375,15 @@ export default function WalletPage() {
         <button
           type="button"
           onClick={() => setActiveTab("history")}
-          className={`flex items-center gap-2.5 px-5 py-3 rounded-t-xl text-xs font-bold transition-all cursor-pointer border-b-2 -mb-px ${
+          className={`flex items-center gap-2 px-3.5 sm:px-5 py-3 rounded-t-xl text-xs font-bold transition-all cursor-pointer border-b-2 -mb-px shrink-0 whitespace-nowrap ${
             activeTab === "history"
               ? "border-purple-600 text-purple-600 bg-purple-50/50 dark:bg-purple-950/30"
               : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
           }`}
         >
-          <Receipt className="h-4 w-4" />
-          <span>Wallet History & Passbook</span>
-          <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+          <Receipt className="h-4 w-4 shrink-0" />
+          <span className="whitespace-nowrap">Wallet History & Passbook</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap inline-flex items-center ${
             activeTab === "history" ? "bg-purple-600 text-white" : "bg-muted text-foreground"
           }`}>
             {transactions.length} Txns
@@ -429,8 +429,14 @@ export default function WalletPage() {
                 ₹{walletBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
               </p>
               <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
-                <span>Status:</span>
-                <span className={`font-bold ${isBalanceHealthy ? "text-emerald-600" : isBalanceNegative ? "text-red-600" : "text-amber-600"}`}>
+                <span className="whitespace-nowrap">Status:</span>
+                <span className={`font-bold whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] inline-flex items-center ${
+                  isBalanceHealthy
+                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60"
+                    : isBalanceNegative
+                    ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200/60"
+                    : "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/60"
+                }`}>
                   {isBalanceHealthy ? "Active & Healthy" : isBalanceNegative ? "Overdrawn / Low" : "Zero Balance"}
                 </span>
               </div>
@@ -439,7 +445,7 @@ export default function WalletPage() {
             {/* Card 2: Total Added */}
             <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Added</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Total Added</span>
                 <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center border border-emerald-200/60">
                   <ArrowDownLeft className="h-5 w-5" />
                 </div>
@@ -448,15 +454,15 @@ export default function WalletPage() {
                 ₹{totalCredited.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
               </p>
               <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
-                <span>Lifetime Credits:</span>
-                <span className="font-bold text-emerald-600">+₹{totalCredited.toLocaleString("en-IN")}</span>
+                <span className="whitespace-nowrap">Lifetime Credits:</span>
+                <span className="font-bold text-emerald-600 whitespace-nowrap">+₹{totalCredited.toLocaleString("en-IN")}</span>
               </div>
             </div>
 
             {/* Card 3: Total Spent */}
             <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Spent</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Total Spent</span>
                 <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center border border-blue-200/60">
                   <ArrowUpRight className="h-5 w-5" />
                 </div>
@@ -465,15 +471,15 @@ export default function WalletPage() {
                 ₹{totalDebited.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
               </p>
               <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
-                <span>Report Deductions:</span>
-                <span className="font-bold text-blue-600">-₹{totalDebited.toLocaleString("en-IN")}</span>
+                <span className="whitespace-nowrap">Report Deductions:</span>
+                <span className="font-bold text-blue-600 whitespace-nowrap">-₹{totalDebited.toLocaleString("en-IN")}</span>
               </div>
             </div>
 
             {/* Card 4: Credit Facility */}
             <div className="bg-card border border-border/70 rounded-2xl p-5 shadow-2xs">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Credit Facility</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">Credit Facility</span>
                 <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center border border-amber-200/60">
                   <ShieldCheck className="h-5 w-5" />
                 </div>
@@ -482,8 +488,8 @@ export default function WalletPage() {
                 ₹{creditLimit.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
               </p>
               <div className="flex items-center justify-between text-xs text-muted-foreground mt-2 pt-2 border-t border-border/50">
-                <span>Usable Limit:</span>
-                <span className="font-bold text-foreground">₹{(walletBalance + creditLimit).toLocaleString("en-IN")}</span>
+                <span className="whitespace-nowrap">Usable Limit:</span>
+                <span className="font-bold text-foreground whitespace-nowrap">₹{(walletBalance + creditLimit).toLocaleString("en-IN")}</span>
               </div>
             </div>
           </div>
@@ -502,7 +508,7 @@ export default function WalletPage() {
                     <p className="text-xs text-muted-foreground">Powered by PayU Automated Payment Gateway</p>
                   </div>
                 </div>
-                <span className="text-[11px] font-bold text-muted-foreground">
+                <span className="text-[11px] font-bold text-muted-foreground whitespace-nowrap">
                   Min: ₹{(gatewayConfig?.min_recharge_amount || 100).toLocaleString("en-IN")}
                 </span>
               </div>
@@ -534,19 +540,19 @@ export default function WalletPage() {
                 {/* Quick Amount Chips */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-foreground">Select Recharge Amount</label>
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                     {[500, 1000, 2000, 5000, 10000].map((amt) => (
                       <button
                         key={amt}
                         type="button"
                         disabled={!isRechargeAllowed}
                         onClick={() => handleQuickAmount(amt)}
-                        className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all text-center ${
+                        className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all text-center whitespace-nowrap cursor-pointer ${
                           !isRechargeAllowed
                             ? "opacity-50 cursor-not-allowed bg-muted/40 border-border text-muted-foreground"
                             : rechargeAmount === amt
-                            ? "bg-purple-600 text-white border-purple-600 shadow-xs cursor-pointer"
-                            : "bg-background border-border hover:bg-accent text-foreground cursor-pointer"
+                            ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                            : "bg-background border-border hover:bg-accent text-foreground"
                         }`}
                       >
                         ₹{amt.toLocaleString("en-IN")}
@@ -593,9 +599,9 @@ export default function WalletPage() {
                         <Sparkles className="h-5 w-5" />
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-bold text-foreground">PayU Instant</p>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                          <p className="text-sm font-bold text-foreground whitespace-nowrap">PayU Instant</p>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border whitespace-nowrap inline-flex items-center ${
                             !isRechargeAllowed
                               ? "bg-muted text-muted-foreground border-border"
                               : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300/60"
@@ -627,7 +633,7 @@ export default function WalletPage() {
                 <button
                   type="submit"
                   disabled={!isRechargeAllowed || isSubmittingRecharge}
-                  className={`w-full h-12 rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 ${
+                  className={`w-full h-12 px-4 rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 ${
                     !isRechargeAllowed
                       ? "bg-muted text-muted-foreground border border-border cursor-not-allowed shadow-none"
                       : "bg-purple-600 hover:bg-purple-700 text-white hover:-translate-y-px active:scale-[0.98] cursor-pointer"
@@ -635,8 +641,8 @@ export default function WalletPage() {
                 >
                   {!isRechargeAllowed ? (
                     <>
-                      <Lock className="h-4 w-4" />
-                      <span>
+                      <Lock className="h-4 w-4 shrink-0" />
+                      <span className="whitespace-nowrap">
                         {!isGatewayEnabled
                           ? "Recharge Locked (Disabled by Lab)"
                           : "Recharge Locked (Keys Not Configured)"}
@@ -644,13 +650,13 @@ export default function WalletPage() {
                     </>
                   ) : isSubmittingRecharge ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Redirecting to PayU...</span>
+                      <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                      <span className="whitespace-nowrap">Redirecting to PayU...</span>
                     </>
                   ) : (
                     <>
-                      <CreditCard className="h-4 w-4" />
-                      <span>Recharge ₹{rechargeAmount.toLocaleString("en-IN")} via PayU Instant</span>
+                      <CreditCard className="h-4 w-4 shrink-0" />
+                      <span className="truncate sm:whitespace-nowrap">Recharge ₹{rechargeAmount.toLocaleString("en-IN")} via PayU Instant</span>
                     </>
                   )}
                 </button>
@@ -809,9 +815,9 @@ export default function WalletPage() {
             <div className="p-5 border-b border-border/70 space-y-4">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-foreground">Transaction Audit Passbook</h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-muted text-foreground">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base font-bold text-foreground whitespace-nowrap">Transaction Audit Passbook</h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-muted text-foreground border border-border/60 whitespace-nowrap inline-flex items-center">
                       {filteredTransactions.length} of {transactions.length} records
                     </span>
                   </div>
@@ -821,11 +827,11 @@ export default function WalletPage() {
                 </div>
 
                 {/* Quick Date Presets */}
-                <div className="flex items-center gap-1.5 p-1 bg-muted rounded-xl text-xs font-semibold self-start lg:self-auto">
+                <div className="flex items-center gap-1.5 p-1 bg-muted rounded-xl text-xs font-semibold overflow-x-auto no-scrollbar max-w-full">
                   <button
                     type="button"
                     onClick={() => handleDatePreset("ALL")}
-                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                       datePreset === "ALL" ? "bg-card text-foreground shadow-xs font-bold" : "text-muted-foreground"
                     }`}
                   >
@@ -834,7 +840,7 @@ export default function WalletPage() {
                   <button
                     type="button"
                     onClick={() => handleDatePreset("TODAY")}
-                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                       datePreset === "TODAY" ? "bg-card text-foreground shadow-xs font-bold" : "text-muted-foreground"
                     }`}
                   >
@@ -843,7 +849,7 @@ export default function WalletPage() {
                   <button
                     type="button"
                     onClick={() => handleDatePreset("7DAYS")}
-                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                       datePreset === "7DAYS" ? "bg-card text-foreground shadow-xs font-bold" : "text-muted-foreground"
                     }`}
                   >
@@ -852,7 +858,7 @@ export default function WalletPage() {
                   <button
                     type="button"
                     onClick={() => handleDatePreset("MONTH")}
-                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                    className={`px-3 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                       datePreset === "MONTH" ? "bg-card text-foreground shadow-xs font-bold" : "text-muted-foreground"
                     }`}
                   >
@@ -867,7 +873,7 @@ export default function WalletPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5 bg-background border border-border px-2.5 py-1.5 rounded-xl text-xs">
                     <Calendar className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-muted-foreground font-semibold text-[11px]">From:</span>
+                    <span className="text-muted-foreground font-semibold text-[11px] whitespace-nowrap">From:</span>
                     <input
                       type="date"
                       value={fromDate}
@@ -882,7 +888,7 @@ export default function WalletPage() {
 
                   <div className="flex items-center gap-1.5 bg-background border border-border px-2.5 py-1.5 rounded-xl text-xs">
                     <Calendar className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-muted-foreground font-semibold text-[11px]">To:</span>
+                    <span className="text-muted-foreground font-semibold text-[11px] whitespace-nowrap">To:</span>
                     <input
                       type="date"
                       value={toDate}
@@ -899,7 +905,7 @@ export default function WalletPage() {
                     <button
                       type="button"
                       onClick={() => handleDatePreset("ALL")}
-                      className="px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer rounded-lg hover:bg-muted transition-colors flex items-center gap-1"
+                      className="px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground cursor-pointer rounded-lg hover:bg-muted transition-colors flex items-center gap-1 whitespace-nowrap"
                       title="Reset dates"
                     >
                       <X className="h-3 w-3" />
@@ -909,13 +915,13 @@ export default function WalletPage() {
                 </div>
 
                 {/* Type & Search */}
-                <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
                   {/* Type Filter */}
-                  <div className="flex items-center p-1 bg-muted rounded-xl text-xs font-semibold">
+                  <div className="flex items-center p-1 bg-muted rounded-xl text-xs font-semibold overflow-x-auto no-scrollbar shrink-0">
                     <button
                       type="button"
                       onClick={() => { setTypeFilter("ALL"); setCurrentPage(1); }}
-                      className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                      className={`px-3 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                         typeFilter === "ALL" ? "bg-card text-foreground shadow-xs font-bold" : "text-muted-foreground"
                       }`}
                     >
@@ -924,7 +930,7 @@ export default function WalletPage() {
                     <button
                       type="button"
                       onClick={() => { setTypeFilter("DEBIT"); setCurrentPage(1); }}
-                      className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                      className={`px-3 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                         typeFilter === "DEBIT" ? "bg-card text-red-600 shadow-xs font-bold" : "text-muted-foreground"
                       }`}
                     >
@@ -933,7 +939,7 @@ export default function WalletPage() {
                     <button
                       type="button"
                       onClick={() => { setTypeFilter("CREDIT"); setCurrentPage(1); }}
-                      className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                      className={`px-3 py-1 rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                         typeFilter === "CREDIT" ? "bg-card text-emerald-600 shadow-xs font-bold" : "text-muted-foreground"
                       }`}
                     >
@@ -942,14 +948,14 @@ export default function WalletPage() {
                   </div>
 
                   {/* Search Input */}
-                  <div className="relative">
+                  <div className="relative flex-1 sm:w-64 sm:flex-none">
                     <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                       placeholder="Search Patient / Report / Txn..."
-                      className="h-9 pl-8 pr-8 rounded-xl bg-background border border-border text-xs font-medium text-foreground focus:border-purple-600 outline-none w-56 sm:w-64"
+                      className="h-9 pl-8 pr-8 rounded-xl bg-background border border-border text-xs font-medium text-foreground focus:border-purple-600 outline-none w-full"
                     />
                     {searchQuery && (
                       <button
@@ -1100,7 +1106,7 @@ export default function WalletPage() {
 
                           {/* Payment Channel */}
                           <td className="py-3.5 px-4 whitespace-nowrap">
-                            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-muted text-foreground border border-border/70">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-muted text-foreground border border-border/70 whitespace-nowrap inline-flex items-center">
                               {method === "PAYU_UPI" ? "UPI Dynamic QR" : method === "WALLET" ? "Prepaid Wallet" : method}
                             </span>
                           </td>
@@ -1120,7 +1126,7 @@ export default function WalletPage() {
                           {/* Status */}
                           <td className="py-3.5 px-4 text-center whitespace-nowrap">
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap inline-flex items-center ${
                                 t.status === "SUCCESS"
                                   ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/60"
                                   : t.status === "PENDING"

@@ -96,16 +96,6 @@ const receptionistNav: NavItem[] = [
       { name: "Monthly Business Report", href: "/dashboard/billing/monthly-expenses" },
     ],
   },
-  {
-    name: "Cases",
-    icon: Stethoscope,
-    children: [
-      { name: "View Referral", href: "/dashboard/doctors" },
-      { name: "Referral Manage", href: "/dashboard/doctors/manage" },
-      { name: "Doctor Portal", href: "/dashboard/doctors/portal" },
-      { name: "Outsource Cases", href: "/dashboard/cases/outsource" },
-    ],
-  },
   { name: "Help & Support", href: "/dashboard/support", icon: LifeBuoy },
 ];
 
@@ -136,9 +126,7 @@ const b2bNav: NavItem[] = [
     name: "Finance & Rates",
     icon: TrendingUp,
     children: [
-      { name: "Due Reports", href: "/dashboard/billing/dues" },
       { name: "Billing", href: "/dashboard/billing" },
-      { name: "Monthly Business Report", href: "/dashboard/billing/monthly-expenses" },
       { name: "Revenue & Ledger", href: "/dashboard/revenue" },
       { name: "Rate List", href: "/dashboard/ratelist" },
     ],

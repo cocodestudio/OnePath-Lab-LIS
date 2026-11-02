@@ -931,115 +931,137 @@ export function buildReportBlocks(
             : (initialTemplate || "<p class='text-zinc-400 italic text-xs'>No content recorded.</p>");
           const content = sanitizeHtml(rawContent);
 
-          // Check if content has a multi-row table (e.g. Culture & Sensitivity with 39 rows) that needs multi-page pagination
-          let isMultiPageTable = false;
-          let preTableHtml = "";
-          let theadHtml = "";
-          let colgroupHtml = "";
-          let trNodes: string[] = [];
-          let postTableHtml = "";
-
+          // Check if content has an HTML table (e.g. Culture & Sensitivity antibiotic table)
           if (content.includes("<table")) {
             const tableMatch = content.match(/<table[\s\S]*?<\/table>/i);
             if (tableMatch) {
               const tableHtml = tableMatch[0];
               const tableIdx = content.indexOf(tableHtml);
-              preTableHtml = content.substring(0, tableIdx);
-              postTableHtml = content.substring(tableIdx + tableHtml.length);
+              const preTableHtml = content.substring(0, tableIdx).trim();
+              const postTableHtml = content.substring(tableIdx + tableHtml.length).trim();
 
+              // Extract <thead> or first row if it has <th>
+              let theadHtml = "";
               const theadMatch = tableHtml.match(/<thead[\s\S]*?<\/thead>/i);
-              theadHtml = theadMatch ? theadMatch[0] : "";
-
-              const colgroupMatch = tableHtml.match(/<colgroup[\s\S]*?<\/colgroup>/i);
-              colgroupHtml = colgroupMatch ? colgroupMatch[0] : `<colgroup><col style="width:10%" /><col style="width:55%" /><col style="width:35%" /></colgroup>`;
-
-              const tbodyMatch = tableHtml.match(/<tbody[\s\S]*?<\/tbody>/i);
-              const tbodyContent = tbodyMatch ? tbodyMatch[0] : tableHtml;
-
-              const trMatches = tbodyContent.match(/<tr[\s\S]*?<\/tr>/gi);
-              if (trMatches && trMatches.length > 6) {
-                isMultiPageTable = true;
-                trNodes = trMatches;
+              if (theadMatch) {
+                theadHtml = theadMatch[0];
               }
-            }
-          }
 
-          if (isMultiPageTable) {
-            // 1. Intro block (sterile note, collection date, sample type, organism, colony count)
-            if (preTableHtml) {
+              const trMatches = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+              let dataRows: string[] = [];
+
+              if (!theadHtml && trMatches.length > 0 && trMatches[0] && /<th\b/i.test(trMatches[0])) {
+                theadHtml = `<thead>${trMatches[0]}</thead>`;
+                dataRows = trMatches.slice(1);
+              } else if (theadHtml) {
+                const tbodyMatch = tableHtml.match(/<tbody[\s\S]*?<\/tbody>/i);
+                const tbodyContent = tbodyMatch ? tbodyMatch[0] : tableHtml;
+                dataRows = (tbodyContent.match(/<tr[\s\S]*?<\/tr>/gi) || []).filter(r => !/<th\b/i.test(r));
+              } else {
+                dataRows = trMatches;
+              }
+
+              // Standard clinical 3-column colgroup (S.No 10%, Antibiotic 55%, Sensitivity 35%)
+              const colgroupHtml = `<colgroup><col style="width: 10%;" /><col style="width: 55%;" /><col style="width: 35%;" /></colgroup>`;
+
+              // 1. Pre-table intro block (Sterile note, Collection date, Sample type, Organism, Colony count)
+              if (preTableHtml) {
+                pushBlock({
+                  key: `custom-editor-intro-${item.id}`,
+                  node: (
+                    <div 
+                      className="my-1 text-zinc-900 report-custom-editor-content [&_p]:my-0.5"
+                      style={{ 
+                        fontFamily: 'inherit',
+                        fontSize: `${typo.testParameterFontSize || 10.5}px`,
+                        textAlign: "left",
+                        lineHeight: 1.35,
+                      }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(preTableHtml) }}
+                    />
+                  ),
+                });
+              }
+
+              // 2. Table rendering:
+              // If giant table with > 15 data rows, chunk into slices so it paginates gracefully across pages.
+              // Otherwise (standard table with <= 15 rows), render as 1 complete seamless table!
+              if (dataRows.length > 15) {
+                const chunkSize = 4;
+                for (let rIdx = 0; rIdx < dataRows.length; rIdx += chunkSize) {
+                  const chunkSlice = dataRows.slice(rIdx, rIdx + chunkSize);
+                  const rowsHtml = chunkSlice.join("");
+                  // Sanitize table envelope with secure row parsing: sanitizeHtml(rowsHtml)
+                  const chunkTableHtml = `<table class="report-editor-table" style="width: 100%; table-layout: fixed; border-collapse: collapse; margin: 0;">${colgroupHtml}${theadHtml}<tbody>${rowsHtml}</tbody></table>`;
+
+                  pushBlock({
+                    key: `custom-editor-row-${item.id}-${rIdx}`,
+                    node: (
+                      <div className="report-custom-editor-content [&_table]:border-collapse [&_table]:w-full [&_table]:border [&_table]:border-zinc-300 [&_th]:border [&_th]:border-zinc-300 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:bg-zinc-100 [&_th]:font-bold [&_th]:text-[10px] [&_th]:text-left [&_td]:border [&_td]:border-zinc-300 [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-[10px] [&_td]:leading-snug [&_p]:my-0 [&_p]:leading-normal">
+                        <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(chunkTableHtml) }} />
+                      </div>
+                    ),
+                  } as any);
+                }
+              } else {
+                const fullTableHtml = `<table class="report-editor-table" style="width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 6px; margin-bottom: 6px;">${colgroupHtml}${theadHtml}<tbody>${dataRows.join("")}</tbody></table>`;
+                pushBlock({
+                  key: `custom-editor-row-${item.id}-0`,
+                  node: (
+                    <div 
+                      className="my-1 text-zinc-900 report-custom-editor-content [&_table]:border-collapse [&_table]:w-full [&_table]:border [&_table]:border-zinc-300 [&_th]:border [&_th]:border-zinc-300 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:bg-zinc-100 [&_th]:font-bold [&_th]:text-[10px] [&_th]:text-left [&_td]:border [&_td]:border-zinc-300 [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-[10px] [&_td]:leading-snug [&_p]:my-0 [&_p]:leading-normal"
+                      style={{ 
+                        fontFamily: 'inherit',
+                        fontSize: `${typo.testParameterFontSize || 10.5}px`,
+                        textAlign: "left",
+                      }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(fullTableHtml) }}
+                    />
+                  ),
+                });
+              }
+
+              // 3. Post-table block (if any)
+              if (postTableHtml && postTableHtml.replace(/<[^>]*>/g, "").trim().length > 0) {
+                pushBlock({
+                  key: `custom-editor-post-${item.id}`,
+                  node: (
+                    <div 
+                      className="my-1.5 p-1 text-zinc-900 report-custom-editor-content [&_p]:my-0.5"
+                      style={{ 
+                        fontFamily: 'inherit',
+                        fontSize: `${typo.testParameterFontSize || 10.5}px`,
+                        textAlign: "left",
+                      }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(postTableHtml) }}
+                    />
+                  ),
+                });
+              }
+            } else {
+              // Table tag present but no matching end tag, render sanitized content
               pushBlock({
-                key: `custom-editor-intro-${item.id}`,
+                key: `custom-editor-${item.id}`,
                 node: (
                   <div 
-                    className="my-1 text-zinc-900 report-custom-editor-content"
+                    className="my-1.5 p-1 bg-white rounded leading-relaxed text-zinc-900 report-custom-editor-content [&_table]:border-collapse [&_table]:w-full [&_table]:border [&_table]:border-zinc-300 [&_th]:border [&_th]:border-zinc-300 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:bg-zinc-100 [&_th]:font-bold [&_th]:text-[10px] [&_th]:text-left [&_td]:border [&_td]:border-zinc-300 [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-[10px] [&_td]:leading-snug [&_p]:my-0"
                     style={{ 
                       fontFamily: 'inherit',
-                      fontSize: `${typo.testParameterFontSize || 10.5}px`,
-                      textAlign: "left",
-                      lineHeight: 1.35,
-                    }}
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(preTableHtml) }}
-                  />
-                ),
-              });
-            }
-
-            // 2. Chunked table rows in slices of 2 rows each
-            const chunkSize = 2;
-            for (let rIdx = 0; rIdx < trNodes.length; rIdx += chunkSize) {
-              const chunkSlice = trNodes.slice(rIdx, rIdx + chunkSize);
-              const rowsHtml = chunkSlice.join("");
-              const isFirstChunk = (rIdx === 0);
-
-              const contHeader = theadHtml ? (
-                <div className="report-custom-editor-content" style={{ marginTop: "2px", marginBottom: "0px" }}>
-                  <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", margin: 0 }}>
-                    <colgroup dangerouslySetInnerHTML={{ __html: sanitizeHtml(colgroupHtml) }} />
-                    <thead dangerouslySetInnerHTML={{ __html: sanitizeHtml(theadHtml) }} />
-                  </table>
-                </div>
-              ) : null;
-
-              pushBlock({
-                key: `custom-editor-row-${item.id}-${rIdx}`,
-                continuationHeader: contHeader,
-                node: (
-                  <div className="report-custom-editor-content">
-                    <table style={{ width: "100%", tableLayout: "fixed", borderCollapse: "collapse", margin: 0 }}>
-                      <colgroup dangerouslySetInnerHTML={{ __html: sanitizeHtml(colgroupHtml) }} />
-                      {isFirstChunk && theadHtml && (
-                        <thead dangerouslySetInnerHTML={{ __html: sanitizeHtml(theadHtml) }} />
-                      )}
-                      <tbody dangerouslySetInnerHTML={{ __html: sanitizeHtml(rowsHtml) }} />
-                    </table>
-                  </div>
-                ),
-              } as any);
-            }
-
-            // 3. Post-table block if any
-            if (postTableHtml) {
-              pushBlock({
-                key: `custom-editor-post-${item.id}`,
-                node: (
-                  <div 
-                    className="my-1.5 p-1 text-zinc-900 report-custom-editor-content"
-                    style={{ 
-                      fontFamily: 'inherit',
-                      fontSize: `${typo.testParameterFontSize || 10.5}px`,
+                      fontSize: `${typo.testParameterFontSize || 11}px`,
                       textAlign: "left",
                     }}
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(postTableHtml) }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
                   />
                 ),
               });
             }
           } else {
+            // No table in content (e.g. Histopathology or simple custom editor text)
             pushBlock({
               key: `custom-editor-${item.id}`,
               node: (
                 <div 
-                  className="my-1.5 p-1 bg-white rounded leading-relaxed text-zinc-900 report-custom-editor-content"
+                  className="my-1.5 p-1 bg-white rounded leading-relaxed text-zinc-900 report-custom-editor-content [&_table]:border-collapse [&_table]:w-full [&_table]:border [&_table]:border-zinc-300 [&_th]:border [&_th]:border-zinc-300 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:bg-zinc-100 [&_th]:font-bold [&_th]:text-[10px] [&_th]:text-left [&_td]:border [&_td]:border-zinc-300 [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:text-[10px] [&_td]:leading-snug [&_p]:my-0"
                   style={{ 
                     fontFamily: 'inherit',
                     fontSize: `${typo.testParameterFontSize || 11}px`,
@@ -1936,23 +1958,38 @@ export const PaginatedReportPreview = React.forwardRef<
                 background-color: #ffffff !important;
               }
             }
-            .report-custom-editor-content table {
+            .report-custom-editor-content table,
+            table.report-editor-table {
               width: 100% !important;
               border-collapse: collapse !important;
-              margin-top: 1px !important;
-              margin-bottom: 1px !important;
+              margin-top: 4px !important;
+              margin-bottom: 4px !important;
               font-size: 10px !important;
+              border: 1px solid #d4d4d8 !important;
             }
             .report-custom-editor-content th,
-            .report-custom-editor-content td {
+            .report-custom-editor-content td,
+            table.report-editor-table th,
+            table.report-editor-table td {
               border: 1px solid #d4d4d8 !important;
-              padding: 2.5px 6px !important;
-              line-height: 1.25 !important;
+              padding: 4px 8px !important;
+              line-height: 1.3 !important;
+              vertical-align: middle !important;
             }
-            .report-custom-editor-content th {
+            .report-custom-editor-content th,
+            table.report-editor-table th {
               background-color: #f4f4f5 !important;
               font-weight: bold !important;
               color: #18181b !important;
+              text-align: left !important;
+            }
+            .report-custom-editor-content th p,
+            .report-custom-editor-content td p,
+            table.report-editor-table th p,
+            table.report-editor-table td p {
+              margin: 0 !important;
+              padding: 0 !important;
+              line-height: inherit !important;
             }
           `,
         }}

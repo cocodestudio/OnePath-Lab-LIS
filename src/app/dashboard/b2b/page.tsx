@@ -9,7 +9,7 @@ import {
   ShieldCheck, ArrowRight, X, Filter, Sparkles, PlusCircle, IndianRupee,
   Receipt, Download, Printer, Loader2, MessageSquare, ChevronDown, Store, Building2
 } from "lucide-react";
-import { fetchFromLaravel } from "@/lib/api-client";
+import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -110,6 +110,14 @@ export default function B2bSalesPage() {
 
   // Lab profile & bill styling
   const toast = useToast();
+
+  useEffect(() => {
+    const user = getStoredUser();
+    if (user && (user.role === "B2B" || user.role === "COLLECTION_CENTER" || user.role === "COLLECTION_CENTRE" || user.role === "RECEPTIONIST")) {
+      window.location.replace("/dashboard");
+    }
+  }, []);
+
   const [labProfile, setLabProfile] = useState<any>(null);
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(defaultBillLayoutSettings);
   const [selectedPatientForInvoice, setSelectedPatientForInvoice] = useState<PatientRecord | null>(null);

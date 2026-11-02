@@ -1176,20 +1176,15 @@ export default function ReportsListPage() {
               </p>
             </div>
           </div>
-          <Button
-            size="sm"
-            onClick={() => setInsufficientBalanceModal({
-              open: true,
-              cost: outstandingLock.outstandingBalance,
-              balance: -outstandingLock.outstandingBalance,
-              deficit: outstandingLock.outstandingBalance,
-              repCode: "Clear Outstanding",
-            })}
-            className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-8 px-3 rounded-lg shrink-0 gap-1.5 cursor-pointer"
-          >
-            <Wallet className="w-3.5 h-3.5" />
-            Recharge Wallet
-          </Button>
+          <Link href="/dashboard/wallet">
+            <Button
+              size="sm"
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-8 px-3 rounded-lg shrink-0 gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Wallet className="w-3.5 h-3.5" />
+              Recharge Wallet
+            </Button>
+          </Link>
         </div>
       )}
 

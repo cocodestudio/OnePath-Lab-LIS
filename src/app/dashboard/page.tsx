@@ -22,14 +22,19 @@ import { AcceptDueModal } from "@/components/accept-due-modal";
 interface Stats {
   patientsToday: number;
   totalPatients: number;
+  monthPatients?: number;
   todayReports: number;
   totalReports: number;
+  monthReports?: number;
   todayPendingReports: number;
   pendingReports: number;
+  monthPendingReports?: number;
   todayCompletedReports: number;
   completedReports: number;
+  monthCompletedReports?: number;
   revenue: number;
   totalRevenue: number;
+  monthRevenue?: number;
 }
 interface ChartItem { date: string; fullDate?: string; reports: number; revenue: number; }
 interface RecentReport {
@@ -131,7 +136,7 @@ function getInitialStoredStats(): Stats {
           }
         }
       }
-    } catch {}
+    } catch { }
   }
   return {
     patientsToday: 0,
@@ -164,7 +169,7 @@ function getInitialStoredCharts(): ChartItem[] {
           return parsed;
         }
       }
-    } catch {}
+    } catch { }
   }
   return [];
 }
@@ -186,7 +191,7 @@ function getInitialStoredReports(): RecentReport[] {
           return parsed;
         }
       }
-    } catch {}
+    } catch { }
   }
   return [];
 }
@@ -208,7 +213,7 @@ function getInitialStoredDues(): any[] {
           return parsed;
         }
       }
-    } catch {}
+    } catch { }
   }
   return [];
 }
@@ -227,7 +232,7 @@ function getInitialStoredLab(): any {
           return parsed;
         }
       }
-    } catch {}
+    } catch { }
   }
   return null;
 }
@@ -241,7 +246,7 @@ export default function DashboardOverviewPage() {
       try {
         const u = getStoredUser();
         if (u) return u;
-      } catch {}
+      } catch { }
     }
     return null;
   });
@@ -277,9 +282,9 @@ export default function DashboardOverviewPage() {
           memoryOverviewLab = res;
           try {
             localStorage.setItem("lis_cached_lab", JSON.stringify(res));
-          } catch {}
+          } catch { }
         }
-      }).catch(() => {});
+      }).catch(() => { });
     };
 
     refreshLabInfo();
@@ -290,7 +295,7 @@ export default function DashboardOverviewPage() {
         memoryOverviewLab = e.detail;
         try {
           localStorage.setItem("lis_cached_lab", JSON.stringify(e.detail));
-        } catch {}
+        } catch { }
       } else {
         refreshLabInfo(true);
       }
@@ -328,7 +333,7 @@ export default function DashboardOverviewPage() {
       try {
         sessionStorage.removeItem("lis_fresh_login");
         sessionStorage.removeItem("lis_logged_out");
-      } catch {}
+      } catch { }
       memoryOverviewLabId = null;
       memoryOverviewStats = null;
       memoryOverviewCharts = null;
@@ -369,15 +374,15 @@ export default function DashboardOverviewPage() {
         localStorage.removeItem("lis_cached_dashboard_charts");
         localStorage.removeItem("lis_cached_dashboard_recent_reports");
         localStorage.removeItem("lis_cached_dashboard_due_bills");
-      } catch {}
+      } catch { }
       try {
         fetchFromLaravel("/lab", { skipCache: true }).then((res) => {
           if (res) {
             setLabInfo(res);
             memoryOverviewLab = res;
           }
-        }).catch(() => {});
-      } catch {}
+        }).catch(() => { });
+      } catch { }
     }
     try {
       const hasExistingData = stats.totalPatients > 0 || recentReports.length > 0 || dueBills.length > 0;
@@ -400,14 +405,19 @@ export default function DashboardOverviewPage() {
       const newStats: Stats = {
         patientsToday: analytics?.todayPatients ?? 0,
         totalPatients: analytics?.totalPatients ?? 0,
+        monthPatients: analytics?.monthPatients ?? analytics?.todayPatients ?? 0,
         todayReports: todayReps,
         totalReports: totReports,
+        monthReports: analytics?.monthReports ?? analytics?.todayReports ?? 0,
         todayPendingReports: todayPend,
         pendingReports: pendReports,
+        monthPendingReports: analytics?.monthPendingReports ?? analytics?.todayPendingReports ?? 0,
         todayCompletedReports: todayComp,
         completedReports: compReports,
+        monthCompletedReports: analytics?.monthCompletedReports ?? analytics?.todayCompletedReports ?? 0,
         revenue: analytics?.todayRevenue ?? 0,
         totalRevenue: analytics?.totalRevenue ?? 0,
+        monthRevenue: analytics?.monthRevenue ?? analytics?.todayRevenue ?? 0,
       };
 
       setStats(newStats);
@@ -422,14 +432,14 @@ export default function DashboardOverviewPage() {
           "lis_cached_dashboard_stats",
           JSON.stringify({ ...newStats, cachedDate: getTodayDateStr(), labId: currentLabId })
         );
-      } catch {}
+      } catch { }
 
       if (Array.isArray(analytics?.reportsOverTime)) {
         setChartData(analytics.reportsOverTime);
         memoryOverviewCharts = analytics.reportsOverTime;
         try {
           localStorage.setItem("lis_cached_dashboard_charts", JSON.stringify({ labId: currentLabId, data: analytics.reportsOverTime }));
-        } catch {}
+        } catch { }
       }
 
       const reportsList = Array.isArray(reports) ? reports : reports?.data ?? [];
@@ -438,7 +448,7 @@ export default function DashboardOverviewPage() {
       memoryOverviewReports = slicedReports;
       try {
         localStorage.setItem("lis_cached_dashboard_recent_reports", JSON.stringify({ labId: currentLabId, data: slicedReports }));
-      } catch {}
+      } catch { }
 
       const duesList = Array.isArray(duesRes) ? duesRes : (duesRes?.data ?? []);
       const slicedDues = duesList.slice(0, 6);
@@ -446,10 +456,10 @@ export default function DashboardOverviewPage() {
       memoryOverviewDues = slicedDues;
       try {
         localStorage.setItem("lis_cached_dashboard_due_bills", JSON.stringify({ labId: currentLabId, data: slicedDues }));
-      } catch {}
+      } catch { }
 
       if (forceRefresh) {
-        toast.success("Overview Refreshed", "Dashboard metrics and reports updated with latest live data.");
+        toast.success("Overview Refreshed", "Dashboard Refreshed.");
       }
     } catch (err) {
       console.error("Dashboard load error:", err);
@@ -481,7 +491,7 @@ export default function DashboardOverviewPage() {
           "lis_cached_dashboard_due_bills",
           JSON.stringify({ labId: currentLabId, data: nextList })
         );
-      } catch {}
+      } catch { }
       return nextList;
     });
     loadDashboardData(false);
@@ -499,8 +509,16 @@ export default function DashboardOverviewPage() {
     return <B2BOverview user={user} />;
   }
 
-  const completionPct = stats.totalReports > 0 ? Math.round((stats.completedReports / stats.totalReports) * 100) : 0;
-  const formattedChartData = chartData.map((item) => ({
+  const monthTotalReports = Number(stats.monthReports ?? stats.totalReports ?? 0);
+  const monthCompletedReports = Number(stats.monthCompletedReports ?? stats.completedReports ?? 0);
+  const monthPendingReports = Number(stats.monthPendingReports ?? stats.pendingReports ?? 0);
+
+  const completionPct = monthTotalReports > 0
+    ? Math.round((monthCompletedReports / monthTotalReports) * 100)
+    : (stats.totalReports > 0 ? Math.round((stats.completedReports / stats.totalReports) * 100) : 0);
+
+  const weeklyChartSlice = chartData.length > 7 ? chartData.slice(-7) : chartData;
+  const formattedChartData = weeklyChartSlice.map((item) => ({
     name: item.date,
     value: item.reports,
     revenue: item.revenue,
@@ -515,16 +533,20 @@ export default function DashboardOverviewPage() {
     isToday:
       item.date === "Today" ||
       item.date.toUpperCase() ===
-        new Date().toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
+      new Date().toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
   }));
 
-  const total7DaysSales = formattedSalesData.reduce((acc, curr) => acc + (curr.revenue || 0), 0);
-  const avgDailySales =
-    formattedSalesData.length > 0 ? Math.round(total7DaysSales / formattedSalesData.length) : 0;
+  const totalMonthSales = stats.monthRevenue !== undefined
+    ? Number(stats.monthRevenue)
+    : formattedSalesData.reduce((acc, curr) => acc + (curr.revenue || 0), 0);
+  const total7DaysSales = totalMonthSales;
+
+  const currentDayOfMonth = Math.max(1, new Date().getDate());
+  const avgDailySales = Math.round(totalMonthSales / currentDayOfMonth);
 
   const pieData = [
-    { name: "Completed / Approved", value: stats.completedReports, color: "hsl(160 58% 32%)" },
-    { name: "Pending", value: stats.pendingReports, color: "hsl(36 72% 50%)" },
+    { name: "Completed / Approved", value: monthCompletedReports, color: "hsl(160 58% 32%)" },
+    { name: "Pending", value: monthPendingReports, color: "hsl(36 72% 50%)" },
   ];
 
   const labDisplayName =
@@ -569,7 +591,7 @@ export default function DashboardOverviewPage() {
         onRefresh={() => {
           fetchFromLaravel("/lab", { skipCache: true }).then((res) => {
             if (res) setLabInfo(res);
-          }).catch(() => {});
+          }).catch(() => { });
         }}
       />
 
@@ -698,12 +720,12 @@ export default function DashboardOverviewPage() {
                   </div>
                   <h3 className="font-display text-lg font-semibold text-foreground">Total Sales & Revenue Trend</h3>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">Last 7 days revenue collection & daily trajectory</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Current month revenue collection & daily trajectory (from 1st {new Date().toLocaleString("en-US", { month: "short" })})</p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold">
-                  <span className="text-[10px] uppercase font-semibold text-muted-foreground">Total Sales:</span>
-                  <span>₹{Number(stats.totalRevenue || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                  <span className="text-[10px] uppercase font-semibold text-muted-foreground">Month Sales:</span>
+                  <span>₹{Number(totalMonthSales || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
                 </div>
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/60 text-muted-foreground border border-border/60 text-[11px] font-medium">
                   <span className="text-[10px] uppercase font-semibold text-muted-foreground">Today:</span>
@@ -728,6 +750,7 @@ export default function DashboardOverviewPage() {
                       tickLine={false}
                       axisLine={false}
                       className="text-muted-foreground"
+                      interval="preserveStartEnd"
                     />
                     <YAxis
                       fontSize={11}
@@ -792,8 +815,8 @@ export default function DashboardOverviewPage() {
               <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 tnum">₹{Number(stats.revenue || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p>
             </div>
             <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">7-Day Sales</span>
-              <p className="font-bold text-foreground mt-0.5 tnum">₹{total7DaysSales.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p>
+              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Month Sales</span>
+              <p className="font-bold text-foreground mt-0.5 tnum">₹{totalMonthSales.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p>
             </div>
             <div>
               <span className="text-[10px] text-muted-foreground uppercase font-semibold">Daily Avg</span>
@@ -854,7 +877,7 @@ export default function DashboardOverviewPage() {
                           const mon = String(d.getMonth() + 1).padStart(2, "0");
                           dateStr = `${day}/${mon}/${d.getFullYear()}`;
                         }
-                      } catch {}
+                      } catch { }
 
                       return (
                         <tr key={b.id} className="hover:bg-muted/20 transition-colors">
@@ -911,7 +934,7 @@ export default function DashboardOverviewPage() {
             <div className="flex items-center justify-between gap-2 mb-3">
               <div className="min-w-0">
                 <h3 className="font-display text-base sm:text-lg font-semibold text-foreground truncate">Diagnostic Report Status</h3>
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">Laboratory completion & clinical throughput</p>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">Monthly laboratory completion & clinical throughput</p>
               </div>
               <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap shrink-0 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -923,7 +946,7 @@ export default function DashboardOverviewPage() {
               {/* Donut Chart & Completion Bar */}
               <div className="flex flex-col items-center justify-center">
                 <div className="relative flex items-center justify-center w-full min-h-[160px] min-w-0">
-                  {isMounted && stats.totalReports > 0 ? (
+                  {isMounted && (monthTotalReports > 0 || stats.totalReports > 0) ? (
                     <>
                       <ResponsiveContainer width="100%" height={160} minWidth={0} minHeight={0} debounce={50}>
                         <PieChart>
@@ -933,8 +956,8 @@ export default function DashboardOverviewPage() {
                         </PieChart>
                       </ResponsiveContainer>
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="font-display text-2xl font-semibold text-foreground leading-none tnum">{stats.totalReports}</span>
-                        <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground mt-1">Total Reports</span>
+                        <span className="font-display text-2xl font-semibold text-foreground leading-none tnum">{monthTotalReports}</span>
+                        <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground mt-1">This Month</span>
                       </div>
                     </>
                   ) : (
@@ -965,14 +988,14 @@ export default function DashboardOverviewPage() {
                       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "hsl(160 58% 32%)" }} />
                       <span className="text-muted-foreground font-medium">Completed / Approved</span>
                     </div>
-                    <span className="font-bold tnum text-foreground">{stats.completedReports}</span>
+                    <span className="font-bold tnum text-foreground">{monthCompletedReports}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/30 border border-border/40">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "hsl(36 72% 50%)" }} />
                       <span className="text-muted-foreground font-medium">Pending In-Review</span>
                     </div>
-                    <span className="font-bold tnum text-foreground">{stats.pendingReports}</span>
+                    <span className="font-bold tnum text-foreground">{monthPendingReports}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/20 border border-border/30">
                     <span className="text-muted-foreground font-medium">Today's Intake Completed</span>

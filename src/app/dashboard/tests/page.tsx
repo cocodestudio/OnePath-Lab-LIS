@@ -2032,9 +2032,9 @@ export default function TestMasterPage() {
           MAJESTIC RESPONSIVE DIALOG WINDOW (Fullscreen on mobile, 95vw on desktop)
       ========================================================================= */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setSaving(false); }}>
-        <DialogContent className="w-full max-w-full sm:max-w-[95vw] sm:w-[95vw] h-[100dvh] sm:h-[92vh] max-h-[100dvh] sm:max-h-[94vh] p-0 gap-0 overflow-hidden rounded-none sm:rounded-2xl border-0 sm:border border-border/90 bg-card shadow-2xl flex flex-col" hideClose>
+        <DialogContent className="inset-0 top-0 left-0 translate-x-0 translate-y-0 sm:top-[50%] sm:left-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] w-full max-w-full sm:max-w-[95vw] sm:w-[95vw] h-[100dvh] sm:h-[92vh] max-h-[100dvh] sm:max-h-[94vh] p-0 gap-0 overflow-hidden rounded-none sm:rounded-2xl border-0 sm:border border-border/90 bg-card shadow-2xl flex flex-col" hideClose>
           {/* Top Bar with Back Arrow, Title, Three-Dots Dropdown on Mobile, and Primary CTA */}
-          <div className="min-h-14 sm:min-h-16 py-2 sm:py-0 border-b border-border/80 bg-card px-3 sm:px-6 flex items-center justify-between gap-2 shrink-0">
+          <div className="min-h-14 sm:min-h-16 pt-[calc(0.5rem+env(safe-area-inset-top,0px))] pb-2 sm:py-0 border-b border-border/80 bg-card px-3 sm:px-6 flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <button
                 type="button"
@@ -3519,8 +3519,8 @@ export default function TestMasterPage() {
           RICH TIPTAP CLINICAL INTERPRETATION MODAL
       ========================================================================= */}
       <Dialog open={notesModalOpen} onOpenChange={setNotesModalOpen}>
-        <DialogContent className="w-full max-w-full sm:max-w-6xl sm:w-[95vw] h-[100dvh] sm:h-[88vh] max-h-[100dvh] sm:max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-none sm:rounded-2xl border-0 sm:border border-border/80 shadow-2xl bg-card">
-          <div className="p-3.5 sm:p-4 px-4 sm:px-6 border-b border-border/80 bg-card flex items-center justify-between shrink-0">
+        <DialogContent className="inset-0 top-0 left-0 translate-x-0 translate-y-0 sm:top-[50%] sm:left-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] w-full max-w-full sm:max-w-6xl sm:w-[95vw] h-[100dvh] sm:h-[88vh] max-h-[100dvh] sm:max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-none sm:rounded-2xl border-0 sm:border border-border/80 shadow-2xl bg-card" hideClose>
+          <div className="pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-3.5 sm:p-4 px-4 sm:px-6 border-b border-border/80 bg-card flex items-center justify-between shrink-0">
             <div className="min-w-0 pr-2">
               <DialogTitle className="font-display text-sm sm:text-base font-bold text-foreground flex items-center gap-1.5 sm:gap-2 truncate">
                 <FileText className="h-4 w-4 text-primary shrink-0" />

@@ -22,6 +22,24 @@ export default function LoginPage() {
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
+  // Two-Factor Authentication (2FA) State
+  const [requires2Fa, setRequires2Fa] = useState(false);
+  const [twoFaMethod, setTwoFaMethod] = useState<"EMAIL_OTP" | "WHATSAPP_OTP" | "GOOGLE_AUTHENTICATOR">("GOOGLE_AUTHENTICATOR");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [maskedDestination, setMaskedDestination] = useState("");
+  const [twoFaCode, setTwoFaCode] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [isResending, setIsResending] = useState(false);
+  const twoFaInputRef = React.useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -132,8 +150,51 @@ export default function LoginPage() {
     }
   };
 
+  const completeLoginSession = (token: string, user: any) => {
+    setIsRedirecting(true);
+
+    // Clean all cached data from any previous session on this PC
+    if (typeof window !== "undefined") {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && (k.startsWith("lis_cached_") || k.startsWith("lis_dashboard_") || k.startsWith("b2b_") || k.startsWith("admin_"))) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
+      } catch {}
+    }
+
+    localStorage.setItem("lis_token", token);
+    localStorage.setItem("lis_user", JSON.stringify(user || {}));
+    sessionStorage.removeItem("lis_subscription_locked");
+    sessionStorage.removeItem("lis_logged_out");
+    sessionStorage.setItem("lis_fresh_login", "1");
+    clearApiCache();
+
+    const maxAge = rememberMe ? 2592000 : 86400 * 7;
+    const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";
+    document.cookie = `lis_token=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
+    document.cookie = `lis_role=${encodeURIComponent(user?.role || "")}; path=/; max-age=${maxAge}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
+
+    // Clear any redirect loop flag on successful login
+    sessionStorage.removeItem("lis_last_redirect");
+
+    // Replace history so /login is never retained in the browser back stack
+    window.location.replace("/dashboard");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // If already in 2FA challenge state, delegate to 2FA verification
+    if (requires2Fa) {
+      await handleVerify2Fa(e);
+      return;
+    }
+
     if (!email || !password) {
       setError("Please enter your email and password.");
       return;
@@ -165,48 +226,100 @@ export default function LoginPage() {
         return;
       }
 
-      const token = data.access_token || data.token;
-      const user = data.user;
-
-      setIsRedirecting(true);
-
-      // Clean all cached data from any previous session on this PC
-      if (typeof window !== "undefined") {
-        try {
-          const keysToRemove: string[] = [];
-          for (let i = 0; i < localStorage.length; i++) {
-            const k = localStorage.key(i);
-            if (k && (k.startsWith("lis_cached_") || k.startsWith("lis_dashboard_") || k.startsWith("b2b_") || k.startsWith("admin_"))) {
-              keysToRemove.push(k);
-            }
-          }
-          keysToRemove.forEach((k) => localStorage.removeItem(k));
-        } catch {}
+      // Check if 2FA challenge is requested
+      if (data.status === "requires_2fa" || data.requires_2fa) {
+        setRequires2Fa(true);
+        setTwoFaMethod(data.method || "GOOGLE_AUTHENTICATOR");
+        setChallengeToken(data.challenge_token || "");
+        setMaskedDestination(
+          data.method === "EMAIL_OTP"
+            ? data.email_masked || email.trim()
+            : data.phone_masked || ""
+        );
+        setTwoFaCode("");
+        setResendCooldown(30);
+        setLoading(false);
+        setTimeout(() => twoFaInputRef.current?.focus(), 150);
+        return;
       }
 
-      localStorage.setItem("lis_token", token);
-      localStorage.setItem("lis_user", JSON.stringify(user || {}));
-      sessionStorage.removeItem("lis_subscription_locked");
-      sessionStorage.removeItem("lis_logged_out");
-      sessionStorage.setItem("lis_fresh_login", "1");
-      clearApiCache();
-
-      const maxAge = rememberMe ? 2592000 : 86400 * 7;
-      const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";
-      document.cookie = `lis_token=${encodeURIComponent(token)}; path=/; max-age=${maxAge}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
-      document.cookie = `lis_role=${encodeURIComponent(user?.role || "")}; path=/; max-age=${maxAge}; SameSite=Lax${isSecure ? "; Secure" : ""}`;
-
-      // Clear any redirect loop flag on successful login
-      sessionStorage.removeItem("lis_last_redirect");
-
-      // Replace history so /login is never retained in the browser back stack
-      window.location.replace("/dashboard");
+      const token = data.access_token || data.token;
+      const user = data.user;
+      completeLoginSession(token, user);
     } catch (err: any) {
       console.error("Login request failed:", err);
       setError(err?.message || "An unexpected network error occurred. Please try again.");
       setLoading(false);
       setIsRedirecting(false);
     }
+  };
+
+  const handleVerify2Fa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!twoFaCode.trim() || twoFaCode.trim().length !== 6) {
+      setError("Please enter the complete 6-digit verification code.");
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      const verifyURL = `${getAuthBaseUrl()}/2fa/verify`;
+      const res = await fetch(verifyURL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ challenge_token: challengeToken, code: twoFaCode.trim() }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(data.message || data.error || "Invalid verification code. Please check and try again.");
+        setLoading(false);
+        return;
+      }
+
+      const token = data.access_token || data.token;
+      const user = data.user;
+      completeLoginSession(token, user);
+    } catch (err: any) {
+      console.error("2FA Verification failed:", err);
+      setError(err?.message || "Verification failed due to a network error. Please try again.");
+      setLoading(false);
+      setIsRedirecting(false);
+    }
+  };
+
+  const handleResend2FaCode = async () => {
+    if (resendCooldown > 0 || isResending || !challengeToken) return;
+    setIsResending(true);
+    setError(null);
+    try {
+      const resendURL = `${getAuthBaseUrl()}/2fa/resend`;
+      const res = await fetch(resendURL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ challenge_token: challengeToken }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.status === "success") {
+        setResendCooldown(30);
+      } else {
+        setError(data.message || "Failed to resend verification code.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Network error resending code.");
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  const handleCancel2Fa = () => {
+    setRequires2Fa(false);
+    setTwoFaCode("");
+    setChallengeToken("");
+    setError(null);
   };
 
   return (
@@ -436,7 +549,7 @@ export default function LoginPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    disabled={loading}
+                    disabled={loading || requires2Fa}
                     required
                     autoComplete="email"
                     placeholder={loginType === "ADMIN" ? "pathologist@onepathlab.com" : loginType === "B2B" ? "partner@b2blab.com" : "center@onepathlab.com"}
@@ -459,33 +572,98 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    disabled={loading}
+                    disabled={loading || requires2Fa}
                     required
                     autoComplete="current-password"
                     placeholder="••••••••••••"
                     className="w-full h-11 sm:h-12 rounded-xl border border-slate-300/90 bg-white hover:border-slate-400/90 focus:bg-white pl-11 pr-11 text-base sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 focus:outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 disabled:opacity-60 disabled:bg-slate-50"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-                    title={showPassword ? "Hide password" : "Show password"}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                  >
-                    {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
-                  </button>
+                  {!requires2Fa && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                      title={showPassword ? "Hide password" : "Show password"}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                    </button>
+                  )}
                 </div>
                 {/* Forgot Password Link - Directly Below Password Field */}
-                <div className="flex justify-end pt-0.5">
-                  <button
-                    type="button"
-                    onClick={handleOpenForgotModal}
-                    className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline transition-colors cursor-pointer"
-                  >
-                    Forgot password?
-                  </button>
-                </div>
+                {!requires2Fa && (
+                  <div className="flex justify-end pt-0.5">
+                    <button
+                      type="button"
+                      onClick={handleOpenForgotModal}
+                      className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline transition-colors cursor-pointer"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {/* 2FA Verification Box - Directly Below Password Field */}
+              {requires2Fa && (
+                <div className="space-y-3 p-4 rounded-2xl bg-emerald-50/70 border border-emerald-300 shadow-xs dark:bg-emerald-950/25 dark:border-emerald-800 animate-fade-in transition-all">
+                  <div className="flex items-start gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-emerald-600 text-white shrink-0 mt-0.5">
+                      <ShieldCheck className="h-4 w-4" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 block">
+                        Two-Factor Authentication Required
+                      </span>
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-400 leading-snug">
+                        {twoFaMethod === "GOOGLE_AUTHENTICATOR"
+                          ? "Open Google Authenticator app on your phone and enter the 6-digit code."
+                          : twoFaMethod === "EMAIL_OTP"
+                          ? `Enter the 6-digit verification code sent to ${maskedDestination || "your registered email"}.`
+                          : `Enter the 6-digit verification code sent to WhatsApp ${maskedDestination || "your registered phone"}.`}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="relative pt-1">
+                    <input
+                      ref={twoFaInputRef}
+                      id="twoFaCode"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      value={twoFaCode}
+                      onChange={(e) => setTwoFaCode(e.target.value.replace(/\D/g, ""))}
+                      disabled={loading || isRedirecting}
+                      placeholder="••••••"
+                      autoFocus
+                      required
+                      className="w-full h-12 rounded-xl border border-emerald-400 bg-white text-center font-mono text-2xl font-bold tracking-[0.4em] text-slate-900 shadow-inner focus:outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/20"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs pt-0.5">
+                    {(twoFaMethod === "EMAIL_OTP" || twoFaMethod === "WHATSAPP_OTP") ? (
+                      <button
+                        type="button"
+                        onClick={handleResend2FaCode}
+                        disabled={resendCooldown > 0 || isResending}
+                        className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline disabled:text-slate-400 cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        {isResending ? "Sending..." : resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
+                      </button>
+                    ) : <span />}
+                    <button
+                      type="button"
+                      onClick={handleCancel2Fa}
+                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 hover:underline cursor-pointer"
+                    >
+                      Cancel / Back
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Remember Me Checkbox */}
               <div className="pt-0.5">
@@ -503,7 +681,7 @@ export default function LoginPage() {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading || isRedirecting}
+                disabled={loading || isRedirecting || (requires2Fa && twoFaCode.length !== 6)}
                 className="w-full h-11 sm:h-12 rounded-xl bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 text-white font-semibold text-sm tracking-wide flex items-center justify-center gap-2 transition-all duration-200 shadow-sm hover:shadow-md hover:scale-[1.005] active:scale-[0.99] disabled:opacity-60 cursor-pointer group mt-2"
               >
                 {isRedirecting ? (
@@ -514,7 +692,12 @@ export default function LoginPage() {
                 ) : loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Signing in...</span>
+                    <span>{requires2Fa ? "Verifying Code..." : "Signing in..."}</span>
+                  </>
+                ) : requires2Fa ? (
+                  <>
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>Verify & Sign In</span>
                   </>
                 ) : (
                   <>

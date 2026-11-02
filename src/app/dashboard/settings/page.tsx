@@ -327,16 +327,29 @@ function optimizeLetterheadImage(file: File): Promise<string> {
   });
 }
 
+function normalizeSettingsTab(tab: string | null): "letterhead" | "report-layout" | "bills-layout" | "machine-integration" | "collection-centers" | "payment-gateway" {
+  if (!tab) return "letterhead";
+  const t = tab.toLowerCase().trim();
+  if (t === "report-layout" || t === "report" || t === "layout" || t === "abha" || t === "abha-integration") return "report-layout";
+  if (t === "bills-layout" || t === "bills" || t === "bill" || t === "invoice") return "bills-layout";
+  if (t === "collection-centers" || t === "rbac" || t === "roles" || t === "terminals") return "collection-centers";
+  if (t === "payment-gateway" || t === "gateway" || t === "payu") return "payment-gateway";
+  if (t === "machine-integration" || t === "machine" || t === "machine-interfacing" || t === "analyzer") return "machine-integration";
+  if (t === "letterhead") return "letterhead";
+  return "letterhead";
+}
+
 function SettingsContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab");
-  const [activeTab, setActiveTab] = useState<"letterhead" | "report-layout" | "bills-layout" | "machine-integration" | "collection-centers" | "payment-gateway">(
-    (initialTab && ["letterhead", "report-layout", "bills-layout", "machine-integration", "collection-centers", "payment-gateway"].includes(initialTab))
-      ? (initialTab as any)
-      : (initialTab === "abha" || initialTab === "abha-integration")
-      ? "report-layout"
-      : "letterhead"
-  );
+  const [activeTab, setActiveTab] = useState<"letterhead" | "report-layout" | "bills-layout" | "machine-integration" | "collection-centers" | "payment-gateway">(() => normalizeSettingsTab(initialTab));
+
+  useEffect(() => {
+    const currentTabParam = searchParams.get("tab");
+    if (currentTabParam) {
+      setActiveTab(normalizeSettingsTab(currentTabParam));
+    }
+  }, [searchParams]);
   const [settings, setSettings] = useState<ExtendedPrintSettings>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -389,7 +402,7 @@ function SettingsContent() {
 
   useEffect(() => {
     const user = getStoredUser();
-    if (user && (user.role === "B2B" || user.role === "COLLECTION_CENTER" || user.role === "COLLECTION_CENTRE")) {
+    if (user && (user.role === "B2B" || user.role === "COLLECTION_CENTER" || user.role === "COLLECTION_CENTRE" || user.role === "RECEPTIONIST")) {
       window.location.replace("/dashboard");
     }
   }, []);

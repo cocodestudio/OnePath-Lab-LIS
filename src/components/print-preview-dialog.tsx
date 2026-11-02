@@ -25,7 +25,7 @@ import { WhatsAppQrDialog } from "@/components/whatsapp-qr-dialog";
 import { AiReportGenerationModal } from "@/components/ai-report-generation-modal";
 import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
-import { downloadNativePdf, getNativePdfBase64 } from "@/lib/pdf-report-downloader";
+import { downloadNativePdf, getNativePdfBase64, prefetchNativePdf } from "@/lib/pdf-report-downloader";
 
 interface PrintPreviewDialogProps {
   open: boolean;
@@ -45,6 +45,109 @@ interface TopLevelBlock {
 }
 
 const A4_W = 794;
+
+/**
+ * High-Fidelity A4 Report Preview Shimmer Skeleton
+ * Replaces generic spinners with an authentic A4 report skeleton
+ * featuring simulated letterhead, patient demographics, and parameter rows.
+ */
+function ReportPreviewShimmer({ scale = 0.8 }: { scale?: number }) {
+  const width = Math.round(A4_W * scale);
+  const height = Math.round(1123 * scale);
+
+  return (
+    <div
+      style={{
+        width: `${width}px`,
+        height: `${height}px`,
+        maxWidth: "100%",
+      }}
+      className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg p-5 sm:p-8 flex flex-col justify-between overflow-hidden relative select-none shimmer-card-pulse"
+    >
+      {/* Top Header Shimmer */}
+      <div className="space-y-4">
+        <div className="flex items-start justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="h-10 sm:h-12 w-10 sm:w-12 rounded-lg bg-zinc-200 dark:bg-zinc-800 shrink-0 animate-pulse" />
+            <div className="space-y-1.5">
+              <div className="h-3.5 sm:h-4 w-32 sm:w-48 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+              <div className="h-2 sm:h-2.5 w-44 sm:w-64 rounded bg-zinc-100 dark:bg-zinc-850 animate-pulse" />
+            </div>
+          </div>
+          <div className="space-y-1.5 text-right">
+            <div className="h-2.5 sm:h-3 w-20 sm:w-28 rounded bg-zinc-200 dark:bg-zinc-800 ml-auto animate-pulse" />
+            <div className="h-2 sm:h-2.5 w-24 sm:w-36 rounded bg-zinc-100 dark:bg-zinc-850 ml-auto animate-pulse" />
+          </div>
+        </div>
+
+        {/* Patient Demographics Card */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 p-2.5 sm:p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/60 dark:border-zinc-800/60">
+          <div className="space-y-1">
+            <div className="h-1.5 sm:h-2 w-12 sm:w-14 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+            <div className="h-2.5 sm:h-3 w-20 sm:w-28 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+          </div>
+          <div className="space-y-1">
+            <div className="h-1.5 sm:h-2 w-10 sm:w-12 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+            <div className="h-2.5 sm:h-3 w-16 sm:w-20 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+          </div>
+          <div className="space-y-1">
+            <div className="h-1.5 sm:h-2 w-12 sm:w-16 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+            <div className="h-2.5 sm:h-3 w-20 sm:w-24 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+          </div>
+          <div className="space-y-1">
+            <div className="h-1.5 sm:h-2 w-14 sm:w-16 rounded bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+            <div className="h-2.5 sm:h-3 w-16 sm:w-20 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+          </div>
+        </div>
+
+        {/* Diagnostic Department Header */}
+        <div className="pt-1.5 flex items-center justify-between">
+          <div className="h-3 sm:h-3.5 w-28 sm:w-36 rounded bg-zinc-300 dark:bg-zinc-700 animate-pulse" />
+          <div className="h-2 sm:h-2.5 w-16 sm:w-20 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+        </div>
+
+        {/* Table Header Row */}
+        <div className="h-6 sm:h-7 w-full rounded bg-zinc-100 dark:bg-zinc-850 grid grid-cols-12 gap-2 px-3 items-center border border-zinc-200/50 dark:border-zinc-800/50">
+          <div className="col-span-5 h-2 sm:h-2.5 rounded bg-zinc-300 dark:bg-zinc-700 animate-pulse" />
+          <div className="col-span-2 h-2 sm:h-2.5 rounded bg-zinc-300 dark:bg-zinc-700 animate-pulse" />
+          <div className="col-span-2 h-2 sm:h-2.5 rounded bg-zinc-300 dark:bg-zinc-700 animate-pulse" />
+          <div className="col-span-3 h-2 sm:h-2.5 rounded bg-zinc-300 dark:bg-zinc-700 animate-pulse" />
+        </div>
+
+        {/* Table Parameter Rows */}
+        <div className="space-y-2 pt-0.5">
+          {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <div key={i} className="grid grid-cols-12 gap-2 px-3 py-1 items-center border-b border-zinc-100 dark:border-zinc-850/60">
+              <div
+                className="col-span-5 h-2 sm:h-2.5 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse"
+                style={{ width: `${55 + (i % 4) * 12}%` }}
+              />
+              <div className="col-span-2 h-2 sm:h-2.5 w-10 sm:w-14 rounded bg-zinc-300/80 dark:bg-zinc-700/80 animate-pulse" />
+              <div className="col-span-2 h-1.5 sm:h-2 w-8 sm:w-10 rounded bg-zinc-200/60 dark:bg-zinc-800/60 animate-pulse" />
+              <div className="col-span-3 h-1.5 sm:h-2 w-14 sm:w-20 rounded bg-zinc-200/60 dark:bg-zinc-800/60 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Footer Area */}
+      <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 flex items-end justify-between">
+        <div className="flex items-center gap-2">
+          <div className="h-10 sm:h-12 w-10 sm:w-12 rounded bg-zinc-200 dark:bg-zinc-800 shrink-0 animate-pulse" />
+          <div className="space-y-1">
+            <div className="h-1.5 sm:h-2 w-16 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse" />
+            <div className="h-1.5 sm:h-2 w-20 rounded bg-zinc-100 dark:bg-zinc-850 animate-pulse" />
+          </div>
+        </div>
+        <div className="space-y-1.5 text-right">
+          <div className="h-6 sm:h-7 w-20 sm:w-24 rounded bg-zinc-200/80 dark:bg-zinc-800/80 ml-auto animate-pulse" />
+          <div className="h-2 sm:h-2.5 w-24 sm:w-28 rounded bg-zinc-300 dark:bg-zinc-700 ml-auto animate-pulse" />
+          <div className="h-1.5 sm:h-2 w-16 sm:w-20 rounded bg-zinc-200/70 dark:bg-zinc-850 ml-auto animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function PrintPreviewDialog({
   open,
@@ -101,6 +204,20 @@ export function PrintPreviewDialog({
   const [customPhone, setCustomPhone] = useState("");
   const [savePhoneToProfile, setSavePhoneToProfile] = useState(true);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isPreviewReady, setIsPreviewReady] = useState(false);
+
+  // Preview Shimmer Effect: Displays realistic A4 skeleton while report layout settles
+  useEffect(() => {
+    if (open) {
+      setIsPreviewReady(false);
+      const timer = setTimeout(() => {
+        setIsPreviewReady(true);
+      }, 550);
+      return () => clearTimeout(timer);
+    } else {
+      setIsPreviewReady(false);
+    }
+  }, [open, useCustomLetterpad, showInterpretation, separatePagePerTest, excludedMainTests]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollListRef = useRef<HTMLDivElement>(null);
@@ -693,6 +810,27 @@ export function PrintPreviewDialog({
     };
   }, [report]);
 
+  // ── Speculative Background PDF Pre-fetch (Flabs LIS pattern) ─────────────────
+  // Pre-warms the vector PDF in client blob cache so clicking 'Download PDF' is 100% instant (0ms delay)
+  useEffect(() => {
+    if (!open || !activeReport) return;
+
+    const timer = setTimeout(() => {
+      if (printRef.current) {
+        const pName = (report?.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const rCode = (report?.customId || report?.id || "Report").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const filename = `LabReport_${rCode}_${pName}.pdf`;
+
+        prefetchNativePdf({
+          printContainer: printRef.current,
+          filename,
+        }).catch(() => {});
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [open, activeReport, printSettings, showInterpretation]);
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: report ? `Report_${report.customId}` : "Report",
@@ -787,7 +925,7 @@ export function PrintPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-full w-screen h-screen max-h-screen p-0 m-0 border-0 rounded-none overflow-hidden flex flex-col bg-background">
+      <DialogContent className="inset-0 top-0 left-0 translate-x-0 translate-y-0 max-w-full w-full h-[100dvh] max-h-[100dvh] p-0 m-0 border-0 rounded-none overflow-hidden flex flex-col bg-background" hideClose>
         <DialogHeader className="sr-only">
           <DialogTitle>Print & Layout Preview</DialogTitle>
           <DialogDescription>Customize parameter sequence, interpretation, and letterhead</DialogDescription>
@@ -810,7 +948,7 @@ export function PrintPreviewDialog({
         )}
 
         {/* ── Top Bar ── */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-3.5 sm:px-6 py-3 sm:py-3.5 bg-background border-b border-border shadow-xs z-10 shrink-0 gap-2.5 sm:gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-3.5 sm:px-6 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-3 sm:py-3.5 bg-background border-b border-border shadow-xs z-10 shrink-0 gap-2.5 sm:gap-4">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <div className="bg-primary/10 p-2 rounded-lg shrink-0">
               <FileText className="h-4 sm:h-5 w-4 sm:w-5 text-primary" />
@@ -1232,21 +1370,35 @@ export function PrintPreviewDialog({
           {/* ── Preview Pane ── */}
           <div
             ref={containerRef}
-            className={`flex-1 overflow-auto sheet-pan-canvas bg-zinc-200 dark:bg-zinc-900/90 justify-center items-start py-4 sm:py-8 px-2 sm:px-4 custom-scrollbar shadow-inner ${
+            className={`flex-1 overflow-auto sheet-pan-canvas bg-zinc-200 dark:bg-zinc-900/90 justify-center items-start py-4 sm:py-8 px-2 sm:px-4 custom-scrollbar shadow-inner relative ${
               mobileTab === "preview"
                 ? "flex z-10"
                 : "max-md:fixed max-md:inset-0 max-md:opacity-0 max-md:pointer-events-none max-md:-z-50 md:flex"
             }`}
           >
-            {printSettings && (
-              <PaginatedReportPreview
-                report={activeReport}
-                settings={printSettings}
-                scale={previewScale}
-                hideInterpretation={!showInterpretation}
-                onPageCount={setTotalPages}
-              />
+            {/* Shimmer Effect Skeleton while Report Pre-warms and Renders */}
+            {!isPreviewReady && (
+              <div className="absolute top-4 sm:top-8 left-1/2 -translate-x-1/2 z-20 transition-opacity duration-300 pointer-events-none">
+                <ReportPreviewShimmer scale={previewScale} />
+              </div>
             )}
+
+            {/* Actual Live Measured Report Preview */}
+            <div
+              className={`transition-opacity duration-300 ${
+                isPreviewReady ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              {printSettings && (
+                <PaginatedReportPreview
+                  report={activeReport}
+                  settings={printSettings}
+                  scale={previewScale}
+                  hideInterpretation={!showInterpretation}
+                  onPageCount={setTotalPages}
+                />
+              )}
+            </div>
           </div>
 
         </div>

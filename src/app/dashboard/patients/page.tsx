@@ -351,6 +351,7 @@ export default function PatientsPage() {
   const userRole = String(currentUser?.role || "").toUpperCase();
   const isB2B = userRole === "B2B" || userRole === "COLLECTION_CENTER" || userRole === "COLLECTION_CENTRE" || userRole === "RECEPTIONIST";
   const isCollectionCenter = userRole === "COLLECTION_CENTER" || userRole === "COLLECTION_CENTRE";
+  const isDirectHistoryViewRole = userRole === "RECEPTIONIST" || userRole === "B2B";
 
   const canEditDemographics = (() => {
     // If not a Collection Centre (e.g. Admin, Receptionist, etc.), keep existing edit rights
@@ -1193,6 +1194,55 @@ export default function PatientsPage() {
                                   )}
                                 </Button>
                               </Link>
+                            </>
+                          ) : isDirectHistoryViewRole ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-primary cursor-pointer hover:bg-primary/10"
+                                title="View Patient History"
+                                disabled={navigatingViewId === patient.id}
+                                onClick={() => {
+                                  setNavigatingViewId(patient.id);
+                                  try {
+                                    sessionStorage.setItem("patient_detail_cache_" + patient.id, JSON.stringify(patient));
+                                  } catch (_) {}
+                                  router.push("/dashboard/patients/" + patient.id);
+                                }}
+                              >
+                                {navigatingViewId === patient.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </Button>
+
+                              {userRole === "RECEPTIONIST" && (
+                                <Link
+                                  href={`/dashboard/patients/register?edit=${patient.id}`}
+                                  onClick={() => {
+                                    setNavigatingEditId(patient.id);
+                                    try {
+                                      sessionStorage.setItem(`edit_patient_cache_${patient.id}`, JSON.stringify(patient));
+                                    } catch (_) {}
+                                  }}
+                                >
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-primary cursor-pointer hover:bg-primary/10"
+                                    title="Edit Patient Details & Tests"
+                                    disabled={navigatingEditId === patient.id}
+                                  >
+                                    {navigatingEditId === patient.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                    ) : (
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                    )}
+                                  </Button>
+                                </Link>
+                              )}
                             </>
                           ) : (
                             <>

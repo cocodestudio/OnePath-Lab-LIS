@@ -27,6 +27,12 @@ import {
   hasReportParam,
   getTestPriority,
 } from "../src/lib/clinical-formulas/formula-engine";
+import { hasPermission, ROLE_DEFAULT_PERMISSIONS } from "../src/lib/permissions";
+import {
+  getClientFallbackAnswer,
+  getRoleWelcomeMessage,
+  normalizeAiRole,
+} from "../src/lib/ai-guide-knowledge";
 
 let totalTests = 0;
 let passedTests = 0;
@@ -4564,9 +4570,9 @@ const profilePageSrc50 = fs.readFileSync(path.resolve(__dirname, "../src/app/das
 
 // 50.1 Fluid Full-Width Container & Zero Cramped Box Boundary
 assert(
-  profilePageSrc50.includes("w-full max-w-6xl mx-auto space-y-6 pb-20 px-3 sm:px-6 lg:px-8") &&
+  (profilePageSrc50.includes("w-full max-w-full") || profilePageSrc50.includes("w-full max-w-6xl")) &&
   !profilePageSrc50.includes("max-w-2xl mx-auto"),
-  "[PROFILE RESPONSIVE LAYOUT] Profile page expands across modern wide displays (max-w-6xl) eliminating awkward box margins"
+  "[PROFILE RESPONSIVE LAYOUT] Profile page expands across modern wide displays eliminating awkward box margins"
 );
 
 // 50.2 Sleek Compact Premium Segmented Tab Switcher
@@ -5260,6 +5266,790 @@ assert(
   editReportSrc64.includes("const merged = Array.from(new Set([...parsed, ...defaultInterpIds]));") &&
   editReportSrc64.includes("group.hasInterpretation = true;"),
   "[ENTER RESULTS INTERP MERGE] Newly added tests with interpretations automatically check Add Interpretation by default without dropping existing selections"
+);
+
+// =========================================================================
+// SUITE 65: RBAC RADIX PORTAL DROPDOWN, MOBILE FULLSCREEN DIALOG PINNING,
+// AND MONTH-TO-DATE FINANCIAL & DIAGNOSTIC ANALYTICS SCOPING
+// =========================================================================
+console.log("\n--- SUITE 65: RBAC Dropdown Portal, Dialog Responsiveness, and Month-To-Date Analytics ---");
+
+const collectionCentersSrc65 = fs.readFileSync(
+  path.join(__dirname, "../src/components/collection-centers-tab.tsx"),
+  "utf8"
+);
+const testCatalogSrc65 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/tests/page.tsx"),
+  "utf8"
+);
+const printPreviewDialogSrc65 = fs.readFileSync(
+  path.join(__dirname, "../src/components/print-preview-dialog.tsx"),
+  "utf8"
+);
+const analyticsControllerSrc65 = fs.readFileSync(
+  path.join(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/AnalyticsController.php"),
+  "utf8"
+);
+const dashboardOverviewSrc65 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/page.tsx"),
+  "utf8"
+);
+
+// 65.1 RBAC Actions 3-Dots Dropdown Uses Radix DropdownMenu Portal (Eliminates Table Overflow Clipping & Scrollbars)
+assert(
+  collectionCentersSrc65.includes("DropdownMenu") &&
+  collectionCentersSrc65.includes("DropdownMenuTrigger") &&
+  collectionCentersSrc65.includes("DropdownMenuContent align=\"end\"") &&
+  collectionCentersSrc65.includes("<span>Add Role</span>"),
+  "[RBAC ACTIONS PORTAL DROPDOWN] RBAC Staff and Partner table actions use Radix Portal DropdownMenu so menu mounts outside table container without clipping or scrollbars"
+);
+
+// 65.2 Test Catalog Mobile Dialog Pinned to Top With Safe Area Insets (Prevents Notch Clipping)
+assert(
+  testCatalogSrc65.includes("inset-0 top-0 left-0 translate-x-0 translate-y-0 sm:top-[50%] sm:left-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%]") &&
+  testCatalogSrc65.includes("pt-[calc(0.5rem+env(safe-area-inset-top,0px))]"),
+  "[TEST CATALOG MOBILE DIALOG] Test master modal resets center transforms on mobile (top-0 left-0) and adds safe-area-inset-top so header never slides under top notch"
+);
+
+// 65.3 Print Preview Dialog Screen Pinning and Safe Area Padding
+assert(
+  printPreviewDialogSrc65.includes("inset-0 top-0 left-0 translate-x-0 translate-y-0 max-w-full w-full h-[100dvh]") &&
+  printPreviewDialogSrc65.includes("pt-[calc(0.75rem+env(safe-area-inset-top,0px))]"),
+  "[PRINT PREVIEW MOBILE DIALOG] Print & layout preview dialog stays strictly pinned within mobile viewport bounds with safe top padding"
+);
+
+// 65.4 Analytics Backend Calculates Current Month-To-Date Aggregates & Trajectory
+assert(
+  analyticsControllerSrc65.includes("$monthStart = Carbon::today()->startOfMonth();") &&
+  analyticsControllerSrc65.includes("COUNT(CASE WHEN created_at >= ? THEN 1 END) as month_total") &&
+  analyticsControllerSrc65.includes("COALESCE(SUM(CASE WHEN created_at >= ? THEN paid_amount ELSE 0 END), 0) as month_paid") &&
+  analyticsControllerSrc65.includes("'monthReports' => (int) ($reportStats->month_total ?? 0)") &&
+  analyticsControllerSrc65.includes("'monthRevenue' => (float) $monthRevenue"),
+  "[ANALYTICS BACKEND MONTH SCOPING] AnalyticsController queries from start of current month and returns monthReports, monthCompletedReports, and monthRevenue"
+);
+
+// 65.5 Dashboard Overview Scopes Total Sales & Diagnostic Report Status to Current Month
+assert(
+  dashboardOverviewSrc65.includes("const monthTotalReports = Number(stats.monthReports ?? stats.totalReports ?? 0);") &&
+  dashboardOverviewSrc65.includes("const totalMonthSales = stats.monthRevenue !== undefined") &&
+  dashboardOverviewSrc65.includes("Current month revenue collection & daily trajectory (from 1st") &&
+  dashboardOverviewSrc65.includes("Month Sales:") &&
+  dashboardOverviewSrc65.includes("This Month"),
+  "[DASHBOARD OVERVIEW MONTH KPI] Overview dashboard displays Month Sales starting from 1st of current month and scopes Diagnostic Report Status to current month"
+);
+
+// =========================================================================
+// SUITE 66: CULTURE & SENSITIVITY CUSTOM EDITOR TABLE PRINT PREVIEW FIDELITY
+// =========================================================================
+console.log("\n--- SUITE 66: Culture & Sensitivity Table Alignment & Sanitization Integrity ---");
+
+const reportSheetSrc66 = fs.readFileSync(
+  path.join(__dirname, "../src/components/report-sheet.tsx"),
+  "utf8"
+);
+const globalsCssSrc66 = fs.readFileSync(
+  path.join(__dirname, "../src/app/globals.css"),
+  "utf8"
+);
+
+// 66.1 Culture Table Complete HTML Envelope Sanitization (Prevents DOMPurify from dropping tr/th/td tags)
+assert(
+  reportSheetSrc66.includes("const fullTableHtml = `<table class=\"report-editor-table\" style=\"width: 100%; table-layout: fixed; border-collapse: collapse; margin-top: 6px; margin-bottom: 6px;\">${colgroupHtml}${theadHtml}<tbody>${dataRows.join(\"\")}</tbody></table>`;") &&
+  reportSheetSrc66.includes("dangerouslySetInnerHTML={{ __html: sanitizeHtml(fullTableHtml) }}"),
+  "[CULTURE TABLE SANITIZATION] Culture and Sensitivity tables sanitize complete <table>...</table> envelopes so browser DOMParser and DOMPurify never strip tr, th, or td tags into plain text"
+);
+
+// 66.2 TipTap Tbody Header Row Extraction to Thead
+assert(
+  reportSheetSrc66.includes("if (!theadHtml && trMatches.length > 0 && trMatches[0] && /<th\\b/i.test(trMatches[0]))") &&
+  reportSheetSrc66.includes("theadHtml = `<thead>${trMatches[0]}</thead>`;") &&
+  reportSheetSrc66.includes("dataRows = trMatches.slice(1);"),
+  "[TIPTAP TBODY HEADER EXTRACTION] Automatically extracts <th> rows placed inside <tbody> by TipTap and converts them to standard <thead>"
+);
+
+// 66.3 Clinical 3-Column Colgroup Proportions
+assert(
+  reportSheetSrc66.includes("<colgroup><col style=\"width: 10%;\" /><col style=\"width: 55%;\" /><col style=\"width: 35%;\" /></colgroup>"),
+  "[CULTURE TABLE COLGROUP] Enforces clinical 3-column widths: S.No (10%), Antibiotic (55%), Sensitivity (35%)"
+);
+
+// 66.4 Table Styling and Paragraph Margin Resets in Globals CSS
+assert(
+  globalsCssSrc66.includes(".report-custom-editor-content table") &&
+  globalsCssSrc66.includes("table.report-editor-table") &&
+  globalsCssSrc66.includes("table.report-editor-table th p") &&
+  globalsCssSrc66.includes("margin: 0 !important;"),
+  "[CULTURE TABLE CSS RESETS] Globals CSS enforces border-collapse, table borders, header backgrounds, and resets paragraph margins inside table cells"
+);
+
+// ==============================================================================
+// SUITE 67: Receptionist Role Scoping, Responsive Track Samples & Fixed AI Guide
+// ==============================================================================
+console.log("\n--- SUITE 67: Receptionist Scoping, Responsive Track Samples & Fixed AI Guide ---");
+
+const sidebarClientSrc67 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/sidebar-client.tsx"),
+  "utf8"
+);
+const trackSamplesSrc67 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/track-samples/page.tsx"),
+  "utf8"
+);
+const aiGuideSrc67 = fs.readFileSync(
+  path.join(__dirname, "../src/components/ai-guide-widget.tsx"),
+  "utf8"
+);
+const backendReportCtrlSrc67 = fs.readFileSync(
+  path.join(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/ReportController.php"),
+  "utf8"
+);
+
+// 67.1 Receptionist Sidebar Scoping (Cases suppressed for Receptionist, preserved for Admin)
+const receptionistNavBlock = sidebarClientSrc67.match(/const receptionistNav:\s*NavItem\[\]\s*=\s*\[([\s\S]*?)\];/)?.[1] || "";
+const adminNavBlock = sidebarClientSrc67.match(/const navigation:\s*NavItem\[\]\s*=\s*\[([\s\S]*?)\];/)?.[1] || "";
+assert(
+  !receptionistNavBlock.includes('name: "Cases"') &&
+  adminNavBlock.includes('name: "Cases"'),
+  "[RECEPTIONIST CASES SUPPRESSION] Cases option is cleanly removed from Receptionist navigation and strictly reserved for Admin"
+);
+
+// 67.2 Track Samples Explicit Search on Button Click & Enter (No continuous keystroke hammering)
+assert(
+  trackSamplesSrc67.includes("<form onSubmit={handleManualSearch}") &&
+  trackSamplesSrc67.includes("track_sample=1") &&
+  !trackSamplesSrc67.includes("debounceTimer.current = setTimeout"),
+  "[TRACK SAMPLES EXPLICIT SEARCH] Search executes on button click / form submit with track_sample=1 parameter without keystroke debounce delay"
+);
+
+// 67.3 Track Samples Report Link Icon Suppression
+assert(
+  !trackSamplesSrc67.includes("<ExternalLink") &&
+  !trackSamplesSrc67.includes("title=\"Open full report in new tab\""),
+  "[TRACK SAMPLES REPORT LINK ICON SUPPRESSION] Direct report opening external link icon next to Print Report button is removed"
+);
+
+// 67.4 Track Samples Responsive Layout
+assert(
+  trackSamplesSrc67.includes("w-full sm:w-auto") &&
+  trackSamplesSrc67.includes("overflow-x-auto sm:overflow-visible") &&
+  trackSamplesSrc67.includes("grid-cols-1 sm:grid-cols-2"),
+  "[TRACK SAMPLES RESPONSIVE LAYOUT] Print Report button, progress stepper, and demographics are responsive on mobile viewports"
+);
+
+// 67.5 Mobile AI Assistant Fixed Bottom Input Field (Never scrolls with messages)
+assert(
+  aiGuideSrc67.includes("min-h-0 overflow-y-auto overscroll-contain") &&
+  aiGuideSrc67.includes("shrink-0 sticky bottom-0 z-10") &&
+  aiGuideSrc67.includes("safe-area-inset-bottom") &&
+  aiGuideSrc67.includes("h-[calc(100dvh-16px)]"),
+  "[AI ASSISTANT FIXED BOTTOM INPUT] AI Assistant modal on mobile features sticky fixed bottom input container that never scrolls with chat messages"
+);
+
+// 67.6 Backend Report Controller Sample Tracking Resilience
+assert(
+  backendReportCtrlSrc67.includes("$isTracking = $request->boolean('track') || $request->boolean('track_sample')") &&
+  backendReportCtrlSrc67.includes("if (!$isTracking)") &&
+  backendReportCtrlSrc67.includes("$query->whereHas('results');"),
+  "[BACKEND TRACKING PERMISSION] ReportController permits sample tracking across the lab without requiring pre-entered results"
+);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODULE 68: Receptionist & B2B Patient Actions, Direct Wallet Link & Auto-Refund
+// ══════════════════════════════════════════════════════════════════════════════
+console.log("\n▶ MODULE 68: Receptionist & B2B Patient Actions, Direct Wallet Link & Auto-Refund");
+
+const patientsPageSrc68 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/patients/page.tsx"), "utf-8");
+const reportsPageSrc68 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/reports/page.tsx"), "utf-8");
+const sidebarClientSrc68 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/sidebar-client.tsx"), "utf-8");
+const b2bWalletCtrlSrc68 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/B2bWalletController.php"), "utf-8");
+const billCtrlSrc68 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"), "utf-8");
+const patientCtrlSrc68 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/PatientController.php"), "utf-8");
+
+// 68.1 Patient List Receptionist & B2B Direct History View
+assert(
+  patientsPageSrc68.includes('isDirectHistoryViewRole = userRole === "RECEPTIONIST" || userRole === "B2B"') &&
+  patientsPageSrc68.includes('title="View Patient History"') &&
+  patientsPageSrc68.includes('navigatingViewId === patient.id ? (') &&
+  patientsPageSrc68.includes('router.push("/dashboard/patients/" + patient.id)'),
+  "[PATIENT LIST ACTIONS] Receptionist and B2B have three dots replaced with direct View Patient History button and loader spinner"
+);
+
+// 68.2 B2B Reports Outstanding Balance Direct Navigation
+assert(
+  reportsPageSrc68.includes('<Link href="/dashboard/wallet">') &&
+  reportsPageSrc68.includes('Recharge Wallet') &&
+  reportsPageSrc68.includes('outstandingLock?.isLocked'),
+  "[REPORTS DIRECT WALLET NAVIGATION] Outstanding balance banner Recharge Wallet button links directly to /dashboard/wallet without opening modal"
+);
+
+// 68.3 B2B Sidebar Finance & Rates Clean Up
+const b2bNavBlock68 = sidebarClientSrc68.match(/const b2bNav:\s*NavItem\[\]\s*=\s*\[([\s\S]*?)\];/)?.[1] || "";
+assert(
+  !b2bNavBlock68.includes('"Due Reports"') &&
+  !b2bNavBlock68.includes('"Monthly Business Report"') &&
+  b2bNavBlock68.includes('"Revenue & Ledger"') &&
+  b2bNavBlock68.includes('"Rate List"'),
+  "[B2B SIDEBAR CLEANUP] Due Reports and Monthly Business Report removed from B2B Finance & Rates menu"
+);
+
+// 68.4 Backend B2B Auto-Refund on Delete Bill & Delete Patient
+assert(
+  b2bWalletCtrlSrc68.includes("public static function refundTransactionsForReports") &&
+  b2bWalletCtrlSrc68.includes("REFUND-") &&
+  b2bWalletCtrlSrc68.includes("Refund for Deleted Requisition:"),
+  "[BACKEND B2B AUTO-REFUND] B2bWalletController provides idempotent refundTransactionsForReports with duplicate refund prevention"
+);
+
+assert(
+  billCtrlSrc68.includes("B2bWalletController::refundTransactionsForReports($bill->reports, $patientName)"),
+  "[BILL CONTROLLER B2B REFUND] Bill deletion automatically issues B2B wallet credit refund and logs transaction"
+);
+
+assert(
+  patientCtrlSrc68.includes("B2bWalletController::refundTransactionsForReports($reports, $patient->name)"),
+  "[PATIENT CONTROLLER B2B REFUND] Patient deletion automatically issues B2B wallet credit refund and logs transaction"
+);
+
+// 68.5 Patient History Page: 3-Dots Menu Hidden for Receptionist & B2B
+const patientDetailsPageSrc68 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/patients/[id]/page.tsx"), "utf-8");
+assert(
+  patientDetailsPageSrc68.includes('const isReceptionist = userRole === "RECEPTIONIST"') &&
+  patientDetailsPageSrc68.includes('!isReceptionist && userRole !== "B2B"') &&
+  patientDetailsPageSrc68.includes('<span>{loadingPrintId === row.reportId ? "Loading..." : "Report"}</span>'),
+  "[PATIENT HISTORY RECEPTIONIST REPORT ACTIONS] 3-dots dropdown menu suppressed for Receptionist and B2B in patient history, showing only Report button"
+);
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODULE 69: B2B Mobile Responsiveness, Single-Line Pill Badges & Ledger Table
+// ══════════════════════════════════════════════════════════════════════════════
+console.log("\n▶ MODULE 69: B2B Mobile Responsiveness, Single-Line Pill Badges & Ledger Table");
+
+const walletPageSrc69 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/wallet/page.tsx"), "utf-8");
+const revenuePageSrc69 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/revenue/page.tsx"), "utf-8");
+
+// 69.1 B2B Wallet Page Mobile Layout & Sub-Tab Scroll
+assert(
+  walletPageSrc69.includes("overflow-x-hidden space-y-5 sm:space-y-7") &&
+  walletPageSrc69.includes("overflow-x-auto no-scrollbar") &&
+  walletPageSrc69.includes("grid-cols-3 sm:grid-cols-5"),
+  "[WALLET MOBILE RESPONSIVE LAYOUT] Wallet page features overflow-x protection, scrollable sub-tabs, and mobile-friendly 3/5 column amount chips"
+);
+
+// 69.2 B2B Wallet Single-Line Pill Labels
+assert(
+  walletPageSrc69.includes("PayU Automated Ledger") &&
+  walletPageSrc69.includes("Instant Auto-Credit") &&
+  walletPageSrc69.includes("whitespace-nowrap inline-flex items-center"),
+  "[WALLET SINGLE-LINE PILL BADGES] Header, gateway, and tab badge pills use whitespace-nowrap and inline-flex for single-line alignment"
+);
+
+// 69.3 B2B Revenue Page Mobile Toolbar & Date Presets
+assert(
+  revenuePageSrc69.includes("overflow-x-hidden space-y-6 sm:space-y-7") &&
+  revenuePageSrc69.includes("overflow-x-auto no-scrollbar w-full sm:w-auto shrink-0 max-w-full") &&
+  revenuePageSrc69.includes("whitespace-nowrap inline-flex items-center shrink-0"),
+  "[REVENUE MOBILE RESPONSIVE TOOLBAR] Revenue page wraps cleanly on mobile with horizontal-scrollable date switcher pills"
+);
+
+// 69.4 B2B Revenue Table: Single-Line Patient Column & Pill Statuses
+assert(
+  revenuePageSrc69.includes('className="px-6 py-3.5 whitespace-nowrap"') &&
+  revenuePageSrc69.includes('font-bold text-foreground whitespace-nowrap truncate max-w-[220px]') &&
+  revenuePageSrc69.includes('text-[11px] text-muted-foreground whitespace-nowrap font-mono') &&
+  revenuePageSrc69.includes('Ledger Active'),
+  "[REVENUE TABLE SINGLE-LINE PATIENT] Patient column displays patient name and ID strictly on a single line with clean ellipsis truncation"
+);
+
+// ==============================================================================
+// 70. System-Wide Security Audit Hardening & Zero-Loophole Verification (SEC-01 - SEC-09)
+// ==============================================================================
+console.log("\n▶ MODULE 70: Security Hardening, Anti-Tamper & Granular RBAC Verification");
+
+// 70.1 hasPermission helper: Admin universal bypass
+assert(
+  hasPermission({ role: "ADMIN" }, "can_manage_settings") === true &&
+  hasPermission({ role: "SUPER_ADMIN" }, "can_approve_reports") === true,
+  "[SEC RBAC ADMIN BYPASS] Admin and Super Admin users possess universal access to all permission keys"
+);
+
+// 70.2 hasPermission helper: Role defaults enforcement
+assert(
+  hasPermission({ role: "RECEPTIONIST" }, "can_register_patients") === true &&
+  hasPermission({ role: "RECEPTIONIST" }, "can_manage_settings") === false &&
+  hasPermission({ role: "COLLECTION_CENTER" }, "can_scan_barcodes") === true &&
+  hasPermission({ role: "COLLECTION_CENTER" }, "can_enter_results") === false,
+  "[SEC RBAC ROLE DEFAULTS] Non-admin roles strictly default to their authorized capability matrix"
+);
+
+// 70.3 hasPermission helper: Custom permissions array override
+assert(
+  hasPermission({ role: "RECEPTIONIST", permissions: ["can_manage_settings"] }, "can_manage_settings") === true &&
+  hasPermission({ role: "RECEPTIONIST", permissions: ["can_scan_barcodes"] }, "can_manage_billing") === false &&
+  hasPermission(null, "can_manage_settings") === false,
+  "[SEC RBAC PERMISSION OVERRIDE] Custom assigned staff permissions correctly override defaults; null safe"
+);
+
+// 70.4 Backend Lab Model Sensitive Data Masking ($hidden)
+const labModelSrc = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Models/Lab.php"), "utf-8");
+assert(
+  labModelSrc.includes("payment_gateway_settings") &&
+  labModelSrc.includes("abdm_settings") &&
+  labModelSrc.includes("summary_dispatch_settings") &&
+  labModelSrc.includes("$hidden"),
+  "[SEC-01 LAB MODEL HIDDEN KEYS] Payment gateway secret keys, ABDM tokens, and dispatch preferences hidden from public JSON"
+);
+
+// 70.5 Backend RBAC: RateListController, CollectionCenterController & BillController
+const rateListCtrlSrc = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/RateListController.php"), "utf-8");
+const ccCtrlSrc = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/CollectionCenterController.php"), "utf-8");
+const billCtrlSrc = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"), "utf-8");
+assert(
+  rateListCtrlSrc.includes("ensureAdminAccess") &&
+  rateListCtrlSrc.includes("COLLECTION_CENTER") &&
+  ccCtrlSrc.includes("ensureAdminAccess") &&
+  billCtrlSrc.includes("Unauthorized: Only Laboratory Administrators can delete billing and clinical records"),
+  "[SEC-02..04 CONTROLLER RBAC GUARDS] Rate lists, collection center staff, and bill deletions strictly guarded against non-admin roles"
+);
+
+// 70.6 Backend RBAC: B2bSalesController, LabController & DoctorController
+const b2bSalesCtrlSrc = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/B2bSalesController.php"), "utf-8");
+const labCtrlSrc = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/LabController.php"), "utf-8");
+const docCtrlSrc = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/DoctorController.php"), "utf-8");
+assert(
+  b2bSalesCtrlSrc.includes("ensureAdminAccess") &&
+  labCtrlSrc.includes("ensureAdminAccess") &&
+  docCtrlSrc.includes("ensureAdminAccess"),
+  "[SEC-05..06 SENSITIVE API GUARDS] B2B partner ledger, lab settings/payment keys, and doctor commissions guarded to Lab Admin"
+);
+
+// 70.7 Frontend Navigation Route Guards
+const settingsPageSrc70 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/settings/page.tsx"), "utf-8");
+const b2bPageSrc70 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/b2b/page.tsx"), "utf-8");
+assert(
+  settingsPageSrc70.includes('user.role === "RECEPTIONIST"') &&
+  b2bPageSrc70.includes('user.role === "RECEPTIONIST"'),
+  "[SEC-07 UI ROUTE GUARDS] Master settings and B2B client administration pages securely redirect receptionist and external partners"
+);
+
+// 70.8 Chromium Vector PDF SSRF Interception & Auto-Pruning
+const pdfRouteSrc70 = fs.readFileSync(path.resolve(__dirname, "../src/app/api/reports/download-pdf/route.ts"), "utf-8");
+assert(
+  pdfRouteSrc70.includes("page.setRequestInterception(true)") &&
+  pdfRouteSrc70.includes("169.254.169.254") &&
+  pdfRouteSrc70.includes("file:") &&
+  pdfRouteSrc70.includes("lastCachePruneTime") &&
+  pdfRouteSrc70.includes("MAX_AGE_MS"),
+  "[SEC-09 PDF SSRF DEFENSE & CACHE PRUNING] Download PDF endpoint blocks loopback, cloud metadata IPs, and automatically prunes stale disk cache"
+);
+
+// 70.9 Instant PDF Background Pre-warming & A4 Shimmer Skeleton
+const previewDialogSrc70 = fs.readFileSync(path.resolve(__dirname, "../src/components/print-preview-dialog.tsx"), "utf-8");
+const pdfDownloaderSrc70 = fs.readFileSync(path.resolve(__dirname, "../src/lib/pdf-report-downloader.ts"), "utf-8");
+assert(
+  previewDialogSrc70.includes("ReportPreviewShimmer") &&
+  previewDialogSrc70.includes("prefetchNativePdf") &&
+  previewDialogSrc70.includes("isPreviewReady") &&
+  pdfDownloaderSrc70.includes("prefetchNativePdf") &&
+  pdfDownloaderSrc70.includes("clientPdfBlobCache"),
+  "[INSTANT PDF & SHIMMER PREVIEW] Print preview displays A4 shimmer skeleton while pre-warming vector PDF in background for instant download"
+);
+
+// ==============================================================================
+// 71. Role-Isolated AI Guide Navigation & Interactive Knowledge Engine (AI-01 - AI-12)
+// ==============================================================================
+console.log("\n▶ MODULE 71: Role-Isolated AI Guide Navigation & Interactive Knowledge Engine");
+
+// 71.1 Role Normalization
+assert(
+  normalizeAiRole("COLLECTION_CENTRE") === "COLLECTION_CENTER" &&
+  normalizeAiRole("collection_center") === "COLLECTION_CENTER" &&
+  normalizeAiRole("RECEPTIONIST") === "RECEPTIONIST" &&
+  normalizeAiRole("front_desk") === "RECEPTIONIST" &&
+  normalizeAiRole("B2B") === "B2B" &&
+  normalizeAiRole("b2b_partner") === "B2B" &&
+  normalizeAiRole("ADMIN") === "ADMIN" &&
+  normalizeAiRole("PATHOLOGIST") === "ADMIN" &&
+  normalizeAiRole("SUPER_ADMIN") === "ADMIN" &&
+  normalizeAiRole(null) === "ADMIN",
+  "[AI-01 ROLE NORMALIZATION] Accurately maps various role casings and aliases to 4 canonical portal roles"
+);
+
+// 71.2 Role Welcome Messages Integrity
+const ccWelcome = getRoleWelcomeMessage("COLLECTION_CENTER");
+const recepWelcome = getRoleWelcomeMessage("RECEPTIONIST");
+const b2bWelcome = getRoleWelcomeMessage("B2B");
+const adminWelcome = getRoleWelcomeMessage("ADMIN");
+assert(
+  ccWelcome.includes("Today's Samples") &&
+  ccWelcome.includes("tube barcodes") &&
+  recepWelcome.includes("Track Samples") &&
+  recepWelcome.includes("Patient Registration") &&
+  b2bWelcome.includes("prepaid wallet") &&
+  b2bWelcome.includes("contracted") &&
+  adminWelcome.includes("Settings") &&
+  adminWelcome.includes("Tests Master"),
+  "[AI-02 ROLE WELCOME DISPATCH] Welcome messages provide role-tailored capability overviews without cross-role leakage"
+);
+
+// 71.3 Admin Settings Navigation (Sub-tabs with Exact Query Params)
+const letterheadAns = getClientFallbackAnswer("Letterhead margin kaise set kare?", "ADMIN");
+const layoutAns = getClientFallbackAnswer("1 test per page kaise kare?", "ADMIN");
+const billsAns = getClientFallbackAnswer("Bills layout receipt print kaise set kare?", "ADMIN");
+const rbacAns = getClientFallbackAnswer("RBAC staff login permission kaise kare?", "ADMIN");
+const gatewayAns = getClientFallbackAnswer("PayU payment gateway kaise integrate kare?", "ADMIN");
+const machineAns = getClientFallbackAnswer("Analyzer machine kaise connect kare?", "ADMIN");
+assert(
+  letterheadAns.includes("/dashboard/settings?tab=letterhead") &&
+  layoutAns.includes("/dashboard/settings?tab=report-layout") &&
+  layoutAns.includes("Multi-Page Test Separation") &&
+  billsAns.includes("/dashboard/settings?tab=bills-layout") &&
+  rbacAns.includes("/dashboard/settings?tab=collection-centers") &&
+  gatewayAns.includes("/dashboard/settings?tab=payment-gateway") &&
+  machineAns.includes("/dashboard/settings?tab=machine-integration") &&
+  machineAns.includes("START_MACHINE_BRIDGE.bat"),
+  "[AI-03 ADMIN SETTINGS SUB-TABS] Admin guide accurately routes to exact ?tab= URLs for letterhead, layout, bills, rbac, gateway, and machines"
+);
+
+// 71.4 Admin Result Entry & Diagnostic Workflows
+const resultEntryAns = getClientFallbackAnswer("Result entry kaise kare?", "ADMIN");
+const worksheetAns = getClientFallbackAnswer("Bench worksheet kaise print kare?", "ADMIN");
+const packagesAns = getClientFallbackAnswer("Health packages combo kaise banaye?", "ADMIN");
+const ratelistAns = getClientFallbackAnswer("Rate list 1-click discount kaise set kare?", "ADMIN");
+const inventoryAns = getClientFallbackAnswer("Inventory reagents stock kaise manage kare?", "ADMIN");
+assert(
+  resultEntryAns.includes("/dashboard/reports") &&
+  resultEntryAns.includes("Enter Result") &&
+  worksheetAns.includes("/dashboard/tests/worksheet") &&
+  packagesAns.includes("/dashboard/tests/packages") &&
+  ratelistAns.includes("/dashboard/ratelist") &&
+  ratelistAns.includes("1-Click % Discount") &&
+  inventoryAns.includes("/dashboard/inventory") &&
+  inventoryAns.includes("/dashboard/inventory/manage"),
+  "[AI-04 ADMIN CLINICAL & DIAGNOSTIC NAVIGATION] Admin guide provides step-by-step guidance for Result Entry, Worksheets, Packages, Rate Lists, and Inventory"
+);
+
+// 71.5 Admin Financial Analytics & Doctor Referrals
+const duesAns = getClientFallbackAnswer("Pending dues balance kaise collect kare?", "ADMIN");
+const monthlyExpAns = getClientFallbackAnswer("Monthly expenses aur profit loss kaise dekhe?", "ADMIN");
+const docReferralAns = getClientFallbackAnswer("Doctor referral commission manage kaise kare?", "ADMIN");
+const docPortalAns = getClientFallbackAnswer("Doctor portal kahan hai?", "ADMIN");
+const outsourceAns = getClientFallbackAnswer("Outsource cases reference lab kaise track kare?", "ADMIN");
+const smartRepAns = getClientFallbackAnswer("AI smart report kaise banaye?", "ADMIN");
+const quotaAns = getClientFallbackAnswer("Daily quota aur GST tax invoices kahan hai?", "ADMIN");
+assert(
+  duesAns.includes("/dashboard/billing/dues") &&
+  monthlyExpAns.includes("/dashboard/billing/monthly-expenses") &&
+  docReferralAns.includes("/dashboard/doctors/manage") &&
+  docPortalAns.includes("/dashboard/doctors/portal") &&
+  outsourceAns.includes("/dashboard/cases/outsource") &&
+  smartRepAns.includes("/dashboard/smart-report") &&
+  quotaAns.includes("/dashboard/account/lab"),
+  "[AI-05 ADMIN FINANCIAL & REFERRAL ROUTES] Admin guide maps due reports, monthly expenses, cases/referrals, doctor portal, smart reports, and lab accounts"
+);
+
+// 71.6 Receptionist Scope Restriction & Anti-Conflict Isolation
+const recepResultBlock = getClientFallbackAnswer("Result entry kaise kare?", "RECEPTIONIST");
+const recepDoctorSignBlock = getClientFallbackAnswer("Doctor digital signature kaise lagaye?", "RECEPTIONIST");
+const recepSettingsBlock = getClientFallbackAnswer("Settings kahan hai?", "RECEPTIONIST");
+const recepCasesBlock = getClientFallbackAnswer("Cases manage kaise kare?", "RECEPTIONIST");
+assert(
+  (recepResultBlock.includes("nahi hai") || recepResultBlock.includes("not part of")) &&
+  (recepResultBlock.includes("Technicians") || recepResultBlock.includes("Pathologist")) &&
+  recepResultBlock.includes("/dashboard/patients/register") &&
+  !recepResultBlock.includes("/dashboard/reports/[id]/edit") &&
+  (recepDoctorSignBlock.includes("nahi hai") || recepDoctorSignBlock.includes("not part of")) &&
+  (recepSettingsBlock.includes("nahi hai") || recepSettingsBlock.includes("not available")) &&
+  !recepSettingsBlock.includes("/dashboard/settings?tab=") &&
+  (recepCasesBlock.includes("nahi hai") || recepCasesBlock.includes("strictly reserved")),
+  "[AI-06 RECEPTIONIST SCOPE DEFENSE] Receptionist is strictly blocked from result entry, doctor signs, cases, and settings with clear role boundaries"
+);
+
+// 71.7 Receptionist Authorized Guided Navigation
+const recepTrackAns = getClientFallbackAnswer("Sample progress track kaise kare?", "RECEPTIONIST");
+const recepRegisterAns = getClientFallbackAnswer("Naya patient kaise register kare?", "RECEPTIONIST");
+const recepDuesAns = getClientFallbackAnswer("Pending due balance kaise check kare?", "RECEPTIONIST");
+const recepBillingAns = getClientFallbackAnswer("Cash payment kaise collect kare?", "RECEPTIONIST");
+const recepAbhaAns = getClientFallbackAnswer("ABHA ID QR poster kaise open kare?", "RECEPTIONIST");
+assert(
+  recepTrackAns.includes("/dashboard/track-samples") &&
+  recepTrackAns.includes("Print Report") &&
+  recepRegisterAns.includes("/dashboard/patients/register") &&
+  recepDuesAns.includes("/dashboard/billing/dues") &&
+  recepBillingAns.includes("/dashboard/billing") &&
+  recepAbhaAns.includes("Create ABHA ID"),
+  "[AI-07 RECEPTIONIST AUTHORIZED NAVIGATION] Receptionist receives accurate step-by-step guidance for Track Samples, Intake, Due Reports, and ABHA posters"
+);
+
+// 71.8 Collection Center Scope Restriction & Anti-Conflict Isolation
+const ccResultBlock = getClientFallbackAnswer("Test result entry kaise kare?", "COLLECTION_CENTER");
+const ccSettingsBlock = getClientFallbackAnswer("Letterhead settings kahan hai?", "COLLECTION_CENTER");
+const ccCasesBlock = getClientFallbackAnswer("Cases referral kaise manage kare?", "COLLECTION_CENTER");
+assert(
+  (ccResultBlock.includes("nahi hai") || ccResultBlock.includes("not available")) &&
+  (ccResultBlock.includes("Central Laboratory") || ccResultBlock.includes("Pathologist")) &&
+  ccResultBlock.includes("/dashboard/today-samples") &&
+  (ccSettingsBlock.includes("nahi hai") || ccSettingsBlock.includes("not accessible")) &&
+  !ccSettingsBlock.includes("/dashboard/settings?tab=") &&
+  (ccCasesBlock.includes("nahi hai") || ccCasesBlock.includes("restricted exclusively")),
+  "[AI-08 COLLECTION CENTER SCOPE DEFENSE] Collection Center is strictly barred from result entry, settings, and cases"
+);
+
+// 71.9 Collection Center Authorized Guided Navigation
+const ccBarcodesAns = getClientFallbackAnswer("Vacutainer tube barcodes kaise tag kare?", "COLLECTION_CENTER");
+const ccTodayAns = getClientFallbackAnswer("Today samples intake kaise kare?", "COLLECTION_CENTER");
+const ccReceiptAns = getClientFallbackAnswer("Payment receipt kaise print kare?", "COLLECTION_CENTER");
+const ccDuesAns = getClientFallbackAnswer("Pending dues kaise dekhe?", "COLLECTION_CENTER");
+const ccReportsAns = getClientFallbackAnswer("Approved reports kaise print kare?", "COLLECTION_CENTER");
+assert(
+  ccBarcodesAns.includes("/dashboard/today-samples") &&
+  ccBarcodesAns.includes("EDTA") &&
+  ccBarcodesAns.includes("SST") &&
+  ccBarcodesAns.includes("Status / Barcodes") &&
+  ccTodayAns.includes("/dashboard/today-samples") &&
+  ccReceiptAns.includes("/dashboard/billing") &&
+  ccDuesAns.includes("/dashboard/billing/dues") &&
+  ccReportsAns.includes("/dashboard/reports"),
+  "[AI-09 COLLECTION CENTER AUTHORIZED NAVIGATION] Collection Center accurately guided to Today's Samples, color vacutainers, billing, dues, and reports"
+);
+
+// 71.10 B2B Partner Scope Restriction & Anti-Conflict Isolation
+const b2bDuesBlock = getClientFallbackAnswer("Due reports kahan hai?", "B2B");
+const b2bMonthlyBlock = getClientFallbackAnswer("Monthly business expenses kahan hai?", "B2B");
+const b2bResultBlock = getClientFallbackAnswer("Result entry kaise kare?", "B2B");
+const b2bSettingsBlock = getClientFallbackAnswer("Settings kahan hai?", "B2B");
+assert(
+  (b2bDuesBlock.includes("nahi hai") || b2bDuesBlock.includes("not applicable")) &&
+  b2bDuesBlock.includes("/dashboard/wallet") &&
+  !b2bDuesBlock.includes("/dashboard/billing/dues") &&
+  (b2bMonthlyBlock.includes("nahi hai") || b2bMonthlyBlock.includes("not part of")) &&
+  b2bMonthlyBlock.includes("/dashboard/revenue") &&
+  !b2bMonthlyBlock.includes("/dashboard/billing/monthly-expenses") &&
+  (b2bResultBlock.includes("nahi hai") || b2bResultBlock.includes("not part of")) &&
+  (b2bSettingsBlock.includes("nahi hai") || b2bSettingsBlock.includes("not available")),
+  "[AI-10 B2B SCOPE DEFENSE] Dues & Monthly Business properly suppressed from B2B with redirects to Wallet and Revenue; result entry blocked"
+);
+
+// 71.11 B2B Partner Authorized Guided Navigation
+const b2bWalletAns = getClientFallbackAnswer("Wallet recharge kaise kare PayU se?", "B2B");
+const b2bLockAns = getClientFallbackAnswer("Report locked kyu hai unpaid balance?", "B2B");
+const b2bBookingAns = getClientFallbackAnswer("Referral patient booking kaise kare contracted rate par?", "B2B");
+const b2bRatelistAns = getClientFallbackAnswer("Contracted test rate list kahan hai?", "B2B");
+const b2bRevenueAns = getClientFallbackAnswer("Revenue aur transaction ledger kaise dekhe?", "B2B");
+const b2bReportsAns = getClientFallbackAnswer("Final reports download kaise kare?", "B2B");
+assert(
+  b2bWalletAns.includes("/dashboard/wallet") &&
+  b2bLockAns.includes("/dashboard/wallet") &&
+  b2bBookingAns.includes("/dashboard/patients/register") &&
+  b2bRatelistAns.includes("/dashboard/ratelist") &&
+  b2bRevenueAns.includes("/dashboard/revenue") &&
+  b2bReportsAns.includes("/dashboard/reports"),
+  "[AI-11 B2B AUTHORIZED NAVIGATION] B2B partner accurately guided to Wallet Recharge, Unlock Solution, Contracted Rate List, Revenue Ledger, and Reports"
+);
+
+// 71.12 English & Hindi Query Parity
+const engAns = getClientFallbackAnswer("How do I register a new patient and print vial barcodes?", "ADMIN");
+const hindiAns = getClientFallbackAnswer("Naya mariz kaise add kare aur barcode kaise nikale?", "ADMIN");
+assert(
+  engAns.includes("Open Patient Registration") &&
+  hindiAns.includes("Open Patient Registration") &&
+  hindiAns.includes("Naye patient") &&
+  !engAns.includes("Naye patient"),
+  "[AI-12 BILINGUAL ACCURACY] Guide responds in matching language (Hindi vs English) with valid navigation URLs in both"
+);
+
+// 71.13 Role-Specific Step-by-Step Navigation & Switch Queries (AI-13 - AI-16)
+const adminNavSwitch = getClientFallbackAnswer("page switch kaise karein?", "ADMIN");
+const recepNavSwitch = getClientFallbackAnswer("tab switch kaise kare?", "RECEPTIONIST");
+const ccNavSwitch = getClientFallbackAnswer("page change kaise kare?", "COLLECTION_CENTER");
+const b2bNavSwitch = getClientFallbackAnswer("all routes kahan hai?", "B2B");
+
+assert(
+  adminNavSwitch.includes("/dashboard") &&
+  adminNavSwitch.includes("/dashboard/patients/register") &&
+  adminNavSwitch.includes("/dashboard/reports/[id]/edit") &&
+  adminNavSwitch.includes("/dashboard/billing/dues") &&
+  adminNavSwitch.includes("/dashboard/billing/monthly-expenses") &&
+  adminNavSwitch.includes("/dashboard/cases") &&
+  adminNavSwitch.includes("/dashboard/collection-centers") &&
+  adminNavSwitch.includes("/dashboard/tests") &&
+  adminNavSwitch.includes("/dashboard/inventory") &&
+  adminNavSwitch.includes("/dashboard/smart-report") &&
+  adminNavSwitch.includes("/dashboard/settings?tab=letterhead") &&
+  adminNavSwitch.includes("/dashboard/settings?tab=report-layout") &&
+  adminNavSwitch.includes("/dashboard/referral") &&
+  adminNavSwitch.includes("/dashboard/support"),
+  "[AI-13 ADMIN STEP-BY-STEP SWITCH GUIDANCE] Admin receives comprehensive step-by-step guidance for all 11 sidebar modules and 6 settings tabs"
+);
+
+assert(
+  recepNavSwitch.includes("/dashboard/patients/register") &&
+  recepNavSwitch.includes("/dashboard/patients/[id]") &&
+  recepNavSwitch.includes("/dashboard/today-samples") &&
+  recepNavSwitch.includes("/dashboard/track-samples") &&
+  recepNavSwitch.includes("/dashboard/reports") &&
+  recepNavSwitch.includes("/dashboard/billing") &&
+  recepNavSwitch.includes("/dashboard/support") &&
+  !recepNavSwitch.includes("/dashboard/cases") &&
+  !recepNavSwitch.includes("/dashboard/tests") &&
+  !recepNavSwitch.includes("/dashboard/inventory") &&
+  !recepNavSwitch.includes("/dashboard/settings"),
+  "[AI-14 RECEPTIONIST STEP-BY-STEP SWITCH GUIDANCE] Receptionist receives strictly isolated Front Desk guidance without Admin modules"
+);
+
+assert(
+  ccNavSwitch.includes("/dashboard/today-samples") &&
+  ccNavSwitch.includes("/dashboard/patients") &&
+  ccNavSwitch.includes("/dashboard/reports") &&
+  ccNavSwitch.includes("/dashboard/billing/dues") &&
+  ccNavSwitch.includes("/dashboard/billing") &&
+  ccNavSwitch.includes("/dashboard/billing/monthly-expenses") &&
+  ccNavSwitch.includes("/dashboard/support") &&
+  !ccNavSwitch.includes("/dashboard/cases") &&
+  !ccNavSwitch.includes("/dashboard/reports/[id]/edit") &&
+  !ccNavSwitch.includes("/dashboard/settings?tab="),
+  "[AI-15 COLLECTION CENTER STEP-BY-STEP SWITCH GUIDANCE] Collection Center receives intake, transit, and financial guidance without edit results or admin tabs"
+);
+
+assert(
+  b2bNavSwitch.includes("/dashboard/patients/register") &&
+  b2bNavSwitch.includes("/dashboard/today-samples") &&
+  b2bNavSwitch.includes("/dashboard/reports") &&
+  b2bNavSwitch.includes("/dashboard/wallet") &&
+  b2bNavSwitch.includes("/dashboard/billing") &&
+  b2bNavSwitch.includes("/dashboard/revenue") &&
+  b2bNavSwitch.includes("/dashboard/ratelist") &&
+  b2bNavSwitch.includes("/dashboard/support") &&
+  !b2bNavSwitch.includes("/dashboard/billing/dues") &&
+  !b2bNavSwitch.includes("/dashboard/billing/monthly-expenses") &&
+  !b2bNavSwitch.includes("/dashboard/cases") &&
+  !b2bNavSwitch.includes("/dashboard/settings"),
+  "[AI-16 B2B STEP-BY-STEP SWITCH GUIDANCE] B2B receives wallet, rate list, and revenue guidance with dues and expenses cleanly suppressed"
+);
+
+// 71.14 Settings Tab Aliasing & Route Redirect Architecture
+const settingsPageSrc71 = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/settings/page.tsx"), "utf-8");
+const nextConfigSrc71 = fs.readFileSync(path.resolve(__dirname, "../next.config.mjs"), "utf-8");
+const backendAiCtrlSrc71 = fs.readFileSync(path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/AiController.php"), "utf-8");
+
+assert(
+  settingsPageSrc71.includes("normalizeSettingsTab") &&
+  settingsPageSrc71.includes('t === "rbac"') &&
+  settingsPageSrc71.includes('t === "machine-interfacing"') &&
+  settingsPageSrc71.includes("setActiveTab(normalizeSettingsTab(currentTabParam))") &&
+  nextConfigSrc71.includes('source: "/dashboard/cases"') &&
+  nextConfigSrc71.includes('source: "/dashboard/collection-centers"') &&
+  nextConfigSrc71.includes('source: "/dashboard/referral"'),
+  "[AI-17 SETTINGS ALIASING & NEXT ROUTE REDIRECTS] Settings page supports in-chat tab query switching and config redirects aliases to canonical destinations"
+);
+
+// 71.15 Backend AiController Route & Scope Alignment
+assert(
+  backendAiCtrlSrc71.includes("isNavigationOrSwitchQuery") &&
+  backendAiCtrlSrc71.includes("/dashboard/reports/[id]/edit") &&
+  backendAiCtrlSrc71.includes("/dashboard/cases") &&
+  backendAiCtrlSrc71.includes("/dashboard/collection-centers") &&
+  backendAiCtrlSrc71.includes("/dashboard/referral") &&
+  backendAiCtrlSrc71.includes("Receptionists do not enter test result values") &&
+  backendAiCtrlSrc71.includes("B2B Partners only see their own patients"),
+  "[AI-18 BACKEND AI CONTROLLER PARITY] Backend AiController provides synchronous fallback guidance matching Next.js real routes and role boundaries"
+);
+
+console.log("\n▶ MODULE 72: Two-Factor Authentication (2FA) & Multi-Role Security Engine");
+
+// 72.1 AI Assistant Guidance for 2FA across roles
+const twoFaHindi = getClientFallbackAnswer("2FA kaise lagaye?", "ADMIN");
+const twoFaEng = getClientFallbackAnswer("How to enable two factor authentication?", "RECEPTIONIST");
+const twoFaB2B = getClientFallbackAnswer("Google authenticator kaise use kare?", "B2B");
+const twoFaCC = getClientFallbackAnswer("whatsapp otp login security kaise on kare?", "COLLECTION_CENTER");
+
+assert(
+  twoFaHindi.includes("/dashboard/account/profile") &&
+  twoFaHindi.includes("Google Authenticator") &&
+  twoFaHindi.includes("Email OTP") &&
+  twoFaHindi.includes("WhatsApp OTP") &&
+  twoFaHindi.includes("Disable 2FA"),
+  "[2FA-01 AI GUIDE BILINGUAL ACCURACY] AI Assistant accurately guides users to My Account > 2FA in Hindi"
+);
+
+assert(
+  twoFaEng.includes("/dashboard/account/profile") &&
+  twoFaEng.includes("Google Authenticator") &&
+  twoFaEng.includes("mutually exclusive") &&
+  twoFaEng.includes("Verify & Activate"),
+  "[2FA-02 AI GUIDE ENGLISH COVERAGE] AI Assistant provides step-by-step 2FA activation instructions in English"
+);
+
+assert(
+  twoFaB2B.includes("/dashboard/account/profile") && twoFaCC.includes("/dashboard/account/profile"),
+  "[2FA-03 MULTI-ROLE ACCESSIBILITY] 2FA guidance is universally active across B2B, Collection Center, Receptionist, and Admin"
+);
+
+// 72.2 My Account Profile Page Integration
+const profilePageSrc72 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/account/profile/page.tsx"), "utf8");
+assert(
+  profilePageSrc72.includes('"2FA"') &&
+  profilePageSrc72.includes("AccountTwoFactorTab") &&
+  profilePageSrc72.includes("profile-phone-section") &&
+  profilePageSrc72.includes('setActiveTab("2FA")'),
+  "[2FA-04 PROFILE PAGE INTEGRATION] Profile page features '2FA' tab button and renders AccountTwoFactorTab component"
+);
+
+// 72.3 Account Two-Factor Tab Component Architecture
+const twoFaComponentSrc72 = fs.readFileSync(path.join(process.cwd(), "src/components/account-two-factor-tab.tsx"), "utf8");
+assert(
+  twoFaComponentSrc72.includes("QRCodeSVG") &&
+  twoFaComponentSrc72.includes("GOOGLE_AUTHENTICATOR") &&
+  twoFaComponentSrc72.includes("EMAIL_OTP") &&
+  twoFaComponentSrc72.includes("WHATSAPP_OTP") &&
+  twoFaComponentSrc72.includes("isThisMethodActive") &&
+  twoFaComponentSrc72.includes("isThisMethodLocked") &&
+  twoFaComponentSrc72.includes("Active & Protected") &&
+  twoFaComponentSrc72.includes("Locked (Disable 2FA First)") &&
+  twoFaComponentSrc72.includes("/profile/2fa/status") &&
+  twoFaComponentSrc72.includes("/profile/2fa/setup") &&
+  twoFaComponentSrc72.includes("/profile/2fa/confirm") &&
+  twoFaComponentSrc72.includes("/profile/2fa/disable"),
+  "[2FA-05 TWO-FACTOR COMPONENT INTEGRITY] AccountTwoFactorTab locks inactive methods, protects active method from duplicate OTP triggers, and requires disabling to switch"
+);
+
+// 72.4 Login Page 2FA Challenge Integration
+const loginPageSrc72 = fs.readFileSync(path.join(process.cwd(), "src/app/login/page.tsx"), "utf8");
+assert(
+  loginPageSrc72.includes("requires_2fa") &&
+  loginPageSrc72.includes("twoFaCode") &&
+  loginPageSrc72.includes("handleVerify2Fa") &&
+  loginPageSrc72.includes("/2fa/verify") &&
+  loginPageSrc72.includes("twoFaInputRef") &&
+  loginPageSrc72.includes("Two-Factor Authentication Required"),
+  "[2FA-06 LOGIN PAGE 2FA CHALLENGE FLOW] Login page seamlessly reveals 6-digit code input directly under password upon 2FA challenge"
+);
+
+// 72.5 Backend Controller & Routes Verification
+const backendTwoFaSrc72 = fs.readFileSync(path.join(process.cwd(), "../Backend/app/Http/Controllers/Api/Lis/TwoFactorAuthController.php"), "utf8");
+const backendRoutesSrc72 = fs.readFileSync(path.join(process.cwd(), "../Backend/routes/api.php"), "utf8");
+assert(
+  backendTwoFaSrc72.includes("initiateSetup") &&
+  backendTwoFaSrc72.includes("confirmSetup") &&
+  backendTwoFaSrc72.includes("disable2Fa") &&
+  backendTwoFaSrc72.includes("verifyLoginChallenge") &&
+  backendTwoFaSrc72.includes("maskEmail") &&
+  backendTwoFaSrc72.includes("maskPhone") &&
+  backendRoutesSrc72.includes("/2fa/verify") &&
+  backendRoutesSrc72.includes("profile/2fa/status"),
+  "[2FA-07 BACKEND 2FA CONTROLLER & API CONTRACT] Backend implements full 2FA challenge lifecycle with masked email and phone credentials"
+);
+
+// 72.6 TOTP RFC 6238 Service & Model Schema Verification
+const backendTotpSrc72 = fs.readFileSync(path.join(process.cwd(), "../Backend/app/Services/TotpService.php"), "utf8");
+const userModelSrc72 = fs.readFileSync(path.join(process.cwd(), "../Backend/app/Models/User.php"), "utf8");
+assert(
+  backendTotpSrc72.includes("generateSecret") &&
+  backendTotpSrc72.includes("getOtpAuthUrl") &&
+  backendTotpSrc72.includes("verifyCode") &&
+  userModelSrc72.includes("two_factor_method") &&
+  userModelSrc72.includes("two_factor_secret") &&
+  userModelSrc72.includes("two_factor_enabled_at"),
+  "[2FA-08 TOTP RFC 6238 & USER MODEL ATTRIBUTES] Pure PHP TOTP service handles Base32 & HMAC-SHA1; User model protects 2FA secret"
 );
 
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);

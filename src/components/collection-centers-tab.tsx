@@ -11,6 +11,12 @@ import {
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 export type PermissionKey =
   | "can_register_patients"
@@ -107,6 +113,27 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, PermissionKey[]> = {
     "can_print_reports",
   ],
 };
+
+/**
+ * Defensive RBAC permission check for UI elements and workflow actions.
+ * Admins always possess all permissions.
+ * Falls back to role default permissions if permissions array is omitted.
+ */
+export function hasPermission(
+  user: any,
+  permission: PermissionKey
+): boolean {
+  if (!user) return false;
+  const role = (user.role || "").toUpperCase();
+  if (role === "ADMIN" || role === "SUPER_ADMIN") return true;
+
+  if (Array.isArray(user.permissions)) {
+    return user.permissions.includes(permission);
+  }
+
+  const defaultPerms = ROLE_DEFAULT_PERMISSIONS[role] || [];
+  return defaultPerms.includes(permission);
+}
 
 interface CollectionCenter {
   id: string | number;
@@ -1308,76 +1335,59 @@ export function CollectionCentersTab() {
 
                           {/* Actions: 3-Dots Dropdown Menu */}
                           <td className="py-4 px-5 text-right">
-                            <div className="relative inline-block" data-rbac-menu>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenMenuId(openMenuId === c.id ? null : c.id);
-                                }}
-                                className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer shadow-2xs"
-                                title="Actions"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors cursor-pointer shadow-2xs"
+                                  title="Actions"
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48 p-1.5 space-y-1 z-50">
+                                {/* Edit Account */}
+                                <DropdownMenuItem
+                                  onClick={() => openEditView(c)}
+                                  className="w-full px-3 py-2 rounded-lg text-xs font-semibold text-foreground hover:bg-muted transition-colors flex items-center gap-2 cursor-pointer text-left"
+                                >
+                                  <Sliders className="h-3.5 w-3.5 text-primary shrink-0" />
+                                  <span>Edit Details</span>
+                                </DropdownMenuItem>
 
-                              {openMenuId === c.id && (
-                                <div className="absolute right-0 top-full mt-1.5 z-30 w-48 rounded-xl bg-card border border-border shadow-xl p-1.5 space-y-1 animate-scale-in text-left">
-                                  {/* Edit Account */}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setOpenMenuId(null);
-                                      openEditView(c);
-                                    }}
-                                    className="w-full px-3 py-2 rounded-lg text-xs font-semibold text-foreground hover:bg-muted transition-colors flex items-center gap-2 cursor-pointer text-left"
-                                  >
-                                    <Sliders className="h-3.5 w-3.5 text-primary shrink-0" />
-                                    <span>Edit Details</span>
-                                  </button>
+                                {/* Suspend / Unsuspend Account */}
+                                <DropdownMenuItem
+                                  disabled={togglingStatusId === c.id}
+                                  onClick={() => handleToggleStatus(c)}
+                                  className={`w-full px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer text-left ${
+                                    isActive
+                                      ? "text-amber-600 dark:text-amber-400 focus:text-amber-600 focus:bg-amber-500/10"
+                                      : "text-emerald-600 dark:text-emerald-400 focus:text-emerald-600 focus:bg-emerald-500/10"
+                                  }`}
+                                >
+                                  {togglingStatusId === c.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                                  ) : isActive ? (
+                                    <Ban className="h-3.5 w-3.5 shrink-0" />
+                                  ) : (
+                                    <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+                                  )}
+                                  <span>{isActive ? "Suspend Account" : "Unsuspend Account"}</span>
+                                </DropdownMenuItem>
 
-                                  {/* Suspend / Unsuspend Account */}
-                                  <button
-                                    type="button"
-                                    disabled={togglingStatusId === c.id}
-                                    onClick={() => {
-                                      setOpenMenuId(null);
-                                      handleToggleStatus(c);
-                                    }}
-                                    className={`w-full px-3 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer text-left ${
-                                      isActive
-                                        ? "text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
-                                        : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
-                                    }`}
-                                  >
-                                    {togglingStatusId === c.id ? (
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-                                    ) : isActive ? (
-                                      <Ban className="h-3.5 w-3.5 shrink-0" />
-                                    ) : (
-                                      <CheckCircle className="h-3.5 w-3.5 shrink-0" />
-                                    )}
-                                    <span>{isActive ? "Suspend Account" : "Unsuspend Account"}</span>
-                                  </button>
+                                <div className="border-t border-border/60 my-1" />
 
-                                  <div className="border-t border-border/60 my-1" />
-
-                                  {/* Delete Account */}
-                                  <button
-                                    type="button"
-                                    disabled={deletingId === c.id}
-                                    onClick={() => {
-                                      setOpenMenuId(null);
-                                      handleDeleteCenter(c.id, c.name);
-                                    }}
-                                    className="w-full px-3 py-2 rounded-lg text-xs font-semibold text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-2 cursor-pointer text-left"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5 shrink-0" />
-                                    <span>Delete Account</span>
-                                  </button>
-                                </div>
-                              )}
-                            </div>
+                                {/* Delete Account */}
+                                <DropdownMenuItem
+                                  disabled={deletingId === c.id}
+                                  onClick={() => handleDeleteCenter(c.id, c.name)}
+                                  className="w-full px-3 py-2 rounded-lg text-xs font-semibold text-destructive focus:text-destructive focus:bg-destructive/10 transition-colors flex items-center gap-2 cursor-pointer text-left"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                                  <span>Delete Account</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </td>
                         </tr>
                       );
