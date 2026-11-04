@@ -92,6 +92,16 @@ export function logout(reason?: string) {
   clearApiCache();
   if (typeof window !== "undefined") {
     try {
+      // Real-time broadcast to all other open tabs on this browser for 0ms instant session termination
+      localStorage.setItem("lis_auth_revoked_at", Date.now().toString());
+      if ("BroadcastChannel" in window) {
+        const bc = new BroadcastChannel("onepath_auth_channel");
+        bc.postMessage({ type: "SESSION_REVOKED", reason });
+        bc.close();
+      }
+    } catch {}
+
+    try {
       // Thoroughly clean ALL user and lab cached items so switching accounts never leaks previous account data
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {

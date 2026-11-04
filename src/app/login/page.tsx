@@ -323,11 +323,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen md:h-screen md:max-h-screen w-full flex flex-col justify-between overflow-y-auto md:overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-100/40 text-slate-900 selection:bg-emerald-500/20 selection:text-emerald-800 antialiased font-sans relative">
+    <div className="min-h-screen min-h-[100dvh] md:h-screen md:max-h-screen w-full flex flex-col justify-between overflow-y-auto md:overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-100/40 text-slate-900 selection:bg-emerald-500/20 selection:text-emerald-800 antialiased font-sans relative">
       {/* ── Main Horizontal Workstation Area (Full Edge-to-Edge) ───────────────────────── */}
-      <div className="flex-1 w-full flex flex-col md:flex-row min-h-0 overflow-y-auto md:overflow-hidden relative z-10">
-        {/* ── Left Side: Pure Clinical Showcase (Expansive & Refined) ──────────────────── */}
-        <div className="w-full md:w-1/2 xl:w-[50%] relative flex flex-col justify-between px-6 sm:px-12 md:px-14 lg:px-16 xl:px-20 py-8 lg:py-10 border-b md:border-b-0 md:border-r border-slate-200/60">
+      <div className="flex-1 w-full flex flex-col md:flex-row min-h-0 overflow-y-visible md:overflow-hidden relative z-10">
+        {/* ── Left Side: Pure Clinical Showcase (Visible on md+ desktop/tablet) ───────── */}
+        <div className="hidden md:flex md:w-1/2 xl:w-[50%] relative flex-col justify-between px-6 sm:px-12 md:px-14 lg:px-16 xl:px-20 py-8 lg:py-10 border-r border-slate-200/60">
           {/* Top Brand Identity: Official Logo + Clear Title */}
           <div className="flex items-center gap-3.5">
             <div className="flex items-center justify-center w-11 h-11 rounded-2xl bg-white border border-slate-200/90 shadow-xs p-1.5 transition-transform duration-300 hover:scale-105">
@@ -350,10 +350,10 @@ export default function LoginPage() {
 
           {/* Center Hero Narrative & Diagnostic Showcase */}
           <div className="space-y-6 my-auto py-6 max-w-xl xl:max-w-2xl">
-            {/* Subtle Clinical Feature Badge */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50/90 border border-emerald-200/80 text-emerald-800 text-xs font-semibold shadow-2xs">
+            {/* Subtle Clinical Feature Text Label */}
+            <div className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-800">
               <Sparkles className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-              <span>Next-Gen Pathology Automation & Interfacing</span>
+              <span>Next-Gen Pathology Automation &amp; Interfacing</span>
             </div>
 
             {/* Editorial Headline & Description */}
@@ -427,30 +427,35 @@ export default function LoginPage() {
         </div>
 
         {/* ── Right Side: LIMS Login (Simple, Ultra-Professional & Responsive) ───────────── */}
-        <div className="w-full md:w-1/2 xl:w-[50%] flex flex-col justify-center items-center px-4 sm:px-8 md:px-10 lg:px-12 xl:px-16 py-8 lg:py-10">
-          <div className="w-full max-w-[420px] sm:max-w-[450px] bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-xl shadow-slate-200/40 p-6 sm:p-8 md:p-9 space-y-6 animate-fade-in">
+        <div className="w-full md:w-1/2 xl:w-[50%] flex flex-col justify-center items-center px-4 sm:px-8 md:px-10 lg:px-12 xl:px-16 py-6 sm:py-8 lg:py-10 md:my-auto">
+          <div className="w-full max-w-[440px] sm:max-w-[460px] bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-xl shadow-slate-200/50 p-5 sm:p-8 md:p-9 space-y-5 sm:space-y-6 animate-fade-in">
             {/* Mobile Header with Logo (< md screens only) */}
-            <div className="flex md:hidden items-center gap-3 pb-2 border-b border-slate-100">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 p-1.5">
-                <Image
-                  src="/onepath-logo.png"
-                  alt="OnePath Lab Logo"
-                  width={32}
-                  height={32}
-                  className="object-contain"
-                />
+            <div className="flex md:hidden items-center justify-between pb-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-slate-50 border border-slate-200 p-1.5 shrink-0 shadow-2xs">
+                  <Image
+                    src="/onepath-logo.png"
+                    alt="OnePath Lab Logo"
+                    width={28}
+                    height={28}
+                    className="object-contain"
+                  />
+                </div>
+                <div className="leading-tight">
+                  <span className="font-display text-base font-bold text-slate-900 tracking-tight block">OnePath Lab</span>
+                  <p className="text-[10px] uppercase font-bold tracking-wider text-emerald-700">
+                    LIS Portal
+                  </p>
+                </div>
               </div>
-              <div>
-                <span className="font-display text-lg font-bold text-slate-900 tracking-tight">OnePath Lab</span>
-                <p className="text-[10px] uppercase font-bold tracking-widest text-emerald-700">
-                  LIS Portal
-                </p>
-              </div>
+              <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 rounded-full shadow-2xs">
+                Workstation
+              </span>
             </div>
 
             {/* Title Section */}
             <div className="space-y-1">
-              <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+              <h2 className="font-display text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">
                 LIMS Login
               </h2>
               <p className="text-xs sm:text-[13px] text-slate-500 leading-normal">
@@ -462,43 +467,46 @@ export default function LoginPage() {
               </p>
             </div>
 
-            {/* Terminal / Center Switcher Pill Tabs */}
-            <div className="p-1 bg-slate-100/90 rounded-xl border border-slate-200/70 grid grid-cols-3 gap-1">
+            {/* Terminal / Center Switcher Tabs - Responsive Full Text & Aligned Icons */}
+            <div className="p-1 sm:p-1.5 bg-slate-100/90 rounded-xl border border-slate-200/70 grid grid-cols-3 gap-1 sm:gap-1.5 w-full">
               <button
                 type="button"
                 onClick={() => { setLoginType("ADMIN"); setError(null); }}
-                className={`h-9 sm:h-10 py-1.5 px-2 rounded-lg text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                className={`min-h-[44px] py-1.5 px-1 sm:px-2 rounded-lg text-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer touch-manipulation select-none active:scale-[0.98] ${
                   loginType === "ADMIN"
                     ? "bg-white text-slate-900 shadow-xs border border-slate-200/80 font-bold"
-                    : "text-slate-500 hover:text-slate-800 font-medium"
+                    : "text-slate-600 hover:text-slate-900 font-medium"
                 }`}
+                title="Admin & Laboratory Staff Portal"
               >
-                <FlaskConical className={`h-3.5 w-3.5 shrink-0 transition-colors ${loginType === "ADMIN" ? "text-emerald-600" : "text-slate-400"}`} />
-                <span className="truncate">Admin / Staff</span>
+                <FlaskConical className={`h-4 w-4 shrink-0 transition-colors ${loginType === "ADMIN" ? "text-emerald-600" : "text-slate-400"}`} />
+                <span className="text-[10.5px] sm:text-xs font-semibold whitespace-nowrap leading-tight text-center tracking-tight">Admin / Staff</span>
               </button>
               <button
                 type="button"
                 onClick={() => { setLoginType("COLLECTION_CENTER"); setError(null); }}
-                className={`h-9 sm:h-10 py-1.5 px-2 rounded-lg text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                className={`min-h-[44px] py-1.5 px-1 sm:px-2 rounded-lg text-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer touch-manipulation select-none active:scale-[0.98] ${
                   loginType === "COLLECTION_CENTER"
                     ? "bg-white text-slate-900 shadow-xs border border-slate-200/80 font-bold"
-                    : "text-slate-500 hover:text-slate-800 font-medium"
+                    : "text-slate-600 hover:text-slate-900 font-medium"
                 }`}
+                title="Sample Collection Center Terminal"
               >
-                <Building2 className={`h-3.5 w-3.5 shrink-0 transition-colors ${loginType === "COLLECTION_CENTER" ? "text-emerald-600" : "text-slate-400"}`} />
-                <span className="truncate">Collection</span>
+                <Building2 className={`h-4 w-4 shrink-0 transition-colors ${loginType === "COLLECTION_CENTER" ? "text-emerald-600" : "text-slate-400"}`} />
+                <span className="text-[10.5px] sm:text-xs font-semibold whitespace-nowrap leading-tight text-center tracking-tight">Collection</span>
               </button>
               <button
                 type="button"
                 onClick={() => { setLoginType("B2B"); setError(null); }}
-                className={`h-9 sm:h-10 py-1.5 px-2 rounded-lg text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                className={`min-h-[44px] py-1.5 px-1 sm:px-2 rounded-lg text-xs transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer touch-manipulation select-none active:scale-[0.98] ${
                   loginType === "B2B"
                     ? "bg-white text-slate-900 shadow-xs border border-slate-200/80 font-bold"
-                    : "text-slate-500 hover:text-slate-800 font-medium"
+                    : "text-slate-600 hover:text-slate-900 font-medium"
                 }`}
+                title="B2B Referral Partner Portal"
               >
-                <Briefcase className={`h-3.5 w-3.5 shrink-0 transition-colors ${loginType === "B2B" ? "text-emerald-600" : "text-slate-400"}`} />
-                <span className="truncate">B2B</span>
+                <Briefcase className={`h-4 w-4 shrink-0 transition-colors ${loginType === "B2B" ? "text-emerald-600" : "text-slate-400"}`} />
+                <span className="text-[10.5px] sm:text-xs font-semibold whitespace-nowrap leading-tight text-center tracking-tight">B2B</span>
               </button>
             </div>
 
@@ -542,7 +550,7 @@ export default function LoginPage() {
                 </label>
                 <div className="relative group">
                   <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-600 transition-colors pointer-events-none flex items-center justify-center">
-                    <Mail className="h-4.5 w-4.5" />
+                    <Mail className="h-5 w-5" />
                   </div>
                   <input
                     id="email"
@@ -565,7 +573,7 @@ export default function LoginPage() {
                 </label>
                 <div className="relative group">
                   <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-600 transition-colors pointer-events-none flex items-center justify-center">
-                    <Lock className="h-4.5 w-4.5" />
+                    <Lock className="h-5 w-5" />
                   </div>
                   <input
                     id="password"
@@ -582,11 +590,11 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer touch-manipulation"
                       title={showPassword ? "Hide password" : "Show password"}
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
-                      {showPassword ? <EyeOff className="h-4.5 w-4.5" /> : <Eye className="h-4.5 w-4.5" />}
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
                   )}
                 </div>
@@ -596,7 +604,7 @@ export default function LoginPage() {
                     <button
                       type="button"
                       onClick={handleOpenForgotModal}
-                      className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline transition-colors cursor-pointer"
+                      className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline transition-colors cursor-pointer py-1 touch-manipulation"
                     >
                       Forgot password?
                     </button>
@@ -682,7 +690,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading || isRedirecting || (requires2Fa && twoFaCode.length !== 6)}
-                className="w-full h-11 sm:h-12 rounded-xl bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 text-white font-semibold text-sm tracking-wide flex items-center justify-center gap-2 transition-all duration-200 shadow-sm hover:shadow-md hover:scale-[1.005] active:scale-[0.99] disabled:opacity-60 cursor-pointer group mt-2"
+                className="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 text-white font-semibold text-sm tracking-wide flex items-center justify-center gap-2 transition-all duration-200 shadow-sm hover:shadow-md hover:scale-[1.005] active:scale-[0.99] disabled:opacity-60 cursor-pointer group mt-2 touch-manipulation"
               >
                 {isRedirecting ? (
                   <>
@@ -710,7 +718,7 @@ export default function LoginPage() {
 
             {/* Minimal SSL Security Seal */}
             <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 pt-1">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
               <span>256-bit SSL Encrypted Session</span>
             </div>
           </div>
@@ -802,7 +810,7 @@ export default function LoginPage() {
 
                 {forgotError && (
                   <div className="flex items-center gap-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-xs sm:text-sm text-red-700 animate-fade-in">
-                    <AlertCircle className="h-4.5 w-4.5 shrink-0 text-red-600" />
+                    <AlertCircle className="h-5 w-5 shrink-0 text-red-600" />
                     <p className="font-semibold">{forgotError}</p>
                   </div>
                 )}
@@ -814,7 +822,7 @@ export default function LoginPage() {
                     </label>
                     <div className="relative group">
                       <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-600 transition-colors pointer-events-none flex items-center justify-center">
-                        <Mail className="h-4.5 w-4.5" />
+                        <Mail className="h-5 w-5" />
                       </div>
                       <input
                         id="forgot-email"
@@ -838,13 +846,13 @@ export default function LoginPage() {
                     >
                       {forgotLoading ? (
                         <>
-                          <Loader2 className="h-4.5 w-4.5 animate-spin" />
+                          <Loader2 className="h-5 w-5 animate-spin" />
                           <span>Sending Reset Link...</span>
                         </>
                       ) : (
                         <>
                           <span>Send Reset Link</span>
-                          <ArrowRight className="h-4.5 w-4.5" />
+                          <ArrowRight className="h-5 w-5" />
                         </>
                       )}
                     </button>

@@ -27,7 +27,10 @@ import {
   normalizeDesignation,
   DEFAULT_INTAKE_FIELDS,
   type IntakeFieldConfig,
-  normalizeReportSettings
+  type ReportLayoutSettings,
+  defaultReportLayoutSettings,
+  normalizeReportSettings,
+  getNextSequentialBarcode,
 } from "@/lib/report-settings";
 import { getStoredPackages, type LabPackage, saveReportPackage, resolvePackageTestIds } from "@/lib/packages";
 const InvoiceSheet = dynamic(() => import("@/components/invoice-sheet").then(m => m.InvoiceSheet), { ssr: false });
@@ -44,6 +47,7 @@ import {
   setCachedPartnerLabs,
   DEFAULT_PARTNER_LABS,
 } from "@/lib/outsource-partner-labs";
+import { formatToDateTimeLocal } from "@/lib/date-utils";
 
 interface Test {
   id: string; name: string; category: string; price: number;
@@ -529,6 +533,7 @@ function RegisterPatientPage() {
   const [secondReferral, setSecondReferral] = useState("");
   const [isDoctorModalOpen, setIsDoctorModalOpen] = useState(false);
   const [newDoctorInput, setNewDoctorInput] = useState("");
+  const [newDoctorEmail, setNewDoctorEmail] = useState("");
   const [newDoctorPhone, setNewDoctorPhone] = useState("");
   const [newDoctorDegree, setNewDoctorDegree] = useState("");
   const [newDoctorSpecialty, setNewDoctorSpecialty] = useState("");
@@ -638,6 +643,7 @@ function RegisterPatientPage() {
     });
   };
   const [labInfo, setLabInfo] = useState<any>(null);
+  const [reportSettings, setReportSettings] = useState<ReportLayoutSettings>(() => defaultReportLayoutSettings);
   const [billSettings, setBillSettings] = useState<BillLayoutSettings>(() => normalizeBillSettings({}));
   const registerPrintRef = useRef<HTMLDivElement>(null);
 
@@ -1285,10 +1291,12 @@ function RegisterPatientPage() {
   };
 
   useEffect(() => {
-    // Populate collection date time once mounted on client in user's local timezone
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    setCollectionDateTime(now.toISOString().slice(0, 16));
+    // Populate collection date time once mounted on client in user's local timezone (ONLY for new registrations)
+    if (!editId) {
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      setCollectionDateTime(now.toISOString().slice(0, 16));
+    }
 
     try {
       const cachedBill = localStorage.getItem("lis_cached_bill_settings");
@@ -1352,6 +1360,9 @@ function RegisterPatientPage() {
         const cachedReport = localStorage.getItem("lis_cached_report_settings");
         if (cachedReport) {
           const parsed = JSON.parse(cachedReport);
+          if (parsed && typeof parsed === "object") {
+            setReportSettings(normalizeReportSettings(parsed));
+          }
           if (Array.isArray(parsed?.intakeFields)) {
             const sanitized = DEFAULT_INTAKE_FIELDS.map(def => {
               const found = parsed.intakeFields.find((item: any) => item.key === def.key || item.orderingName === def.orderingName);
@@ -1442,6 +1453,7 @@ function RegisterPatientPage() {
         const rawSettings = lab?.report_settings || lab?.reportSettings;
         if (rawSettings) {
           const normalized = normalizeReportSettings(rawSettings);
+          setReportSettings(normalized);
           if (normalized.intakeFields && normalized.intakeFields.length > 0) {
             setIntakeFields(normalized.intakeFields);
             setTempIntakeFields(normalized.intakeFields);
@@ -1623,9 +1635,19 @@ function RegisterPatientPage() {
     setFirstName(fn);
     setLastName(ln);
 
+    let patMeta = patientData.meta;
+    if (typeof patMeta === "string") {
+      try { patMeta = JSON.parse(patMeta); } catch { patMeta = {}; }
+    }
+    if (!patMeta || typeof patMeta !== "object") {
+      patMeta = {};
+    }
+
     setAgeYears((patientData.age || 0).toString());
-    setAgeMonths("0");
-    setAgeDays("0");
+    const m = patientData.age_months ?? patientData.ageMonths ?? patMeta?.age_months ?? patMeta?.ageMonths ?? "";
+    const d = patientData.age_days ?? patientData.ageDays ?? patMeta?.age_days ?? patMeta?.ageDays ?? "";
+    setAgeMonths(m !== "" && m !== null && m !== undefined ? String(m) : "0");
+    setAgeDays(d !== "" && d !== null && d !== undefined ? String(d) : "0");
     setGender(patientData.gender || "Male");
     setPhone(patientData.phone && patientData.phone !== "N/A" ? patientData.phone.replace(/\D/g, "").slice(-10) : "");
     setEmail(patientData.email || "");
@@ -1642,9 +1664,29 @@ function RegisterPatientPage() {
     const coll = patientData.collected_at || patientData.collectedAt || "Main Lab (Self / Lab Staff)";
     const match = coll.match(/^(.*?)(?:\s*\((.*?)\))?$/);
     const point = match && match[1] ? match[1].trim() : "Main Lab";
-    const phlebo = match && match[2] ? match[2].trim() : "Self / Lab Staff";
+    const phlebo = (match && match[2] ? match[2].trim() : null) || patientData.collected_by || patientData.collectedBy || "Self / Lab Staff";
     setCollectedAtSelect(point);
     setCollectedBySelect(phlebo);
+
+    // Collection Date & Time: strictly preserve the original patient collection timestamp
+    const rawColl =
+      patientData.collection_date_time ||
+      patientData.collectionDateTime ||
+      patMeta?.collection_date_time ||
+      patMeta?.collectionDateTime ||
+      patientData.collection_date ||
+      patientData.collectionDate ||
+      patientData.collected_at_time ||
+      patientData.created_at ||
+      patientData.createdAt ||
+      patientData.date ||
+      (Array.isArray(patientData.reports) && (patientData.reports[0]?.meta?.collection_date_time || patientData.reports[0]?.meta?.collectionDateTime || patientData.reports[0]?.created_at || patientData.reports[0]?.createdAt)) ||
+      (Array.isArray(patientData.bills) && (patientData.bills[0]?.created_at || patientData.bills[0]?.createdAt)) ||
+      "";
+
+    if (rawColl) {
+      setCollectionDateTime(formatToDateTimeLocal(rawColl));
+    }
 
     // Identification & Corporate
     setAadhaarNo(patientData.aadhaar_no || patientData.aadhaarNo || "");
@@ -1667,14 +1709,6 @@ function RegisterPatientPage() {
     setOwnerName(patientData.owner_name || patientData.ownerName || "");
     setBreed(patientData.breed || "");
     setSpecies(patientData.species || "");
-
-    let patMeta = patientData.meta;
-    if (typeof patMeta === "string") {
-      try { patMeta = JSON.parse(patMeta); } catch { patMeta = {}; }
-    }
-    if (!patMeta || typeof patMeta !== "object") {
-      patMeta = {};
-    }
 
     let loadedBarcodes: Record<string, string> = {};
     if (patMeta?.vial_barcodes) {
@@ -1709,6 +1743,7 @@ function RegisterPatientPage() {
       }
     }
 
+    const effectiveCollDate = rawColl || patMeta?.collection_date_time || patMeta?.collectionDateTime || "";
     const patObj: Patient = {
       id: patientData.id,
       customId: patientData.custom_id || patientData.customId || "",
@@ -1719,10 +1754,18 @@ function RegisterPatientPage() {
       refDoctor: doc,
       address: patientData.address || "",
       collectedAt: coll,
+      collection_date_time: effectiveCollDate,
+      collectionDateTime: effectiveCollDate,
       vial_barcode: rawBarcode,
       vialBarcode: rawBarcode,
       meta: {
         ...patMeta,
+        collection_date_time: effectiveCollDate,
+        collectionDateTime: effectiveCollDate,
+        age_months: m !== "" && m !== null && m !== undefined ? parseInt(String(m)) || 0 : 0,
+        ageMonths: m !== "" && m !== null && m !== undefined ? parseInt(String(m)) || 0 : 0,
+        age_days: d !== "" && d !== null && d !== undefined ? parseInt(String(d)) || 0 : 0,
+        ageDays: d !== "" && d !== null && d !== undefined ? parseInt(String(d)) || 0 : 0,
         vial_barcode: rawBarcode,
         vial_barcodes: loadedBarcodes,
       },
@@ -1790,6 +1833,16 @@ function RegisterPatientPage() {
 
           if (patReport) {
             setExistingReport(patReport);
+            const repColl =
+              patReport.meta?.collection_date_time ||
+              patReport.meta?.collectionDateTime ||
+              patReport.collection_date_time ||
+              patReport.collectionDateTime ||
+              patReport.created_at ||
+              patReport.createdAt;
+            if (repColl) {
+              setCollectionDateTime((prev) => prev || formatToDateTimeLocal(repColl));
+            }
             const bookedMetaIds = patReport.meta?.booked_test_ids || patReport.meta?.bookedTestIds || patBill?.test_ids;
             if (Array.isArray(bookedMetaIds) && bookedMetaIds.length > 0) {
               const validBooked = bookedMetaIds.filter((id: any) => typeof id === "string" && id.length > 0);
@@ -1844,6 +1897,10 @@ function RegisterPatientPage() {
 
           if (patBill) {
             setExistingBill(patBill);
+            const billColl = patBill.created_at || patBill.createdAt;
+            if (billColl) {
+              setCollectionDateTime((prev) => prev || formatToDateTimeLocal(billColl));
+            }
             setDiscount((patBill.discount || 0).toString());
             setPaidAmount((patBill.paid_amount || patBill.paidAmount || 0).toString());
             setPaymentStatus(patBill.status || "UNPAID");
@@ -1860,8 +1917,13 @@ function RegisterPatientPage() {
   // Doctor Helpers
   const handleAddDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = newDoctorInput.trim();
-    if (!trimmed) return;
+    const rawTrimmed = newDoctorInput.trim();
+    if (!rawTrimmed) return;
+    // Auto prefix Dr. if not present (unless 'Self')
+    const trimmed = (rawTrimmed.toLowerCase() === "self" || rawTrimmed.toLowerCase() === "self referral")
+      ? "Self"
+      : (/^dr\.?\s+/i.test(rawTrimmed) ? rawTrimmed.replace(/^dr\.?\s+/i, "Dr. ") : `Dr. ${rawTrimmed}`);
+
     if (!doctorsList.includes(trimmed)) {
       const updated = [...doctorsList, trimmed];
       setDoctorsList(updated);
@@ -1869,6 +1931,7 @@ function RegisterPatientPage() {
     }
     setRefDoctorSelect(trimmed);
     const activeStatus = isDoctorActive;
+    const emailVal = newDoctorEmail.trim();
     const phoneVal = newDoctorPhone.trim();
     const degreeVal = newDoctorDegree.trim();
     const specialtyVal = newDoctorSpecialty.trim();
@@ -1876,6 +1939,7 @@ function RegisterPatientPage() {
     const addressVal = newDoctorAddress.trim();
 
     setNewDoctorInput("");
+    setNewDoctorEmail("");
     setNewDoctorPhone("");
     setNewDoctorDegree("");
     setNewDoctorSpecialty("");
@@ -1889,6 +1953,7 @@ function RegisterPatientPage() {
         method: "POST",
         body: JSON.stringify({
           name: trimmed,
+          email: emailVal || null,
           phone: phoneVal || null,
           degree: degreeVal || null,
           specialty: specialtyVal || null,
@@ -2209,6 +2274,8 @@ function RegisterPatientPage() {
             ? (storedUser?.lab_name || storedUser?.labName || storedUser?.name || collectedAtSelect)
             : `${collectedAtSelect} (${collectedBySelect})`));
 
+      const effectiveCollectionDateTime = collectionDateTime || (isEditMode ? (newPatient?.meta?.collection_date_time || newPatient?.meta?.collectionDateTime || newPatient?.collection_date_time || newPatient?.collectionDateTime || newPatient?.created_at) : null) || new Date().toISOString();
+
       let data;
       if (editPatientId) {
         data = await fetchFromLaravel(`/patients/${editPatientId}`, {
@@ -2233,6 +2300,8 @@ function RegisterPatientPage() {
             collectedAt: effectiveCollectedAt,
             collected_by: collectedBySelect || null,
             collectedBy: collectedBySelect || null,
+            collection_date_time: effectiveCollectionDateTime,
+            collectionDateTime: effectiveCollectionDateTime,
             b2b_user_id: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             b2bUserId: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             collection_center_id: (isCollectionCenterUser && storedUser)
@@ -2250,6 +2319,12 @@ function RegisterPatientPage() {
             vial_barcodes: effectiveVialBarcodes,
             meta: {
               ...(newPatient?.meta || {}),
+              collection_date_time: effectiveCollectionDateTime,
+              collectionDateTime: effectiveCollectionDateTime,
+              age_months: ageMonths ? parseInt(ageMonths) || 0 : 0,
+              ageMonths: ageMonths ? parseInt(ageMonths) || 0 : 0,
+              age_days: ageDays ? parseInt(ageDays) || 0 : 0,
+              ageDays: ageDays ? parseInt(ageDays) || 0 : 0,
               vial_barcode: joinedBarcodes,
               vial_barcodes: effectiveVialBarcodes,
               ...((!isCollectionCenterUser && !isReceptionistUser && !isB2BUser && selectedB2bCenter) ? {
@@ -2347,8 +2422,8 @@ function RegisterPatientPage() {
             collected_at: effectiveCollectedAt,
             collectedBy: collectedBySelect || null,
             collected_by: collectedBySelect || null,
-            collectionDateTime: collectionDateTime || new Date().toISOString(),
-            collection_date_time: collectionDateTime || new Date().toISOString(),
+            collectionDateTime: effectiveCollectionDateTime,
+            collection_date_time: effectiveCollectionDateTime,
             b2b_user_id: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             b2bUserId: (!isCollectionCenterUser && !isReceptionistUser && selectedB2bCenter) ? selectedB2bCenter.id : (isB2BUser ? (storedUser?.id || null) : null),
             collection_center_id: (isCollectionCenterUser && storedUser)
@@ -2365,8 +2440,12 @@ function RegisterPatientPage() {
             vial_barcode: joinedBarcodes,
             vial_barcodes: effectiveVialBarcodes,
             meta: {
-              collection_date_time: collectionDateTime || new Date().toISOString(),
-              collectionDateTime: collectionDateTime || new Date().toISOString(),
+              collection_date_time: effectiveCollectionDateTime,
+              collectionDateTime: effectiveCollectionDateTime,
+              age_months: ageMonths ? parseInt(ageMonths) || 0 : 0,
+              ageMonths: ageMonths ? parseInt(ageMonths) || 0 : 0,
+              age_days: ageDays ? parseInt(ageDays) || 0 : 0,
+              ageDays: ageDays ? parseInt(ageDays) || 0 : 0,
               vial_barcode: joinedBarcodes,
               vial_barcodes: effectiveVialBarcodes,
               ...((!isCollectionCenterUser && !isReceptionistUser && !isB2BUser && selectedB2bCenter) ? {
@@ -2461,8 +2540,8 @@ function RegisterPatientPage() {
         pincode: pincode.trim() || undefined,
         collectedAt: effectiveCollectedAt,
         collectedBy: collectedBySelect || undefined,
-        collectionDateTime: collectionDateTime || new Date().toISOString(),
-        collection_date_time: collectionDateTime || new Date().toISOString(),
+        collectionDateTime: effectiveCollectionDateTime,
+        collection_date_time: effectiveCollectionDateTime,
         aadhaarNo: aadhaarNo.trim() || undefined,
         insuranceNo: insuranceNo.trim() || undefined,
         hfrId: hfrId.trim() || undefined,
@@ -2471,6 +2550,12 @@ function RegisterPatientPage() {
         vialBarcode: joinedBarcodes,
         meta: {
           ...(data?.meta || newPatient?.meta || {}),
+          collection_date_time: effectiveCollectionDateTime,
+          collectionDateTime: effectiveCollectionDateTime,
+          age_months: ageMonths ? parseInt(ageMonths) || 0 : 0,
+          ageMonths: ageMonths ? parseInt(ageMonths) || 0 : 0,
+          age_days: ageDays ? parseInt(ageDays) || 0 : 0,
+          ageDays: ageDays ? parseInt(ageDays) || 0 : 0,
           vial_barcode: joinedBarcodes,
           vial_barcodes: effectiveVialBarcodes,
           ...((!isCollectionCenterUser && !isReceptionistUser && !isB2BUser && selectedB2bCenter) ? {
@@ -2853,6 +2938,8 @@ function RegisterPatientPage() {
       const primaryBarcode = barcodeValues[0] || sampleBarcode.trim() || newPatient?.vial_barcode || null;
       const joinedBarcodes = barcodeValues.length > 0 ? barcodeValues.join(",") : primaryBarcode;
 
+      const effectiveCollectionDateTime = collectionDateTime || (isEditMode ? (newPatient?.meta?.collection_date_time || newPatient?.meta?.collectionDateTime || newPatient?.collection_date_time || newPatient?.collectionDateTime || newPatient?.created_at) : null) || new Date().toISOString();
+
       let report: any = null;
       let assignedBillCustomId = "INV-CONFIRMED";
       const currentBillId = existingBill?.id || existingReport?.bill?.id || existingReport?.bill_id;
@@ -2888,6 +2975,11 @@ function RegisterPatientPage() {
               body: JSON.stringify({
                 package_name: selectedPackage?.name || null,
                 packageName: selectedPackage?.name || null,
+                meta: {
+                  ...(existingReport.meta || {}),
+                  collection_date_time: effectiveCollectionDateTime,
+                  collectionDateTime: effectiveCollectionDateTime,
+                },
               }),
             });
             setExistingReport(report);
@@ -2946,15 +3038,19 @@ function RegisterPatientPage() {
           collectedAt: effectiveCollectedAt,
           collected_by: collectedBySelect || null,
           collectedBy: collectedBySelect || null,
-          collection_date_time: collectionDateTime || new Date().toISOString(),
-          collectionDateTime: collectionDateTime || new Date().toISOString(),
+          collection_date_time: effectiveCollectionDateTime,
+          collectionDateTime: effectiveCollectionDateTime,
           vial_barcode: joinedBarcodes,
           vialBarcode: joinedBarcodes,
           vial_barcodes: activeVialBarcodes,
           meta: {
             ...(newPatient.meta || {}),
-            collection_date_time: collectionDateTime || new Date().toISOString(),
-            collectionDateTime: collectionDateTime || new Date().toISOString(),
+            collection_date_time: effectiveCollectionDateTime,
+            collectionDateTime: effectiveCollectionDateTime,
+            age_months: ageMonths ? parseInt(ageMonths) || 0 : 0,
+            ageMonths: ageMonths ? parseInt(ageMonths) || 0 : 0,
+            age_days: ageDays ? parseInt(ageDays) || 0 : 0,
+            ageDays: ageDays ? parseInt(ageDays) || 0 : 0,
             vial_barcode: joinedBarcodes,
             vial_barcodes: activeVialBarcodes,
             ...outsourceMeta,
@@ -3001,8 +3097,8 @@ function RegisterPatientPage() {
             collectedAt: effectiveCollectedAt,
             collected_by: collectedBySelect || null,
             collectedBy: collectedBySelect || null,
-            collection_date_time: collectionDateTime || new Date().toISOString(),
-            collectionDateTime: collectionDateTime || new Date().toISOString(),
+            collection_date_time: effectiveCollectionDateTime,
+            collectionDateTime: effectiveCollectionDateTime,
             aadhaar_no: aadhaarNo.trim() || null,
             aadhaarNo: aadhaarNo.trim() || null,
             insurance_no: insuranceNo.trim() || null,
@@ -3037,8 +3133,12 @@ function RegisterPatientPage() {
             vial_barcodes: activeVialBarcodes,
             meta: {
               ...(newPatient.meta || {}),
-              collection_date_time: collectionDateTime || new Date().toISOString(),
-              collectionDateTime: collectionDateTime || new Date().toISOString(),
+              collection_date_time: effectiveCollectionDateTime,
+              collectionDateTime: effectiveCollectionDateTime,
+              age_months: ageMonths ? parseInt(ageMonths) || 0 : 0,
+              ageMonths: ageMonths ? parseInt(ageMonths) || 0 : 0,
+              age_days: ageDays ? parseInt(ageDays) || 0 : 0,
+              ageDays: ageDays ? parseInt(ageDays) || 0 : 0,
               vial_barcode: joinedBarcodes,
               vial_barcodes: activeVialBarcodes,
               ...((!isCollectionCenterUser && !isReceptionistUser && !isB2BUser && selectedB2bCenter) ? {
@@ -3206,6 +3306,9 @@ function RegisterPatientPage() {
     setAgeYears("");
     setAgeMonths("");
     setAgeDays("");
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    setCollectionDateTime(now.toISOString().slice(0, 16));
     setGender("Male");
     setPhone("");
     setEmail("");
@@ -4636,6 +4739,25 @@ function RegisterPatientPage() {
                     </div>
 
                     <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
+                      {specimenTubes.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const configuredSeries = reportSettings?.barcodeSeries || labInfo?.report_settings?.barcodeSeries || labInfo?.reportSettings?.barcodeSeries;
+                            const currentLabId = labInfo?.id || "default";
+                            const updated: Record<string, string> = {};
+                            specimenTubes.forEach((t) => {
+                              updated[t.tubeType] = getNextSequentialBarcode(configuredSeries, currentLabId);
+                            });
+                            setVialBarcodes((prev) => ({ ...prev, ...updated }));
+                          }}
+                          className="px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/25 transition-all flex items-center gap-1 cursor-pointer"
+                          title="Auto-generate sequential barcodes for all specimen tubes"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          <span>Auto Label All</span>
+                        </button>
+                      )}
                       <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-muted text-foreground border border-border whitespace-nowrap">
                         {specimenTubes.length} Tubes Required
                       </span>
@@ -4751,10 +4873,11 @@ function RegisterPatientPage() {
 
                               <button
                                 type="button"
-                                title="Auto-generate vial barcode"
+                                title="Auto-generate vial barcode from configured series"
                                 onClick={() => {
-                                  const prefix = newPatient?.customId || "VIAL";
-                                  const autoCode = `${prefix}-${tube.tubeType}-${Math.floor(1000 + Math.random() * 9000)}`;
+                                  const configuredSeries = reportSettings?.barcodeSeries || labInfo?.report_settings?.barcodeSeries || labInfo?.reportSettings?.barcodeSeries;
+                                  const currentLabId = labInfo?.id || "default";
+                                  const autoCode = getNextSequentialBarcode(configuredSeries, currentLabId);
                                   setVialBarcodes(prev => ({ ...prev, [tube.tubeType]: autoCode }));
                                 }}
                                 className="px-2.5 py-2 text-[11px] font-bold rounded-lg border border-border bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-all shrink-0 flex items-center gap-1 cursor-pointer"
@@ -6262,17 +6385,38 @@ function RegisterPatientPage() {
                 <label className="text-[11px] font-bold text-foreground">
                   Doctor Full Name <span className="text-destructive">*</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Dr. Rajesh Sharma"
-                  value={newDoctorInput}
-                  onChange={(e) => setNewDoctorInput(e.target.value)}
-                  className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
-                />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-primary">
+                    Dr.
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Rajesh Sharma"
+                    value={newDoctorInput}
+                    onChange={(e) => setNewDoctorInput(e.target.value.replace(/^dr\.?\s+/i, ""))}
+                    className="w-full pl-9 pr-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
+                  />
+                </div>
+                <p className="text-[10.5px] text-muted-foreground mt-0.5">
+                  ℹ️ &quot;Dr.&quot; title is automatically prefixed. Please enter the name without &quot;Dr.&quot;
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground">
+                    Email Address (Optional)
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="doctor@example.com"
+                    value={newDoctorEmail}
+                    onChange={(e) => setNewDoctorEmail(e.target.value)}
+                    className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
+                  />
+                </div>
+
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold text-foreground">
                     Mobile / WhatsApp (Optional)
@@ -6285,7 +6429,9 @@ function RegisterPatientPage() {
                     className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none font-mono"
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold text-foreground">
                     Degree / Qualification (Optional)
@@ -6298,9 +6444,7 @@ function RegisterPatientPage() {
                     className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold text-foreground">
                     Specialty (Optional)
@@ -6313,7 +6457,9 @@ function RegisterPatientPage() {
                     className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div className="space-y-1">
                   <label className="text-[11px] font-semibold text-foreground">
                     Clinic / Hospital (Optional)
@@ -6326,19 +6472,19 @@ function RegisterPatientPage() {
                     className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
                   />
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-foreground">
-                  Address (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Main Market, City"
-                  value={newDoctorAddress}
-                  onChange={(e) => setNewDoctorAddress(e.target.value)}
-                  className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
-                />
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground">
+                    Address (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Main Market, City"
+                    value={newDoctorAddress}
+                    onChange={(e) => setNewDoctorAddress(e.target.value)}
+                    className="w-full px-3 h-9 bg-background border border-border/90 rounded-lg text-xs placeholder:text-muted-foreground/50 focus:border-primary outline-none"
+                  />
+                </div>
               </div>
 
               {/* Active / Temporary Doctor Checkbox */}

@@ -16,8 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { InventoryAiForecastCard } from "@/components/inventory-ai-forecast-card";
-import { InventoryTestMappingModal } from "@/components/inventory-test-mapping-modal";
 
 interface InventoryBatch {
   id: string;
@@ -108,9 +106,6 @@ export default function ViewInventoryPage() {
   const [quickReason, setQuickReason] = useState(CONSUMPTION_REASONS[0]);
   const [quickCustomReason, setQuickCustomReason] = useState("");
   const [submittingAction, setSubmittingAction] = useState(false);
-
-  // Test Recipe Mapping Modal
-  const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
 
   useEffect(() => {
     loadInventoryData();
@@ -309,7 +304,7 @@ export default function ViewInventoryPage() {
   };
 
   return (
-    <div className="w-full min-w-0 space-y-5 pb-12 animate-in fade-in duration-300">
+    <div className="w-full max-w-full space-y-5 sm:space-y-6 pb-20 animate-in fade-in duration-300 px-2.5 sm:px-4 md:px-6 overflow-x-hidden">
       {/* Top Header & Quick Actions (Full Width Edge-to-Edge) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5 w-full">
         <div>
@@ -350,16 +345,6 @@ export default function ViewInventoryPage() {
             <span>Export CSV</span>
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsRecipeModalOpen(true)}
-            className="h-9 sm:h-10 text-xs font-semibold gap-1.5 border-indigo-500/30 text-indigo-600 dark:text-indigo-400 bg-indigo-500/5 hover:bg-indigo-500/10 shadow-2xs"
-          >
-            <FlaskConical className="h-4 w-4 text-indigo-500" />
-            <span>Test Recipes (Auto-Deduction)</span>
-          </Button>
-
           <Link href="/dashboard/inventory/manage">
             <Button size="sm" className="h-9 sm:h-10 text-xs font-bold gap-1.5 gradient-primary shadow-xs">
               <Plus className="h-4 w-4" />
@@ -368,9 +353,6 @@ export default function ViewInventoryPage() {
           </Link>
         </div>
       </div>
-
-      {/* AI Reagent Forecast & Expiry Intelligence Banner */}
-      <InventoryAiForecastCard onOpenRecipeModal={() => setIsRecipeModalOpen(true)} />
 
       {/* 4 KPI Metric Cards (Full Width Edge-to-Edge Responsive Grid) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
@@ -443,7 +425,7 @@ export default function ViewInventoryPage() {
                 <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1 flex items-center gap-2">
                   <span>{loading ? "..." : metrics.lowStockCount}</span>
                   {metrics.lowStockCount > 0 && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25">
                       Need PO
                     </span>
                   )}
@@ -482,7 +464,7 @@ export default function ViewInventoryPage() {
                 <h3 className="text-2xl sm:text-3xl font-extrabold text-foreground mt-1 flex items-center gap-2">
                   <span>{loading ? "..." : metrics.expiringSoonCount}</span>
                   {metrics.expiredCount > 0 && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30">
                       {metrics.expiredCount} Expired
                     </span>
                   )}
@@ -565,7 +547,7 @@ export default function ViewInventoryPage() {
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none w-full">
             <button
               onClick={() => setSelectedCategory("ALL")}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                 selectedCategory === "ALL"
                   ? "bg-primary text-primary-foreground shadow-xs"
                   : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
@@ -580,7 +562,7 @@ export default function ViewInventoryPage() {
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                     isSelected
                       ? "bg-primary text-primary-foreground shadow-xs"
                       : "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/50"
@@ -747,19 +729,19 @@ export default function ViewInventoryPage() {
                         {/* Status */}
                         <td className="py-3 px-2 sm:px-3 text-center">
                           {item.stockStatus === "adequate" && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 whitespace-nowrap">
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                               Adequate
                             </span>
                           )}
                           {item.stockStatus === "low_stock" && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
                               <AlertTriangle className="h-3 w-3" />
                               Low Stock
                             </span>
                           )}
                           {item.stockStatus === "out_of_stock" && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 whitespace-nowrap">
                               <MinusCircle className="h-3 w-3" />
                               Out of Stock
                             </span>
@@ -928,19 +910,19 @@ export default function ViewInventoryPage() {
                       {/* Status Badge */}
                       <div className="shrink-0">
                         {item.stockStatus === "adequate" && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 whitespace-nowrap">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                             Adequate
                           </span>
                         )}
                         {item.stockStatus === "low_stock" && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
                             <AlertTriangle className="h-3 w-3" />
                             Low Stock
                           </span>
                         )}
                         {item.stockStatus === "out_of_stock" && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10.5px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 whitespace-nowrap">
                             <MinusCircle className="h-3 w-3" />
                             Out of Stock
                           </span>
@@ -1363,13 +1345,6 @@ export default function ViewInventoryPage() {
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* Test-to-Inventory Recipe Mapping Modal */}
-      <InventoryTestMappingModal
-        open={isRecipeModalOpen}
-        onOpenChange={setIsRecipeModalOpen}
-        onSaved={() => loadInventoryData(true)}
-      />
     </div>
   );
 }

@@ -1024,7 +1024,11 @@ export default function ReportsListPage() {
       patId.toLowerCase().includes(q) ||
       repId.toLowerCase().includes(q) ||
       billId.toLowerCase().includes(q) ||
-      vialBarcode.toLowerCase().includes(q);
+      vialBarcode.toLowerCase().includes(q) ||
+      String(r.patient?.uhid || "").toLowerCase().includes(q) ||
+      String(r.patient?.ref_doctor || r.patient?.refDoctor || "").toLowerCase().includes(q) ||
+      String(r.patient?.abha_number || r.patient?.abhaNumber || "").toLowerCase().includes(q) ||
+      String(r.patient?.abha_address || r.patient?.abhaAddress || "").toLowerCase().includes(q);
 
     const isRepRejected = r.status === "REJECTED" || r.meta?.sample_status === "REJECTED" || r.patient?.meta?.sample_status === "REJECTED";
 
@@ -1107,6 +1111,10 @@ export default function ReportsListPage() {
     try {
       if (typeof window !== "undefined") {
         sessionStorage.setItem("lis_batch_print_ids", JSON.stringify(selectedIds));
+        const matched = reports.filter((r) => selectedIds.includes(r.id));
+        if (matched.length > 0) {
+          sessionStorage.setItem("lis_batch_print_initial_data", JSON.stringify(matched));
+        }
       }
     } catch {}
     const url = `/dashboard/reports/batch-print?ids=${selectedIds.join(",")}`;

@@ -303,7 +303,7 @@ export default function DashboardOverviewPage() {
 
     const handleOnlineSync = () => {
       refreshLabInfo(true);
-      loadDashboardData(true);
+      loadDashboardData(true, false);
     };
 
     const handleFocus = () => {
@@ -348,7 +348,7 @@ export default function DashboardOverviewPage() {
     const now = Date.now();
     const isCacheFresh = (now - lastOverviewFetchTime < 45000) && (stats.totalPatients > 0 || recentReports.length > 0 || dueBills.length > 0);
     if (!isCacheFresh || isFreshSession) {
-      loadDashboardData(isFreshSession);
+      loadDashboardData(isFreshSession, false);
     }
 
     return () => {
@@ -358,7 +358,7 @@ export default function DashboardOverviewPage() {
     };
   }, []);
 
-  const loadDashboardData = async (forceRefresh = false) => {
+  const loadDashboardData = async (forceRefresh = false, showToast = false) => {
     if (forceRefresh) {
       setIsRefreshing(true);
       clearApiCache("/analytics");
@@ -458,12 +458,12 @@ export default function DashboardOverviewPage() {
         localStorage.setItem("lis_cached_dashboard_due_bills", JSON.stringify({ labId: currentLabId, data: slicedDues }));
       } catch { }
 
-      if (forceRefresh) {
+      if (showToast) {
         toast.success("Overview Refreshed", "Dashboard Refreshed.");
       }
     } catch (err) {
       console.error("Dashboard load error:", err);
-      if (forceRefresh) {
+      if (showToast) {
         toast.error("Refresh Failed", "Could not fetch updated live data. Please try again.");
       }
     } finally {
@@ -574,7 +574,7 @@ export default function DashboardOverviewPage() {
         <div className="flex gap-2.5">
           <button
             type="button"
-            onClick={() => loadDashboardData(true)}
+            onClick={() => loadDashboardData(true, true)}
             disabled={isRefreshing || loading}
             title="Refresh latest live analytics and reports"
             className="flex items-center gap-2 h-10 px-4 rounded-lg border border-border bg-card text-foreground text-xs font-semibold hover:bg-accent hover:text-accent-foreground transition-all cursor-pointer disabled:opacity-60 shadow-2xs"

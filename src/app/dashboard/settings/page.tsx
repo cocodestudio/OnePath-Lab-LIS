@@ -13,7 +13,7 @@ import {
   CreditCard, PenTool, Image as ImageIcon, ClipboardList,
   CheckSquare, Stethoscope, User, Shield, Lock, Asterisk,
   Cpu, Radio, Activity, HardDrive, Terminal, Building2,
-  GripVertical, FlaskConical, Plus
+  GripVertical, FlaskConical, Plus, Barcode
 } from "lucide-react";
 import { ReportSheet, type PrintSettings, type ReportSheetData } from "@/components/report-sheet";
 import { InvoiceSheet, type InvoiceData } from "@/components/invoice-sheet";
@@ -37,6 +37,8 @@ import {
   normalizeReportSettings,
   REPORT_FONTS,
   getReportFontStack,
+  peekNextBarcode,
+  resetBarcodeSequence,
 } from "@/lib/report-settings";
 import {
   ALL_BILL_ORDERING_FIELDS,
@@ -1817,6 +1819,73 @@ function SettingsContent() {
                   </label>
                 );
               })}
+            </div>
+          </div>
+
+          {/* SECTION: SPECIMEN VIAL BARCODE AUTO-GENERATION SERIES */}
+          <div className="p-4 sm:p-6 bg-card border border-border/90 rounded-2xl shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/80 pb-3">
+              <div>
+                <h2 className="font-display text-base font-bold text-foreground flex items-center gap-2">
+                  <Barcode className="h-4 w-4 text-primary shrink-0" />
+                  <span>Specimen Vial Barcode Auto-Generation Series</span>
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Define the starting barcode series for vacutainer tubes (e.g. 0000001). Clicking &apos;Auto&apos; in Add Patient will increment this series sequentially (+1). If left blank, random 7-digit numeric barcodes will be generated.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                <span className="text-xs font-mono font-bold px-2.5 py-1 bg-primary/10 text-primary rounded-lg border border-primary/20">
+                  Next Barcode: {peekNextBarcode(layoutSettings.barcodeSeries, getStoredUser()?.lab_id || getStoredUser()?.labId || "default")}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1 items-end">
+              <div className="md:col-span-2 space-y-1.5">
+                <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <span>Starting Barcode Series / Sequence</span>
+                  <span className="text-[11px] font-normal text-muted-foreground">(e.g., 0000001, 100001, OPL-0001)</span>
+                </label>
+                <div className="relative">
+                  <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    value={layoutSettings.barcodeSeries ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value.trim();
+                      setLayoutSettings((prev) => ({ ...prev, barcodeSeries: val }));
+                    }}
+                    placeholder="e.g. 0000001"
+                    className="w-full pl-9 pr-3 py-2 text-xs font-mono font-bold rounded-xl border border-border/80 bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent uppercase placeholder:font-sans placeholder:font-normal placeholder:text-muted-foreground/50 shadow-2xs"
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {layoutSettings.barcodeSeries?.trim()
+                    ? `Active Series: Starts from "${layoutSettings.barcodeSeries.trim()}" and increments +1 on every auto-generated vial barcode.`
+                    : "Default Series: Pure 7-digit random numeric barcodes (no lab/tube text prefix)."}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {layoutSettings.barcodeSeries?.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentLabId = getStoredUser()?.lab_id || getStoredUser()?.labId || "default";
+                      const activeSeries = layoutSettings.barcodeSeries?.trim() || "";
+                      resetBarcodeSequence(activeSeries, currentLabId);
+                      setToast({ text: `Barcode sequence counter reset to ${activeSeries}!`, type: "success" });
+                      setTimeout(() => setToast(null), 3000);
+                    }}
+                    className="px-3.5 py-2 rounded-xl border border-border bg-muted/60 hover:bg-muted text-foreground font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                    title="Reset sequence counter back to initial starting number"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Reset Counter</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

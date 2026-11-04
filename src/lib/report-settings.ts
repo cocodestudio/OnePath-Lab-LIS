@@ -400,6 +400,10 @@ export interface ReportLayoutSettings {
   departmentOrder?: string[];
   separatePagePerTest?: boolean;
   smartReport?: SmartReportSettings;
+  /** Custom starting series for specimen/vacutainer barcodes (e.g. "0000001", "100001", "OPL-0001") */
+  barcodeSeries?: string;
+  /** Counter tracking the sequential progression for this series */
+  barcodeCounter?: number;
 }
 
 export const DEFAULT_DEPARTMENT_ORDER = [
@@ -441,6 +445,8 @@ export const defaultReportLayoutSettings: ReportLayoutSettings = {
   departmentOrder: [...DEFAULT_DEPARTMENT_ORDER],
   intakeFields: DEFAULT_INTAKE_FIELDS,
   smartReport: { ...defaultSmartReportSettings },
+  barcodeSeries: "",
+  barcodeCounter: 0,
   typography: {
     fontFamily: "Arial",
     departmentFontSize: 13,
@@ -809,5 +815,181 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
     res.smartReport = { ...defaultSmartReportSettings };
   }
 
+  res.barcodeSeries = typeof raw.barcodeSeries === "string"
+    ? raw.barcodeSeries.trim()
+    : (typeof raw.barcode_series === "string" ? raw.barcode_series.trim() : "");
+
+  res.barcodeCounter = typeof raw.barcodeCounter === "number"
+    ? raw.barcodeCounter
+    : (typeof raw.barcode_counter === "number" ? raw.barcode_counter : 0);
+
   return res;
+}
+
+/**
+ * Generates the next sequential specimen/vacutainer barcode.
+ * - If a custom barcode series is configured (e.g. "0000001", "100001", "OPL-0001"):
+ *   Parses the series prefix and numeric digits, keeping zero-padding length.
+ *   Starts from the series start number, increments +1 on each subsequent call.
+ *   Persists progression per lab in localStorage.
+ * - If no series is configured:
+ *   Generates a clean 7-digit random numeric string (e.g. "6839201").
+ */
+export function getNextSequentialBarcode(barcodeSeries?: string | null, labId?: string | number | null): string {
+  const trimmed = (barcodeSeries || "").trim();
+  if (!trimmed) {
+    // Default fallback: Pure 7-digit random numeric code (e.g. 5839201)
+    return Math.floor(1000000 + Math.random() * 9000000).toString();
+  }
+
+  const match = trimmed.match(/^(.*?)(\d+)$/);
+  if (!match) {
+    // If not ending in digits, append 6 random digits
+    return `${trimmed}${Math.floor(100000 + Math.random() * 900000)}`;
+  }
+
+  const prefix = match[1];
+  const digitsStr = match[2];
+  const padLength = digitsStr.length;
+  const initialNum = parseInt(digitsStr, 10);
+
+  const storageKey = `lis_barcode_seq_${labId || "default"}`;
+  let currentNum = initialNum;
+
+  try {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.series === trimmed && typeof parsed.lastNum === "number" && parsed.lastNum >= initialNum) {
+          currentNum = parsed.lastNum + 1;
+        } else {
+          currentNum = initialNum;
+        }
+      } else {
+        currentNum = initialNum;
+      }
+      localStorage.setItem(storageKey, JSON.stringify({ series: trimmed, lastNum: currentNum }));
+      try {
+        if ("BroadcastChannel" in window) {
+          const bc = new BroadcastChannel("onepath_barcode_channel");
+          bc.postMessage({ type: "BARCODE_ADVANCED", labId: labId || "default", series: trimmed, lastNum: currentNum });
+          bc.close();
+        }
+      } catch {}
+    }
+  } catch {
+    // If localStorage unavailable, return initial format
+  }
+
+  return `${prefix}${String(currentNum).padStart(padLength, "0")}`;
+}
+
+/**
+ * Peeks at the next barcode that will be generated for a series without incrementing its counter.
+ */
+export function peekNextBarcode(barcodeSeries?: string | null, labId?: string | number | null): string {
+  const trimmed = (barcodeSeries || "").trim();
+  if (!trimmed) {
+    return "Random 7-digit numeric (e.g. 6849201)";
+  }
+
+  const match = trimmed.match(/^(.*?)(\d+)$/);
+  if (!match) {
+    return `${trimmed}######`;
+  }
+
+  const prefix = match[1];
+  const digitsStr = match[2];
+  const padLength = digitsStr.length;
+  const initialNum = parseInt(digitsStr, 10);
+
+  const storageKey = `lis_barcode_seq_${labId || "default"}`;
+  let currentNum = initialNum;
+
+  try {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.series === trimmed && typeof parsed.lastNum === "number" && parsed.lastNum >= initialNum) {
+          currentNum = parsed.lastNum + 1;
+        }
+      }
+    }
+  } catch {}
+
+  return `${prefix}${String(currentNum).padStart(padLength, "0")}`;
+}
+
+/**
+ * Synchronizes the local sequence counter with existing barcodes in the database/records
+ * to safely avoid collision if another workstation generated barcodes.
+ */
+export function syncBarcodeSequence(
+  highestExistingBarcode?: string | null,
+  barcodeSeries?: string | null,
+  labId?: string | number | null
+): void {
+  const trimmed = (barcodeSeries || "").trim();
+  const rawBarcode = (highestExistingBarcode || "").trim();
+  if (!trimmed || !rawBarcode) return;
+
+  const match = trimmed.match(/^(.*?)(\d+)$/);
+  if (!match) return;
+
+  const prefix = match[1];
+  const digitsStr = match[2];
+  const initialNum = parseInt(digitsStr, 10);
+
+  // Check if rawBarcode matches the prefix followed by digits
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const targetMatch = rawBarcode.match(new RegExp(`^${escapedPrefix}(\\d+)$`));
+  if (!targetMatch) return;
+
+  const targetNum = parseInt(targetMatch[1], 10);
+  if (isNaN(targetNum) || targetNum < initialNum) return;
+
+  try {
+    if (typeof window !== "undefined") {
+      const storageKey = `lis_barcode_seq_${labId || "default"}`;
+      const stored = localStorage.getItem(storageKey);
+      let currentLastNum = initialNum - 1;
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.series === trimmed && typeof parsed.lastNum === "number") {
+          currentLastNum = parsed.lastNum;
+        }
+      }
+      if (targetNum > currentLastNum) {
+        localStorage.setItem(storageKey, JSON.stringify({ series: trimmed, lastNum: targetNum }));
+        try {
+          if ("BroadcastChannel" in window) {
+            const bc = new BroadcastChannel("onepath_barcode_channel");
+            bc.postMessage({ type: "BARCODE_SYNCED", labId: labId || "default", series: trimmed, lastNum: targetNum });
+            bc.close();
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+}
+
+/**
+ * Resets the sequence counter for a lab back to the starting series number.
+ */
+export function resetBarcodeSequence(barcodeSeries?: string | null, labId?: string | number | null): void {
+  try {
+    if (typeof window !== "undefined") {
+      const storageKey = `lis_barcode_seq_${labId || "default"}`;
+      localStorage.removeItem(storageKey);
+      try {
+        if ("BroadcastChannel" in window) {
+          const bc = new BroadcastChannel("onepath_barcode_channel");
+          bc.postMessage({ type: "BARCODE_RESET", labId: labId || "default", series: (barcodeSeries || "").trim() });
+          bc.close();
+        }
+      } catch {}
+    }
+  } catch {}
 }

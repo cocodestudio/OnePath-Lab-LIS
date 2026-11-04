@@ -3126,14 +3126,17 @@ assert(
 
 const invPageIntegrationsSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/inventory/page.tsx"), "utf-8");
 assert(
-  invPageIntegrationsSrc.includes("InventoryAiForecastCard") && invPageIntegrationsSrc.includes("InventoryTestMappingModal"),
-  "Inventory dashboard integrates both AI forecast card and test recipe modal"
+  !invPageIntegrationsSrc.includes("InventoryAiForecastCard") &&
+  !invPageIntegrationsSrc.includes("InventoryTestMappingModal") &&
+  invPageIntegrationsSrc.includes("/inventory/stock-in") &&
+  invPageIntegrationsSrc.includes("/inventory/stock-out"),
+  "Inventory dashboard decouples AI forecast and recipes, running lightweight manual stock-in, stock-out, and lot tracking"
 );
 
 const testCountPageSrc = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/tests/count/page.tsx"), "utf-8");
 assert(
-  testCountPageSrc.includes("InventoryTestMappingModal") && testCountPageSrc.includes("Inventory Recipe"),
-  "Tests Count page links each test to its reagent auto-consumption recipe modal"
+  testCountPageSrc.includes("Cost / Test") && testCountPageSrc.includes("Total Cost") && !testCountPageSrc.includes("InventoryTestMappingModal"),
+  "Tests Count page calculates unit cost and total cost per test and decouples from inventory recipes"
 );
 
 console.log("\n▶ MODULE 30: Reports Patient List Root Test Name Hover & Parameter Concealment Engine");
@@ -6050,6 +6053,411 @@ assert(
   userModelSrc72.includes("two_factor_secret") &&
   userModelSrc72.includes("two_factor_enabled_at"),
   "[2FA-08 TOTP RFC 6238 & USER MODEL ATTRIBUTES] Pure PHP TOTP service handles Base32 & HMAC-SHA1; User model protects 2FA secret"
+);
+
+// ==============================================================================
+// 73. Monthly Expenses Column Order & Batch Print Studio Responsive Customizer
+// ==============================================================================
+console.log("\n▶ MODULE 73: Monthly Register Cash/UPI Interchange & Batch Print Studio Engine");
+
+const monthlyRegisterSrc73 = fs.readFileSync(path.join(process.cwd(), "src/components/monthly-expenses-register.tsx"), "utf8");
+
+// 73.1 Cash Before UPI in Table Headers
+const cashThIndex = monthlyRegisterSrc73.indexOf("Cash (₹)");
+const upiThIndex = monthlyRegisterSrc73.indexOf("UPI (₹)");
+assert(
+  cashThIndex !== -1 && upiThIndex !== -1 && cashThIndex < upiThIndex,
+  "[MONTHLY REGISTER COLUMNS] Cash column strictly precedes UPI column in monthly table header"
+);
+
+// 73.2 Cash Before UPI in CSV Export & Footers
+assert(
+  monthlyRegisterSrc73.includes('escapeCsv("Cash (INR)"),') &&
+  monthlyRegisterSrc73.includes('escapeCsv("UPI (INR)"),') &&
+  monthlyRegisterSrc73.indexOf('escapeCsv("Cash (INR)"),') < monthlyRegisterSrc73.indexOf('escapeCsv("UPI (INR)"),'),
+  "[MONTHLY REGISTER CSV EXPORT] CSV export orders Cash column before UPI column"
+);
+
+// 73.3 Batch Print Studio File & Cache Pre-warming
+const batchPrintSrc73 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/reports/batch-print/page.tsx"), "utf8");
+const reportsPageSrc73 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/reports/page.tsx"), "utf8");
+
+assert(
+  reportsPageSrc73.includes("lis_batch_print_initial_data") &&
+  batchPrintSrc73.includes("lis_batch_print_initial_data"),
+  "[BATCH PRINT INSTANT LOADING] Reports page primes sessionStorage with initial data for zero-delay instant open"
+);
+
+// 73.4 Per-Patient Test Selection & Tick Marks
+assert(
+  batchPrintSrc73.includes("excludedTestsMap") &&
+  batchPrintSrc73.includes("extractMainTestsFromReport") &&
+  batchPrintSrc73.includes("toggleReportTest") &&
+  batchPrintSrc73.includes("selectAllTestsForReport") &&
+  batchPrintSrc73.includes("Tests to Print"),
+  "[BATCH PRINT TEST SELECTION] Sidebar and right panel feature tick marks allowing users to unselect/select tests per patient"
+);
+
+// 73.5 Default All Tests Selected & Seamless Filtration
+assert(
+  batchPrintSrc73.includes("normalizeReportSheet({ ...r, results: filteredResults }, liveLab)") &&
+  batchPrintSrc73.includes("excludedForThisRep.length === 0"),
+  "[BATCH PRINT FILTER INTEGRITY] All tests are selected by default; unselected tests are excluded from the printout"
+);
+
+// 73.6 Mobile Responsiveness: Single-Line Text & Segmented Mobile Switcher
+assert(
+  batchPrintSrc73.includes("mobileTab") &&
+  batchPrintSrc73.includes("Preview Canvas") &&
+  batchPrintSrc73.includes("Queue &amp; Tests") &&
+  batchPrintSrc73.includes("({preparedReports.length} Queued)") &&
+  !batchPrintSrc73.includes("px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-primary/10 text-primary border border-primary/20"),
+  "[BATCH PRINT MOBILE RESPONSIVE] Batch print features single-line text label and responsive segmented mobile switcher matching single report preview"
+);
+
+// 73.7 Patients Page Three Dots & Action Feedback Shimmer
+const patientsPageSrc73 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/patients/page.tsx"), "utf8");
+assert(
+  patientsPageSrc73.includes("isDropdownActionActive") &&
+  patientsPageSrc73.includes("isRowProcessing") &&
+  patientsPageSrc73.includes("navigatingResultId") &&
+  patientsPageSrc73.includes("deletingBillPatientId") &&
+  patientsPageSrc73.includes("openingRejectId") &&
+  patientsPageSrc73.includes("animate-pulse") &&
+  patientsPageSrc73.includes("isDropdownActionActive ? (") &&
+  patientsPageSrc73.includes('<Loader2 className="h-4 w-4 animate-spin text-primary" />'),
+  "[PATIENTS ACTION FEEDBACK] Patients row three dots button and action container display active spinner and shimmer feedback upon option click"
+);
+
+console.log("\n▶ MODULE 74: Test Count Unit Costing & Financial Analysis Engine");
+const testCountSrc74 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/tests/count/page.tsx"), "utf8");
+assert(
+  testCountSrc74.includes("testCosts") &&
+  testCountSrc74.includes("handleCostChange") &&
+  testCountSrc74.includes("lis_test_unit_costs_") &&
+  testCountSrc74.includes("Cost / Test (₹)"),
+  "[TEST COUNT UNIT COST] Test count table provides editable Cost / Test column persisted per lab in localStorage"
+);
+assert(
+  testCountSrc74.includes("Total Cost (₹)") &&
+  testCountSrc74.includes("rowTotalCost") &&
+  testCountSrc74.includes("pageTotalCost") &&
+  testCountSrc74.includes("Total Cost for Period"),
+  "[TEST COUNT TOTAL COST] Computes row total cost (count * unit cost) and overall period cost KPI"
+);
+assert(
+  !testCountSrc74.includes("InventoryTestMappingModal") &&
+  !testCountSrc74.includes("Usage Frequency") &&
+  !testCountSrc74.includes("Inventory Recipe"),
+  "[TEST COUNT DECOUPLING] Inventory recipe modal, recipe buttons, and usage frequency columns are completely removed"
+);
+assert(
+  testCountSrc74.includes("· Live Costing") &&
+  testCountSrc74.includes("colSpan={2}") &&
+  testCountSrc74.includes("colSpan={3}") &&
+  !testCountSrc74.includes("text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-primary/10"),
+  "[TEST COUNT MOBILE & SINGLE LINE LABEL] Table footer has responsive column parity and single-line labels without overflow"
+);
+
+// 74.4 View & Manage Inventory Mobile Responsiveness & AI Decoupling
+const invViewSrc74 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/inventory/page.tsx"), "utf8");
+const invManageSrc74 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/inventory/manage/page.tsx"), "utf8");
+assert(
+  !invViewSrc74.includes("InventoryAiForecastCard") &&
+  !invViewSrc74.includes("InventoryTestMappingModal") &&
+  !invViewSrc74.includes("Test Recipes (Auto-Deduction)"),
+  "[INVENTORY VIEW AI DECOUPLING] View inventory removes AI forecast cards and auto-deduction test recipes"
+);
+assert(
+  invViewSrc74.includes("overflow-x-hidden") &&
+  invManageSrc74.includes("overflow-x-hidden") &&
+  invManageSrc74.includes("block md:hidden") &&
+  invManageSrc74.includes("hidden md:block"),
+  "[INVENTORY RESPONSIVE DUAL-VIEW] Inventory view and manage pages provide dedicated responsive mobile card list and overflow guardrails"
+);
+
+// 74.5 LIS Login Page Mobile Responsiveness & Role Switcher Non-Truncation
+const loginPageSrc74 = fs.readFileSync(path.join(process.cwd(), "src/app/login/page.tsx"), "utf8");
+assert(
+  loginPageSrc74.includes("hidden md:flex") &&
+  loginPageSrc74.includes("font-semibold whitespace-nowrap") &&
+  loginPageSrc74.includes("Admin / Staff") &&
+  loginPageSrc74.includes("Collection") &&
+  loginPageSrc74.includes("B2B"),
+  "[LOGIN PAGE RESPONSIVENESS] LIS login page delivers direct mobile access without infinite scrolling and full readable role switcher labels"
+);
+
+// 74.6 LIS Desktop Sidebar Collapse/Expand Toggle
+const sidebarSrc74 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/sidebar-client.tsx"), "utf8");
+assert(
+  sidebarSrc74.includes("PanelLeftClose") &&
+  sidebarSrc74.includes("PanelLeftOpen") &&
+  sidebarSrc74.includes("isCollapsed") &&
+  sidebarSrc74.includes("toggleCollapse") &&
+  sidebarSrc74.includes("lis_sidebar_collapsed") &&
+  sidebarSrc74.includes("renderSidebar(false)") &&
+  sidebarSrc74.includes("renderSidebar(true)"),
+  "[SIDEBAR COLLAPSE ENGINE] Desktop LIS sidebar provides top-aligned collapse/expand toggle button with persistence and shortcut support"
+);
+
+console.log("\n▶ MODULE 75: Doctor Referral Dr. Prefix & Portal Access Engine");
+
+// 75.1 Add Patient Manage Doctor Dialog has Email & Dr. Prefix
+const patientRegisterSrc75 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/patients/register/page.tsx"), "utf8");
+assert(
+  patientRegisterSrc75.includes("newDoctorEmail") &&
+  patientRegisterSrc75.includes("Email Address (Optional)") &&
+  patientRegisterSrc75.includes("Dr.") &&
+  patientRegisterSrc75.includes("title is automatically prefixed"),
+  "[REFERRAL DOCTOR EMAIL & PREFIX] Add Patient doctor dialog includes Email field and Dr. prefix visual/helper"
+);
+
+// 75.2 Manage Doctors Page Dr. Prefix Normalization & Top Bar Responsiveness
+const manageDoctorsSrc75 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/doctors/manage/page.tsx"), "utf8");
+assert(
+  manageDoctorsSrc75.includes("title is automatically prefixed") &&
+  manageDoctorsSrc75.includes("normalizedName") &&
+  manageDoctorsSrc75.includes("flex-1 sm:flex-initial"),
+  "[MANAGE DOCTORS PREFIX] Manage doctors profile handles Dr. prefix automatically and top bar buttons are responsively aligned"
+);
+
+// 75.3 Doctor Portal Management 2-Card KPI, Setup vs Manage Access Decoupling & Revoke Action
+const doctorPortalSrc75 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/doctors/portal/page.tsx"), "utf8");
+assert(
+  doctorPortalSrc75.includes("grid-cols-1 sm:grid-cols-2") &&
+  doctorPortalSrc75.includes("onepathlab") &&
+  doctorPortalSrc75.includes("Setup Access") &&
+  doctorPortalSrc75.includes("Manage Access") &&
+  doctorPortalSrc75.includes("Revoke") &&
+  doctorPortalSrc75.includes("!hasActiveLink ?") &&
+  !doctorPortalSrc75.includes("Portal Authentication") &&
+  !doctorPortalSrc75.includes("Total Referred Patients</span>") &&
+  !doctorPortalSrc75.includes("ExternalLink className=\"w-3.5 h-3.5\""),
+  "[DOCTOR PORTAL ACCESS ENGINE] Doctor portal features 2 KPI cards, clean Setup vs Manage Access state decoupling, direct Revoke button, and default password onepathlab"
+);
+
+console.log("\n▶ MODULE 76: Realtime Password Revocation & Multi-Device Session Invalidation Engine");
+
+// 76.1 User Model Centralized Password Rotation Hook
+const userModelSrc76 = fs.readFileSync(path.join(process.cwd(), "../Backend/app/Models/User.php"), "utf8");
+assert(
+  userModelSrc76.includes("isDirty('password')") &&
+  userModelSrc76.includes("$user->tokens()->delete()") &&
+  userModelSrc76.includes("user_pw_revoked_"),
+  "[PASSWORD REVOCATION BACKEND] User model automatically terminates all Sanctum tokens on password update"
+);
+
+// 76.2 Referral Doctor Model Token Invalidation Hook
+const referralDoctorModelSrc76 = fs.readFileSync(path.join(process.cwd(), "../Backend/app/Models/ReferralDoctor.php"), "utf8");
+assert(
+  referralDoctorModelSrc76.includes("isDirty('password')") &&
+  referralDoctorModelSrc76.includes("portal_token = 'doc_'"),
+  "[DOCTOR TOKEN INVALIDATION] ReferralDoctor model rotates portal token on password update"
+);
+
+// 76.3 Frontend Realtime Heartbeat & BroadcastChannel Cross-Tab Sync
+const authGuardSrc76 = fs.readFileSync(path.join(process.cwd(), "src/components/dashboard-auth-guard.tsx"), "utf8");
+assert(
+  authGuardSrc76.includes("onepath_auth_channel") &&
+  authGuardSrc76.includes("handleStorageEvent") &&
+  (authGuardSrc76.includes("60000") || authGuardSrc76.includes("4000")),
+  "[REALTIME AUTH WATCHDOG] Dashboard auth guard features heartbeat, BroadcastChannel, and storage listeners"
+);
+
+// 76.4 API Client Broadcast on Logout & 401 Interception
+const apiClientSrc76 = fs.readFileSync(path.join(process.cwd(), "src/lib/api-client.ts"), "utf8");
+assert(
+  apiClientSrc76.includes("onepath_auth_channel") &&
+  apiClientSrc76.includes("lis_auth_revoked_at") &&
+  apiClientSrc76.includes("logout(\"normal\")"),
+  "[API CLIENT AUTH SYNC] API client dispatches realtime broadcast and terminates sessions on 401 status"
+);
+
+// ==============================================================================
+// 77. Specimen Vial Barcode Auto-Generation Series & High-Precision A4 Sticker Print Engine
+// ==============================================================================
+console.log("\n▶ MODULE 77: Specimen Vial Barcode Auto-Generation Series & High-Precision A4 Sticker Print Engine");
+
+const reportSettingsLib = require("../src/lib/report-settings");
+
+// 77.1 Default Fallback Generates Clean Numeric Barcodes
+const randomBarcode1 = reportSettingsLib.getNextSequentialBarcode();
+const randomBarcode2 = reportSettingsLib.getNextSequentialBarcode("");
+assert(
+  /^\d{7}$/.test(randomBarcode1) && /^\d{7}$/.test(randomBarcode2) && !randomBarcode1.includes("VIAL") && !randomBarcode1.includes("-"),
+  "[DEFAULT RANDOM NUMERIC BARCODE] Empty or missing series generates clean 7-digit numeric string without text prefix"
+);
+
+// 77.2 Configured Barcode Series Increments Sequentially (+1) with Padding Preservation
+const testSeries = "0000001";
+const testLabId = "test_lab_77";
+reportSettingsLib.resetBarcodeSequence(testSeries, testLabId);
+const peekFirst = reportSettingsLib.peekNextBarcode(testSeries, testLabId);
+assert(
+  peekFirst === "0000001",
+  "[BARCODE PEEK PREVIEW] Peek accurately inspects initial series without incrementing"
+);
+
+const seq1 = reportSettingsLib.getNextSequentialBarcode(testSeries, testLabId);
+const seq2 = reportSettingsLib.getNextSequentialBarcode(testSeries, testLabId);
+const seq3 = reportSettingsLib.getNextSequentialBarcode(testSeries, testLabId);
+
+assert(
+  seq1 === "0000001" && seq2 === "0000002" && seq3 === "0000003",
+  "[BARCODE SEQUENTIAL PROGRESSION] Barcodes start from defined series and increment +1 preserving zero-padding"
+);
+
+// 77.3 Custom Prefix Series Support (e.g. OPL-0001)
+const prefixSeries = "OPL-0001";
+const prefixLabId = "test_lab_prefix_77";
+reportSettingsLib.resetBarcodeSequence(prefixSeries, prefixLabId);
+const pseq1 = reportSettingsLib.getNextSequentialBarcode(prefixSeries, prefixLabId);
+const pseq2 = reportSettingsLib.getNextSequentialBarcode(prefixSeries, prefixLabId);
+assert(
+  pseq1 === "OPL-0001" && pseq2 === "OPL-0002",
+  "[PREFIX BARCODE PROGRESSION] Prefixed series preserves text prefix and increments numeric sequence"
+);
+
+// 77.4 Reset Barcode Sequence
+reportSettingsLib.resetBarcodeSequence(testSeries, testLabId);
+const resetSeq = reportSettingsLib.getNextSequentialBarcode(testSeries, testLabId);
+assert(
+  resetSeq === "0000001",
+  "[BARCODE SEQUENCE RESET] Resetting barcode sequence returns progression to initial starting number"
+);
+
+// 77.4b Multi-Device Barcode Sequence Synchronization (SEC-16)
+reportSettingsLib.resetBarcodeSequence(testSeries, testLabId);
+reportSettingsLib.syncBarcodeSequence("0000042", testSeries, testLabId);
+const syncedNext = reportSettingsLib.getNextSequentialBarcode(testSeries, testLabId);
+assert(
+  syncedNext === "0000043",
+  "[BARCODE SEQUENCE SYNC] syncBarcodeSequence advances sequence counter to prevent duplicate collisions"
+);
+
+// 77.5 Report Settings Normalization & Persistence
+const normalizedWithSeries = reportSettingsLib.normalizeReportSettings({
+  barcodeSeries: "0000001",
+  barcodeCounter: 5,
+});
+assert(
+  normalizedWithSeries.barcodeSeries === "0000001" && normalizedWithSeries.barcodeCounter === 5,
+  "[SETTINGS NORMALIZATION] normalizeReportSettings preserves barcodeSeries and barcodeCounter"
+);
+
+// 77.6 Settings Page Report Layout Barcode Card
+const settingsPageSrc77 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/settings/page.tsx"), "utf8");
+assert(
+  settingsPageSrc77.includes("Specimen Vial Barcode Auto-Generation Series") &&
+  settingsPageSrc77.includes("layoutSettings.barcodeSeries") &&
+  settingsPageSrc77.includes("peekNextBarcode") &&
+  settingsPageSrc77.includes("resetBarcodeSequence"),
+  "[SETTINGS UI BARCODE SERIES] Settings page includes dedicated Barcode Series input card and reset action"
+);
+
+// 77.7 Registration Auto-Generation Integration
+const registerPageSrc77 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/patients/register/page.tsx"), "utf8");
+assert(
+  registerPageSrc77.includes("getNextSequentialBarcode") &&
+  registerPageSrc77.includes("Auto Label All") &&
+  !registerPageSrc77.includes("prefix}-${tube.tubeType}-${Math.floor"),
+  "[REGISTRATION SEQUENTIAL BARCODE] Add Patient auto button uses getNextSequentialBarcode without old tube-prefix string"
+);
+
+// 77.8 High-Precision 3-Across A4 Barcode Printing
+const printBarcodeLibSrc = fs.readFileSync(path.join(process.cwd(), "src/lib/print-barcode.ts"), "utf8");
+assert(
+  printBarcodeLibSrc.includes("62mm") &&
+  printBarcodeLibSrc.includes("28mm") &&
+  printBarcodeLibSrc.includes("max-width: 196mm") &&
+  printBarcodeLibSrc.includes("printBarcodeLabels"),
+  "[BARCODE PRINT ENGINE] printBarcodeLabels specifies 62mm x 28mm stickers fitting 3 horizontally on A4 sheet"
+);
+
+// 77.9 Patients Page Modal & Drawer Barcode Print Buttons
+const patientsPageSrc77 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/patients/page.tsx"), "utf8");
+assert(
+  patientsPageSrc77.includes("printBarcodeLabels") &&
+  patientsPageSrc77.includes("Print All Barcodes") &&
+  patientsPageSrc77.includes("Print"),
+  "[PATIENTS PAGE BARCODE PRINT] Patients page provides dedicated sticker print buttons in modal and drawer"
+);
+
+// ==============================================================================
+// 78. Patient Demographics Edit State & Previous Collection Date-Time Preservation
+// ==============================================================================
+console.log("\n▶ MODULE 78: Patient Demographics Edit State & Previous Collection Date-Time Preservation");
+
+const dateUtilsLib = require("../src/lib/date-utils");
+
+// 78.1 formatToDateTimeLocal ISO Conversion in Asia/Kolkata
+const testIsoUtc = "2026-11-01T05:00:00.000000Z";
+const formattedIst = dateUtilsLib.formatToDateTimeLocal(testIsoUtc);
+assert(
+  formattedIst === "2026-11-01T10:30",
+  "[DATE LOCAL FORMATTER UTC->IST] formatToDateTimeLocal correctly converts UTC ISO timestamp to IST YYYY-MM-DDTHH:mm"
+);
+
+// 78.2 formatToDateTimeLocal SQL Datetime String Conversion
+const testSqlDate = "2026-11-01 10:30:00";
+const formattedSql = dateUtilsLib.formatToDateTimeLocal(testSqlDate);
+assert(
+  formattedSql === "2026-11-01T10:30",
+  "[DATE LOCAL FORMATTER SQL] formatToDateTimeLocal correctly converts SQL datetime string to YYYY-MM-DDTHH:mm"
+);
+
+// 78.3 formatToDateTimeLocal Already Local ISO preservation
+const testLocalIso = "2026-11-01T10:30";
+assert(
+  dateUtilsLib.formatToDateTimeLocal(testLocalIso) === "2026-11-01T10:30",
+  "[DATE LOCAL FORMATTER PASSTHROUGH] formatToDateTimeLocal preserves existing YYYY-MM-DDTHH:mm without shift"
+);
+
+// 78.4 formatToDateTimeLocal Date-Only String Conversion
+assert(
+  dateUtilsLib.formatToDateTimeLocal("2026-11-01") === "2026-11-01T00:00",
+  "[DATE LOCAL FORMATTER DATE-ONLY] formatToDateTimeLocal converts date-only string to YYYY-MM-DDTHH:mm"
+);
+
+// 78.5 formatToDateTimeLocal Null/Undefined Safety
+assert(
+  dateUtilsLib.formatToDateTimeLocal(null) === "" && dateUtilsLib.formatToDateTimeLocal(undefined) === "",
+  "[DATE LOCAL FORMATTER NULL-SAFETY] formatToDateTimeLocal safely returns empty string for null and undefined"
+);
+
+// 78.6 Registration Page Mount Effect Isolation
+const registerPageSrc78 = fs.readFileSync(path.join(process.cwd(), "src/app/dashboard/patients/register/page.tsx"), "utf8");
+assert(
+  registerPageSrc78.includes("if (!editId)") &&
+  registerPageSrc78.includes("formatToDateTimeLocal(rawColl)"),
+  "[REGISTRATION EDIT ISOLATION] Register page mount useEffect skips overwriting collection date with now when editId is present"
+);
+
+// 78.7 Demographics Extraction Preserves Original Collection Date & Age Details
+assert(
+  registerPageSrc78.includes("patientData.collection_date_time ||") &&
+  registerPageSrc78.includes("patMeta?.collection_date_time") &&
+  registerPageSrc78.includes("patientData.age_months ?? patientData.ageMonths ?? patMeta?.age_months"),
+  "[DEMOGRAPHICS RECOVERY] applyPatientDemographics extracts and preserves collection timestamp and age months/days from record"
+);
+
+// 78.8 Update Payloads Retain Effective Collection Date-Time
+assert(
+  registerPageSrc78.includes("collection_date_time: effectiveCollectionDateTime") &&
+  registerPageSrc78.includes("collectionDateTime: effectiveCollectionDateTime"),
+  "[UPDATE PAYLOAD COLLECTION PRESERVATION] Both PUT and booking payloads pass effectiveCollectionDateTime and sync to report meta"
+);
+
+// 78.9 Backend PatientController Synchronizes Collection Date to Reports
+const backendPatientCtrlSrc78 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/PatientController.php"),
+  "utf8"
+);
+assert(
+  backendPatientCtrlSrc78.includes("Synchronize with patient reports so printouts reflect the accurate collection timestamp") &&
+  backendPatientCtrlSrc78.includes("$repMeta['collection_date_time'] = $collDateTime") &&
+  backendPatientCtrlSrc78.includes("$mergedMeta['age_months']"),
+  "[BACKEND PATIENT SYNC] PatientController updates report meta collection date and preserves pediatric age fields"
 );
 
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);

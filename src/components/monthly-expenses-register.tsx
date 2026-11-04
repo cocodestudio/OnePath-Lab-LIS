@@ -128,8 +128,8 @@ export function MonthlyExpensesRegister({
     const csvRows: string[] = [];
     csvRows.push([
       escapeCsv("Date"),
-      escapeCsv("UPI (INR)"),
       escapeCsv("Cash (INR)"),
+      escapeCsv("UPI (INR)"),
       escapeCsv("Dues (INR)"),
       escapeCsv("Total (INR)"),
     ].join(","));
@@ -138,8 +138,8 @@ export function MonthlyExpensesRegister({
       const fullDate = `${r.formatted_date || r.date}${r.day_name ? ` (${r.day_name.slice(0, 3)})` : ""}`;
       csvRows.push([
         escapeCsv(fullDate),
-        escapeCsv(Number(r.upi || 0).toFixed(2)),
         escapeCsv(Number(r.cash || 0).toFixed(2)),
+        escapeCsv(Number(r.upi || 0).toFixed(2)),
         escapeCsv(Number(r.dues || 0).toFixed(2)),
         escapeCsv(Number(r.total || 0).toFixed(2)),
       ].join(","));
@@ -148,8 +148,8 @@ export function MonthlyExpensesRegister({
     // Final Total Row at bottom
     csvRows.push([
       escapeCsv(`SUB TOTAL / FINAL TOTAL (${data.month_name || "Month"} ${data.year || ""})`),
-      escapeCsv(Number(data.summary?.total_upi || 0).toFixed(2)),
       escapeCsv(Number(data.summary?.total_cash || 0).toFixed(2)),
+      escapeCsv(Number(data.summary?.total_upi || 0).toFixed(2)),
       escapeCsv(Number(data.summary?.total_dues || 0).toFixed(2)),
       escapeCsv(Number(data.summary?.final_total || 0).toFixed(2)),
     ].join(","));
@@ -292,19 +292,6 @@ export function MonthlyExpensesRegister({
             </p>
           </div>
 
-          {/* UPI Collections */}
-          <div className="p-3 sm:p-4 rounded-xl border border-border/80 bg-card shadow-xs min-w-0">
-            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
-              UPI Collections
-            </span>
-            <div className="text-sm sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 truncate">
-              {formatINR(data.summary.total_upi)}
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
-              Online / QR
-            </p>
-          </div>
-
           {/* Cash Collections */}
           <div className="p-3 sm:p-4 rounded-xl border border-border/80 bg-card shadow-xs min-w-0">
             <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
@@ -315,6 +302,19 @@ export function MonthlyExpensesRegister({
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               Counter Cash
+            </p>
+          </div>
+
+          {/* UPI Collections */}
+          <div className="p-3 sm:p-4 rounded-xl border border-border/80 bg-card shadow-xs min-w-0">
+            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
+              UPI Collections
+            </span>
+            <div className="text-sm sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 truncate">
+              {formatINR(data.summary.total_upi)}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Online / QR
             </p>
           </div>
 
@@ -368,8 +368,8 @@ export function MonthlyExpensesRegister({
                 <thead>
                   <tr className="bg-muted/50 border-b border-border text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                     <th className="py-2.5 px-3 sm:px-4 whitespace-nowrap min-w-[130px]">Date</th>
-                    <th className="py-2.5 px-3 sm:px-4 text-right whitespace-nowrap min-w-[100px]">UPI (₹)</th>
                     <th className="py-2.5 px-3 sm:px-4 text-right whitespace-nowrap min-w-[100px]">Cash (₹)</th>
+                    <th className="py-2.5 px-3 sm:px-4 text-right whitespace-nowrap min-w-[100px]">UPI (₹)</th>
                     <th className="py-2.5 px-3 sm:px-4 text-right whitespace-nowrap min-w-[100px]">Dues (₹)</th>
                     <th className="py-2.5 px-3 sm:px-4 text-right whitespace-nowrap min-w-[110px]">Total (₹)</th>
                   </tr>
@@ -396,22 +396,22 @@ export function MonthlyExpensesRegister({
                           )}
                         </td>
 
-                        {/* UPI (Green if > 0) */}
+                        {/* Cash (Green if > 0) */}
                         <td className="py-2 px-3 sm:px-4 text-right whitespace-nowrap font-mono font-medium">
-                          {row.upi > 0 ? (
+                          {row.cash > 0 ? (
                             <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                              {formatINR(row.upi)}
+                              {formatINR(row.cash)}
                             </span>
                           ) : (
                             <span className="text-muted-foreground/50">₹0.00</span>
                           )}
                         </td>
 
-                        {/* Cash (Green if > 0) */}
+                        {/* UPI (Green if > 0) */}
                         <td className="py-2 px-3 sm:px-4 text-right whitespace-nowrap font-mono font-medium">
-                          {row.cash > 0 ? (
+                          {row.upi > 0 ? (
                             <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                              {formatINR(row.cash)}
+                              {formatINR(row.upi)}
                             </span>
                           ) : (
                             <span className="text-muted-foreground/50">₹0.00</span>
@@ -449,10 +449,10 @@ export function MonthlyExpensesRegister({
                       Sub Total / Final Total
                     </td>
                     <td className="py-2.5 px-3 sm:px-4 text-right whitespace-nowrap font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                      {formatINR(data?.summary?.total_upi)}
+                      {formatINR(data?.summary?.total_cash)}
                     </td>
                     <td className="py-2.5 px-3 sm:px-4 text-right whitespace-nowrap font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                      {formatINR(data?.summary?.total_cash)}
+                      {formatINR(data?.summary?.total_upi)}
                     </td>
                     <td className="py-2.5 px-3 sm:px-4 text-right whitespace-nowrap font-mono text-rose-600 dark:text-rose-400 font-bold">
                       {formatINR(data?.summary?.total_dues)}

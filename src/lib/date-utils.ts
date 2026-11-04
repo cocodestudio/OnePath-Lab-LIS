@@ -81,3 +81,62 @@ export function getStartOfMonthStr(): string {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
   }
 }
+
+/**
+ * Formats any ISO, SQL, or custom date/time representation into YYYY-MM-DDTHH:mm
+ * strictly suitable for <input type="datetime-local">.
+ * Preserves exact local Indian Standard Time (Asia/Kolkata).
+ */
+export function formatToDateTimeLocal(dateInput?: string | Date | null): string {
+  if (!dateInput) return "";
+  if (dateInput instanceof Date) {
+    if (isNaN(dateInput.getTime())) return "";
+    const formatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(dateInput);
+    const map: Record<string, string> = {};
+    for (const p of parts) map[p.type] = p.value;
+    let hour = map.hour ?? "00";
+    if (hour === "24") hour = "00";
+    return `${map.year}-${map.month}-${map.day}T${hour}:${map.minute}`;
+  }
+
+  const s = String(dateInput).trim();
+  if (!s) return "";
+  // Already in valid datetime-local format
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) return s;
+  // SQL datetime without tz: 2026-11-01 10:30:00 -> 2026-11-01T10:30
+  if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(s)) return s.slice(0, 16).replace(/\s+/, "T");
+  // Date only: 2026-11-01 -> 2026-11-01T00:00
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00`;
+
+  try {
+    const dt = new Date(s);
+    if (isNaN(dt.getTime())) return s.slice(0, 16).replace(" ", "T");
+    const formatter = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(dt);
+    const map: Record<string, string> = {};
+    for (const p of parts) map[p.type] = p.value;
+    let hour = map.hour ?? "00";
+    if (hour === "24") hour = "00";
+    return `${map.year}-${map.month}-${map.day}T${hour}:${map.minute}`;
+  } catch {
+    return s.slice(0, 16).replace(" ", "T");
+  }
+}
+

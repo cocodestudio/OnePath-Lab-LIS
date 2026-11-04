@@ -147,7 +147,7 @@ export default function ManageDoctorsPage() {
           const names = docList.map((d) => d.name).filter(Boolean);
           const combined = Array.from(new Set(["Self", ...names]));
           localStorage.setItem("lis_referral_doctors", JSON.stringify(combined));
-        } catch {}
+        } catch { }
 
         // Preselect if query param provided
         if (preselectedDoctorName) {
@@ -434,15 +434,21 @@ export default function ManageDoctorsPage() {
   // Submit Doctor Form
   const handleSaveDoctorProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!doctorForm.name.trim()) {
+    const rawName = doctorForm.name.trim();
+    if (!rawName) {
       toast.error("Missing Name", "Doctor name is required.");
       return;
     }
 
+    // Auto prefix Dr. if not present (unless 'Self')
+    const normalizedName = (rawName.toLowerCase() === "self" || rawName.toLowerCase() === "self referral")
+      ? "Self"
+      : (/^dr\.?\s+/i.test(rawName) ? rawName.replace(/^dr\.?\s+/i, "Dr. ") : `Dr. ${rawName}`);
+
     setIsSaving(true);
     try {
       const payload = {
-        name: doctorForm.name.trim(),
+        name: normalizedName,
         degree: doctorForm.degree.trim() || null,
         phone: doctorForm.phone.trim() || null,
         email: doctorForm.email.trim() || null,
@@ -553,54 +559,56 @@ export default function ManageDoctorsPage() {
           </div>
         </div>
 
-        {/* Tab Switcher & SINGLE Add Doctor Button */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="flex items-center bg-muted/50 p-1 rounded-xl border border-border/80">
+        {/* Tab Switcher & Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto shrink-0">
+          {/* Tab Switcher */}
+          <div className="flex items-center bg-muted/50 p-1 rounded-xl border border-border/80 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => setActiveTab("matrix")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeTab === "matrix"
-                  ? "bg-background text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${activeTab === "matrix"
+                ? "bg-background text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+                }`}
             >
               Test Commission Matrix
             </button>
             <button
               type="button"
               onClick={() => setActiveTab("directory")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeTab === "directory"
-                  ? "bg-background text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${activeTab === "directory"
+                ? "bg-background text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+                }`}
             >
               Doctor Directory ({doctors.length})
             </button>
           </div>
 
-          {/* Statement Print Settings Button */}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setIsPrintSettingsModalOpen(true)}
-            className="gap-1.5 h-9 rounded-xl border-border hover:bg-muted/80 text-foreground font-semibold shadow-2xs cursor-pointer"
-            title="Configure statement PDF columns & print layout"
-          >
-            <Printer className="h-4 w-4 text-primary" />
-            <span>Print Settings</span>
-          </Button>
+          {/* Action Buttons Group */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Statement Print Settings Button */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setIsPrintSettingsModalOpen(true)}
+              className="flex-1 sm:flex-initial gap-1.5 h-9 rounded-xl border-border hover:bg-muted/80 text-foreground font-semibold shadow-2xs cursor-pointer justify-center"
+              title="Configure statement PDF columns & print layout"
+            >
+              <Printer className="h-4 w-4 text-primary" />
+              <span>Print Settings</span>
+            </Button>
 
-          {/* ONLY ONE Single Add Doctor Button on the page */}
-          <Button
-            size="sm"
-            onClick={() => handleOpenDoctorModal()}
-            className="gap-1.5 h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs cursor-pointer"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add Doctor</span>
-          </Button>
+            {/* ONLY ONE Single Add Doctor Button on the page */}
+            <Button
+              size="sm"
+              onClick={() => handleOpenDoctorModal()}
+              className="flex-1 sm:flex-initial gap-1.5 h-9 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs cursor-pointer justify-center"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add Doctor</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -692,11 +700,10 @@ export default function ManageDoctorsPage() {
                   setSelectedCategory("ALL");
                   setMatrixPage(1);
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                  selectedCategory === "ALL"
-                    ? "bg-primary text-primary-foreground shadow-xs"
-                    : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
-                }`}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${selectedCategory === "ALL"
+                  ? "bg-primary text-primary-foreground shadow-xs"
+                  : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 All Departments ({tests.length})
               </button>
@@ -708,11 +715,10 @@ export default function ManageDoctorsPage() {
                     setSelectedCategory(cat);
                     setMatrixPage(1);
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                    selectedCategory === cat
-                      ? "bg-primary text-primary-foreground shadow-xs"
-                      : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${selectedCategory === cat
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
                 >
                   {cat}
                 </button>
@@ -880,9 +886,8 @@ export default function ManageDoctorsPage() {
                       return (
                         <tr
                           key={test.id}
-                          className={`hover:bg-muted/20 transition-colors ${
-                            hasOverride ? "bg-primary/[0.02]" : ""
-                          }`}
+                          className={`hover:bg-muted/20 transition-colors ${hasOverride ? "bg-primary/[0.02]" : ""
+                            }`}
                         >
                           {/* Test Code & Name */}
                           <td className="py-3 px-4 sm:px-6">
@@ -917,11 +922,10 @@ export default function ManageDoctorsPage() {
                                 placeholder={`${baseRate}% (default)`}
                                 value={hasOverride ? activeCommissions[test.id] : ""}
                                 onChange={(e) => handleTestCommissionChange(test.id, e.target.value)}
-                                className={`h-8 text-right pr-6 font-mono font-bold text-xs rounded-lg ${
-                                  hasOverride
-                                    ? "border-primary/60 bg-primary/5 text-primary"
-                                    : "border-border/70 bg-background text-muted-foreground"
-                                }`}
+                                className={`h-8 text-right pr-6 font-mono font-bold text-xs rounded-lg ${hasOverride
+                                  ? "border-primary/60 bg-primary/5 text-primary"
+                                  : "border-border/70 bg-background text-muted-foreground"
+                                  }`}
                               />
                               <Percent className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
                             </div>
@@ -1199,14 +1203,22 @@ export default function ManageDoctorsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs font-bold text-foreground">Doctor Full Name *</Label>
-                  <Input
-                    type="text"
-                    required
-                    placeholder="e.g. Dr. Rajesh Sharma"
-                    value={doctorForm.name}
-                    onChange={(e) => setDoctorForm({ ...doctorForm, name: e.target.value })}
-                    className="mt-1 h-9 text-xs rounded-xl"
-                  />
+                  <div className="relative mt-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-primary">
+                      Dr.
+                    </span>
+                    <Input
+                      type="text"
+                      required
+                      placeholder="Rajesh Sharma"
+                      value={doctorForm.name.replace(/^dr\.?\s+/i, "")}
+                      onChange={(e) => setDoctorForm({ ...doctorForm, name: e.target.value.replace(/^dr\.?\s+/i, "") })}
+                      className="pl-9 h-9 text-xs rounded-xl"
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    ℹ️ &quot;Dr.&quot; title is automatically prefixed. Please enter the name without &quot;Dr.&quot;
+                  </p>
                 </div>
 
                 <div>
@@ -1394,11 +1406,10 @@ export default function ManageDoctorsPage() {
                 ].map((item) => (
                   <label
                     key={item.key}
-                    className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${
-                      (statementPrintSettings as any)[item.key]
-                        ? "bg-primary/5 border-primary/40 text-foreground"
-                        : "bg-muted/20 border-border/70 text-muted-foreground hover:bg-muted/40"
-                    }`}
+                    className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${(statementPrintSettings as any)[item.key]
+                      ? "bg-primary/5 border-primary/40 text-foreground"
+                      : "bg-muted/20 border-border/70 text-muted-foreground hover:bg-muted/40"
+                      }`}
                   >
                     <input
                       type="checkbox"
@@ -1427,11 +1438,10 @@ export default function ManageDoctorsPage() {
                 <span>Diagnostic & Investigation Details</span>
               </h4>
               <label
-                className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${
-                  statementPrintSettings.show_tests
-                    ? "bg-primary/5 border-primary/40 text-foreground"
-                    : "bg-muted/20 border-border/70 text-muted-foreground hover:bg-muted/40"
-                }`}
+                className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${statementPrintSettings.show_tests
+                  ? "bg-primary/5 border-primary/40 text-foreground"
+                  : "bg-muted/20 border-border/70 text-muted-foreground hover:bg-muted/40"
+                  }`}
               >
                 <input
                   type="checkbox"
@@ -1462,11 +1472,10 @@ export default function ManageDoctorsPage() {
               <div className="space-y-2.5">
                 {/* Lab Revenue Toggle with prominent privacy callout */}
                 <label
-                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
-                    statementPrintSettings.show_lab_revenue
-                      ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/40 text-foreground"
-                      : "bg-amber-500/5 border-amber-500/30 text-amber-700 dark:text-amber-300"
-                  }`}
+                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer select-none ${statementPrintSettings.show_lab_revenue
+                    ? "bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/40 text-foreground"
+                    : "bg-amber-500/5 border-amber-500/30 text-amber-700 dark:text-amber-300"
+                    }`}
                 >
                   <input
                     type="checkbox"
@@ -1521,11 +1530,10 @@ export default function ManageDoctorsPage() {
                   ].map((item) => (
                     <label
                       key={item.key}
-                      className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${
-                        (statementPrintSettings as any)[item.key]
-                          ? "bg-primary/5 border-primary/40 text-foreground"
-                          : "bg-muted/20 border-border/70 text-muted-foreground hover:bg-muted/40"
-                      }`}
+                      className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer select-none ${(statementPrintSettings as any)[item.key]
+                        ? "bg-primary/5 border-primary/40 text-foreground"
+                        : "bg-muted/20 border-border/70 text-muted-foreground hover:bg-muted/40"
+                        }`}
                     >
                       <input
                         type="checkbox"

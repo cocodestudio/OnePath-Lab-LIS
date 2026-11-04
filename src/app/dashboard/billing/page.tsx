@@ -986,7 +986,8 @@ export default function BillingPage() {
       (cleanQ.length >= 3 && cleanPhone.includes(cleanQ)) ||
       barcode.toLowerCase().includes(q) ||
       uhid.toLowerCase().includes(q) ||
-      (Array.isArray(b.reports) && b.reports.some((r: any) => String(r.custom_id || "").toLowerCase().includes(q)));
+      String(b.patient?.ref_doctor || (b.patient as any)?.refDoctor || "").toLowerCase().includes(q) ||
+      (Array.isArray(b.reports) && b.reports.some((r: any) => String(r.custom_id || r.customId || r.id || "").toLowerCase().includes(q)));
 
     const matchesStatus = statusFilter === "ALL" || b.status === statusFilter;
     // When searching, bypass date restriction!

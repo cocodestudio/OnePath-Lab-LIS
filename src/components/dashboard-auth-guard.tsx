@@ -39,33 +39,46 @@ export function DashboardAuthGuard() {
     // Verify immediately on mount
     verifyActiveSession();
 
-    // 3. Heartbeat check every 12 seconds
+    // 3. Heartbeat check (60s interval per AGENTS.md Rule 4.5; cross-tab revocation is handled instantly via BroadcastChannel)
     const heartbeatInterval = setInterval(() => {
       verifyActiveSession();
-    }, 12000);
+    }, 60000);
 
-    // 4. On window focus / tab visibility change
+    // 4. On window focus / tab visibility change (throttle to max once every 30s)
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === "visible") {
-        if (Date.now() - lastCheckTimeRef.current > 5000) {
+        if (Date.now() - lastCheckTimeRef.current > 30000) {
           verifyActiveSession();
         }
       }
     };
 
-    // 5. On user click anywhere on page: verify session if > 8s since last check
-    const handleDocumentClick = () => {
-      if (Date.now() - lastCheckTimeRef.current > 8000) {
-        verifyActiveSession();
-      }
-    };
-
-    // 6. Listen for 401 unauthorized event from api-client
+    // 5. Listen for 401 unauthorized event from api-client
     const handleUnauthorizedEvent = () => {
       handleLogout("normal");
     };
 
-    // 7. Prevent bfcache from serving protected pages after logout
+    // 6. Instant cross-tab real-time session termination via BroadcastChannel
+    let authChannel: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        authChannel = new BroadcastChannel("onepath_auth_channel");
+        authChannel.onmessage = (event) => {
+          if (event.data?.type === "SESSION_REVOKED" || event.data?.type === "LOGOUT") {
+            handleLogout("normal");
+          }
+        };
+      }
+    } catch {}
+
+    // 8. Cross-tab storage event listener for instant 0ms session invalidation
+    const handleStorageEvent = (event: StorageEvent) => {
+      if (event.key === "lis_auth_revoked_at" || event.key === "lis_logged_out" || (event.key === "lis_token" && !event.newValue)) {
+        handleLogout("normal");
+      }
+    };
+
+    // 9. Prevent bfcache from serving protected pages after logout
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted || !getStoredToken()) {
         if (!getStoredToken()) {
@@ -76,7 +89,7 @@ export function DashboardAuthGuard() {
       }
     };
 
-    // 8. Prevent browser back navigation from exiting authenticated session
+    // 10. Prevent browser back navigation from exiting authenticated session
     const handlePopState = () => {
       if (!getStoredToken()) {
         handleLogout("normal");
@@ -95,17 +108,22 @@ export function DashboardAuthGuard() {
     window.addEventListener("popstate", handlePopState);
     window.addEventListener("focus", handleVisibilityOrFocus);
     window.addEventListener("lis_auth_unauthorized", handleUnauthorizedEvent);
+    window.addEventListener("storage", handleStorageEvent);
     document.addEventListener("visibilitychange", handleVisibilityOrFocus);
-    document.addEventListener("click", handleDocumentClick, { passive: true });
 
     return () => {
       clearInterval(heartbeatInterval);
+      if (authChannel) {
+        try {
+          authChannel.close();
+        } catch {}
+      }
       window.removeEventListener("pageshow", handlePageShow);
       window.removeEventListener("popstate", handlePopState);
       window.removeEventListener("focus", handleVisibilityOrFocus);
       window.removeEventListener("lis_auth_unauthorized", handleUnauthorizedEvent);
+      window.removeEventListener("storage", handleStorageEvent);
       document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
-      document.removeEventListener("click", handleDocumentClick);
     };
   }, []);
 

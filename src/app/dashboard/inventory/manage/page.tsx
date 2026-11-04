@@ -720,11 +720,11 @@ export default function ManageInventoryPage() {
   }, [items, itemSearch]);
 
   return (
-    <div className="w-full min-w-0 space-y-5 pb-12 animate-in fade-in duration-300">
+    <div className="w-full max-w-full space-y-5 sm:space-y-6 pb-20 animate-in fade-in duration-300 px-2.5 sm:px-4 md:px-6 overflow-x-hidden">
       {/* Top Header & Breadcrumb (Full Width Edge-to-Edge) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/60 pb-5">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-1.5">
+          <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-1.5 flex-wrap">
             <Link href="/dashboard/inventory" className="hover:text-primary transition-colors flex items-center gap-1">
               <ArrowLeft className="h-3 w-3" />
               <span>Back to View Inventory</span>
@@ -732,8 +732,8 @@ export default function ManageInventoryPage() {
             <span>/</span>
             <span className="text-foreground font-medium">Stock Operations &amp; Management</span>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-xs shrink-0">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-xs shrink-0 mt-0.5 sm:mt-0">
               <Sliders className="h-5 w-5" />
             </div>
             <div>
@@ -1509,7 +1509,77 @@ export default function ManageInventoryPage() {
             </div>
           </div>
 
-          <Card className="border-border/70 shadow-xs overflow-hidden bg-card/60 backdrop-blur-xs w-full">
+          {/* Mobile Card List (Visible on screens < 768px) */}
+          <div className="block md:hidden space-y-3 w-full">
+            {filteredCatalogItems.length === 0 ? (
+              <Card className="p-8 text-center border-border/70 bg-card/60">
+                <Package className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-xs font-semibold text-foreground">No catalog items found</p>
+              </Card>
+            ) : (
+              filteredCatalogItems.map((item) => (
+                <Card key={item.id} className="border-border/70 shadow-xs bg-card/60 backdrop-blur-xs overflow-hidden">
+                  <CardContent className="p-3.5 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-extrabold text-foreground text-sm leading-snug">{item.name}</h3>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          {item.code && (
+                            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-muted border border-border/60 text-foreground">
+                              {item.code}
+                            </span>
+                          )}
+                          <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-md bg-muted text-foreground border border-border/50">
+                            {item.category}
+                          </span>
+                          {item.brand && (
+                            <span className="text-[11px] text-muted-foreground font-medium">· {item.brand}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditItem(item)}
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+                          title="Edit Item"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteItem(item)}
+                          className="h-8 w-8 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                          title="Deactivate / Delete"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/50 text-[11px]">
+                      <div>
+                        <span className="text-[9.5px] uppercase font-bold text-muted-foreground block">Unit</span>
+                        <span className="font-semibold text-foreground">{item.uom}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9.5px] uppercase font-bold text-muted-foreground block">Min Stock</span>
+                        <span className="font-extrabold text-foreground">{item.minStockAlert}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9.5px] uppercase font-bold text-muted-foreground block">Storage</span>
+                        <span className="text-muted-foreground truncate block">{item.storageTemp || "Ambient"}</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+
+          {/* Desktop Table (Visible on screens >= 768px) */}
+          <Card className="hidden md:block border-border/70 shadow-xs overflow-hidden bg-card/60 backdrop-blur-xs w-full">
             <div className="table-responsive-container w-full">
               <table className="w-full text-left border-collapse text-xs sm:text-sm min-w-[950px]">
                 <thead>

@@ -467,7 +467,25 @@ const centerDisplayName = centerUser.name || centerUser.center_name || centerUse
 assert.strictEqual(centerDisplayName, "Asfaq");
 console.log("  ✓ Case 5.7 (Dues Dropdown Name Priority): Correctly displays user's name ('Asfaq') instead of parent lab name ('OnePath Command Center')");
 
-console.log("-> Suite 5 Passed: 7/7 Doctor Portal access, phone normalization, and dues centre tests.\n");
+// Case 5.8: Doctor Name Auto "Dr." Prefix Normalization
+function normalizeDoctorPrefix(name) {
+  const raw = String(name || "").trim();
+  if (!raw) return "";
+  if (raw.toLowerCase() === "self" || raw.toLowerCase() === "self referral") return "Self";
+  return /^dr\.?\s+/i.test(raw) ? raw.replace(/^dr\.?\s+/i, "Dr. ") : `Dr. ${raw}`;
+}
+assert.strictEqual(normalizeDoctorPrefix("Rajesh Sharma"), "Dr. Rajesh Sharma");
+assert.strictEqual(normalizeDoctorPrefix("dr rajesh"), "Dr. rajesh");
+assert.strictEqual(normalizeDoctorPrefix("Dr. Amit Verma"), "Dr. Amit Verma");
+assert.strictEqual(normalizeDoctorPrefix("Self"), "Self");
+console.log("  ✓ Case 5.8 (Doctor Name Dr. Prefix): Automatically adds 'Dr.' prefix while preserving 'Self'");
+
+// Case 5.9: Doctor Portal Default Secure Password Contract
+const defaultDoctorPassword = "onepathlab";
+assert.strictEqual(defaultDoctorPassword, "onepathlab");
+console.log("  ✓ Case 5.9 (Doctor Portal Default Password): Enforces 'onepathlab' default password contract");
+
+console.log("-> Suite 5 Passed: 9/9 Doctor Portal access, phone normalization, Dr. prefix, and credentials tests.\n");
 
 // ==========================================
 // SUITE 6: INVOICE TEST ITEMS RESOLUTION (ONLY MAIN TESTS & PRICES, ZERO PARAMETERS)

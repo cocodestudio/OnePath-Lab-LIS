@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, FileText, Receipt, Menu, X,
   FlaskConical, Settings, HelpCircle, LifeBuoy, Clock, TrendingUp,
   Briefcase, ChevronDown, Wallet, Lock, Sparkles, ShieldAlert, Gift, Activity, Boxes,
-  Stethoscope
+  Stethoscope, PanelLeftClose, PanelLeftOpen, Plus
 } from "lucide-react";
 import { getStoredUser, fetchFromLaravel } from "@/lib/api-client";
 import { isSubscriptionExpired } from "@/lib/subscription";
@@ -143,8 +143,43 @@ export default function Sidebar() {
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [isAiGuideOpen, setIsAiGuideOpen] = useState(false);
   const [isLocked, setIsLocked] = useState<boolean>(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTouchTimeRef = useRef<number>(0);
+
+  // Initialize collapse preference from localStorage
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("lis_sidebar_collapsed");
+        if (stored === "true") setIsCollapsed(true);
+      }
+    } catch {}
+  }, []);
+
+  const toggleCollapse = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("lis_sidebar_collapsed", String(next));
+        }
+      } catch {}
+      return next;
+    });
+  };
+
+  // Keyboard shortcut Ctrl+B / Cmd+B to toggle collapse
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        toggleCollapse();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Global touch listener to record touch timestamps with zero passive lag
   useEffect(() => {
@@ -421,92 +456,170 @@ export default function Sidebar() {
     }
   }, [pathname, role]);
 
-  const content = (
-    <aside
-      data-sidebar="true"
-      className="flex h-full w-[280px] max-w-[88vw] flex-col bg-card border-r border-border/70 overscroll-contain"
-    >
-      {/* Brand */}
-      <div className="flex h-[68px] items-center gap-3 px-6 shrink-0 border-b border-border/60">
-        <div className="relative h-8 w-8 shrink-0">
-          <Image src="/onepath-logo.png" alt="OnePath" fill sizes="32px" className="object-contain" />
-        </div>
-        <div className="flex items-center tracking-tight leading-none">
-          <span className="text-[17.5px] font-extrabold text-foreground tracking-tight">OnePath</span>
-          <span className="text-[17.5px] font-bold text-primary ml-1 tracking-tight">Lab</span>
-        </div>
-      </div>
+  const renderSidebar = (isMobile: boolean) => {
+    const collapsed = !isMobile && isCollapsed;
+
+    return (
+      <aside
+        data-sidebar="true"
+        className={`flex h-full flex-col bg-card border-r border-border/70 overscroll-contain transition-all duration-300 ease-in-out ${
+          isMobile ? "w-[280px] max-w-[88vw]" : collapsed ? "w-[76px]" : "w-[280px]"
+        }`}
+      >
+        {/* Brand */}
+        {collapsed ? (
+          <div className="flex h-[68px] items-center justify-center shrink-0 border-b border-border/60">
+            <button
+              type="button"
+              onClick={toggleCollapse}
+              className="h-10 w-10 rounded-xl hover:bg-muted/80 text-muted-foreground hover:text-foreground flex items-center justify-center transition-all cursor-pointer relative group"
+              title="Expand Sidebar (Ctrl+B)"
+              aria-label="Expand Sidebar"
+            >
+              <div className="relative h-7 w-7 shrink-0 group-hover:scale-95 transition-transform">
+                <Image src="/onepath-logo.png" alt="OnePath" fill sizes="28px" className="object-contain" />
+              </div>
+              <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-xs">
+                <PanelLeftOpen className="h-2.5 w-2.5" />
+              </span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex h-[68px] items-center justify-between px-5 shrink-0 border-b border-border/60">
+            <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
+              <div className="relative h-8 w-8 shrink-0">
+                <Image src="/onepath-logo.png" alt="OnePath" fill sizes="32px" className="object-contain" />
+              </div>
+              <div className="flex items-center tracking-tight leading-none">
+                <span className="text-[17.5px] font-extrabold text-foreground tracking-tight">OnePath</span>
+                <span className="text-[17.5px] font-bold text-primary ml-1 tracking-tight">Lab</span>
+              </div>
+            </Link>
+            {!isMobile && (
+              <button
+                type="button"
+                onClick={toggleCollapse}
+                className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+                title="Collapse Sidebar (Ctrl+B)"
+                aria-label="Collapse Sidebar"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
 
       {/* Quick Action: Register Patient / Sample Entry */}
-      <div className="px-3.5 pt-4 pb-2">
-        {effectiveLocked ? (
-          <Link
-            href="/dashboard/account/lab?tab=subscription"
-            onClick={() => setIsOpen(false)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs shadow-xs hover:bg-rose-500/20 transition-all cursor-pointer touch-manipulation"
-          >
-            <Lock className="h-3.5 w-3.5" />
-            <span>Plan Expired · Locked</span>
-          </Link>
-        ) : (
-          <Link
-            href="/dashboard/patients/register"
-            onClick={() => setIsOpen(false)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md ring-inset-top hover:-translate-y-px active:scale-[0.98] transition-all cursor-pointer touch-manipulation"
-          >
-            <span className="text-base leading-none font-bold">+</span>
-            <span suppressHydrationWarning>
-              {isB2B
-                ? "New Requisition"
-                : isCollectionCenter
-                  ? "Sample Entry"
-                  : "Add Patient"}
-            </span>
-          </Link>
-        )}
-      </div>
+      {collapsed ? (
+        <div className="px-2 pt-3 pb-2 flex justify-center">
+          {effectiveLocked ? (
+            <Link
+              href="/dashboard/account/lab?tab=subscription"
+              onClick={() => setIsOpen(false)}
+              className="h-10 w-10 flex items-center justify-center rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 shadow-xs hover:bg-rose-500/20 transition-all cursor-pointer"
+              title="Plan Expired · Locked"
+            >
+              <Lock className="h-4 w-4" />
+            </Link>
+          ) : (
+            <Link
+              href="/dashboard/patients/register"
+              onClick={() => setIsOpen(false)}
+              className="h-10 w-10 flex items-center justify-center rounded-xl gradient-primary text-primary-foreground font-bold shadow-md ring-inset-top hover:scale-105 active:scale-95 transition-all cursor-pointer"
+              title={isB2B ? "New Requisition (+)" : isCollectionCenter ? "Sample Entry (+)" : "Add Patient (+)"}
+            >
+              <Plus className="h-5 w-5" />
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="px-3.5 pt-4 pb-2">
+          {effectiveLocked ? (
+            <Link
+              href="/dashboard/account/lab?tab=subscription"
+              onClick={() => setIsOpen(false)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold text-xs shadow-xs hover:bg-rose-500/20 transition-all cursor-pointer touch-manipulation"
+            >
+              <Lock className="h-3.5 w-3.5" />
+              <span>Plan Expired · Locked</span>
+            </Link>
+          ) : (
+            <Link
+              href="/dashboard/patients/register"
+              onClick={() => setIsOpen(false)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md ring-inset-top hover:-translate-y-px active:scale-[0.98] transition-all cursor-pointer touch-manipulation"
+            >
+              <span className="text-base leading-none font-bold">+</span>
+              <span suppressHydrationWarning>
+                {isB2B
+                  ? "New Requisition"
+                  : isCollectionCenter
+                    ? "Sample Entry"
+                    : "Add Patient"}
+              </span>
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Subscription Locked Alert Banner in Sidebar */}
       {effectiveLocked && (
-        <div className="mx-3.5 my-2 p-3 rounded-2xl bg-gradient-to-br from-rose-500/15 via-amber-500/10 to-transparent border border-rose-500/30 text-xs space-y-2 animate-pulse">
-          <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-extrabold text-[12px]">
-            <Lock className="h-4 w-4 shrink-0" />
-            <span>Operations Locked</span>
+        collapsed ? (
+          <div className="px-2 py-1 flex justify-center">
+            <Link
+              href="/dashboard/account/lab?tab=subscription"
+              onClick={() => setIsOpen(false)}
+              className="h-9 w-9 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-600 flex items-center justify-center shadow-2xs hover:bg-rose-500/25 transition-colors"
+              title="Plan Expired · Activate Plan Now"
+            >
+              <Sparkles className="h-4 w-4" />
+            </Link>
           </div>
-          <p className="text-[11px] text-muted-foreground leading-tight">
-            Trial or subscription expired. Please activate a plan to unlock all features.
-          </p>
-          <Link
-            href="/dashboard/account/lab?tab=subscription"
-            onClick={() => setIsOpen(false)}
-            className="w-full py-2 px-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition-all block text-center cursor-pointer touch-manipulation"
-          >
-            <Sparkles className="h-3 w-3" />
-            <span>Activate Plan Now →</span>
-          </Link>
-        </div>
+        ) : (
+          <div className="mx-3.5 my-2 p-3 rounded-2xl bg-gradient-to-br from-rose-500/15 via-amber-500/10 to-transparent border border-rose-500/30 text-xs space-y-2 animate-pulse">
+            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-extrabold text-[12px]">
+              <Lock className="h-4 w-4 shrink-0" />
+              <span>Operations Locked</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-tight">
+              Trial or subscription expired. Please activate a plan to unlock all features.
+            </p>
+            <Link
+              href="/dashboard/account/lab?tab=subscription"
+              onClick={() => setIsOpen(false)}
+              className="w-full py-2 px-3 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-[11px] flex items-center justify-center gap-1.5 shadow-sm transition-all block text-center cursor-pointer touch-manipulation"
+            >
+              <Sparkles className="h-3 w-3" />
+              <span>Activate Plan Now →</span>
+            </Link>
+          </div>
+        )
       )}
 
       {/* Nav */}
       <nav
-        className="flex-1 px-3.5 py-3 space-y-1 overflow-y-auto overscroll-contain"
+        className={`flex-1 ${collapsed ? "px-2 py-3 space-y-2" : "px-3.5 py-3 space-y-1"} overflow-y-auto overscroll-contain`}
         style={{ WebkitOverflowScrolling: "touch" }}
       >
-        <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
-          {!isRoleResolved
-            ? "Portal"
-            : isB2B
-              ? "B2B Partner Portal"
-              : isCollectionCenter
-                ? "Terminal Portal"
-                : isReceptionist
-                  ? "Front Desk Portal"
-                  : effectiveLocked
-                    ? "Locked Navigation"
-                    : "Navigation"}
-        </p>
+        {!collapsed ? (
+          <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+            {!isRoleResolved
+              ? "Portal"
+              : isB2B
+                ? "B2B Partner Portal"
+                : isCollectionCenter
+                  ? "Terminal Portal"
+                  : isReceptionist
+                    ? "Front Desk Portal"
+                    : effectiveLocked
+                      ? "Locked Navigation"
+                      : "Navigation"}
+          </p>
+        ) : (
+          <div className="w-8 h-px bg-border/60 mx-auto my-1" />
+        )}
 
-        {effectiveLocked && (
+        {effectiveLocked && !collapsed && (
           <Link
             href="/dashboard/account/lab?tab=subscription"
             onClick={() => setIsOpen(false)}
@@ -523,14 +636,68 @@ export default function Sidebar() {
         {!isRoleResolved ? (
           <div className="space-y-2 px-1 py-2 animate-pulse">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/30">
+              <div key={i} className={`flex items-center gap-3 ${collapsed ? "justify-center p-2" : "px-3 py-2.5"} rounded-lg bg-muted/30`}>
                 <div className="h-4 w-4 rounded-md bg-muted/60 shrink-0" />
-                <div className="h-3.5 bg-muted/50 rounded-md" style={{ width: `${55 + (i % 3) * 15}%` }} />
+                {!collapsed && <div className="h-3.5 bg-muted/50 rounded-md" style={{ width: `${55 + (i % 3) * 15}%` }} />}
               </div>
             ))}
           </div>
         ) : (
           visibleNav.map((item) => {
+            if (collapsed) {
+              if (item.children) {
+                const isChildActive = !effectiveLocked && item.children.some((c) => isActive(c.href));
+                return (
+                  <div key={item.name} className="flex justify-center py-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCollapsed(false);
+                        try { localStorage.setItem("lis_sidebar_collapsed", "false"); } catch {}
+                        setExpandedItem(item.name);
+                      }}
+                      className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all cursor-pointer group relative ${
+                        isChildActive
+                          ? "bg-primary/15 text-primary font-bold shadow-xs"
+                          : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                      }`}
+                      title={`${item.name} (${item.children.length} sub-items)`}
+                      aria-label={item.name}
+                    >
+                      <item.icon className="h-5 w-5" />
+                      {isChildActive && (
+                        <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary" />
+                      )}
+                    </button>
+                  </div>
+                );
+              }
+
+              const active = !effectiveLocked && isActive(item.href);
+              return (
+                <div key={item.name} className="flex justify-center py-0.5">
+                  <Link
+                    href={effectiveLocked ? "/dashboard/account/lab?tab=subscription" : item.href!}
+                    onClick={(e) => {
+                      if (effectiveLocked) handleLockedNavClick(e);
+                    }}
+                    className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all cursor-pointer relative ${
+                      active
+                        ? "bg-primary text-primary-foreground shadow-md"
+                        : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                    }`}
+                    title={item.name}
+                    aria-label={item.name}
+                  >
+                    <item.icon className="h-5 w-5" />
+                    {active && (
+                      <span className="absolute -left-1 top-1/2 -translate-y-1/2 h-4 w-1 rounded-r-full bg-primary-foreground" />
+                    )}
+                  </Link>
+                </div>
+              );
+            }
+
             if (item.children) {
               const isChildActive = !effectiveLocked && item.children.some((c) => isActive(c.href));
               const isExpanded = !effectiveLocked && expandedItem === item.name;
@@ -655,53 +822,73 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-3.5 space-y-2.5 border-t border-border/60">
-        {/* LIS AI Assistant Button (Moved from bottom-right to bottom-left sidebar) */}
-        <button
-          type="button"
-          onClick={() => {
-            window.dispatchEvent(new CustomEvent("toggle-ai-guide"));
-            if (typeof window !== "undefined" && window.innerWidth < 768) {
-              setIsOpen(false);
-            }
-          }}
-          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs group active:scale-[0.98] ${isAiGuideOpen
-            ? "bg-primary text-primary-foreground border-primary shadow-sm"
-            : "bg-emerald-500/10 hover:bg-emerald-500/15 border-emerald-500/25 dark:border-emerald-500/35 text-foreground"
-            }`}
-          title="OnePath LIS AI Assistant & Guide"
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div
-              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-xs transition-transform group-hover:scale-105 ${isAiGuideOpen
-                ? "bg-white/20 text-white"
-                : "bg-emerald-600 text-white"
-                }`}
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-            </div>
-            <div className="flex flex-col text-left leading-tight min-w-0">
-              <span className="text-[12.5px] font-bold truncate">LIS AI Assistant</span>
-              <span
-                className={`text-[10px] font-medium truncate ${isAiGuideOpen ? "text-primary-foreground/85" : "text-muted-foreground"
+      {collapsed ? (
+        <div className="p-2 border-t border-border/60 flex justify-center">
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("toggle-ai-guide"));
+            }}
+            className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all cursor-pointer shadow-xs ${isAiGuideOpen
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25"
+              }`}
+            title="OnePath LIS AI Assistant & Guide"
+            aria-label="LIS AI Assistant"
+          >
+            <Sparkles className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="p-3.5 space-y-2.5 border-t border-border/60">
+          {/* LIS AI Assistant Button (Moved from bottom-right to bottom-left sidebar) */}
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("toggle-ai-guide"));
+              if (typeof window !== "undefined" && window.innerWidth < 768) {
+                setIsOpen(false);
+              }
+            }}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-xs group active:scale-[0.98] ${isAiGuideOpen
+              ? "bg-primary text-primary-foreground border-primary shadow-sm"
+              : "bg-emerald-500/10 hover:bg-emerald-500/15 border-emerald-500/25 dark:border-emerald-500/35 text-foreground"
+              }`}
+            title="OnePath LIS AI Assistant & Guide"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div
+                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-xs transition-transform group-hover:scale-105 ${isAiGuideOpen
+                  ? "bg-white/20 text-white"
+                  : "bg-emerald-600 text-white"
                   }`}
               >
-                {isAiGuideOpen ? "Click to Close" : "Interactive Lab Guide"}
-              </span>
+                <Sparkles className="h-3.5 w-3.5" />
+              </div>
+              <div className="flex flex-col text-left leading-tight min-w-0">
+                <span className="text-[12.5px] font-bold truncate">LIS AI Assistant</span>
+                <span
+                  className={`text-[10px] font-medium truncate ${isAiGuideOpen ? "text-primary-foreground/85" : "text-muted-foreground"
+                    }`}
+                >
+                  {isAiGuideOpen ? "Click to Close" : "Interactive Lab Guide"}
+                </span>
+              </div>
             </div>
-          </div>
-          <span
-            className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 transition-colors ${isAiGuideOpen
-              ? "bg-white/20 text-white"
-              : "bg-emerald-600 text-white shadow-2xs group-hover:bg-emerald-700"
-              }`}
-          >
-            {isAiGuideOpen ? "Active" : "Ask AI"}
-          </span>
-        </button>
-      </div>
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 transition-colors ${isAiGuideOpen
+                ? "bg-white/20 text-white"
+                : "bg-emerald-600 text-white shadow-2xs group-hover:bg-emerald-700"
+                }`}
+            >
+              {isAiGuideOpen ? "Active" : "Ask AI"}
+            </span>
+          </button>
+        </div>
+      )}
     </aside>
-  );
+    );
+  };
 
   return (
     <>
@@ -725,7 +912,7 @@ export default function Sidebar() {
         />
       )}
 
-      <div className="hidden md:flex h-full">{content}</div>
+      <div className="hidden md:flex h-full">{renderSidebar(false)}</div>
 
       <div
         className={`fixed inset-y-0 left-0 z-40 flex md:hidden transition-transform duration-300 ease-out overscroll-contain ${isOpen ? "translate-x-0" : "-translate-x-full"
@@ -737,7 +924,7 @@ export default function Sidebar() {
           }
         }}
       >
-        {content}
+        {renderSidebar(true)}
       </div>
     </>
   );

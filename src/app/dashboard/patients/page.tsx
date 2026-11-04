@@ -27,6 +27,7 @@ import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getStoredToken, getAuthBaseUrl, updateStoredUser } from "@/lib/api-client";
 import { ALL_DESIGNATIONS } from "@/lib/report-settings";
 import { BarcodeSVG } from "@/components/barcode-svg";
+import { printBarcodeLabels } from "@/lib/print-barcode";
 import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
 import { DateFilterRibbon } from "@/components/date-filter-ribbon";
 import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
@@ -482,6 +483,9 @@ export default function PatientsPage() {
   const [saving, setSaving] = useState(false);
   const [navigatingEditId, setNavigatingEditId] = useState<string | null>(null);
   const [navigatingViewId, setNavigatingViewId] = useState<string | null>(null);
+  const [navigatingResultId, setNavigatingResultId] = useState<string | null>(null);
+  const [deletingBillPatientId, setDeletingBillPatientId] = useState<string | null>(null);
+  const [openingRejectId, setOpeningRejectId] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
 
@@ -587,34 +591,39 @@ export default function PatientsPage() {
   }, [dateMode, filterDate, startDate, endDate, fetchPatients]);
 
   const handleInitiateDeleteBill = async (patient: Patient) => {
-    let billId = patient.bills?.[0]?.id || (patient as any).bill_id || (patient as any).billId;
-    let billCustomId = patient.bills?.[0]?.custom_id || patient.bills?.[0]?.customId;
-    let amount = patient.bills?.[0]?.total ?? patient.bills?.[0]?.grand_total;
+    setDeletingBillPatientId(patient.id);
+    try {
+      let billId = patient.bills?.[0]?.id || (patient as any).bill_id || (patient as any).billId;
+      let billCustomId = patient.bills?.[0]?.custom_id || patient.bills?.[0]?.customId;
+      let amount = patient.bills?.[0]?.total ?? patient.bills?.[0]?.grand_total;
 
-    if (!billId && patient.reports?.[0]?.bill_id) {
-      billId = patient.reports[0].bill_id;
+      if (!billId && patient.reports?.[0]?.bill_id) {
+        billId = patient.reports[0].bill_id;
+      }
+
+      if (!billId) {
+        try {
+          const res = await fetchFromLaravel(`/bills?patient_id=${patient.id}&limit=1`);
+          const list = Array.isArray(res) ? res : res?.data;
+          if (list && list.length > 0) {
+            billId = list[0].id;
+            billCustomId = list[0].custom_id || list[0].customId;
+            amount = list[0].total ?? list[0].grand_total;
+          }
+        } catch (_) {}
+      }
+
+      setDeleteBillDialog({
+        isOpen: true,
+        patient,
+        billId: billId ? String(billId) : null,
+        billCustomId: billCustomId ? String(billCustomId) : (billId ? `BILL-${String(billId).slice(0, 8)}` : (patient.custom_id || patient.customId || "RECORD")),
+        amount: amount != null ? Number(amount) : null,
+        isDeleting: false,
+      });
+    } finally {
+      setDeletingBillPatientId(null);
     }
-
-    if (!billId) {
-      try {
-        const res = await fetchFromLaravel(`/bills?patient_id=${patient.id}&limit=1`);
-        const list = Array.isArray(res) ? res : res?.data;
-        if (list && list.length > 0) {
-          billId = list[0].id;
-          billCustomId = list[0].custom_id || list[0].customId;
-          amount = list[0].total ?? list[0].grand_total;
-        }
-      } catch (_) {}
-    }
-
-    setDeleteBillDialog({
-      isOpen: true,
-      patient,
-      billId: billId ? String(billId) : null,
-      billCustomId: billCustomId ? String(billCustomId) : (billId ? `BILL-${String(billId).slice(0, 8)}` : (patient.custom_id || patient.customId || "RECORD")),
-      amount: amount != null ? Number(amount) : null,
-      isDeleting: false,
-    });
   };
 
   const handleConfirmDeleteBill = async () => {
@@ -787,7 +796,9 @@ export default function PatientsPage() {
       patBarcode.toLowerCase().includes(q) ||
       patAbhaAddress.toLowerCase().includes(q) ||
       patAbhaNumber.toLowerCase().includes(q) ||
-      (Array.isArray(p.reports) && p.reports.some((r: any) => String(r.custom_id || "").toLowerCase().includes(q)));
+      String(p.ref_doctor || p.refDoctor || "").toLowerCase().includes(q) ||
+      (Array.isArray(p.reports) && p.reports.some((r: any) => String(r.custom_id || r.customId || r.id || "").toLowerCase().includes(q))) ||
+      (Array.isArray(p.bills) && p.bills.some((b: any) => String(b.custom_id || b.customId || b.id || "").toLowerCase().includes(q)));
 
     // When searching, bypass date restriction so historical records across all dates are displayed!
     const matchesDate = q.length > 0
@@ -806,8 +817,14 @@ export default function PatientsPage() {
     const pure = extractPurePatientName(patient.name || "");
     setEditName(pure || patient.name || "");
     setEditAgeYears((patient.age || 0).toString());
-    setEditAgeMonths("0");
-    setEditAgeDays("0");
+    let patMeta = patient.meta;
+    if (typeof patMeta === "string") {
+      try { patMeta = JSON.parse(patMeta); } catch { patMeta = {}; }
+    }
+    const m = patient.age_months ?? patient.ageMonths ?? patMeta?.age_months ?? patMeta?.ageMonths ?? "";
+    const d = patient.age_days ?? patient.ageDays ?? patMeta?.age_days ?? patMeta?.ageDays ?? "";
+    setEditAgeMonths(m !== "" && m !== null && m !== undefined ? String(m) : "0");
+    setEditAgeDays(d !== "" && d !== null && d !== undefined ? String(d) : "0");
     setEditGender(patient.gender || "Male");
     setEditPhone(patient.phone || "");
     
@@ -820,7 +837,7 @@ export default function PatientsPage() {
     const coll = patient.collected_at || patient.collectedAt || "Main Lab (Self / Lab Staff)";
     const match = coll.match(/^(.*?)(?:\s*\((.*?)\))?$/);
     const point = match && match[1] ? match[1].trim() : "Main Lab";
-    const phlebo = match && match[2] ? match[2].trim() : "Self / Lab Staff";
+    const phlebo = (match && match[2] ? match[2].trim() : null) || patient.collected_by || patient.collectedBy || "Self / Lab Staff";
     
     setEditCollectedAt(point);
     if (point && !collectionPoints.includes(point)) {
@@ -851,6 +868,11 @@ export default function PatientsPage() {
       const effectiveDes = isBlank ? null : editDesignation.trim();
       const finalName = effectiveDes ? `${effectiveDes} ${cleanName}`.trim() : cleanName;
 
+      let patMeta = editPatient.meta;
+      if (typeof patMeta === "string") {
+        try { patMeta = JSON.parse(patMeta); } catch { patMeta = {}; }
+      }
+
       await fetchFromLaravel(`/patients/${editPatient.id}`, {
         method: "PUT",
         body: JSON.stringify({
@@ -862,6 +884,13 @@ export default function PatientsPage() {
           ref_doctor: editRefDoctor.trim() || "Self",
           address: editAddress.trim(),
           collected_at: `${editCollectedAt} (${editCollectedBy})`,
+          meta: {
+            ...(patMeta || {}),
+            age_months: editAgeMonths ? parseInt(editAgeMonths) || 0 : 0,
+            ageMonths: editAgeMonths ? parseInt(editAgeMonths) || 0 : 0,
+            age_days: editAgeDays ? parseInt(editAgeDays) || 0 : 0,
+            ageDays: editAgeDays ? parseInt(editAgeDays) || 0 : 0,
+          },
         }),
       });
 
@@ -1245,121 +1274,178 @@ export default function PatientsPage() {
                               )}
                             </>
                           ) : (
-                            <>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-muted-foreground hover:text-foreground cursor-pointer data-[state=open]:bg-muted"
-                                    title="Patient Options"
-                                  >
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-44 p-1">
-                                  <DropdownMenuItem
-                                    className="cursor-pointer gap-2 py-2 text-xs font-medium"
-                                    disabled={navigatingViewId === patient.id}
-                                    onClick={() => {
-                                      setNavigatingViewId(patient.id);
-                                      try { sessionStorage.setItem("patient_detail_cache_" + patient.id, JSON.stringify(patient)); } catch (_) {}
-                                      router.push("/dashboard/patients/" + patient.id);
-                                    }}
-                                  >
-                                    {navigatingViewId === patient.id ? (
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                    ) : (
-                                      <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                                    )}
-                                    <span>{navigatingViewId === patient.id ? "Loading..." : "View History"}</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    className="cursor-pointer gap-2 py-2 text-xs font-medium"
-                                    onClick={() => handlePrintPatientReport(patient)}
-                                    disabled={loadingPrintId === patient.id}
-                                  >
-                                    {loadingPrintId === patient.id ? (
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                                    ) : (
-                                      <Printer className="h-3.5 w-3.5 text-muted-foreground" />
-                                    )}
-                                    <span>{loadingPrintId === patient.id ? "Loading..." : "Print Report"}</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    className="cursor-pointer gap-2 py-2 text-xs font-medium"
-                                    onClick={() => {
-                                      const reportId = patient.reports?.[0]?.id || patient.report_id || patient.reportId;
-                                      if (reportId) {
-                                        router.push(`/dashboard/reports/${reportId}/edit`);
-                                      } else {
-                                        router.push(`/dashboard/reports?search=${encodeURIComponent(patient.custom_id || patient.customId || patient.name)}`);
-                                      }
-                                    }}
-                                  >
-                                    <Edit3 className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <span>Enter Result</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    className="cursor-pointer gap-2 py-2 text-xs font-medium text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/30"
-                                    onClick={() => handleInitiateDeleteBill(patient)}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                    <span>Delete Bill</span>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                              {(() => {
-                                if (currentUser?.role === 'TECHNICIAN' || currentUser?.role === 'DOCTOR') {
-                                  return null;
-                                }
+                            (() => {
+                              const isDropdownActionActive =
+                                navigatingViewId === patient.id ||
+                                loadingPrintId === patient.id ||
+                                navigatingResultId === patient.id ||
+                                deletingBillPatientId === patient.id;
 
-                                return (
-                                  <Link
-                                    href={`/dashboard/patients/register?edit=${patient.id}`}
-                                    onClick={() => {
-                                      setNavigatingEditId(patient.id);
-                                      try {
-                                        sessionStorage.setItem(`edit_patient_cache_${patient.id}`, JSON.stringify(patient));
-                                      } catch (_) {}
-                                    }}
-                                  >
+                              const isRowProcessing =
+                                isDropdownActionActive ||
+                                navigatingEditId === patient.id ||
+                                openingRejectId === patient.id;
+
+                              return (
+                                <div className={`flex items-center justify-end gap-1.5 transition-all rounded-lg p-0.5 ${
+                                  isRowProcessing ? "bg-primary/5 ring-1 ring-primary/25 animate-pulse" : ""
+                                }`}>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className={`h-8 w-8 cursor-pointer data-[state=open]:bg-muted transition-all ${
+                                          isDropdownActionActive
+                                            ? "bg-primary/10 text-primary border border-primary/25 shadow-2xs"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                                        }`}
+                                        title={isDropdownActionActive ? "Action in progress..." : "Patient Options"}
+                                        disabled={isDropdownActionActive}
+                                      >
+                                        {isDropdownActionActive ? (
+                                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                        ) : (
+                                          <MoreVertical className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-48 p-1">
+                                      <DropdownMenuItem
+                                        className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                        disabled={navigatingViewId === patient.id}
+                                        onClick={() => {
+                                          setNavigatingViewId(patient.id);
+                                          try { sessionStorage.setItem("patient_detail_cache_" + patient.id, JSON.stringify(patient)); } catch (_) {}
+                                          router.push("/dashboard/patients/" + patient.id);
+                                        }}
+                                      >
+                                        {navigatingViewId === patient.id ? (
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                        ) : (
+                                          <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                                        )}
+                                        <span>{navigatingViewId === patient.id ? "Opening Profile..." : "View History"}</span>
+                                      </DropdownMenuItem>
+
+                                      <DropdownMenuItem
+                                        className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                        onClick={() => handlePrintPatientReport(patient)}
+                                        disabled={loadingPrintId === patient.id}
+                                      >
+                                        {loadingPrintId === patient.id ? (
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                        ) : (
+                                          <Printer className="h-3.5 w-3.5 text-muted-foreground" />
+                                        )}
+                                        <span>{loadingPrintId === patient.id ? "Fetching Report..." : "Print Report"}</span>
+                                      </DropdownMenuItem>
+
+                                      <DropdownMenuItem
+                                        className="cursor-pointer gap-2 py-2 text-xs font-medium"
+                                        disabled={navigatingResultId === patient.id}
+                                        onClick={() => {
+                                          setNavigatingResultId(patient.id);
+                                          const reportId = patient.reports?.[0]?.id || patient.report_id || patient.reportId;
+                                          if (reportId) {
+                                            router.push(`/dashboard/reports/${reportId}/edit`);
+                                          } else {
+                                            router.push(`/dashboard/reports?search=${encodeURIComponent(patient.custom_id || patient.customId || patient.name)}`);
+                                          }
+                                        }}
+                                      >
+                                        {navigatingResultId === patient.id ? (
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                        ) : (
+                                          <Edit3 className="h-3.5 w-3.5 text-muted-foreground" />
+                                        )}
+                                        <span>{navigatingResultId === patient.id ? "Opening Editor..." : "Enter Result"}</span>
+                                      </DropdownMenuItem>
+
+                                      <DropdownMenuItem
+                                        className="cursor-pointer gap-2 py-2 text-xs font-medium text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/30"
+                                        disabled={deletingBillPatientId === patient.id}
+                                        onClick={() => handleInitiateDeleteBill(patient)}
+                                      >
+                                        {deletingBillPatientId === patient.id ? (
+                                          <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600" />
+                                        ) : (
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        )}
+                                        <span>{deletingBillPatientId === patient.id ? "Preparing Delete..." : "Delete Bill"}</span>
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+
+                                  {/* Edit Patient Details & Tests */}
+                                  {(() => {
+                                    if (currentUser?.role === 'TECHNICIAN' || currentUser?.role === 'DOCTOR') {
+                                      return null;
+                                    }
+
+                                    return (
+                                      <Link
+                                        href={`/dashboard/patients/register?edit=${patient.id}`}
+                                        onClick={() => {
+                                          setNavigatingEditId(patient.id);
+                                          try {
+                                            sessionStorage.setItem(`edit_patient_cache_${patient.id}`, JSON.stringify(patient));
+                                          } catch (_) {}
+                                        }}
+                                      >
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className={`h-8 w-8 cursor-pointer transition-all ${
+                                            navigatingEditId === patient.id
+                                              ? "bg-primary/10 text-primary border border-primary/20 shadow-2xs"
+                                              : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+                                          }`}
+                                          title="Edit Patient Details & Tests"
+                                          disabled={navigatingEditId === patient.id}
+                                        >
+                                          {navigatingEditId === patient.id ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                          ) : (
+                                            <Edit2 className="h-3.5 w-3.5" />
+                                          )}
+                                        </Button>
+                                      </Link>
+                                    );
+                                  })()}
+
+                                  {/* Reject Laboratory Sample */}
+                                  {!isB2B && (currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'admin' || !currentUser?.role) && (
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-8 w-8 text-muted-foreground hover:text-primary cursor-pointer"
-                                      title="Edit Patient Details & Tests"
-                                      disabled={navigatingEditId === patient.id}
+                                      className={`h-8 w-8 cursor-pointer transition-all ${
+                                        openingRejectId === patient.id
+                                          ? "bg-amber-500/10 text-amber-600 border border-amber-500/30"
+                                          : patient.meta?.sample_status === 'REJECTED'
+                                          ? 'text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30'
+                                          : 'text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10'
+                                      }`}
+                                      disabled={openingRejectId === patient.id}
+                                      onClick={() => {
+                                        setOpeningRejectId(patient.id);
+                                        setRejectPatient(patient);
+                                        setRejectReason(patient.meta?.rejection_reason || "Hemolyzed / Hemolytic Sample");
+                                        setCustomRejectReason("");
+                                        setTimeout(() => setOpeningRejectId(null), 300);
+                                      }}
+                                      title={patient.meta?.sample_status === 'REJECTED' ? "Update Sample Rejection" : "Reject Laboratory Sample"}
                                     >
-                                      {navigatingEditId === patient.id ? (
-                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                      {openingRejectId === patient.id ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
                                       ) : (
-                                        <Edit2 className="h-3.5 w-3.5" />
+                                        <Ban className="h-3.5 w-3.5" />
                                       )}
                                     </Button>
-                                  </Link>
-                                );
-                              })()}
-                              {!isB2B && (currentUser?.role === 'ADMIN' || currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'admin' || !currentUser?.role) && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className={`h-8 w-8 cursor-pointer ${
-                                    patient.meta?.sample_status === 'REJECTED'
-                                      ? 'text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30'
-                                      : 'text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10'
-                                  }`}
-                                  onClick={() => {
-                                    setRejectPatient(patient);
-                                    setRejectReason(patient.meta?.rejection_reason || "Hemolyzed / Hemolytic Sample");
-                                    setCustomRejectReason("");
-                                  }}
-                                  title={patient.meta?.sample_status === 'REJECTED' ? "Update Sample Rejection" : "Reject Laboratory Sample"}
-                                >
-                                  <Ban className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                            </>
+                                  )}
+                                </div>
+                              );
+                            })()
                           )}
                         </div>
                       </td>
@@ -1710,14 +1796,39 @@ export default function PatientsPage() {
                       </p>
                     </div>
                     {viewPatient.vial_barcode && (
-                      <button
-                        type="button"
-                        onClick={() => handleCopyBarcode(viewPatient.vial_barcode!)}
-                        className="px-3 py-1.5 rounded-lg border border-border bg-muted/60 hover:bg-muted text-foreground font-bold text-[11px] flex items-center gap-1.5 transition-all self-start sm:self-auto cursor-pointer"
-                      >
-                        {copiedBarcode === viewPatient.vial_barcode ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
-                        <span>{copiedBarcode === viewPatient.vial_barcode ? "Copied!" : "Copy"}</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            printBarcodeLabels({
+                              labels: [{
+                                code: viewPatient.vial_barcode!,
+                                patientName: viewPatient.name,
+                                patientAge: viewPatient.age,
+                                patientGender: viewPatient.gender,
+                                patientId: viewPatient.custom_id || viewPatient.customId,
+                                refDoctor: viewPatient.ref_doctor || viewPatient.refDoctor,
+                                collectionCenter: viewPatient.collected_at || viewPatient.collectedAt,
+                              }],
+                              copiesPerLabel: 1,
+                              sheetTitle: `Barcode - ${viewPatient.name || "Patient"}`,
+                            });
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg border border-border bg-card hover:bg-muted text-foreground font-bold text-[11px] flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                          title="Print Barcode sticker"
+                        >
+                          <Printer className="h-3 w-3 text-primary" />
+                          <span>Print</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyBarcode(viewPatient.vial_barcode!)}
+                          className="px-3 py-1.5 rounded-lg border border-border bg-muted/60 hover:bg-muted text-foreground font-bold text-[11px] flex items-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          {copiedBarcode === viewPatient.vial_barcode ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
+                          <span>{copiedBarcode === viewPatient.vial_barcode ? "Copied!" : "Copy"}</span>
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -1743,14 +1854,41 @@ export default function PatientsPage() {
                                   <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ backgroundColor: tube.capColor }} />
                                   {tube.title}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopyBarcode(tube.code)}
-                                  className="text-muted-foreground hover:text-primary transition-colors cursor-pointer shrink-0"
-                                  title="Copy barcode"
-                                >
-                                  {copiedBarcode === tube.code ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                                </button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      printBarcodeLabels({
+                                        labels: [{
+                                          code: tube.code,
+                                          tubeType: tube.tubeType,
+                                          specimenType: tube.specimenType,
+                                          title: tube.title,
+                                          patientName: viewPatient.name,
+                                          patientAge: viewPatient.age,
+                                          patientGender: viewPatient.gender,
+                                          patientId: viewPatient.custom_id || viewPatient.customId,
+                                          refDoctor: viewPatient.ref_doctor || viewPatient.refDoctor,
+                                          collectionCenter: viewPatient.collected_at || viewPatient.collectedAt,
+                                        }],
+                                        copiesPerLabel: 1,
+                                        sheetTitle: `${tube.tubeType} Barcode - ${viewPatient.name || "Patient"}`,
+                                      });
+                                    }}
+                                    className="p-1 text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+                                    title={`Print ${tube.tubeType} Barcode sticker`}
+                                  >
+                                    <Printer className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyBarcode(tube.code)}
+                                    className="p-1 text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+                                    title="Copy barcode"
+                                  >
+                                    {copiedBarcode === tube.code ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                  </button>
+                                </div>
                               </div>
                               <p className="text-[10px] text-muted-foreground truncate">{tube.specimenType}</p>
                               <div className="bg-muted/40 p-1.5 rounded font-mono text-xs font-black text-foreground truncate select-all">
@@ -1906,24 +2044,53 @@ export default function PatientsPage() {
                               </div>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleCopyBarcode(tube.code)}
-                              className="px-2.5 py-1.5 rounded-xl border border-border bg-card hover:bg-muted text-foreground font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0"
-                              title={`Copy ${tube.tubeType} Barcode`}
-                            >
-                              {copiedBarcode === tube.code ? (
-                                <>
-                                  <Check className="h-3.5 w-3.5 text-emerald-600" />
-                                  <span className="text-emerald-600">Copied!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                                  <span>Copy</span>
-                                </>
-                              )}
-                            </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  printBarcodeLabels({
+                                    labels: [{
+                                      code: tube.code,
+                                      tubeType: tube.tubeType,
+                                      specimenType: tube.specimenType,
+                                      title: tube.title,
+                                      patientName: patientName,
+                                      patientAge: patientAge,
+                                      patientGender: patientGender,
+                                      patientId: patientId,
+                                      refDoctor: refDoctor,
+                                      collectionCenter: collectionPoint,
+                                    }],
+                                    copiesPerLabel: 1,
+                                    sheetTitle: `${tube.tubeType} Barcode - ${patientName}`,
+                                  });
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0"
+                                title={`Print this ${tube.tubeType} Barcode sticker (formatted for 3-across A4 top)`}
+                              >
+                                <Printer className="h-3.5 w-3.5" />
+                                <span>Print</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleCopyBarcode(tube.code)}
+                                className="px-2.5 py-1.5 rounded-xl border border-border bg-card hover:bg-muted text-foreground font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0"
+                                title={`Copy ${tube.tubeType} Barcode`}
+                              >
+                                {copiedBarcode === tube.code ? (
+                                  <>
+                                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                                    <span className="text-emerald-600">Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <span>Copy</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
                           </div>
 
                           {/* Middle Specs: Additive & Department Tests */}
@@ -1966,7 +2133,35 @@ export default function PatientsPage() {
                     <span>All barcodes are synchronized for laboratory analyzer integration &amp; LIS tracking.</span>
                   </div>
 
-                  <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                  <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end flex-wrap">
+                    {vialList.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          printBarcodeLabels({
+                            labels: vialList.map((t) => ({
+                              code: t.code,
+                              tubeType: t.tubeType,
+                              specimenType: t.specimenType,
+                              title: t.title,
+                              patientName: patientName,
+                              patientAge: patientAge,
+                              patientGender: patientGender,
+                              patientId: patientId,
+                              refDoctor: refDoctor,
+                              collectionCenter: collectionPoint,
+                            })),
+                            copiesPerLabel: 1,
+                            sheetTitle: `All Specimen Barcodes - ${patientName}`,
+                          });
+                        }}
+                        className="px-4 py-2 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary font-bold text-xs transition-all cursor-pointer shadow-2xs flex items-center gap-1.5"
+                        title="Print all specimen tube barcode stickers (3-across on A4 top)"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        <span>Print All Barcodes ({vialList.length})</span>
+                      </button>
+                    )}
                     {vialList.length > 1 && (
                       <button
                         type="button"
