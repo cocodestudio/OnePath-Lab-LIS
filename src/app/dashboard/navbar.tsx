@@ -913,10 +913,7 @@ export default function Navbar() {
                   e.preventDefault();
                   if (isLoggingOut) return;
                   setIsLoggingOut(true);
-                  // Brief micro-delay to let the sleek targeted shimmer effect run on the logout button before zero-leak purge & redirect
-                  setTimeout(() => {
-                    logout();
-                  }, 240);
+                  logout();
                 }}
                 className={`relative overflow-hidden flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer select-none ${
                   isLoggingOut

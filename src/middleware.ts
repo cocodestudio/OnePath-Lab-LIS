@@ -24,12 +24,18 @@ export function middleware(request: NextRequest) {
 
   if (pathname === '/login' && token) {
     const isUnauthRedirect = request.nextUrl.searchParams.get('unauth') === '1' || request.nextUrl.searchParams.get('logout') === '1'
-    if (!isUnauthRedirect) {
-      const redirectRes = NextResponse.redirect(new URL('/dashboard', request.url))
-      redirectRes.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
-      redirectRes.headers.set('Pragma', 'no-cache')
-      return redirectRes
+    if (isUnauthRedirect) {
+      const response = NextResponse.next()
+      response.cookies.delete('lis_token')
+      response.cookies.delete('lis_role')
+      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
+      response.headers.set('Pragma', 'no-cache')
+      return response
     }
+    const redirectRes = NextResponse.redirect(new URL('/dashboard', request.url))
+    redirectRes.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0')
+    redirectRes.headers.set('Pragma', 'no-cache')
+    return redirectRes
   }
 
   const response = NextResponse.next()

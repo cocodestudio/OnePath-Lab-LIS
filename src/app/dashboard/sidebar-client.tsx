@@ -524,7 +524,12 @@ export default function Sidebar() {
           ) : (
             <Link
               href="/dashboard/patients/register"
-              onClick={() => setIsOpen(false)}
+              onClick={() => {
+                setIsOpen(false);
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("lis_reset_patient_registration"));
+                }
+              }}
               className="h-10 w-10 flex items-center justify-center rounded-xl gradient-primary text-primary-foreground font-bold shadow-md ring-inset-top hover:scale-105 active:scale-95 transition-all cursor-pointer"
               title={isB2B ? "New Requisition (+)" : isCollectionCenter ? "Sample Entry (+)" : "Add Patient (+)"}
             >
@@ -546,7 +551,12 @@ export default function Sidebar() {
           ) : (
             <Link
               href="/dashboard/patients/register"
-              onClick={() => setIsOpen(false)}
+              onClick={() => {
+                setIsOpen(false);
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("lis_reset_patient_registration"));
+                }
+              }}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md ring-inset-top hover:-translate-y-px active:scale-[0.98] transition-all cursor-pointer touch-manipulation"
             >
               <span className="text-base leading-none font-bold">+</span>

@@ -18,8 +18,18 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   // Pass-through strategy for modern dynamic Next.js routes and backend APIs
   if (event.request.method !== 'GET') return;
+
+  // Let browser handle page navigations natively without service worker interception to prevent ERR_FAILED
+  if (event.request.mode === 'navigate') {
+    return;
+  }
+
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    fetch(event.request).catch(async () => {
+      const cached = await caches.match(event.request);
+      if (cached) return cached;
+      return new Response('', { status: 408, statusText: 'Request Timeout or Offline' });
+    })
   );
 });
 

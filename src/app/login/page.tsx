@@ -55,6 +55,9 @@ export default function LoginPage() {
         sessionStorage.removeItem("lis_last_redirect");
         document.cookie = "lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0;";
         document.cookie = "lis_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0;";
+        if (isLogout && window.history) {
+          window.history.replaceState({}, document.title, "/login");
+        }
       } catch {}
       if (isUnauth) {
         setError("Your session has expired. Please sign in to continue.");

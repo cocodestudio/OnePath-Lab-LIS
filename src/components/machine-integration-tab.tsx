@@ -1,16 +1,92 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Cpu, Radio, Activity, HardDrive, Terminal, Laptop,
   CheckCircle2, RefreshCw, PlusCircle, Trash2, Sliders,
   Play, Download, Eye, AlertCircle, ArrowRight, Check,
   Zap, FileText, ChevronRight, Layers, Lock, ShieldCheck,
-  Server, Shield, Loader2, Sparkles, ExternalLink, Cable, Plus
+  Server, Shield, Loader2, Sparkles, ExternalLink, Cable, Plus,
+  Search, CheckCircle
 } from "lucide-react";
 import { fetchFromLaravel } from "@/lib/api-client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
+import {
+  ANALYZER_CATALOG,
+  ANALYZER_CATEGORIES,
+  searchAnalyzers,
+  getAnalyzerById,
+  AnalyzerModel
+} from "@/lib/analyzer-catalog";
+import {
+  generateVirtualPacketForAnalyzer,
+  parseSimulatorPacket,
+  SimulatorParsedResult
+} from "@/lib/virtual-analyzer-simulator";
+
+/**
+ * Backwards-compatible analyzer preset list for legacy callers & test harness.
+ * Primary catalog: ANALYZER_CATALOG (200+ models in src/lib/analyzer-catalog.ts).
+ * Popular Machine Preset (1-Click Auto-Fill)
+ */
+export const PRESET_ANALYZERS = [
+  {
+    label: "Beacon UNIKON 230 / B200 (Biochemistry - ASTM TCP/IP Port 5100)",
+    name: "Beacon UNIKON 230 Automated Chemistry",
+    model: "Beacon UNIKON 230 / B AUTO 200",
+    category: "Biochemistry",
+    protocol: "ASTM / TCP-IP",
+    connection_type: "TCP_IP",
+    port: 5100,
+    baud_rate: 9600,
+    com_port: "COM3",
+  },
+  {
+    label: "Aveacon 3-Part Cell Counter (Haematology - TCP/IP Port 5100)",
+    name: "Aveacon 3-Part Cell Counter",
+    model: "Aveacon V1.4.1 Series",
+    category: "Haematology",
+    protocol: "ASTM / TCP-IP",
+    connection_type: "TCP_IP",
+    port: 5100,
+    baud_rate: 9600,
+    com_port: "COM3",
+  },
+  {
+    label: "Mindray BC-5000 / BC-3000 (Haematology - HL7/ASTM TCP Port 5100)",
+    name: "Mindray 5-Part Hematology",
+    model: "Mindray BC-5000 Series",
+    category: "Haematology",
+    protocol: "HL7 v2.x",
+    connection_type: "TCP_IP",
+    port: 5100,
+    baud_rate: 9600,
+    com_port: "COM3",
+  },
+  {
+    label: "Erba Chem 5X / 7 / XL-200 (Biochemistry - RS-232 COM3 @ 9600)",
+    name: "Erba Biochemistry Analyzer",
+    model: "Erba Chem 5X / 7 / XL-200",
+    category: "Biochemistry",
+    protocol: "ASTM / TCP-IP",
+    connection_type: "SERIAL_RS232",
+    port: 5100,
+    baud_rate: 9600,
+    com_port: "COM3",
+  },
+  {
+    label: "Sysmex XP-100 / XN Series (Haematology - ASTM TCP Port 5100)",
+    name: "Sysmex Hematology Analyzer",
+    model: "Sysmex XP-100 / XN-350 / XN-550",
+    category: "Haematology",
+    protocol: "ASTM / TCP-IP",
+    connection_type: "TCP_IP",
+    port: 5100,
+    baud_rate: 9600,
+    com_port: "COM3",
+  },
+];
 
 interface Instrument {
   id: string;
@@ -26,6 +102,8 @@ interface Instrument {
   is_active: boolean;
   auto_apply: boolean;
   last_sync_at?: string;
+  parameter_mappings?: Record<string, string>;
+  unmapped_codes?: string[];
 }
 
 export function MachineIntegrationTab() {
@@ -38,7 +116,20 @@ export function MachineIntegrationTab() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // New Machine Form State
-  const [newDevice, setNewDevice] = useState({
+  const [newDevice, setNewDevice] = useState<{
+    name: string;
+    model: string;
+    category: string;
+    protocol: string;
+    connection_type: string;
+    ip_address: string;
+    port: number;
+    com_port: string;
+    baud_rate: number;
+    is_active: boolean;
+    auto_apply: boolean;
+    parameter_mappings?: Record<string, string>;
+  }>({
     name: "",
     model: "",
     category: "Haematology",
@@ -51,6 +142,202 @@ export function MachineIntegrationTab() {
     is_active: true,
     auto_apply: true,
   });
+
+  // Machine Catalog Filter & Selection State
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [catalogCategory, setCatalogCategory] = useState("ALL");
+  const [selectedPresetId, setSelectedPresetId] = useState("");
+
+  const filteredAnalyzers = useMemo(() => {
+    return searchAnalyzers(catalogSearch, catalogCategory);
+  }, [catalogSearch, catalogCategory]);
+
+  const selectedPreset = useMemo(() => {
+    return selectedPresetId ? getAnalyzerById(selectedPresetId) : undefined;
+  }, [selectedPresetId]);
+
+  const handleSelectPreset = (analyzerId: string) => {
+    setSelectedPresetId(analyzerId);
+    if (!analyzerId) return;
+    const a = getAnalyzerById(analyzerId);
+    if (a) {
+      setNewDevice((prev) => ({
+        ...prev,
+        name: `${a.brand} ${a.model}`,
+        model: a.model,
+        category: a.category,
+        protocol: a.protocol,
+        connection_type: a.connection_type,
+        port: a.port ?? 5100,
+        baud_rate: a.baud_rate ?? 9600,
+        com_port: a.com_port ?? "COM3",
+        parameter_mappings: a.parameter_mappings,
+      }));
+    }
+  };
+
+  // Virtual Analyzer Test Studio State
+  const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
+  const [simAnalyzerId, setSimAnalyzerId] = useState("beacon-unikon-230");
+  const [simSampleId, setSimSampleId] = useState("SMP-9021");
+  const [simIsControl, setSimIsControl] = useState(false);
+  const [simResult, setSimResult] = useState<SimulatorParsedResult | null>(null);
+  const [simLoading, setSimLoading] = useState(false);
+  const [simIngestStatus, setSimIngestStatus] = useState<string | null>(null);
+
+  const handleOpenSimulator = (inst?: Instrument) => {
+    if (inst) {
+      const matched = ANALYZER_CATALOG.find(
+        (a) => a.id === inst.id || a.model.toLowerCase() === (inst.model || "").toLowerCase()
+      );
+      if (matched) setSimAnalyzerId(matched.id);
+    }
+    setIsSimulatorOpen(true);
+  };
+
+  const handleRunSimulation = async () => {
+    setSimLoading(true);
+    setSimIngestStatus(null);
+    try {
+      const analyzer = getAnalyzerById(simAnalyzerId) || ANALYZER_CATALOG[0];
+      const effectiveSampleId = simIsControl
+        ? (simSampleId.startsWith("QC-") ? simSampleId : "QC-" + simSampleId)
+        : simSampleId;
+
+      const rawPacket = generateVirtualPacketForAnalyzer(analyzer, effectiveSampleId);
+      const parsed = parseSimulatorPacket(rawPacket, analyzer.id);
+      setSimResult(parsed);
+
+      // Ingest test into LIS backend
+      const res = await fetchFromLaravel("/instruments/ingest", {
+        method: "POST",
+        body: JSON.stringify({
+          instrument_name: parsed.analyzerName,
+          category: parsed.category,
+          connection_type: parsed.connectionType,
+          sample_id: parsed.sampleId,
+          parameters: parsed.parameters,
+          histograms: parsed.histograms,
+          raw_data: parsed.rawPacket,
+          is_control: parsed.isControl,
+        }),
+      });
+
+      if (res && res.status === "success") {
+        setSimIngestStatus(
+          "Successfully processed! " + (res.matched_report ? "Matched with Patient Report: " + res.matched_report.barcode : "Stored in LIS machine buffer")
+        );
+        showToast("Simulation packet processed successfully!", "success");
+      } else {
+        setSimIngestStatus("Packet parsed & verified locally!");
+      }
+    } catch (err: any) {
+      setSimIngestStatus("Parsed locally: " + (err.message || "LIS backend idle"));
+    } finally {
+      setSimLoading(false);
+    }
+  };
+
+  // Visual Parameter Mapper Drawer State
+  const [isMappingDrawerOpen, setIsMappingDrawerOpen] = useState(false);
+  const [selectedMappingInstrument, setSelectedMappingInstrument] = useState<Instrument | null>(null);
+  const [localMappings, setLocalMappings] = useState<Array<{ key: string; target: string }>>([]);
+  const [unmappedList, setUnmappedList] = useState<string[]>([]);
+  const [newMappingKey, setNewMappingKey] = useState("");
+  const [newMappingTarget, setNewMappingTarget] = useState("");
+  const [isSavingMappings, setIsSavingMappings] = useState(false);
+
+  const handleOpenMappingDrawer = (inst: Instrument) => {
+    setSelectedMappingInstrument(inst);
+    const mappingsObj = inst.parameter_mappings || {};
+    const rows: Array<{ key: string; target: string }> = [];
+    for (const [k, v] of Object.entries(mappingsObj)) {
+      if (k !== "_unmapped") {
+        rows.push({ key: k, target: String(v) });
+      }
+    }
+    setLocalMappings(rows);
+    setUnmappedList(inst.unmapped_codes || (mappingsObj as any)["_unmapped"] || []);
+    setNewMappingKey("");
+    setNewMappingTarget("");
+    setIsMappingDrawerOpen(true);
+  };
+
+  const handleAddMappingRow = () => {
+    if (!newMappingKey.trim() || !newMappingTarget.trim()) {
+      showToast("Please enter both Machine Code and LIS Test Name", "error");
+      return;
+    }
+    const cleanKey = newMappingKey.trim().toUpperCase();
+    const cleanTarget = newMappingTarget.trim();
+
+    setLocalMappings((prev) => {
+      const filtered = prev.filter((r) => r.key !== cleanKey);
+      return [...filtered, { key: cleanKey, target: cleanTarget }];
+    });
+    setUnmappedList((prev) => prev.filter((code) => code.toUpperCase() !== cleanKey));
+    setNewMappingKey("");
+    setNewMappingTarget("");
+  };
+
+  const handleRemoveMappingRow = (keyToRemove: string) => {
+    setLocalMappings((prev) => prev.filter((r) => r.key !== keyToRemove));
+  };
+
+  const handleLoadModelDefaults = () => {
+    if (!selectedMappingInstrument) return;
+    const catModel = ANALYZER_CATALOG.find(
+      (a) =>
+        a.id === selectedMappingInstrument.id ||
+        a.model.toLowerCase() === (selectedMappingInstrument.model || "").toLowerCase()
+    );
+    if (catModel && catModel.parameter_mappings) {
+      const rows = Object.entries(catModel.parameter_mappings).map(([k, v]) => ({
+        key: k,
+        target: v,
+      }));
+      setLocalMappings(rows);
+      showToast(`Loaded ${rows.length} standard defaults for ${catModel.model}`, "success");
+    } else {
+      showToast("No catalog presets found for this model.", "error");
+    }
+  };
+
+  const handleSaveMappings = async () => {
+    if (!selectedMappingInstrument) return;
+    setIsSavingMappings(true);
+    try {
+      const mappingsObj: Record<string, string> = {};
+      for (const row of localMappings) {
+        if (row.key.trim() && row.target.trim()) {
+          mappingsObj[row.key.trim().toUpperCase()] = row.target.trim();
+        }
+      }
+      if (unmappedList.length > 0) {
+        (mappingsObj as any)["_unmapped"] = unmappedList;
+      }
+
+      await fetchFromLaravel(`/instruments/${selectedMappingInstrument.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ parameter_mappings: mappingsObj }),
+      });
+
+      setInstruments((prev) =>
+        prev.map((i) =>
+          i.id === selectedMappingInstrument.id
+            ? { ...i, parameter_mappings: mappingsObj, unmapped_codes: unmappedList }
+            : i
+        )
+      );
+
+      setIsMappingDrawerOpen(false);
+      showToast("Custom parameter mappings saved successfully!", "success");
+    } catch (err: any) {
+      showToast(err.message || "Failed to save parameter mappings.", "error");
+    } finally {
+      setIsSavingMappings(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -86,7 +373,7 @@ export function MachineIntegrationTab() {
 
   const handleToggleAutoApply = async (inst: Instrument) => {
     try {
-      await fetchFromLaravel(`/instruments/${inst.id}`, {
+      await fetchFromLaravel("/instruments/" + inst.id, {
         method: "PUT",
         body: JSON.stringify({ auto_apply: !inst.auto_apply }),
       });
@@ -101,7 +388,7 @@ export function MachineIntegrationTab() {
 
   const handleToggleActive = async (inst: Instrument) => {
     try {
-      await fetchFromLaravel(`/instruments/${inst.id}`, {
+      await fetchFromLaravel("/instruments/" + inst.id, {
         method: "PUT",
         body: JSON.stringify({ is_active: !inst.is_active }),
       });
@@ -117,7 +404,7 @@ export function MachineIntegrationTab() {
   const handleDeleteInstrument = async (id: string) => {
     if (!confirm("Are you sure you want to remove this machine configuration?")) return;
     try {
-      await fetchFromLaravel(`/instruments/${id}`, { method: "DELETE" });
+      await fetchFromLaravel("/instruments/" + id, { method: "DELETE" });
       setInstruments((prev) => prev.filter((i) => i.id !== id));
       showToast("Machine removed.", "success");
     } catch (err: any) {
@@ -162,20 +449,38 @@ export function MachineIntegrationTab() {
               </span>
             </div>
             <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
-              Connect your <strong>Aveacon Cell Counter</strong>, <strong>Nihon Kohden MEK-1305</strong>, <strong>Beacon B200</strong>, <strong>Mindray</strong>, or <strong>Sysmex</strong> analyzers via <strong>LAN Ethernet Cable (TCP/IP)</strong> or <strong>RS-232 Serial Cable (USB-to-DB9)</strong>. Results stream directly into patient reports when entering test results!
+              Connect your <strong>Beacon UNIKON 230</strong>, <strong>Aveacon Cell Counter</strong>, <strong>Nihon Kohden MEK-1305</strong>, <strong>Beacon B200</strong>, <strong>Mindray</strong>, or <strong>Sysmex</strong> analyzers via <strong>LAN Ethernet Cable (TCP/IP)</strong> or <strong>RS-232 Serial Cable (USB-to-DB9)</strong>. Results stream directly into patient reports when entering test results!
             </p>
           </div>
 
-          {/* Quick Action Button: Download Windows Bridge */}
+          {/* Quick Action Button: Download Standalone Windows .exe & Batch Starter */}
           <div className="flex flex-wrap items-center gap-2.5 shrink-0 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => handleOpenSimulator()}
+              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-98"
+              title="Open Virtual Analyzer Test Studio to test & simulate any machine"
+            >
+              <Play className="h-4 w-4" />
+              <span>Virtual Test Studio</span>
+            </button>
+            <a
+              href="/OnePath-Bridge.exe"
+              download="OnePath-Bridge.exe"
+              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground text-xs font-bold transition-all shadow-md cursor-pointer hover:brightness-105 active:scale-98"
+              title="Download Standalone Windows Machine Bridge (.exe) - No Node.js Required"
+            >
+              <Download className="h-4 w-4" />
+              <span>Download OnePath-Bridge.exe</span>
+            </a>
             <a
               href="/START_MACHINE_BRIDGE.bat"
               download="START_MACHINE_BRIDGE.bat"
-              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-muted/80 hover:bg-muted border border-border text-foreground text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-98"
-              title="Download 1-Click Windows Starter"
+              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted/80 hover:bg-muted border border-border text-foreground text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-98"
+              title="Download 1-Click Windows Starter (.bat)"
             >
-              <Download className="h-4 w-4 text-primary" />
-              <span>Download Windows Bridge (.bat)</span>
+              <Terminal className="h-4 w-4 text-primary" />
+              <span>Starter (.bat)</span>
             </a>
           </div>
         </div>
@@ -298,12 +603,44 @@ export function MachineIntegrationTab() {
                   <span className="text-[11px] font-medium text-foreground">Auto-fill matching report</span>
                 </label>
 
-                <button
-                  onClick={() => handleToggleActive(inst)}
-                  className="text-[11px] font-bold text-primary hover:underline cursor-pointer shrink-0"
-                >
-                  {inst.is_active ? "Disable" : "Enable"}
-                </button>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  {/* Visual Parameter Mapper Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenMappingDrawer(inst)}
+                    className={`text-[11px] font-bold hover:underline cursor-pointer shrink-0 flex items-center gap-1 ${
+                      (inst.unmapped_codes?.length || 0) > 0
+                        ? "text-amber-600 dark:text-amber-400 font-extrabold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    title="Open Visual Parameter Mapping"
+                  >
+                    <Sliders className="h-3 w-3" />
+                    <span>Mapping</span>
+                    {(inst.unmapped_codes?.length || 0) > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[9px] font-mono animate-pulse">
+                        {inst.unmapped_codes!.length} unmapped
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSimulator(inst)}
+                    className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer shrink-0 flex items-center gap-1"
+                    title="Simulate test packet for this analyzer"
+                  >
+                    <Play className="h-3 w-3" />
+                    <span>Test Packet</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleToggleActive(inst)}
+                    className="text-[11px] font-bold text-primary hover:underline cursor-pointer shrink-0"
+                  >
+                    {inst.is_active ? "Disable" : "Enable"}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -312,11 +649,128 @@ export function MachineIntegrationTab() {
 
       {/* ── Dialog: Add New Machine (TCP/IP or Serial RS-232) ── */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="w-[calc(100vw-2rem)] max-w-md bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-2xl">
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl max-h-[92vh] overflow-y-auto bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="font-display font-bold text-foreground">Configure New Instrument</DialogTitle>
+            <DialogTitle className="font-display font-bold text-foreground flex items-center justify-between">
+              <span>Configure New Laboratory Instrument</span>
+              <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                {ANALYZER_CATALOG.length}+ Models Catalog
+              </span>
+            </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleAddInstrument} className="space-y-4 pt-2">
+            {/* ── 200+ Clinical Analyzers Catalog Picker ── */}
+            <div className="space-y-2.5 bg-primary/5 p-3.5 rounded-xl border border-primary/20">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-primary flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>200+ Analyzers Catalog (1-Click Auto-Configure)</span>
+                </label>
+                <span className="text-[10px] text-muted-foreground font-semibold">
+                  Showing {filteredAnalyzers.length} of {ANALYZER_CATALOG.length}
+                </span>
+              </div>
+
+              {/* Category Filter Pills */}
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
+                {ANALYZER_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setCatalogCategory(cat.id)}
+                    className={`px-2 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                      catalogCategory === cat.id
+                        ? "bg-primary text-primary-foreground shadow-xs"
+                        : "bg-background/80 text-muted-foreground hover:text-foreground border border-border/50"
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search Box */}
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  placeholder="Search 200+ machines (e.g. UNIKON, Mindray, Sysmex, Erba, Maglumi, Sensa Core)..."
+                  className="w-full pl-9 pr-8 py-1.5 rounded-xl bg-background border border-border text-xs font-semibold text-foreground placeholder:text-muted-foreground focus:border-primary outline-none"
+                />
+                {catalogSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setCatalogSearch("")}
+                    className="absolute right-2.5 top-2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              {/* Dropdown Selector */}
+              <select
+                value={selectedPresetId}
+                onChange={(e) => handleSelectPreset(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-background border border-primary/30 text-xs font-bold text-foreground focus:border-primary outline-none cursor-pointer"
+              >
+                <option value="">
+                  {filteredAnalyzers.length > 0
+                    ? `✨ Select Machine Model (${filteredAnalyzers.length} available)...`
+                    : "No analyzer found matching your search"}
+                </option>
+                {filteredAnalyzers.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    [{a.brand}] {a.model} — {a.category} ({a.connection_type === "TCP_IP" ? "LAN TCP" : "Serial RS232"})
+                  </option>
+                ))}
+              </select>
+
+              {/* Selected Preset Details & Parameter Mappings Badge Preview */}
+              {selectedPreset && (
+                <div className="p-3 rounded-xl bg-background border border-primary/20 space-y-2 text-xs shadow-xs">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="font-bold text-foreground text-xs flex items-center gap-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                      <span>{selectedPreset.brand} {selectedPreset.model}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+                        {selectedPreset.protocol}
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted text-foreground border border-border">
+                        {selectedPreset.connection_type === "TCP_IP" ? `TCP Port ${selectedPreset.port}` : `${selectedPreset.com_port || "COM3"} @ ${selectedPreset.baud_rate}`}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{selectedPreset.description}</p>
+                  {selectedPreset.parameter_mappings && Object.keys(selectedPreset.parameter_mappings).length > 0 && (
+                    <div className="pt-2 border-t border-border/60">
+                      <div className="text-[10px] font-bold text-muted-foreground flex items-center justify-between mb-1.5">
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">
+                          ✓ {Object.keys(selectedPreset.parameter_mappings).length} Parameters Pre-Mapped
+                        </span>
+                        <span className="text-[9px] text-muted-foreground">Auto-populates patient reports</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                        {Object.entries(selectedPreset.parameter_mappings).map(([rawCode, mappedName]) => (
+                          <span
+                            key={rawCode}
+                            className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono text-foreground border border-border/50"
+                            title={`Machine code: ${rawCode} ➔ Report parameter: ${mappedName}`}
+                          >
+                            <span className="font-bold text-primary">{rawCode}</span>: {mappedName}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-1">
               <label className="text-xs font-bold text-foreground">Machine Name *</label>
               <input
@@ -444,6 +898,319 @@ export function MachineIntegrationTab() {
               </button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Virtual Analyzer Test Studio ── */}
+      <Dialog open={isSimulatorOpen} onOpenChange={setIsSimulatorOpen}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl max-h-[92vh] overflow-y-auto bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold text-foreground flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Play className="h-5 w-5 text-primary" />
+                <span>Virtual Analyzer Test Studio</span>
+              </span>
+              <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                Hardware-Free Simulation
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2 text-xs">
+            {/* Machine & Sample Selectors */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-muted/30 p-3.5 rounded-xl border border-border/80">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-foreground">Select Analyzer Model</label>
+                <select
+                  value={simAnalyzerId}
+                  onChange={(e) => setSimAnalyzerId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs font-semibold text-foreground focus:border-primary outline-none"
+                >
+                  {ANALYZER_CATALOG.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.brand} {a.model} ({a.category} - {a.protocol})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-foreground flex items-center justify-between">
+                  <span>Sample Barcode / SID</span>
+                  <button
+                    type="button"
+                    onClick={() => setSimSampleId(`SMP-${Math.floor(1000 + Math.random() * 9000)}`)}
+                    className="text-[10px] text-primary hover:underline font-bold cursor-pointer"
+                  >
+                    🎲 Random
+                  </button>
+                </label>
+                <input
+                  type="text"
+                  value={simSampleId}
+                  onChange={(e) => setSimSampleId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-background border border-border text-xs font-mono font-semibold text-foreground focus:border-primary outline-none"
+                  placeholder="e.g. SMP-9021"
+                />
+              </div>
+
+              <div className="sm:col-span-2 flex items-center justify-between pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={simIsControl}
+                    onChange={(e) => setSimIsControl(e.target.checked)}
+                    className="rounded text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
+                  />
+                  <span className="text-[11px] font-semibold text-foreground">
+                    Simulate as Quality Control / Calibrator (QC Shield Test)
+                  </span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={handleRunSimulation}
+                  disabled={simLoading}
+                  className="gradient-primary text-primary-foreground font-bold text-xs px-4 py-2 rounded-xl shadow-xs cursor-pointer hover:brightness-105 active:scale-98 flex items-center gap-1.5"
+                >
+                  {simLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                  <span>{simLoading ? "Simulating..." : "⚡ Fire Test Packet"}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Ingest Status Banner */}
+            {simIngestStatus && (
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center gap-2 text-xs font-semibold">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                <span>{simIngestStatus}</span>
+              </div>
+            )}
+
+            {/* Simulation Results View */}
+            {simResult && (
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between text-xs font-bold text-foreground">
+                  <span>Extracted Clinical Parameters ({Object.keys(simResult.parameters).length}):</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    Category: {simResult.category} | Sample: {simResult.sampleId}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1">
+                  {Object.entries(simResult.parameters).map(([key, val]) => (
+                    <div key={key} className="p-2 rounded-lg bg-background border border-border shadow-xs space-y-0.5">
+                      <div className="text-[10px] font-bold text-primary font-mono">{key}</div>
+                      <div className="text-xs font-bold text-foreground font-mono">
+                        {val.value} <span className="text-[10px] font-normal text-muted-foreground">{val.unit}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Raw Stream Preview */}
+                <div className="space-y-1">
+                  <div className="text-[11px] font-bold text-foreground">Raw Machine Stream (ASCII):</div>
+                  <pre className="p-2.5 rounded-xl bg-muted font-mono text-[10px] text-foreground max-h-28 overflow-y-auto whitespace-pre-wrap select-all">
+                    {simResult.rawPacket}
+                  </pre>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2 border-t border-border/60">
+              <button
+                type="button"
+                onClick={() => setIsSimulatorOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted cursor-pointer"
+              >
+                Close Simulator
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Visual Parameter Mapping Drawer (Self-Learning) ── */}
+      <Dialog open={isMappingDrawerOpen} onOpenChange={setIsMappingDrawerOpen}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl max-h-[92vh] overflow-y-auto bg-card border border-border rounded-2xl p-4 sm:p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold text-foreground flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Sliders className="h-5 w-5 text-primary" />
+                <span>Parameter Mapping: {selectedMappingInstrument?.name}</span>
+              </span>
+              <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                {localMappings.length} Active Mappings
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2 text-xs">
+            <p className="text-[11px] text-muted-foreground">
+              Link machine-specific test codes sent by your analyzer (e.g. <strong className="text-foreground">SUGAR_F</strong>, <strong className="text-foreground">ALT_1</strong>, or <strong className="text-foreground">CR_SERUM</strong>) to your official OnePath Lab report parameters.
+            </p>
+
+            {/* Self-Learning Alert: Unmapped codes detected */}
+            {unmappedList.length > 0 && (
+              <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-bold text-xs">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>Self-Learning Alert: {unmappedList.length} Unmapped Code(s) Detected</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">Click a code to map it instantly</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {unmappedList.map((code) => (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => {
+                        setNewMappingKey(code);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-background border border-amber-500/40 text-xs font-mono font-bold text-foreground hover:bg-amber-500/10 cursor-pointer transition-all flex items-center gap-1"
+                      title={`Click to map ${code}`}
+                    >
+                      <Plus className="h-3 w-3 text-amber-600" />
+                      <span>{code}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Add New Custom Mapping Form */}
+            <div className="bg-muted/40 p-3 rounded-xl border border-border/80 space-y-2">
+              <label className="text-[11px] font-bold text-foreground">Add Custom Test Mapping</label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  placeholder="Machine Code (e.g. SUGAR_F)"
+                  value={newMappingKey}
+                  onChange={(e) => setNewMappingKey(e.target.value.toUpperCase())}
+                  className="w-full sm:w-1/3 px-3 py-2 rounded-xl bg-background border border-border text-xs font-mono font-bold text-foreground placeholder:text-muted-foreground focus:border-primary outline-none"
+                />
+                <div className="hidden sm:flex items-center text-muted-foreground font-bold">➔</div>
+                <input
+                  type="text"
+                  placeholder="LIS Parameter Name (e.g. Blood Glucose (Fasting) or FBS)"
+                  value={newMappingTarget}
+                  onChange={(e) => setNewMappingTarget(e.target.value)}
+                  list="standard-lis-tests"
+                  className="w-full sm:w-1/2 px-3 py-2 rounded-xl bg-background border border-border text-xs font-semibold text-foreground placeholder:text-muted-foreground focus:border-primary outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddMappingRow}
+                  className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:brightness-105 active:scale-98 transition-all cursor-pointer whitespace-nowrap"
+                >
+                  + Add Mapping
+                </button>
+              </div>
+            </div>
+
+            {/* Standard parameter recommendations datalist */}
+            <datalist id="standard-lis-tests">
+              <option value="Blood Glucose (Fasting)" />
+              <option value="Blood Glucose (Post Prandial)" />
+              <option value="Blood Glucose (Random)" />
+              <option value="Alanine Aminotransferase (SGPT)" />
+              <option value="Aspartate Aminotransferase (SGOT)" />
+              <option value="Serum Creatinine" />
+              <option value="Blood Urea" />
+              <option value="Bilirubin Total" />
+              <option value="Bilirubin Direct" />
+              <option value="Total Cholesterol" />
+              <option value="Triglycerides" />
+              <option value="HDL Cholesterol" />
+              <option value="LDL Cholesterol" />
+              <option value="Alkaline Phosphatase (ALP)" />
+              <option value="Uric Acid" />
+              <option value="Calcium" />
+              <option value="White Blood Cells (WBC)" />
+              <option value="Hemoglobin" />
+              <option value="Platelet Count" />
+              <option value="Red Blood Cells (RBC)" />
+              <option value="Neutrophils" />
+              <option value="Lymphocytes" />
+              <option value="Sodium" />
+              <option value="Potassium" />
+              <option value="Chloride" />
+              <option value="TSH" />
+              <option value="Vitamin D (25-OH)" />
+              <option value="Vitamin B12" />
+            </datalist>
+
+            {/* Active Parameter Mappings Table */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-foreground text-xs">Configured Parameters ({localMappings.length})</span>
+                <button
+                  type="button"
+                  onClick={handleLoadModelDefaults}
+                  className="text-[11px] font-bold text-primary hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  <span>Load {selectedMappingInstrument?.model || "Model"} Defaults</span>
+                </button>
+              </div>
+
+              {localMappings.length === 0 ? (
+                <div className="text-center py-6 border border-dashed border-border rounded-xl text-muted-foreground">
+                  <p className="text-xs">No custom parameter mappings defined yet.</p>
+                  <p className="text-[10px] mt-1">Click &quot;Load Defaults&quot; above to import standard mappings from the catalog.</p>
+                </div>
+              ) : (
+                <div className="max-h-60 overflow-y-auto space-y-1.5 p-1 border border-border/60 rounded-xl bg-background/50">
+                  {localMappings.map((row) => (
+                    <div
+                      key={row.key}
+                      className="flex items-center justify-between px-3 py-2 rounded-lg bg-card border border-border/80 text-xs shadow-2xs hover:border-primary/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 font-mono">
+                        <span className="px-2 py-0.5 rounded bg-primary/10 text-primary font-bold text-[11px]">
+                          {row.key}
+                        </span>
+                        <span className="text-muted-foreground font-sans">➔</span>
+                        <span className="font-sans font-semibold text-foreground text-xs">
+                          {row.target}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMappingRow(row.key)}
+                        className="text-muted-foreground hover:text-rose-600 p-1 rounded cursor-pointer"
+                        title="Remove mapping"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Actions Footer */}
+            <div className="flex justify-end gap-2 pt-2 border-t border-border/60">
+              <button
+                type="button"
+                onClick={() => setIsMappingDrawerOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-muted-foreground hover:bg-muted cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveMappings}
+                disabled={isSavingMappings}
+                className="gradient-primary text-primary-foreground font-bold text-xs px-5 py-2 rounded-xl shadow-xs cursor-pointer hover:brightness-105 active:scale-98 flex items-center gap-1.5"
+              >
+                {isSavingMappings ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                <span>{isSavingMappings ? "Saving..." : "Save Parameter Mappings"}</span>
+              </button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

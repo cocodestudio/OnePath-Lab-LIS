@@ -1,0 +1,8 @@
+{
+  "TCP_PORT": 5100,
+  "COM_PORT": "COM3",
+  "BAUD_RATE": 9600,
+  "LIS_API_URL": "http://127.0.0.1:8000/api/lis/instruments/webhook",
+  "LAB_ID": "01a05221-6f20-73b4-8107-2e68c7824c90",
+  "LIS_TOKEN": ""
+}

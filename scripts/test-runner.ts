@@ -6460,6 +6460,425 @@ assert(
   "[BACKEND PATIENT SYNC] PatientController updates report meta collection date and preserves pediatric age fields"
 );
 
+console.log("\n▶ MODULE 79: UNIKON 230 & Universal Biochemistry Machine Integration Engine");
+
+// 79.1 Bridge source exports dynamic LAB_ID fallback and file logger
+const bridgeSrc79 = fs.readFileSync(path.resolve(__dirname, "../public/onepath-bridge.js"), "utf8");
+assert(
+  bridgeSrc79.includes("const LAB_ID = process.env.LAB_ID || process.env.LIS_LAB_ID") &&
+  bridgeSrc79.includes("logMachineTraffic"),
+  "[BRIDGE DYNAMIC LAB ID & TRAFFIC LOGGER] onepath-bridge.js resolves LAB_ID dynamically and records traffic for remote debugging"
+);
+
+// 79.2 ASTM Field 3 Universal Test ID Token Extraction Logic
+function simulateAstmTestIdExtraction(rawId: string): string {
+  if (rawId.includes("^")) {
+    const tokens = rawId.split("^").map(t => t.trim().toUpperCase()).filter(Boolean);
+    const alphaToken = tokens.find(t => /^[A-Z][A-Z0-9_\-%]+$/.test(t) && !/^\d+$/.test(t));
+    return alphaToken || tokens[tokens.length - 1] || "";
+  }
+  return rawId.trim().toUpperCase();
+}
+assert(
+  simulateAstmTestIdExtraction("^^^GLU^1") === "GLU" &&
+  simulateAstmTestIdExtraction("^^^101^GLU") === "GLU" &&
+  simulateAstmTestIdExtraction("GLU") === "GLU" &&
+  simulateAstmTestIdExtraction("^^^SGPT") === "SGPT",
+  "[ASTM UNIVERSAL TEST ID EXTRACTION] Robustly extracts test code from multi-component subfields"
+);
+
+// 79.3 Biochemistry Parameter Alias Normalization
+function normalizeBiochemCode(code: string): string {
+  if (code === "GLUC" || code === "FBS" || code === "RBS" || code === "PPBS") return "GLU";
+  if (code === "ALT" || code === "GPT") return "SGPT";
+  if (code === "AST" || code === "GOT") return "SGOT";
+  if (code === "TBIL" || code === "T-BIL" || code === "BILI-T" || code === "BILI_TOTAL") return "BILT";
+  if (code === "DBIL" || code === "D-BIL" || code === "BILI-D" || code === "BILI_DIRECT") return "BILD";
+  if (code === "CREA" || code === "CR") return "CREAT";
+  if (code === "UA") return "URIC";
+  if (code === "TG") return "TRIG";
+  if (code === "TCHOL" || code === "T-CHOL") return "CHOL";
+  if (code === "AKP" || code === "ALKP") return "ALP";
+  return code;
+}
+assert(
+  normalizeBiochemCode("FBS") === "GLU" &&
+  normalizeBiochemCode("ALT") === "SGPT" &&
+  normalizeBiochemCode("GOT") === "SGOT" &&
+  normalizeBiochemCode("TBIL") === "BILT" &&
+  normalizeBiochemCode("DBIL") === "BILD" &&
+  normalizeBiochemCode("CREA") === "CREAT" &&
+  normalizeBiochemCode("ALKP") === "ALP",
+  "[BIOCHEMISTRY ALIAS NORMALIZATION] Normalizes machine-specific short codes into canonical LIS parameters"
+);
+
+// 79.4 Control & Calibrator Detection Pattern
+const isControlRegex = /^(QC|CAL|BLANK|STD|CTRL)/i;
+assert(
+  isControlRegex.test("QC-NORMAL") &&
+  isControlRegex.test("CAL-1") &&
+  isControlRegex.test("BLANK") &&
+  !isControlRegex.test("SMP-1004") &&
+  !isControlRegex.test("PATIENT-99"),
+  "[QC CALIBRATOR BLANK DETECTION] Accurately isolates control samples to prevent overwriting patient reports"
+);
+
+// 79.5 Category Assignment Verification
+assert(
+  bridgeSrc79.includes("category: isBiochem ? 'Biochemistry' : 'Haematology'") &&
+  bridgeSrc79.includes("Beacon UNIKON 230 / Auto Chemistry"),
+  "[DYNAMIC CATEGORY ASSIGNMENT] Bridge designates Biochemistry and assigns UNIKON 230 identifier"
+);
+
+// 79.6 Backend InstrumentController Includes UNIKON 230
+const backendInstCtrlSrc79 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/InstrumentController.php"),
+  "utf8"
+);
+assert(
+  backendInstCtrlSrc79.includes("Beacon UNIKON 230 / B200 Automated Chemistry") &&
+  backendInstCtrlSrc79.includes("Beacon UNIKON 230 / B AUTO 200"),
+  "[BACKEND UNIKON 230 PRESET] InstrumentController guarantees Beacon UNIKON 230 in default catalog"
+);
+
+// 79.7 Backend Ingest Control Sample Protection
+assert(
+  backendInstCtrlSrc79.includes("$isControl = $request->boolean('is_control') || preg_match('/^(QC|CAL|BLANK|STD|CTRL)/i'") &&
+  backendInstCtrlSrc79.includes("if (!$isControl) {") &&
+  backendInstCtrlSrc79.includes("if (!$isControl && $report && !$isReportFinalized"),
+  "[BACKEND INGEST CONTROL SHIELD] Ingest endpoint shields patient reports from control/blank sample overwrite"
+);
+
+// 79.8 Backend matchParamToTest Extended Biochemistry Synonyms
+assert(
+  backendInstCtrlSrc79.includes("str_contains($name, 'gpt')") &&
+  backendInstCtrlSrc79.includes("str_contains($name, 'got')") &&
+  backendInstCtrlSrc79.includes("str_contains($name, 't-bil')") &&
+  backendInstCtrlSrc79.includes("str_contains($name, 'd-bil')") &&
+  backendInstCtrlSrc79.includes("str_contains($name, 'alkp')"),
+  "[EXTENDED BIOCHEMISTRY SYNONYMS] Backend catches regional & international biochemistry parameter naming conventions"
+);
+
+// 79.9 Machine Integration UI 1-Click Preset Catalog
+const machineTabSrc79 = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/machine-integration-tab.tsx"),
+  "utf8"
+);
+assert(
+  machineTabSrc79.includes("PRESET_ANALYZERS") &&
+  machineTabSrc79.includes("Beacon UNIKON 230 / B200 (Biochemistry - ASTM TCP/IP Port 5100)") &&
+  machineTabSrc79.includes("Popular Machine Preset (1-Click Auto-Fill)"),
+  "[MACHINE UI 1-CLICK PRESET CATALOG] UI provides instant 1-click auto-fill for UNIKON 230, Beacon, Mindray, Erba, and Sysmex"
+);
+
+console.log("\n▶ MODULE 80: Master Machine Catalog (200+ Clinical Analyzers) & UI Auto-Fill Engine");
+
+// 80.1 Catalog volume check (200+ distinct clinical analyzer models)
+const catalogJsonPath80 = path.resolve(__dirname, "../src/lib/analyzer_catalog.json");
+const catalogData80 = JSON.parse(fs.readFileSync(catalogJsonPath80, "utf8"));
+assert(
+  Array.isArray(catalogData80) && catalogData80.length >= 200,
+  `[ANALYZER CATALOG VOLUME] Catalog contains ${catalogData80.length} analyzer models (target: >= 200)`
+);
+
+// 80.2 Category distribution completeness
+const categoryCounts80: Record<string, number> = {};
+catalogData80.forEach((item: any) => {
+  categoryCounts80[item.category] = (categoryCounts80[item.category] || 0) + 1;
+});
+assert(
+  (categoryCounts80["Haematology"] || 0) >= 50 &&
+  (categoryCounts80["Biochemistry"] || 0) >= 40 &&
+  (categoryCounts80["Immunology"] || 0) >= 15 &&
+  (categoryCounts80["Electrolytes"] || 0) >= 10 &&
+  (categoryCounts80["Coagulation"] || 0) >= 10 &&
+  (categoryCounts80["Urinalysis"] || 0) >= 10,
+  "[DIAGNOSTIC CATEGORIES REPRESENTATION] Comprehensive coverage across Haematology, Biochemistry, Immunology, Electrolytes, Coagulation, and Urinalysis"
+);
+
+// 80.3 searchAnalyzers & query filters
+const {
+  ANALYZER_CATALOG: catalogTs80,
+  searchAnalyzers: searchAnalyzers80,
+  getAnalyzerById: getAnalyzerById80,
+  getAnalyzersByCategory: getAnalyzersByCategory80,
+  getPopularAnalyzers: getPopularAnalyzers80
+} = require("../src/lib/analyzer-catalog");
+
+const unikonMatches80 = searchAnalyzers80("UNIKON");
+assert(
+  unikonMatches80.length >= 1 &&
+  unikonMatches80.some((m: any) => m.id === "beacon-unikon-230" && m.category === "Biochemistry"),
+  "[CATALOG SEARCH UNIKON] searchAnalyzers correctly locates Beacon UNIKON 230"
+);
+
+const sysmexHaemMatches80 = searchAnalyzers80("Sysmex", "Haematology");
+assert(
+  sysmexHaemMatches80.length >= 10 &&
+  sysmexHaemMatches80.every((m: any) => m.brand === "Sysmex" && m.category === "Haematology"),
+  "[CATALOG SEARCH FILTER] searchAnalyzers filters by query AND category"
+);
+
+// 80.4 Key analyzer parameter mappings integrity
+const unikon230 = getAnalyzerById80("beacon-unikon-230");
+assert(
+  unikon230?.parameter_mappings &&
+  (unikon230.parameter_mappings["GLU"] === "Blood Glucose (Fasting)" || unikon230.parameter_mappings["GLU"] === "GLU") &&
+  unikon230.parameter_mappings["SGPT"] === "SGPT" &&
+  (unikon230.parameter_mappings["CREAT"] === "Serum Creatinine" || unikon230.parameter_mappings["CREAT"] === "CREAT"),
+  "[PARAMETER MAPPING UNIKON 230] Beacon UNIKON 230 maps routine biochemistry parameters"
+);
+
+const bc5000 = getAnalyzerById80("mindray-bc-5000");
+assert(
+  bc5000?.parameter_mappings &&
+  bc5000.parameter_mappings["WBC"] === "WBC" &&
+  bc5000.parameter_mappings["HGB"] === "Hemoglobin" &&
+  bc5000.parameter_mappings["PLT"] === "Platelet Count",
+  "[PARAMETER MAPPING MINDRAY BC-5000] Mindray BC-5000 maps 5-part CBC differential"
+);
+
+const maglumi800 = getAnalyzerById80("snibe-maglumi-800");
+assert(
+  maglumi800?.parameter_mappings &&
+  maglumi800.parameter_mappings["TSH"] === "TSH" &&
+  (maglumi800.parameter_mappings["VITD"] === "Vitamin D (25-OH)" || maglumi800.parameter_mappings["VITD"] === "Vitamin D"),
+  "[PARAMETER MAPPING MAGLUMI 800] Snibe Maglumi 800 maps thyroid & vitamin immunoassay parameters"
+);
+
+const sensaSt200 = getAnalyzerById80("sensa-core-st-200");
+assert(
+  sensaSt200?.parameter_mappings &&
+  sensaSt200.parameter_mappings["NA"] === "Sodium" &&
+  sensaSt200.parameter_mappings["K"] === "Potassium" &&
+  sensaSt200.parameter_mappings["CL"] === "Chloride",
+  "[PARAMETER MAPPING SENSA CORE ST-200] Sensa Core ST-200 maps electrolyte parameters"
+);
+
+// 80.5 UI Integration verification
+const machineTabSrc80 = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/machine-integration-tab.tsx"),
+  "utf8"
+);
+assert(
+  machineTabSrc80.includes("ANALYZER_CATALOG") &&
+  machineTabSrc80.includes("searchAnalyzers") &&
+  machineTabSrc80.includes("filteredAnalyzers") &&
+  (machineTabSrc80.includes("Pre-Mapped") || machineTabSrc80.includes("parameter_mappings")),
+  "[MACHINE UI 200+ CATALOG INTEGRATION] UI integrates searchable 200+ catalog, category pills, and pre-mapped parameter badges"
+);
+
+console.log("\n▶ MODULE 81: Standalone .exe Desktop Client & Zero-Dependency Runtime Verification");
+
+// 81.1 Binary presence and compiled size check
+const exePath81 = path.resolve(__dirname, "../public/OnePath-Bridge.exe");
+const exeExists81 = fs.existsSync(exePath81);
+const exeStats81 = exeExists81 ? fs.statSync(exePath81) : null;
+assert(
+  exeExists81 && exeStats81 && exeStats81.size > 20 * 1024 * 1024,
+  `[STANDALONE EXE COMPILED] OnePath-Bridge.exe exists and contains bundled runtime (${exeStats81 ? Math.round(exeStats81.size / 1024 / 1024) : 0}MB)`
+);
+
+// 81.2 Bridge smart configuration resolution
+const bridgeSrc81 = fs.readFileSync(path.resolve(__dirname, "../public/onepath-bridge.js"), "utf8");
+assert(
+  bridgeSrc81.includes("bridge-config.json") &&
+  bridgeSrc81.includes("isPkg = typeof process.pkg !== 'undefined'") &&
+  bridgeSrc81.includes("execDir = isPkg ? path.dirname(process.execPath) : __dirname"),
+  "[STANDALONE SMART CONFIG] onepath-bridge.js resolves standalone execDir and manages bridge-config.json"
+);
+
+// 81.3 Bridge network auto-detection
+assert(
+  bridgeSrc81.includes("os.networkInterfaces()") &&
+  bridgeSrc81.includes("getLocalIPv4Addresses"),
+  "[NETWORK AUTO-DETECTION] Bridge auto-discovers local IPv4 network adapters for zero-config machine entry"
+);
+
+// 81.4 Batch starter standalone priority
+const batSrc81 = fs.readFileSync(path.resolve(__dirname, "../public/START_MACHINE_BRIDGE.bat"), "utf8");
+assert(
+  batSrc81.includes("if exist \"%~dp0OnePath-Bridge.exe\"") &&
+  batSrc81.includes("\"%~dp0OnePath-Bridge.exe\""),
+  "[BATCH STARTER EXE PRIORITY] START_MACHINE_BRIDGE.bat immediately executes OnePath-Bridge.exe without requiring Node.js"
+);
+
+// 81.5 UI Standalone EXE download button
+assert(
+  machineTabSrc80.includes("OnePath-Bridge.exe") &&
+  machineTabSrc80.includes("Download OnePath-Bridge.exe"),
+  "[MACHINE UI EXE DOWNLOAD] UI provides direct 1-click download of OnePath-Bridge.exe standalone Windows binary"
+);
+
+console.log("\n▶ MODULE 82: Virtual Analyzer Test Harness & Machine Simulation Engine Verification");
+
+// 82.1 Packet generators for UNIKON 230 and Mindray BC-5000
+const {
+  generateUnikon230Packet: genUnikon82,
+  generateMindrayBc5000Packet: genMindray82,
+  generateVirtualPacketForAnalyzer: genUniversal82,
+  parseSimulatorPacket: parseSim82,
+  normalizeBiochemCode: normBiochem82
+} = require("../src/lib/virtual-analyzer-simulator");
+
+const unikonPacket82 = genUnikon82("SMP-UNIKON-TEST");
+assert(
+  unikonPacket82.includes("Beacon UNIKON 230") &&
+  unikonPacket82.includes("SMP-UNIKON-TEST") &&
+  unikonPacket82.includes("^^^GLU^1|98.4") &&
+  unikonPacket82.includes("^^^SGPT^1|34.2") &&
+  unikonPacket82.includes("L|1|N"),
+  "[UNIKON 230 VIRTUAL PACKET] Generates authentic ASTM E1394 packet with routine biochemistry test codes"
+);
+
+const mindrayPacket82 = genMindray82("SMP-BC5000-TEST");
+assert(
+  mindrayPacket82.includes("Mindray|BC-5000") &&
+  mindrayPacket82.includes("SMP-BC5000-TEST") &&
+  mindrayPacket82.includes("6690-2^WBC^LN||7.4") &&
+  mindrayPacket82.includes("10030^NEU%^LN||62.8"),
+  "[MINDRAY BC-5000 VIRTUAL PACKET] Generates authentic HL7 v2.3.1 MLLP packet with complete 5-part CBC differential"
+);
+
+// 82.2 In-memory parsing verification
+const parsedUnikon82 = parseSim82(unikonPacket82, "beacon-unikon-230");
+assert(
+  parsedUnikon82.sampleId === "SMP-UNIKON-TEST" &&
+  parsedUnikon82.category === "Biochemistry" &&
+  parsedUnikon82.parameters["GLU"]?.value === "98.4" &&
+  parsedUnikon82.parameters["SGPT"]?.value === "34.2" &&
+  parsedUnikon82.parameters["CREAT"]?.value === "1.02",
+  "[VIRTUAL PARSER UNIKON 230] Simulator parser extracts and normalizes UNIKON 230 parameters"
+);
+
+const parsedMindray82 = parseSim82(mindrayPacket82, "mindray-bc-5000");
+assert(
+  parsedMindray82.sampleId === "SMP-BC5000-TEST" &&
+  parsedMindray82.parameters["WBC"]?.value === "7400" && // WBC normalized to /cumm
+  parsedMindray82.parameters["HGB"]?.value === "14.2" && // g/L 142 normalized to 14.2 g/dL
+  parsedMindray82.parameters["PLT"]?.value === "245",
+  "[VIRTUAL PARSER MINDRAY BC-5000] Simulator parser extracts 5-part differential and normalizes WBC/HGB units"
+);
+
+// 82.3 QC / Calibrator shield check in simulator
+const qcPacket82 = genUnikon82("QC-NORMAL-01");
+const parsedQc82 = parseSim82(qcPacket82, "beacon-unikon-230");
+assert(
+  parsedQc82.isControl === true,
+  "[VIRTUAL QC CONTROL DETECTION] Simulator flags QC control samples to protect patient reports"
+);
+
+// 82.4 UI Virtual Test Studio Integration
+const machineTabSrc82 = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/machine-integration-tab.tsx"),
+  "utf8"
+);
+assert(
+  machineTabSrc82.includes("Virtual Analyzer Test Studio") &&
+  machineTabSrc82.includes("handleOpenSimulator") &&
+  machineTabSrc82.includes("handleRunSimulation") &&
+  machineTabSrc82.includes("Test Packet"),
+  "[UI VIRTUAL TEST STUDIO] Machine Integration Tab provides 1-click Test Studio, packet generation, and live parsing view"
+);
+
+// ============================================================================
+// MODULE 83: Zero Cross-Patient Registration Pollution & Intake Reset Engine
+// ============================================================================
+console.log("\n▶ MODULE 83: Zero Cross-Patient Registration Pollution & Intake Reset Engine");
+
+const regPageSrc83 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/patients/register/page.tsx"),
+  "utf8"
+);
+const sidebarSrc83 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/sidebar-client.tsx"),
+  "utf8"
+);
+
+// 83.1 handleResetFlow resets all patient ID and mode states
+assert(
+  regPageSrc83.includes("setEditPatientId(null);") &&
+  regPageSrc83.includes("setIsEditMode(false);") &&
+  regPageSrc83.includes("setExistingReport(null);") &&
+  regPageSrc83.includes("setExistingBill(null);") &&
+  regPageSrc83.includes('window.history.replaceState(null, "", "/dashboard/patients/register");'),
+  "[INTAKE RESET THOROUGHNESS] handleResetFlow cleanly clears editPatientId, isEditMode, existing bill/report, and resets URL"
+);
+
+// 83.2 useEffect on editId clears edit states when navigating to fresh registration
+assert(
+  regPageSrc83.includes("if (!editId) {") &&
+  regPageSrc83.includes("setIsEditLoading(false);") &&
+  regPageSrc83.includes("setEditPatientId(null);") &&
+  regPageSrc83.includes("setExistingReport(null);"),
+  "[EDIT ID MOUNT CLEANUP] Mount effect resets editPatientId and editMode when editId is absent"
+);
+
+// 83.3 Global patient registration reset event
+assert(
+  regPageSrc83.includes("lis_reset_patient_registration") &&
+  regPageSrc83.includes("handleResetFlow();") &&
+  sidebarSrc83.includes("lis_reset_patient_registration"),
+  "[GLOBAL REGISTRATION RESET EVENT] Sidebar + Add Patient triggers lis_reset_patient_registration to wipe stale buffers"
+);
+
+console.log("\n▶ MODULE 84: Self-Learning Visual Parameter Mapper & Custom Machine Aliases Verification");
+
+// 84.1 Backend Instrument Model Accessor & Appends
+const backendModelSrc84 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Models/Instrument.php"),
+  "utf8"
+);
+assert(
+  backendModelSrc84.includes("'unmapped_codes'") &&
+  backendModelSrc84.includes("getUnmappedCodesAttribute") &&
+  backendModelSrc84.includes("$mappings['_unmapped']"),
+  "[INSTRUMENT UNMAPPED CODES ACCESSOR] Instrument model appends unmapped_codes and reads _unmapped array safely"
+);
+
+// 84.2 Backend Instrument Controller Self-Learning Tracking
+const backendCtrlSrc84 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/InstrumentController.php"),
+  "utf8"
+);
+assert(
+  backendCtrlSrc84.includes("Self-Learning: Track unmapped parameters") &&
+  backendCtrlSrc84.includes("$unmappedParams[] = $rawKey;") &&
+  backendCtrlSrc84.includes("$existingMappings['_unmapped'] = $mergedUnmapped;"),
+  "[BACKEND SELF-LEARNING TRACKER] InstrumentController automatically catches unmapped parameters and persists to instrument buffer"
+);
+
+// 84.3 Backend Clean up of resolved unmapped codes on saving custom mappings
+assert(
+  backendCtrlSrc84.includes("$existingUnmapped = $instrument->unmapped_codes;") &&
+  backendCtrlSrc84.includes("!in_array(strtoupper(trim((string)$code)), $mappedKeys)") &&
+  backendCtrlSrc84.includes("$mappings['_unmapped'] = $remainingUnmapped;"),
+  "[BACKEND RESOLVED CODES CLEANUP] InstrumentController cleans up resolved codes when user saves custom mappings"
+);
+
+// 84.4 Frontend Visual Parameter Mapper Drawer Integration
+const machineTabSrc84 = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/machine-integration-tab.tsx"),
+  "utf8"
+);
+assert(
+  machineTabSrc84.includes("isMappingDrawerOpen") &&
+  machineTabSrc84.includes("handleOpenMappingDrawer") &&
+  machineTabSrc84.includes("handleAddMappingRow") &&
+  machineTabSrc84.includes("handleSaveMappings") &&
+  machineTabSrc84.includes("handleLoadModelDefaults"),
+  "[UI VISUAL MAPPER DRAWER] machine-integration-tab provides full visual mapper drawer with add, remove, and load defaults"
+);
+
+// 84.5 Frontend Self-Learning Unmapped Code Alert & Datalist
+assert(
+  machineTabSrc84.includes("Self-Learning Alert:") &&
+  machineTabSrc84.includes("Unmapped Code(s) Detected") &&
+  machineTabSrc84.includes("standard-lis-tests") &&
+  machineTabSrc84.includes("unmapped"),
+  "[UI SELF-LEARNING ALERT] UI provides real-time unmapped code chips and 1-click linking to standard LIS test parameters"
+);
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 

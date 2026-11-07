@@ -1,26 +1,106 @@
 /**
  * ONEPATH LIS - UNIVERSAL INSTRUMENT BRIDGE (DUAL MODE: TCP/IP + RS-232 SERIAL CABLE)
- * Connects Pathology Analyzers (Aveacon, Nihon Kohden, Beacon, Mindray, Sysmex, Erba)
+ * Connects Pathology Analyzers (Aveacon, Nihon Kohden, Beacon UNIKON 230, Mindray, Sysmex, Erba, Snibe, Sensa Core)
  * to OnePath Cloud LIS (api.onepathlab.com)
+ * Standalone Windows Executable Compatible (.exe via @yao-pkg/pkg)
  */
 
 const net = require('net');
 const http = require('http');
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
-// ================= CONFIGURATION =================
-const TCP_PORT = parseInt(process.env.PORT || '5100', 10);
-const COM_PORT = process.env.COM_PORT || ''; // e.g., 'COM1', 'COM3', '/dev/ttyUSB0'
-const BAUD_RATE = parseInt(process.env.BAUD_RATE || '9600', 10);
-const LIS_API_URL = process.env.LIS_API_URL || 'http://127.0.0.1:8000/api/lis/instruments/webhook';
-const AUTH_TOKEN = process.env.LIS_TOKEN || ''; // Optional LIS Bearer Token or API Key
+// Detect standalone executable directory vs script directory
+const isPkg = typeof process.pkg !== 'undefined';
+const execDir = isPkg ? path.dirname(process.execPath) : __dirname;
+
+// ================= SMART CONFIGURATION RESOLUTION =================
+const configFilePath = path.join(execDir, 'bridge-config.json');
+let fileConfig = {};
+
+try {
+    if (fs.existsSync(configFilePath)) {
+        const rawContent = fs.readFileSync(configFilePath, 'utf8');
+        fileConfig = JSON.parse(rawContent);
+    } else {
+        // Auto-create default config file for easy client modification
+        const defaultConfig = {
+            TCP_PORT: 5100,
+            COM_PORT: "COM3",
+            BAUD_RATE: 9600,
+            LIS_API_URL: "http://127.0.0.1:8000/api/lis/instruments/webhook",
+            LAB_ID: "01a05221-6f20-73b4-8107-2e68c7824c90",
+            LIS_TOKEN: ""
+        };
+        fs.writeFileSync(configFilePath, JSON.stringify(defaultConfig, null, 2), 'utf8');
+    }
+} catch (configErr) {
+    console.warn(`[⚠️ CONFIG NOTICE] Using environment defaults (${configErr.message})`);
+}
+
+const TCP_PORT = parseInt(process.env.PORT || fileConfig.TCP_PORT || '5100', 10);
+const COM_PORT = process.env.COM_PORT || fileConfig.COM_PORT || ''; // e.g., 'COM1', 'COM3', '/dev/ttyUSB0'
+const BAUD_RATE = parseInt(process.env.BAUD_RATE || fileConfig.BAUD_RATE || '9600', 10);
+const LIS_API_URL = process.env.LIS_API_URL || fileConfig.LIS_API_URL || 'http://127.0.0.1:8000/api/lis/instruments/webhook';
+const AUTH_TOKEN = process.env.LIS_TOKEN || fileConfig.LIS_TOKEN || ''; // Optional LIS Bearer Token or API Key
+const LAB_ID = process.env.LAB_ID || process.env.LIS_LAB_ID || fileConfig.LAB_ID || '01a05221-6f20-73b4-8107-2e68c7824c90';
+
+// Live Traffic Logger for remote debugging & packet inspections
+function logMachineTraffic(text) {
+    try {
+        const logFile = path.join(execDir, 'machine_traffic.log');
+        const timestamp = new Date().toISOString();
+        fs.appendFileSync(logFile, `[${timestamp}] ${text}\n`);
+    } catch (err) {}
+}
+
+// Auto-Detect Local IPv4 Network Addresses
+function getLocalIPv4Addresses() {
+    const interfaces = os.networkInterfaces();
+    const ips = [];
+    for (const name of Object.keys(interfaces)) {
+        for (const netInfo of interfaces[name] || []) {
+            if (netInfo.family === 'IPv4' && !netInfo.internal) {
+                ips.push({ adapter: name, ip: netInfo.address });
+            }
+        }
+    }
+    return ips;
+}
+
+const localIps = getLocalIPv4Addresses();
+const primaryIp = localIps.length > 0 ? localIps[0].ip : '127.0.0.1';
 
 console.log('================================================================');
-console.log('   🔬 ONEPATH LIS - UNIVERSAL INSTRUMENT BRIDGE RECEIVER        ');
-console.log('   Mode 1: LAN / TCP-IP Socket Listening on Port: ' + TCP_PORT);
-console.log('   Mode 2: Serial RS-232 Cable: ' + (COM_PORT ? `${COM_PORT} @ ${BAUD_RATE} baud` : 'Auto / Ready'));
-console.log('   Target Local LIS: ' + LIS_API_URL);
+console.log('   🔬 ONEPATH LIS - UNIVERSAL INSTRUMENT BRIDGE (STANDALONE)    ');
+console.log('================================================================');
+console.log(`   Mode 1: LAN / TCP-IP Socket Listening on Port: ${TCP_PORT}`);
+console.log(`   Mode 2: Serial RS-232 Cable: ${COM_PORT ? `${COM_PORT} @ ${BAUD_RATE} baud` : 'Auto / Ready'}`);
+console.log(`   Target LIS Cloud/Local: ${LIS_API_URL}`);
+console.log(`   Lab Tenant ID: ${LAB_ID}`);
+console.log('----------------------------------------------------------------');
+console.log('   🌐 LOCAL PC IP ADDRESS(ES) DETECTED FOR MACHINE SETUP:');
+if (localIps.length > 0) {
+    localIps.forEach(item => {
+        console.log(`      👉 ${item.adapter}: ${item.ip}`);
+    });
+    console.log(`\n   ⚡ Quick Setup in Analyzer Screen (UNIKON 230 / Mindray / Sysmex):`);
+    console.log(`      1. LIS IP Address: ${primaryIp}`);
+    console.log(`      2. LIS Port: ${TCP_PORT}`);
+    console.log(`      3. Communication Protocol: ASTM or HL7`);
+} else {
+    console.log(`      👉 localhost (127.0.0.1)`);
+}
 console.log('================================================================\n');
+
+// Prevent window from closing abruptly on unhandled exceptions
+process.on('uncaughtException', (err) => {
+    console.error(`\n[❌ BRIDGE ERROR]`, err.message);
+    logMachineTraffic(`[UNCAUGHT EXCEPTION] ${err.stack || err.message}`);
+    console.log('   (Bridge will continue listening. Check machine_traffic.log for details.)\n');
+});
 
 // ── 1. TCP/IP Server (For Aveacon, Beacon, Mindray, Sysmex LAN) ───────────────
 const server = net.createServer((socket) => {
@@ -35,6 +115,7 @@ const server = net.createServer((socket) => {
         buffer += text;
 
         console.log(`[📥 LAN DATA] Received ${chunk.length} bytes: hex=[${hex}] ascii=[${chunk.toString('ascii').replace(/[\r\n]/g, ' ')}]`);
+        logMachineTraffic(`[LAN IN] ${chunk.length}b: ${chunk.toString('ascii').replace(/[\r\n]+/g, ' ')}`);
 
         // Check ASTM control characters
         // 0x05 = ENQ -> Respond with ACK (0x06)
@@ -298,16 +379,43 @@ function parseAndSendToCloud(rawData, connectionType) {
             }
         }
 
-        // ASTM Result line: R|1|^^^WBC^1|7.4|10*3/uL|... or R|1|WBC|7.4|...
+        // ASTM Result line: R|1|^^^WBC^1|7.4|10*3/uL|... or R|1|^^^GLU^1|95.4|mg/dL... or R|1|GLU|95.4|...
         if (trimmedLine.startsWith('R|')) {
             const parts = trimmedLine.split('|');
             if (parts.length >= 4) {
-                let code = parts[2].replace(/^\^+/, '').replace(/\^.*$/, '').trim().toUpperCase();
-                let value = parts[3].trim();
+                const rawId = parts[2] || '';
+                let code = '';
+                if (rawId.includes('^')) {
+                    const idTokens = rawId.split('^').map(t => t.trim().toUpperCase()).filter(Boolean);
+                    // Extract alphabetic test symbol from universal test ID (e.g. ^^^GLU^1, ^^^101^GLU)
+                    const alphaToken = idTokens.find(t => /^[A-Z][A-Z0-9_\-%]+$/.test(t) && !/^\d+$/.test(t));
+                    code = alphaToken || idTokens[idTokens.length - 1] || '';
+                } else {
+                    code = rawId.trim().toUpperCase();
+                }
+
+                // Standardize universal biochemistry aliases (Unikon 230, Beacon, Mindray, Erba)
+                if (code === 'GLUC' || code === 'FBS' || code === 'RBS' || code === 'PPBS') code = 'GLU';
+                else if (code === 'ALT' || code === 'GPT') code = 'SGPT';
+                else if (code === 'AST' || code === 'GOT') code = 'SGOT';
+                else if (code === 'TBIL' || code === 'T-BIL' || code === 'BILI-T' || code === 'BILI_TOTAL') code = 'BILT';
+                else if (code === 'DBIL' || code === 'D-BIL' || code === 'BILI-D' || code === 'BILI_DIRECT') code = 'BILD';
+                else if (code === 'CREA' || code === 'CR') code = 'CREAT';
+                else if (code === 'UA') code = 'URIC';
+                else if (code === 'TCHOL' || code === 'T-CHOL') code = 'CHOL';
+                else if (code === 'TG') code = 'TRIG';
+                else if (code === 'HDL' || code === 'HDL-C') code = 'HDLDI';
+                else if (code === 'LDL' || code === 'LDL-C') code = 'LDLDI';
+                else if (code === 'PROT' || code === 'TOTAL_PROTEIN') code = 'TP';
+                else if (code === 'ALBUMIN') code = 'ALB';
+                else if (code === 'AKP' || code === 'ALKP') code = 'ALP';
+                else if (code === 'CA' || code === 'CALCIUM') code = 'CAL';
+
+                let value = parts[3] ? parts[3].trim() : '';
                 let unit = parts[4] ? parts[4].trim() : '';
                 let flag = parts[6] ? parts[6].trim() : 'N';
 
-                if (code && value !== '' && value !== '*****') {
+                if (code && value !== '' && value !== '*****' && value !== '----') {
                     if (code === 'WBC' && parseFloat(value) > 0 && parseFloat(value) < 100) {
                         value = String(Math.round(parseFloat(value) * 1000));
                         unit = '/cumm';
@@ -327,22 +435,34 @@ function parseAndSendToCloud(rawData, connectionType) {
         console.log(`   [📈 HISTOGRAMS] Extracted: ${Object.keys(histograms).join(', ')}`);
     }
 
-    const isBiochem = Object.keys(parameters).some(k => ['ALP','AMY','BILT','BILD','CAL','CHOL','HDLDI','GLU','CREAT','UREA','SGOT','SGPT','TP','ALB','TRIG','URIC'].includes(k.toUpperCase()));
+    const isBiochem = Object.keys(parameters).some(k => [
+        'ALP','AMY','BILT','BILD','CAL','CHOL','HDLDI','LDLDI','GLU','CREAT','UREA','BUN','SGOT','SGPT','TP','ALB','GLOB','TRIG','URIC','PHOS','NA','K','CL'
+    ].includes(k.toUpperCase()));
+
     if (isBiochem) {
-        instrumentName = 'Avecon Maxlyzer Smart Chemistry';
+        instrumentName = connectionType.includes('Serial') 
+            ? 'Beacon / Erba Auto Chemistry' 
+            : 'Beacon UNIKON 230 / Auto Chemistry';
     }
 
-    // Post to OnePath Local LIS Webhook
+    // Quality Control, Calibrator or Water Blank check
+    const isControl = /^(QC|CAL|BLANK|STD|CTRL)/i.test(sampleId.trim());
+    if (isControl) {
+        console.log(`   [ℹ️ QC/CONTROL DETECTED] Sample ${sampleId} is a control/calibrator run. Protected from patient report overwrite.`);
+    }
+
+    // Post to OnePath Local/Cloud LIS Webhook
     sendToCloudLIS({
-        lab_id: '01a05221-6f20-73b4-8107-2e68c7824c90',
+        lab_id: LAB_ID,
         sample_id: sampleId,
         barcode: sampleId,
         instrument_name: instrumentName,
-        category: 'Haematology',
+        category: isBiochem ? 'Biochemistry' : 'Haematology',
         connection_type: connectionType,
         parameters: parameters,
         histograms: histograms,
-        raw_data: rawData
+        raw_data: rawData,
+        is_control: isControl
     });
 }
 
@@ -387,3 +507,19 @@ function sendToCloudLIS(payload) {
     req.write(postData);
     req.end();
 }
+
+// Keep terminal open and handle user commands
+if (process.stdin.isTTY) {
+    try {
+        process.stdin.resume();
+        process.stdin.on('data', (d) => {
+            const input = d.toString().trim().toLowerCase();
+            if (input === 'q' || input === 'exit') {
+                console.log('\n[👋 STOPPING] OnePath Universal Machine Bridge stopped by user.');
+                process.exit(0);
+            }
+        });
+    } catch (e) {}
+}
+
+console.log('[💡 STATUS] Bridge is actively listening. Press Ctrl+C or type "q" to exit.\n');

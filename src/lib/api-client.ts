@@ -66,7 +66,13 @@ export function updateStoredUser(updates: Partial<any>) {
   localStorage.setItem("lis_user", JSON.stringify(updated));
 }
 
+let isLoggingOutInProgress = false;
+
 export function logout(reason?: string) {
+  // Prevent re-entrant cascade calls from simultaneous storage, broadcast, and click handlers
+  if (isLoggingOutInProgress) return;
+  isLoggingOutInProgress = true;
+
   // Ensure any legacy overlay element is cleaned up immediately
   if (typeof document !== "undefined") {
     try {
@@ -117,12 +123,16 @@ export function logout(reason?: string) {
   }
 
   const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";
-  document.cookie = `lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax${isSecure ? "; Secure" : ""};`;
-  document.cookie = `lis_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax${isSecure ? "; Secure" : ""};`;
+  document.cookie = `lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; SameSite=Lax${isSecure ? "; Secure" : ""};`;
+  document.cookie = `lis_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; SameSite=Lax${isSecure ? "; Secure" : ""};`;
 
   const targetUrl = reason === "suspended" ? "/login?suspended=true" : "/login?logout=1";
   if (typeof window !== "undefined") {
-    window.location.replace(targetUrl);
+    try {
+      window.location.replace(targetUrl);
+    } catch {
+      window.location.href = targetUrl;
+    }
   }
 }
 

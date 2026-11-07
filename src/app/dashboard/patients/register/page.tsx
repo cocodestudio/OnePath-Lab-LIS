@@ -1776,6 +1776,10 @@ function RegisterPatientPage() {
   useEffect(() => {
     if (!editId) {
       setIsEditLoading(false);
+      setIsEditMode(false);
+      setEditPatientId(null);
+      setExistingReport(null);
+      setExistingBill(null);
       return;
     }
     setIsEditMode(true);
@@ -1913,6 +1917,14 @@ function RegisterPatientPage() {
       }
     })();
   }, [editId]);
+
+  useEffect(() => {
+    const handleResetEvent = () => {
+      handleResetFlow();
+    };
+    window.addEventListener("lis_reset_patient_registration", handleResetEvent);
+    return () => window.removeEventListener("lis_reset_patient_registration", handleResetEvent);
+  }, []);
 
   // Doctor Helpers
   const handleAddDoctor = async (e: React.FormEvent) => {
@@ -3339,6 +3351,17 @@ function RegisterPatientPage() {
     setRegistering(false);
     setRegisterError(null);
     setNewPatient(null);
+    setEditPatientId(null);
+    setIsEditMode(false);
+    setIsEditLoading(false);
+    setExistingReport(null);
+    setExistingBill(null);
+    setAbhaNumber("");
+    setAbhaAddress("");
+    setIsAbhaVerified(false);
+    setAbhaProfilePhoto(null);
+    setFieldErrors({});
+    setBookingError(null);
     setSelectedTests([]);
     setDiscount("0");
     setPaidAmount("0");
@@ -3351,6 +3374,9 @@ function RegisterPatientPage() {
     setVialBarcodes({});
     setSelectedPaymentMode("UNPAID");
     setPaymentUpdateMessage(null);
+    if (typeof window !== "undefined" && window.history) {
+      window.history.replaceState(null, "", "/dashboard/patients/register");
+    }
   };
 
   const handleApproveCashPayment = async () => {

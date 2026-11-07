@@ -5,9 +5,16 @@ cls
 
 echo ====================================================================
 echo        ONEPATH LIS - UNIVERSAL INSTRUMENT BRIDGE RECEIVER
-echo     Auto-Sync for Aveacon, Mindray, Sysmex, Beacon, Erba Analyzers
+echo     Auto-Sync for UNIKON 230, Beacon, Aveacon, Mindray, Erba, Sysmex
 echo ====================================================================
 echo.
+
+:: 0. Check if standalone OnePath-Bridge.exe exists locally (No Node.js needed!)
+if exist "%~dp0OnePath-Bridge.exe" (
+    echo [OK] Standalone OnePath-Bridge.exe detected! Starting bridge directly...
+    "%~dp0OnePath-Bridge.exe"
+    exit /b 0
+)
 
 :: 1. Check if Node.js is installed
 where node >nul 2>&1
