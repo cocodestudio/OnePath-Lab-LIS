@@ -45,11 +45,20 @@ export function LimsInstallPill() {
       return;
     }
 
-    // 3. Register service worker for PWA installability criteria
+    // 3. Register service worker for PWA installability criteria (production only; clean up on localhost to prevent ERR_FAILED)
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/sw.js")
-        .catch((err) => console.debug("Service worker registration:", err));
+      const isLocalhost =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
+      if (isLocalhost) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const reg of registrations) reg.unregister();
+        }).catch(() => {});
+      } else {
+        navigator.serviceWorker
+          .register("/sw.js")
+          .catch((err) => console.debug("Service worker registration:", err));
+      }
     }
 
     // 4. Capture native beforeinstallprompt event

@@ -166,7 +166,12 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__pwaInstallPrompt=e;});`
+            __html: `
+              window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__pwaInstallPrompt=e;});
+              if(typeof window!=='undefined'&&(location.hostname==='localhost'||location.hostname==='127.0.0.1')&&'serviceWorker' in navigator){
+                navigator.serviceWorker.getRegistrations().then(function(regs){for(var i=0;i<regs.length;i++){regs[i].unregister();}}).catch(function(){});
+              }
+            `
           }}
         />
         <script

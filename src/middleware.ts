@@ -23,7 +23,10 @@ export function middleware(request: NextRequest) {
   }
 
   if (pathname === '/login' && token) {
-    const isUnauthRedirect = request.nextUrl.searchParams.get('unauth') === '1' || request.nextUrl.searchParams.get('logout') === '1'
+    const isUnauthRedirect =
+      request.nextUrl.searchParams.has('logout') ||
+      request.nextUrl.searchParams.has('unauth') ||
+      request.nextUrl.searchParams.has('expired')
     if (isUnauthRedirect) {
       const response = NextResponse.next()
       response.cookies.delete('lis_token')

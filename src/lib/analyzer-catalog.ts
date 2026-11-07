@@ -40,7 +40,7 @@ export const ANALYZER_CATEGORIES: Array<{ id: string; label: string; icon?: stri
   { id: "Urinalysis", label: "Urinalysis" },
 ];
 
-export const ANALYZER_CATALOG: AnalyzerModel[] = catalogData as AnalyzerModel[];
+export const ANALYZER_CATALOG: AnalyzerModel[] = (catalogData as unknown) as AnalyzerModel[];
 
 /**
  * Search analyzer catalog by text query and category filter.

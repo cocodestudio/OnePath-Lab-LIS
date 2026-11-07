@@ -38,9 +38,9 @@ let totalTests = 0;
 let passedTests = 0;
 let failedTests = 0;
 
-function assert(condition: boolean, testName: string, failureDetails?: string) {
+function assert(condition: boolean | unknown, testName: string, failureDetails?: string) {
   totalTests++;
-  if (condition) {
+  if (Boolean(condition)) {
     passedTests++;
     console.log(`  ✓ PASS: ${testName}`);
   } else {
@@ -6675,7 +6675,7 @@ const exePath81 = path.resolve(__dirname, "../public/OnePath-Bridge.exe");
 const exeExists81 = fs.existsSync(exePath81);
 const exeStats81 = exeExists81 ? fs.statSync(exePath81) : null;
 assert(
-  exeExists81 && exeStats81 && exeStats81.size > 20 * 1024 * 1024,
+  Boolean(exeExists81 && exeStats81 && exeStats81.size > 20 * 1024 * 1024),
   `[STANDALONE EXE COMPILED] OnePath-Bridge.exe exists and contains bundled runtime (${exeStats81 ? Math.round(exeStats81.size / 1024 / 1024) : 0}MB)`
 );
 
@@ -6877,6 +6877,66 @@ assert(
   machineTabSrc84.includes("standard-lis-tests") &&
   machineTabSrc84.includes("unmapped"),
   "[UI SELF-LEARNING ALERT] UI provides real-time unmapped code chips and 1-click linking to standard LIS test parameters"
+);
+
+// ==============================================================================
+// 85. Zero-Regression Logout Flow & Service Worker Dev Shield Verification
+// ==============================================================================
+console.log("\n▶ MODULE 85: Zero-Regression Logout Flow & Service Worker Dev Shield Verification");
+
+// 85.1 Keepalive and Service Worker cleanup in logout()
+const apiClientSrc85 = fs.readFileSync(
+  path.resolve(__dirname, "../src/lib/api-client.ts"),
+  "utf8"
+);
+assert(
+  apiClientSrc85.includes("keepalive: true"),
+  "[LOGOUT KEEPALIVE] Server token revocation includes keepalive: true so browser navigation does not abort it"
+);
+assert(
+  apiClientSrc85.includes("navigator.serviceWorker.getRegistrations()") &&
+  apiClientSrc85.includes("caches.delete"),
+  "[LOGOUT SW PURGE] logout() thoroughly unregisters service workers and purges cache storage"
+);
+
+// 85.2 Multi-Format Cookie Deletion
+assert(
+  apiClientSrc85.includes("expires=Thu, 01 Jan 1970 00:00:00 GMT") &&
+  apiClientSrc85.includes("SameSite=Lax"),
+  "[LOGOUT COOKIE FLUSH] logout() flushes lis_token and lis_role across both standard and Lax SameSite cookies"
+);
+
+// 85.3 Service Worker Native Pass-Through
+const swSrc85 = fs.readFileSync(
+  path.resolve(__dirname, "../public/sw.js"),
+  "utf8"
+);
+assert(
+  swSrc85.includes("localhost") &&
+  swSrc85.includes("event.request.mode === 'navigate'") &&
+  swSrc85.includes("/login"),
+  "[SERVICE WORKER BYPASS] sw.js explicitly passes through localhost, navigations, and /login natively to prevent net::ERR_FAILED"
+);
+
+// 85.4 Dev Mode Auto-Unregister Shield in lims-install-pill and layout
+const installPillSrc85 = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/lims-install-pill.tsx"),
+  "utf8"
+);
+assert(
+  installPillSrc85.includes("localhost") &&
+  installPillSrc85.includes("reg.unregister()"),
+  "[DEV SW SHIELD] lims-install-pill automatically unregisters service workers on localhost"
+);
+
+const layoutSrc85 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/layout.tsx"),
+  "utf8"
+);
+assert(
+  layoutSrc85.includes("localhost") &&
+  layoutSrc85.includes("unregister()"),
+  "[ROOT LAYOUT SHIELD] layout.tsx automatically cleans up leftover service workers on localhost"
 );
 
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);

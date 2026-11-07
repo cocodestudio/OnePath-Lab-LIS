@@ -84,19 +84,34 @@ export function logout(reason?: string) {
   const token = getStoredToken();
   if (token) {
     try {
-      // Fire-and-forget server token revocation in the background without blocking the UI
+      // Fire-and-forget server token revocation with keepalive so page navigation doesn't abort it or cause ERR_FAILED
       fetch(`${getAuthBaseUrl()}/logout`, {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
           "Accept": "application/json",
         },
+        keepalive: true,
       }).catch(() => {});
     } catch {}
   }
 
   clearApiCache();
   if (typeof window !== "undefined") {
+    // Clean up service workers and cache storage to prevent net::ERR_FAILED on navigation
+    try {
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const reg of registrations) reg.unregister();
+        }).catch(() => {});
+      }
+      if ("caches" in window) {
+        caches.keys().then((names) => {
+          for (const name of names) caches.delete(name);
+        }).catch(() => {});
+      }
+    } catch {}
+
     try {
       // Real-time broadcast to all other open tabs on this browser for 0ms instant session termination
       localStorage.setItem("lis_auth_revoked_at", Date.now().toString());
@@ -123,16 +138,20 @@ export function logout(reason?: string) {
   }
 
   const isSecure = typeof window !== "undefined" && window.location.protocol === "https:";
-  document.cookie = `lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; SameSite=Lax${isSecure ? "; Secure" : ""};`;
-  document.cookie = `lis_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; SameSite=Lax${isSecure ? "; Secure" : ""};`;
+  document.cookie = `lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax${isSecure ? "; Secure" : ""};`;
+  document.cookie = `lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;`;
+  document.cookie = `lis_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax${isSecure ? "; Secure" : ""};`;
+  document.cookie = `lis_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;`;
 
   const targetUrl = reason === "suspended" ? "/login?suspended=true" : "/login?logout=1";
   if (typeof window !== "undefined") {
-    try {
-      window.location.replace(targetUrl);
-    } catch {
-      window.location.href = targetUrl;
-    }
+    setTimeout(() => {
+      try {
+        window.location.replace(targetUrl);
+      } catch {
+        window.location.href = targetUrl;
+      }
+    }, 20);
   }
 }
 

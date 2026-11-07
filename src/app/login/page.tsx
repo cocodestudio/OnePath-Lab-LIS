@@ -45,7 +45,7 @@ export default function LoginPage() {
 
     const params = new URLSearchParams(window.location.search);
     const isUnauth = params.get("unauth") === "1" || params.get("expired") === "1";
-    const isLogout = params.get("logout") === "1";
+    const isLogout = params.has("logout");
 
     if (isUnauth || isLogout) {
       // Server rejected dashboard access or user logged out - wipe stale storage to break any loop!
@@ -53,8 +53,10 @@ export default function LoginPage() {
         localStorage.removeItem("lis_token");
         localStorage.removeItem("lis_user");
         sessionStorage.removeItem("lis_last_redirect");
-        document.cookie = "lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0;";
-        document.cookie = "lis_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0;";
+        document.cookie = "lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;";
+        document.cookie = "lis_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax;";
+        document.cookie = "lis_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;";
+        document.cookie = "lis_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax;";
         if (isLogout && window.history) {
           window.history.replaceState({}, document.title, "/login");
         }
