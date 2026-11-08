@@ -340,6 +340,22 @@ export async function downloadDoctorStatementPdf(
   }
 
   const isOutsource = data.case_type === "outsource";
+  const isCollectionCenter = data.case_type === "collection_center" || data.case_type === "cc_all" || (Boolean(data.case_type) && String(data.case_type).startsWith("cc_"));
+
+  const themeBorderColor = isOutsource ? "#d97706" : isCollectionCenter ? "#059669" : "#0284c7";
+  const themeHeaderColor = isOutsource ? "#92400e" : isCollectionCenter ? "#065f46" : "#0369a1";
+  const themeBadgeBg = isOutsource ? "#fef3c7" : isCollectionCenter ? "#ecfdf5" : "#e0f2fe";
+  const themeBadgeText = isOutsource ? "#92400e" : isCollectionCenter ? "#065f46" : "#0369a1";
+  const themeBadgeBorder = isOutsource ? "#fde68a" : isCollectionCenter ? "#a7f3d0" : "#bae6fd";
+  const themePeriodColor = isOutsource ? "#b45309" : isCollectionCenter ? "#047857" : "#0284c7";
+
+  const statementBadgeLabel = isOutsource
+    ? "Doctor Statement • Outsource Tests"
+    : isCollectionCenter
+    ? (data.scope ? `Doctor Statement • ${data.scope}` : "Doctor Statement • Collection Centre")
+    : "Doctor Statement • Main Lab";
+
+  const continuationSubtitle = isOutsource ? "Outsource" : isCollectionCenter ? "Collection Centre" : "Main Lab";
 
   try {
     for (let pIdx = 0; pIdx < pagesData.length; pIdx++) {
@@ -369,17 +385,17 @@ export async function downloadDoctorStatementPdf(
       if (pageInfo.isFirst) {
         // ── Clean & Professional Vector Letterhead ──
         contentHtml += `
-          <div style="border-bottom: 2.5px solid ${isOutsource ? "#d97706" : "#0284c7"}; padding-bottom: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start;">
+          <div style="border-bottom: 2.5px solid ${themeBorderColor}; padding-bottom: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start;">
             <div>
               <div style="display: flex; align-items: center; gap: 8px;">
-                <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: ${isOutsource ? "#92400e" : "#0369a1"}; letter-spacing: -0.3px;">${labName}</h1>
+                <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: ${themeHeaderColor}; letter-spacing: -0.3px;">${labName}</h1>
               </div>
               <p style="margin: 2px 0 0 0; font-size: 10.5px; font-weight: 600; color: #64748b;">${labTagline}</p>
               <p style="margin: 2px 0 0 0; font-size: 9px; color: #475569;">${labAddress} • Phone: ${labPhone} • Email: ${labEmail}</p>
             </div>
             <div style="text-align: right;">
-              <div style="display: inline-block; background: ${isOutsource ? "#fef3c7" : "#e0f2fe"}; color: ${isOutsource ? "#92400e" : "#0369a1"}; font-weight: 800; font-size: 9.5px; padding: 3px 9px; border-radius: 6px; border: 1.5px solid ${isOutsource ? "#fde68a" : "#bae6fd"}; text-transform: uppercase; letter-spacing: 0.3px;">
-                ${isOutsource ? "Doctor Statement • Outsource Tests" : "Doctor Statement • Main Lab"}
+              <div style="display: inline-block; background: ${themeBadgeBg}; color: ${themeBadgeText}; font-weight: 800; font-size: 9.5px; padding: 3px 9px; border-radius: 6px; border: 1.5px solid ${themeBadgeBorder}; text-transform: uppercase; letter-spacing: 0.3px;">
+                ${statementBadgeLabel}
               </div>
               <p style="margin: 4px 0 0 0; font-size: 9px; font-family: monospace; font-weight: 700; color: #0f172a;">${statementId}</p>
               <p style="margin: 1px 0 0 0; font-size: 8.5px; color: #64748b;">Generated: ${nowStr}</p>
@@ -398,7 +414,7 @@ export async function downloadDoctorStatementPdf(
             </div>
             <div style="border-left: 1px solid #cbd5e1; padding-left: 10px; display: flex; flex-direction: column; justify-content: center;">
               <p style="margin: 0; font-size: 8px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Statement Period</p>
-              <p style="margin: 1px 0 0 0; font-size: 12px; font-weight: 800; color: ${isOutsource ? "#b45309" : "#0284c7"};">${periodLabel}</p>
+              <p style="margin: 1px 0 0 0; font-size: 12px; font-weight: 800; color: ${themePeriodColor};">${periodLabel}</p>
               <p style="margin: 1px 0 0 0; font-size: 9px; color: #475569;">
                 Base Incentive Rate: <strong style="color: #4f46e5;">${doc.default_commission_percent || 0}%</strong>
               </p>
@@ -456,8 +472,8 @@ export async function downloadDoctorStatementPdf(
         contentHtml += `
           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 10px;">
             <div>
-              <span style="font-size: 11px; font-weight: 800; color: ${isOutsource ? "#92400e" : "#0284c7"};">${labName}</span>
-              <span style="font-size: 10px; color: #64748b; margin-left: 8px;">• Doctor Referral Statement (${isOutsource ? "Outsource" : "Main Lab"})</span>
+              <span style="font-size: 11px; font-weight: 800; color: ${themeHeaderColor};">${labName}</span>
+              <span style="font-size: 10px; color: #64748b; margin-left: 8px;">• Doctor Referral Statement (${continuationSubtitle})</span>
             </div>
             <div style="font-size: 10px; font-weight: 700; color: #0f172a;">
               <span>${doc.name}</span>

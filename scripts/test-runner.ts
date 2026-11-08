@@ -6939,6 +6939,68 @@ assert(
   "[ROOT LAYOUT SHIELD] layout.tsx automatically cleans up leftover service workers on localhost"
 );
 
+// ==============================================================================
+// 86. Doctor Referral Collection Centre Scope & Multi-Tier Analytics Engine
+// ==============================================================================
+console.log("\n▶ MODULE 86: Doctor Referral Collection Centre Scope & Multi-Tier Analytics Engine");
+
+const doctorsPageSrc86 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/doctors/page.tsx"),
+  "utf8"
+);
+assert(
+  doctorsPageSrc86.includes("/collection-centers") &&
+  doctorsPageSrc86.includes("collectionCenters") &&
+  doctorsPageSrc86.includes("setCollectionCenters"),
+  "[DOCTOR REFERRAL CC FETCH] doctors/page.tsx fetches active collection centres on mount"
+);
+
+assert(
+  !doctorsPageSrc86.includes('value="cc_all"') &&
+  doctorsPageSrc86.includes("cc_${cc.id}"),
+  "[DOCTOR REFERRAL CC DROPDOWN] doctors/page.tsx strictly renders individual added collection centres and omits cc_all"
+);
+
+assert(
+  doctorsPageSrc86.includes("isCollectionCenter") &&
+  doctorsPageSrc86.includes("bg-emerald-500/10") &&
+  doctorsPageSrc86.includes("border-emerald-500/20"),
+  "[DOCTOR REFERRAL CC STYLING] doctors/page.tsx applies emerald theme badges and icons when collection center is selected"
+);
+
+const doctorPatientsPageSrc86 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/doctors/patients/page.tsx"),
+  "utf8"
+);
+assert(
+  doctorPatientsPageSrc86.includes("isCollectionCenter") &&
+  doctorPatientsPageSrc86.includes("bg-emerald-500/10"),
+  "[DOCTOR PATIENTS CC BADGE] doctors/patients/page.tsx displays emerald badge for collection centre patients"
+);
+
+const doctorStatementSrc86 = fs.readFileSync(
+  path.resolve(__dirname, "../src/lib/download-doctor-statement.ts"),
+  "utf8"
+);
+assert(
+  doctorStatementSrc86.includes("isCollectionCenter") &&
+  doctorStatementSrc86.includes("Doctor Statement • Collection Centre") &&
+  doctorStatementSrc86.includes("#059669"),
+  "[DOCTOR STATEMENT CC BRANDING] download-doctor-statement.ts generates emerald-themed Collection Centre statements"
+);
+
+const backendDoctorControllerSrc86 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/DoctorController.php"),
+  "utf8"
+);
+assert(
+  backendDoctorControllerSrc86.includes("parseCaseType") &&
+  backendDoctorControllerSrc86.includes("applyCollectionCenterScope") &&
+  backendDoctorControllerSrc86.includes("resolveCollectionCenterLabel") &&
+  backendDoctorControllerSrc86.includes("CASE C: COLLECTION CENTER SCOPE"),
+  "[BACKEND CC DOCTOR SCOPE] DoctorController.php provides atomic collection centre scoping and test revenue calculations"
+);
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 

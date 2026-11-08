@@ -104,6 +104,15 @@ function DoctorPatientsContent() {
 
   const [perPage, setPerPage] = useState<number>(15);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [collectionCenters, setCollectionCenters] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchFromLaravel("/collection-centers")
+      .then((res) => {
+        if (Array.isArray(res)) setCollectionCenters(res);
+      })
+      .catch((err) => console.warn("Could not fetch collection centers:", err));
+  }, []);
 
   // Fetch Patients strictly matching the inherited date filter
   const fetchPatients = useCallback(async () => {
@@ -188,6 +197,27 @@ function DoctorPatientsContent() {
     [inheritedFilter, customStart, customEnd]
   );
 
+  const isOutsource = inheritedCaseType === "outsource";
+  const isCollectionCenter = inheritedCaseType === "collection_center" || inheritedCaseType.startsWith("cc_");
+
+  const selectedCenter = useMemo(() => {
+    if (!isCollectionCenter) return null;
+    if (inheritedCaseType === "collection_center") return null;
+    const id = inheritedCaseType.startsWith("cc_") ? inheritedCaseType.slice(3) : inheritedCaseType;
+    return collectionCenters.find((c) => String(c.id) === String(id)) || null;
+  }, [isCollectionCenter, inheritedCaseType, collectionCenters]);
+
+  const scopeBadgeText = useMemo(() => {
+    if (isOutsource) return "📦 Outsource Tests";
+    if (isCollectionCenter) {
+      if (selectedCenter) {
+        return `🏢 ${selectedCenter.name || selectedCenter.lab_name || "Collection Centre"}`;
+      }
+      return "🏢 Collection Centre";
+    }
+    return "🔬 Main Lab";
+  }, [isOutsource, isCollectionCenter, selectedCenter]);
+
   return (
     <div className="flex flex-col gap-5 sm:gap-6 w-full max-w-full mx-auto animate-fade-in pb-20">
       {/* ── Page Header (Clean back button and title, no switcher/refresh/referrals buttons) ── */}
@@ -216,12 +246,14 @@ function DoctorPatientsContent() {
               </span>
               <span
                 className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border ${
-                  inheritedCaseType === "outsource"
+                  isOutsource
                     ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20"
+                    : isCollectionCenter
+                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20"
                     : "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
                 }`}
               >
-                <span>{inheritedCaseType === "outsource" ? "📦 Outsource Tests" : "🔬 Main Lab"}</span>
+                <span>{scopeBadgeText}</span>
               </span>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">

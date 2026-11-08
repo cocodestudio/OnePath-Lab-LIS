@@ -55,6 +55,35 @@ export default function DoctorsOverviewPage() {
   const toast = useToast();
   const [filter, setFilter] = useState<string>("this_month");
   const [caseType, setCaseType] = useState<"main_lab" | "outsource">("main_lab");
+  const [collectionCenters, setCollectionCenters] = useState<any[]>([]);
+
+  // Fetch Collection Centres for dynamic scope dropdown
+  useEffect(() => {
+    fetchFromLaravel("/collection-centers")
+      .then((res) => {
+        if (Array.isArray(res)) {
+          const active = res.filter(
+            (c: any) => {
+              const role = String(c.role || "").toUpperCase();
+              const status = String(c.status || "").toLowerCase();
+              return (role === "COLLECTION_CENTER" || role === "COLLECTION_CENTRE") &&
+                     status !== "inactive" && status !== "suspended";
+            }
+          );
+          setCollectionCenters(active);
+        }
+      })
+      .catch((err) => console.warn("Could not fetch collection centers:", err));
+  }, []);
+
+  // Initialize caseType from URL if present
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const ct = urlParams.get("case_type");
+      if (ct) setCaseType(ct as any);
+    }
+  }, []);
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
   const [search, setSearch] = useState<string>("");
@@ -126,7 +155,9 @@ export default function DoctorsOverviewPage() {
       };
 
       await downloadDoctorStatementPdf(res, statementLab);
-      toast.success("Statement Downloaded", `PDF statement for ${doc.name} (${caseType === "outsource" ? "Outsource" : "Main Lab"}) generated successfully.`);
+      const isCC = (caseType as string).startsWith("cc_") || (caseType as string) === "collection_center" || (caseType as string) === "cc_all";
+      const label = isCC ? "Collection Centre" : (caseType === "outsource" ? "Outsource" : "Main Lab");
+      toast.success("Statement Downloaded", `PDF statement for ${doc.name} (${label}) generated successfully.`);
     } catch (err: any) {
       console.error("Statement download failed:", err);
       toast.error("Download Failed", err.message || "Failed to generate doctor statement");
@@ -206,6 +237,44 @@ export default function DoctorsOverviewPage() {
     ? Math.round((summary.total_lab_revenue / summary.total_sales) * 100)
     : 100;
 
+  const activeCaseType = caseType as string;
+  const isOutsource = activeCaseType === "outsource";
+  const isCollectionCenter = activeCaseType.startsWith("cc_") || activeCaseType === "collection_center";
+
+  const selectedCenter = useMemo(() => {
+    if (!isCollectionCenter) return null;
+    const id = activeCaseType.startsWith("cc_") ? activeCaseType.slice(3) : activeCaseType;
+    return collectionCenters.find((c) => String(c.id) === String(id)) || null;
+  }, [isCollectionCenter, activeCaseType, collectionCenters]);
+
+  const scopeBadgeText = useMemo(() => {
+    if (isOutsource) return "Outsource Scope";
+    if (isCollectionCenter) {
+      if (selectedCenter) {
+        return `🏢 ${selectedCenter.name || selectedCenter.lab_name || "Collection Centre"}`;
+      }
+      return "🏢 Collection Centre";
+    }
+    return "Main Lab Scope";
+  }, [isOutsource, isCollectionCenter, selectedCenter]);
+
+  const scopeTriggerLabel = useMemo(() => {
+    if (isOutsource) return "Outsource";
+    if (isCollectionCenter) {
+      if (selectedCenter) {
+        return selectedCenter.name || selectedCenter.lab_name || "Collection Centre";
+      }
+      return "Collection Centre";
+    }
+    return "Main Lab";
+  }, [isOutsource, isCollectionCenter, selectedCenter]);
+
+  const scopeTriggerIcon = useMemo(() => {
+    if (isOutsource) return "📦";
+    if (isCollectionCenter) return "🏢";
+    return "🔬";
+  }, [isOutsource, isCollectionCenter]);
+
   // Generate URL to doctor's patients page passing active period filter
   const getDoctorPatientsUrl = (doc: DoctorStat) => {
     const params = new URLSearchParams();
@@ -226,11 +295,13 @@ export default function DoctorsOverviewPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/70 pb-5">
         <div className="flex items-center gap-3.5 min-w-0">
           <div className={`h-11 w-11 sm:h-12 sm:w-12 rounded-2xl border flex items-center justify-center shadow-xs shrink-0 transition-colors ${
-            caseType === "outsource"
+            isOutsource
               ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+              : isCollectionCenter
+              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
               : "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20"
           }`}>
-            <Stethoscope className="h-5 w-5 sm:h-6 sm:w-6" />
+            {isCollectionCenter ? <Building2 className="h-5 w-5 sm:h-6 sm:w-6" /> : <Stethoscope className="h-5 w-5 sm:h-6 sm:w-6" />}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -238,15 +309,21 @@ export default function DoctorsOverviewPage() {
                 Doctor Referrals & Revenue
               </h1>
               <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border transition-colors shrink-0 ${
-                caseType === "outsource"
+                isOutsource
                   ? "bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800"
+                  : isCollectionCenter
+                  ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
                   : "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200/60 dark:border-indigo-800/60"
               }`}>
-                {caseType === "outsource" ? "Outsource Scope" : "Main Lab Scope"}
+                {scopeBadgeText}
               </span>
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-1 sm:line-clamp-none">
-              {caseType === "outsource"
+              {isCollectionCenter
+                ? selectedCenter
+                  ? `Monitor ${selectedCenter.name || selectedCenter.lab_name} collection centre referral performance, doctor cuts, and hub sales`
+                  : "Monitor collection centre referral performance, doctor cuts, and partner hub sales"
+                : isOutsource
                 ? "Monitor outsource cases referral performance, partner lab incentives, and commissions"
                 : "Monitor in-house doctor sales performance, commission payouts, and net laboratory revenue"}
             </p>
@@ -255,41 +332,61 @@ export default function DoctorsOverviewPage() {
 
         {/* ── Action Toolbar: Dropdown, Refresh & Manage (Aligned & Responsive) ── */}
         <div className="flex items-center gap-2 sm:gap-2.5 w-full sm:w-auto shrink-0 justify-between sm:justify-end">
-          {/* Main Lab vs Outsource Scope Selector (Select Component) */}
-          <div className="flex-1 sm:flex-initial min-w-[135px] sm:w-[185px]">
+          {/* Main Lab vs Outsource vs Collection Centres Scope Selector */}
+          <div className="flex-1 sm:flex-initial min-w-[150px] sm:w-[215px]">
             <Select
               value={caseType}
               onValueChange={(val) => {
-                setCaseType(val as "main_lab" | "outsource");
+                setCaseType(val as any);
                 setCurrentPage(1);
               }}
             >
               <SelectTrigger
                 className={`h-9 px-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-xs select-none w-full ${
-                  caseType === "outsource"
+                  isOutsource
                     ? "bg-amber-500/10 hover:bg-amber-500/15 text-amber-900 dark:text-amber-200 border-amber-400/50 dark:border-amber-600/50"
+                    : isCollectionCenter
+                    ? "bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-900 dark:text-emerald-200 border-emerald-400/50 dark:border-emerald-600/50"
                     : "bg-indigo-500/10 hover:bg-indigo-500/15 text-indigo-900 dark:text-indigo-200 border-indigo-400/50 dark:border-indigo-600/50"
                 }`}
-                aria-label="Select Referral Scope: Main Lab or Outsource"
+                aria-label="Select Referral Scope: Main Lab, Outsource, or Collection Centres"
               >
                 <div className="flex items-center gap-1.5 truncate">
-                  <span className="text-sm shrink-0">{caseType === "outsource" ? "📦" : "🔬"}</span>
-                  <span className="truncate">{caseType === "outsource" ? "Outsource" : "Main Lab"}</span>
+                  <span className="text-sm shrink-0">{scopeTriggerIcon}</span>
+                  <span className="truncate">{scopeTriggerLabel}</span>
                 </div>
               </SelectTrigger>
-              <SelectContent align="end" className="w-52 p-1 rounded-xl border-border/80 shadow-xl">
-                <SelectItem value="main_lab" className="text-xs font-medium cursor-pointer py-2">
+              <SelectContent align="end" className="w-64 max-h-80 p-1.5 rounded-xl border-border/80 shadow-xl overflow-y-auto">
+                <SelectItem value="main_lab" className="text-xs font-medium cursor-pointer py-2 rounded-lg">
                   <div className="flex items-center gap-2">
                     <span>🔬</span>
                     <span className="font-semibold">Main Lab (In-House)</span>
                   </div>
                 </SelectItem>
-                <SelectItem value="outsource" className="text-xs font-medium cursor-pointer py-2">
+                <SelectItem value="outsource" className="text-xs font-medium cursor-pointer py-2 rounded-lg">
                   <div className="flex items-center gap-2">
                     <span>📦</span>
                     <span className="font-semibold">Outsource Tests</span>
                   </div>
                 </SelectItem>
+
+                {/* Collection Centres Section (Only rendered if centres exist) */}
+                {collectionCenters.length > 0 && (
+                  <>
+                    <div className="my-1.5 border-t border-border/70 px-2 pt-2 pb-1">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Collection Centres</p>
+                    </div>
+
+                    {collectionCenters.map((cc) => (
+                      <SelectItem key={String(cc.id)} value={`cc_${cc.id}`} className="text-xs font-medium cursor-pointer py-1.5 rounded-lg">
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="text-xs shrink-0">📍</span>
+                          <span className="truncate">{cc.name || cc.lab_name || "Collection Centre"}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>

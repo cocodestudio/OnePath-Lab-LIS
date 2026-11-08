@@ -97,6 +97,7 @@ function getLocalStaticCss(): string {
 }
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 export const maxDuration = 60;
 
 // Disk Cache Directory for pre-generated vector PDFs (Approach A)
