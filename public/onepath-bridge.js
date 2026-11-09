@@ -244,10 +244,20 @@ function parseAndSendToCloud(rawData, connectionType) {
         const trimmedLine = line.trim();
         if (!trimmedLine) continue;
 
-        // HL7 Order line: OBR|1||783||... or OBR|1|783|783|...
+        // HL7 Order line: OBR|1|200011|1|^N|... or OBR|1||783||...
         if (trimmedLine.startsWith('OBR|')) {
             const parts = trimmedLine.split('|');
-            const obrId = parts[3] || parts[2] || '';
+            const cleanPart2 = (parts[2] || '').trim().replace(/^["'\^]+|["'\^]+$/g, '');
+            const cleanPart3 = (parts[3] || '').trim().replace(/^["'\^]+|["'\^]+$/g, '');
+            // Prioritize sample barcode / placer order number (parts[2]) if valid and not empty
+            let obrId = '';
+            if (cleanPart2 && cleanPart2 !== '""' && (cleanPart2.length > cleanPart3.length || cleanPart3 === '1' || !cleanPart3)) {
+                obrId = cleanPart2;
+            } else if (cleanPart3 && cleanPart3 !== '""') {
+                obrId = cleanPart3;
+            } else {
+                obrId = cleanPart2;
+            }
             if (obrId.trim()) {
                 sampleId = obrId.trim().replace(/^\^+/, '').replace(/\^.*$/, '');
             }
@@ -272,12 +282,19 @@ function parseAndSendToCloud(rawData, connectionType) {
         }
 
         // HL7 OBX Result line: OBX|1|NM|6690-2^WBC^LN||7.4|10^9/L|4.0-10.0||||F
+        // Or Auto Chemistry Analyzer: OBX|0|NM|0|AST|0.00|U/L|0.00-40.00|N|||F||0.00|...
         if (trimmedLine.startsWith('OBX|')) {
             const parts = trimmedLine.split('|');
             if (parts.length >= 6) {
                 const idTokens = (parts[3] || '').split('^');
-                const loinc = (idTokens[0] || '').trim();
-                const nameToken = (idTokens[1] || idTokens[0] || '').trim().toUpperCase();
+                let loinc = (idTokens[0] || '').trim();
+                let nameToken = (idTokens[1] || idTokens[0] || '').trim().toUpperCase();
+
+                // If parts[3] is numeric or '0' (analyzer "Code On LIS" unset), and parts[4] contains alphabetic test symbol (e.g. AST, ALT, ALP, TBIL, GLU, CREA)
+                const subId = (parts[4] || '').trim().toUpperCase();
+                if ((!nameToken || /^\d+$/.test(nameToken)) && subId && /[A-Z]/.test(subId)) {
+                    nameToken = subId;
+                }
 
                 // Check for encapsulated data (Base64 Histograms)
                 if (parts[2] === 'ED' || trimmedLine.includes('Histogram')) {
@@ -326,11 +343,11 @@ function parseAndSendToCloud(rawData, connectionType) {
                 else if (nameToken === 'BILT' || nameToken === 'TBIL' || nameToken === 'BILI_TOTAL' || loinc === '1975-2') code = 'BILT';
                 else if (nameToken === 'BILD' || nameToken === 'DBIL' || nameToken === 'BILI_DIRECT' || loinc === '1968-7') code = 'BILD';
                 else if (nameToken === 'CAL' || nameToken === 'CA' || loinc === '17861-6') code = 'CAL';
-                else if (nameToken === 'CHOL' || nameToken === 'TCHOL' || loinc === '2093-3') code = 'CHOL';
+                else if (nameToken === 'CHOL' || nameToken === 'TCHOL' || nameToken === 'CHO' || loinc === '2093-3') code = 'CHOL';
                 else if (nameToken === 'HDLDI' || nameToken === 'HDL' || nameToken === 'HDL-C' || loinc === '2085-9') code = 'HDLdi';
                 else if (nameToken === 'LDLDI' || nameToken === 'LDL' || nameToken === 'LDL-C' || loinc === '13457-7') code = 'LDLdi';
                 else if (nameToken === 'GLU' || nameToken === 'GLUC' || loinc === '2345-7') code = 'GLU';
-                else if (nameToken === 'CREA' || nameToken === 'CREAT' || loinc === '2160-0') code = 'CREAT';
+                else if (nameToken === 'CREA' || nameToken === 'CREAT' || nameToken === 'CREA-E' || nameToken === 'CREAE' || loinc === '2160-0') code = 'CREAT';
                 else if (nameToken === 'UREA' || nameToken === 'BUN' || loinc === '3094-0') code = 'UREA';
                 else if (nameToken === 'URIC' || nameToken === 'UA' || loinc === '3084-1') code = 'URIC';
                 else if (nameToken === 'SGOT' || nameToken === 'AST' || loinc === '1920-8') code = 'SGOT';
@@ -343,11 +360,27 @@ function parseAndSendToCloud(rawData, connectionType) {
                 else if (nameToken === 'NA' || loinc === '2951-2') code = 'NA';
                 else if (nameToken === 'K' || loinc === '2823-3') code = 'K';
                 else if (nameToken === 'CL' || loinc === '2075-0') code = 'CL';
+                else if (nameToken === 'CRP') code = 'CRP';
+                else if (nameToken === 'LIP' || nameToken === 'LIP OP') code = 'LIP';
+                else if (nameToken === 'AMO') code = 'AMMONIA';
+                else if (nameToken === 'IRON') code = 'IRON';
+                else if (nameToken === 'HBA1C' || nameToken === 'HBA1-C') code = 'HBA1C';
+                else if (nameToken === 'VLDL') code = 'VLDL';
                 else if (nameToken) code = nameToken;
 
-                let value = parts[5] ? parts[5].trim() : '';
-                let unit = parts[6] ? parts[6].trim() : '';
-                let flag = parts[8] ? parts[8].trim() : 'N';
+                let value = '';
+                let unit = '';
+                let flag = 'N';
+
+                if (parts[5] && parts[5].trim() !== '') {
+                    value = parts[5].trim();
+                    unit = parts[6] ? parts[6].trim() : '';
+                    flag = parts[8] ? parts[8].trim() : 'N';
+                } else if (parts[4] && /^[0-9.\-+]+$/.test(parts[4].trim())) {
+                    value = parts[4].trim();
+                    unit = parts[5] ? parts[5].trim() : (parts[6] ? parts[6].trim() : '');
+                    flag = parts[7] ? parts[7].trim() : (parts[8] ? parts[8].trim() : 'N');
+                }
 
                 // Skip non-numeric placeholder markers (e.g. *****)
                 if (value === '*****' || value === '----' || value === '---') {
@@ -438,7 +471,7 @@ function parseAndSendToCloud(rawData, connectionType) {
     }
 
     const isBiochem = Object.keys(parameters).some(k => [
-        'ALP','AMY','BILT','BILD','CAL','CHOL','HDLDI','LDLDI','GLU','CREAT','UREA','BUN','SGOT','SGPT','TP','ALB','GLOB','TRIG','URIC','PHOS','NA','K','CL'
+        'ALP','AMY','BILT','BILD','CAL','CHOL','HDLDI','LDLDI','GLU','CREAT','UREA','BUN','SGOT','SGPT','TP','ALB','GLOB','TRIG','URIC','PHOS','NA','K','CL','CRP','LIP','AMMONIA','IRON','HBA1C','VLDL'
     ].includes(k.toUpperCase()));
 
     if (isBiochem) {
@@ -469,7 +502,11 @@ function parseAndSendToCloud(rawData, connectionType) {
 }
 
 function sendToCloudLIS(payload) {
-    const postData = JSON.stringify(payload);
+    const postData = JSON.stringify({
+        ...payload,
+        token: AUTH_TOKEN || undefined,
+        lis_token: AUTH_TOKEN || undefined,
+    });
     const url = new URL(LIS_API_URL);
 
     const isHttps = url.protocol === 'https:';
@@ -484,7 +521,8 @@ function sendToCloudLIS(payload) {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'Content-Length': Buffer.byteLength(postData),
-            ...(AUTH_TOKEN ? { 'Authorization': `Bearer ${AUTH_TOKEN}` } : {})
+            ...(AUTH_TOKEN ? { 'Authorization': `Bearer ${AUTH_TOKEN}` } : {}),
+            ...(LAB_ID ? { 'X-Lab-Id': LAB_ID } : {})
         }
     };
 
@@ -496,6 +534,10 @@ function sendToCloudLIS(payload) {
         res.on('end', () => {
             if (res.statusCode >= 200 && res.statusCode < 300) {
                 console.log(`[✨ SUCCESS] Auto-synced with OnePath Cloud LIS! (HTTP ${res.statusCode})\n`);
+            } else if (res.statusCode === 401) {
+                console.log(`[❌ CLOUD RESPONSE 401]: Authentication Failed!`);
+                console.log(`   👉 Reason: The LAB_ID ("${LAB_ID}") or LIS_TOKEN is invalid or not registered in your LIS.`);
+                console.log(`   👉 Fix: Open lis.onepathlab.com > Settings > Machine Interfacing, click "Download Config (bridge-config.json)", and place it in this folder!\n`);
             } else {
                 console.log(`[⚠️ CLOUD RESPONSE ${res.statusCode}]:`, body);
             }

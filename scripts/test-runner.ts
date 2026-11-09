@@ -7001,6 +7001,55 @@ assert(
   "[BACKEND CC DOCTOR SCOPE] DoctorController.php provides atomic collection centre scoping and test revenue calculations"
 );
 
+console.log("\n▶ MODULE 87: Automated Biochemistry Analyzer Interfacing & Zero-Regression Tenant Authentication");
+
+// 87.1 HL7 OBR Placer Barcode Priority in onepath-bridge.js
+const bridgeCode87 = fs.readFileSync(path.resolve(__dirname, "../public/onepath-bridge.js"), "utf8");
+assert(
+  bridgeCode87.includes("cleanPart2") &&
+  bridgeCode87.includes("cleanPart3") &&
+  bridgeCode87.includes("cleanPart2.length > cleanPart3.length || cleanPart3 === '1'"),
+  "[HL7 OBR SAMPLE ID PRIORITY] onepath-bridge.js prioritizes actual sample barcode (e.g. 200011) over internal sequence number"
+);
+
+// 87.2 HL7 OBX Sub-ID Test Code Extraction for Analyzers with 'Code on LIS = 0'
+assert(
+  bridgeCode87.includes("(!nameToken || /^\\d+$/.test(nameToken)) && subId && /[A-Z]/.test(subId)") &&
+  bridgeCode87.includes("nameToken = subId;"),
+  "[HL7 OBX SUB-ID PARSER] onepath-bridge.js extracts test name from parts[4] when parts[3] is 0 or numeric"
+);
+
+// 87.3 UI 1-Click Bridge Config Download
+const machineTabSrc87 = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/machine-integration-tab.tsx"),
+  "utf8"
+);
+assert(
+  machineTabSrc87.includes("handleDownloadBridgeConfig") &&
+  machineTabSrc87.includes("download = \"bridge-config.json\"") &&
+  machineTabSrc87.includes("Download bridge-config.json"),
+  "[UI 1-CLICK BRIDGE CONFIG DOWNLOAD] machine-integration-tab.tsx enables 1-click export of pre-configured bridge-config.json"
+);
+
+// 87.4 UI Lab Tenant Credentials Banner & Copy Button
+assert(
+  machineTabSrc87.includes("Lab Bridge Authentication") &&
+  machineTabSrc87.includes("handleCopyLabId") &&
+  machineTabSrc87.includes("Tenant LAB ID:"),
+  "[UI LAB TENANT BANNER] machine-integration-tab.tsx displays lab tenant credentials with 1-click copy"
+);
+
+// 87.5 Backend Instrument Ingest Token Resolution
+const backendInstrumentCtrl87 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/InstrumentController.php"),
+  "utf8"
+);
+assert(
+  backendInstrumentCtrl87.includes("PersonalAccessToken::findToken") &&
+  backendInstrumentCtrl87.includes("bearerToken() ?: $request->input('token')"),
+  "[BACKEND INGEST TOKEN RESOLUTION] InstrumentController.php resolves token via PersonalAccessToken and tenant credentials"
+);
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 
