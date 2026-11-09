@@ -30,7 +30,7 @@ try {
             TCP_PORT: 5100,
             COM_PORT: "COM3",
             BAUD_RATE: 9600,
-            LIS_API_URL: "http://127.0.0.1:8000/api/lis/instruments/webhook",
+            LIS_API_URL: "https://api.onepathlab.com/api/lis/instruments/webhook",
             LAB_ID: "01a05221-6f20-73b4-8107-2e68c7824c90",
             LIS_TOKEN: ""
         };
@@ -43,7 +43,7 @@ try {
 const TCP_PORT = parseInt(process.env.PORT || fileConfig.TCP_PORT || '5100', 10);
 const COM_PORT = process.env.COM_PORT || fileConfig.COM_PORT || ''; // e.g., 'COM1', 'COM3', '/dev/ttyUSB0'
 const BAUD_RATE = parseInt(process.env.BAUD_RATE || fileConfig.BAUD_RATE || '9600', 10);
-const LIS_API_URL = process.env.LIS_API_URL || fileConfig.LIS_API_URL || 'http://127.0.0.1:8000/api/lis/instruments/webhook';
+const LIS_API_URL = process.env.LIS_API_URL || fileConfig.LIS_API_URL || 'https://api.onepathlab.com/api/lis/instruments/webhook';
 const AUTH_TOKEN = process.env.LIS_TOKEN || fileConfig.LIS_TOKEN || ''; // Optional LIS Bearer Token or API Key
 const LAB_ID = process.env.LAB_ID || process.env.LIS_LAB_ID || fileConfig.LAB_ID || '01a05221-6f20-73b4-8107-2e68c7824c90';
 
@@ -394,15 +394,15 @@ function parseAndSendToCloud(rawData, connectionType) {
                     code = rawId.trim().toUpperCase();
                 }
 
-                // Standardize universal biochemistry aliases (Unikon 230, Beacon, Mindray, Erba)
+                // Standardize universal biochemistry aliases (Unikon 230, Beacon, Mindray, Erba, Rayto)
                 if (code === 'GLUC' || code === 'FBS' || code === 'RBS' || code === 'PPBS') code = 'GLU';
                 else if (code === 'ALT' || code === 'GPT') code = 'SGPT';
                 else if (code === 'AST' || code === 'GOT') code = 'SGOT';
                 else if (code === 'TBIL' || code === 'T-BIL' || code === 'BILI-T' || code === 'BILI_TOTAL') code = 'BILT';
                 else if (code === 'DBIL' || code === 'D-BIL' || code === 'BILI-D' || code === 'BILI_DIRECT') code = 'BILD';
-                else if (code === 'CREA' || code === 'CR') code = 'CREAT';
+                else if (code === 'CREA' || code === 'CR' || code === 'CREA-E' || code === 'CREAE') code = 'CREAT';
                 else if (code === 'UA') code = 'URIC';
-                else if (code === 'TCHOL' || code === 'T-CHOL') code = 'CHOL';
+                else if (code === 'TCHOL' || code === 'T-CHOL' || code === 'CHO') code = 'CHOL';
                 else if (code === 'TG') code = 'TRIG';
                 else if (code === 'HDL' || code === 'HDL-C') code = 'HDLDI';
                 else if (code === 'LDL' || code === 'LDL-C') code = 'LDLDI';
@@ -410,6 +410,8 @@ function parseAndSendToCloud(rawData, connectionType) {
                 else if (code === 'ALBUMIN') code = 'ALB';
                 else if (code === 'AKP' || code === 'ALKP') code = 'ALP';
                 else if (code === 'CA' || code === 'CALCIUM') code = 'CAL';
+                else if (code === 'LIP' || code === 'LIP OP') code = 'LIP';
+                else if (code === 'AMO') code = 'AMMONIA';
 
                 let value = parts[3] ? parts[3].trim() : '';
                 let unit = parts[4] ? parts[4].trim() : '';
