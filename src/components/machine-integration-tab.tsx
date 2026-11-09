@@ -654,51 +654,8 @@ pause
           </div>
         </div>
 
-        {/* Lab Bridge Credentials & Quick Setup Banner */}
-        <div className="mt-5 p-3.5 sm:p-4 rounded-xl bg-card border border-border/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs shadow-2xs">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 font-bold text-foreground">
-              <ShieldCheck className="h-4 w-4 text-emerald-600" />
-              <span>Lab Bridge Authentication ({currentLabName})</span>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Run <code className="font-mono text-primary font-bold">INSTALL_SILENT_SERVICE.bat</code> as Admin on machine PC for 24/7 background auto-sync without any open console window!
-            </p>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground text-[11px] pt-0.5">
-              <span>
-                Tenant LAB ID: <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground font-semibold select-all">{currentLabId || "Default Tenant"}</code>
-              </span>
-              <span>
-                API Token: <span className="text-emerald-600 dark:text-emerald-400 font-bold">Active & Linked</span>
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-            {currentLabId && (
-              <button
-                type="button"
-                onClick={handleCopyLabId}
-                className="flex-1 sm:flex-none justify-center px-3 py-1.5 rounded-lg border border-border bg-muted/60 hover:bg-muted text-[11px] font-semibold text-foreground transition-all cursor-pointer flex items-center gap-1.5"
-                title="Copy Lab Tenant ID"
-              >
-                <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                <span>{copiedId ? "Copied!" : "Copy Lab ID"}</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleDownloadSilentInstaller}
-              className="flex-1 sm:flex-none justify-center px-3.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-              title="Download 1-Click Installer to run permanently in background without black window"
-            >
-              <Zap className="h-3.5 w-3.5" />
-              <span>1-Click Silent Auto-Start (.bat)</span>
-            </button>
-          </div>
-        </div>
-
         {/* Dual Mode Connection Options Box */}
-        <div className="mt-4 pt-4 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div className="mt-6 pt-5 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           {/* Mode 1: LAN / TCP-IP */}
           <div className="bg-muted/40 border border-border/80 rounded-xl p-3.5 sm:p-4 space-y-1.5">
             <div className="flex items-center gap-2 text-primary font-bold">

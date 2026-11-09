@@ -7032,12 +7032,11 @@ assert(
   "[UI STREAMLINED 2-BUTTON SUITE] machine-integration-tab.tsx provides clean 2-button interface (Bridge EXE + Silent Service)"
 );
 
-// 87.4 UI Lab Tenant Credentials Banner & Copy Button
+// 87.4 UI Minimalist Banner Cleanliness
 assert(
-  machineTabSrc87.includes("Lab Bridge Authentication") &&
-  machineTabSrc87.includes("handleCopyLabId") &&
-  machineTabSrc87.includes("Tenant LAB ID:"),
-  "[UI LAB TENANT BANNER] machine-integration-tab.tsx displays lab tenant credentials with 1-click copy"
+  !machineTabSrc87.includes("Lab Bridge Authentication") &&
+  !machineTabSrc87.includes("Tenant LAB ID:"),
+  "[UI MINIMALIST CLEANLINESS] machine-integration-tab.tsx removes redundant credential card for zero-distraction layout"
 );
 
 // 87.5 Backend Instrument Ingest Token Resolution
