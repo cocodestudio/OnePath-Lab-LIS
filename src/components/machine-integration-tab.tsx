@@ -631,52 +631,25 @@ pause
             </p>
           </div>
 
-          {/* Quick Action Button: Download Standalone Windows .exe & Batch Starter */}
+          {/* Quick Action Buttons: Only 2 Buttons (Bridge EXE + Silent Background Service) */}
           <div className="flex flex-wrap items-center gap-2.5 shrink-0 w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={() => handleOpenSimulator()}
-              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-98"
-              title="Open Virtual Analyzer Test Studio to test & simulate any machine"
-            >
-              <Play className="h-4 w-4" />
-              <span>Virtual Test Studio</span>
-            </button>
             <a
               href="/OnePath-Bridge.exe"
               download="OnePath-Bridge.exe"
               className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground text-xs font-bold transition-all shadow-md cursor-pointer hover:brightness-105 active:scale-98"
-              title="Download Standalone Windows Machine Bridge (.exe) - No Node.js Required"
+              title="Download Standalone Windows Machine Bridge (.exe)"
             >
               <Download className="h-4 w-4" />
               <span>Download OnePath-Bridge.exe</span>
             </a>
-            <a
-              href="/START_MACHINE_BRIDGE.bat"
-              download="START_MACHINE_BRIDGE.bat"
-              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-3 py-2.5 rounded-xl bg-muted/80 hover:bg-muted border border-border text-foreground text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-98"
-              title="Download 1-Click Windows Starter (.bat)"
-            >
-              <Terminal className="h-4 w-4 text-primary" />
-              <span>Starter (.bat)</span>
-            </a>
             <button
               type="button"
               onClick={handleDownloadSilentInstaller}
-              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-700 dark:text-purple-400 text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-98"
+              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-md cursor-pointer hover:brightness-105 active:scale-98"
               title="Download 1-Click Silent Background Service Installer - Auto starts on PC boot, 0 console windows"
             >
               <Zap className="h-4 w-4" />
-              <span>Silent Service (.bat)</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadBridgeConfig}
-              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-98"
-              title="Download pre-configured bridge-config.json for your lab"
-            >
-              <Download className="h-4 w-4" />
-              <span>Download Config (.json)</span>
+              <span>1-Click Silent Auto-Start (.bat)</span>
             </button>
           </div>
         </div>
@@ -720,15 +693,6 @@ pause
             >
               <Zap className="h-3.5 w-3.5" />
               <span>1-Click Silent Auto-Start (.bat)</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadBridgeConfig}
-              className="flex-1 sm:flex-none justify-center px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
-              title="Download bridge-config.json ready for OnePath-Bridge.exe"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span>Config (.json)</span>
             </button>
           </div>
         </div>

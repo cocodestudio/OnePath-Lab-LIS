@@ -7019,16 +7019,17 @@ assert(
   "[HL7 OBX SUB-ID PARSER] onepath-bridge.js extracts test name from parts[4] when parts[3] is 0 or numeric"
 );
 
-// 87.3 UI 1-Click Bridge Config Download
+// 87.3 UI Streamlined 2-Button Interface
 const machineTabSrc87 = fs.readFileSync(
   path.resolve(__dirname, "../src/components/machine-integration-tab.tsx"),
   "utf8"
 );
 assert(
-  machineTabSrc87.includes("handleDownloadBridgeConfig") &&
-  machineTabSrc87.includes("download = \"bridge-config.json\"") &&
-  machineTabSrc87.includes("Download bridge-config.json"),
-  "[UI 1-CLICK BRIDGE CONFIG DOWNLOAD] machine-integration-tab.tsx enables 1-click export of pre-configured bridge-config.json"
+  machineTabSrc87.includes("Download OnePath-Bridge.exe") &&
+  machineTabSrc87.includes("1-Click Silent Auto-Start (.bat)") &&
+  !machineTabSrc87.includes("Virtual Test Studio</span>") &&
+  !machineTabSrc87.includes("Starter (.bat)</span>"),
+  "[UI STREAMLINED 2-BUTTON SUITE] machine-integration-tab.tsx provides clean 2-button interface (Bridge EXE + Silent Service)"
 );
 
 // 87.4 UI Lab Tenant Credentials Banner & Copy Button
