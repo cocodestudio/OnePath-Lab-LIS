@@ -7032,11 +7032,13 @@ assert(
   "[UI STREAMLINED 2-BUTTON SUITE] machine-integration-tab.tsx provides clean 2-button interface (Bridge EXE + Silent Service)"
 );
 
-// 87.4 UI Minimalist Banner Cleanliness
+// 87.4 UI Minimalist Banner Cleanliness & Removal of Unneeded Analyzer Cards
 assert(
   !machineTabSrc87.includes("Lab Bridge Authentication") &&
-  !machineTabSrc87.includes("Tenant LAB ID:"),
-  "[UI MINIMALIST CLEANLINESS] machine-integration-tab.tsx removes redundant credential card for zero-distraction layout"
+  !machineTabSrc87.includes("Tenant LAB ID:") &&
+  !machineTabSrc87.includes("Add Analyzer</span>") &&
+  !machineTabSrc87.includes("Configured Analyzers ("),
+  "[UI MINIMALIST CLEANLINESS] machine-integration-tab.tsx removes redundant credential card and Add Analyzer section for zero-distraction layout"
 );
 
 // 87.5 Backend Instrument Ingest Token Resolution

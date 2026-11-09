@@ -663,7 +663,7 @@ pause
               <span>Option A: LAN Ethernet Cable / Wi-Fi (Aveacon / Beacon)</span>
             </div>
             <p className="text-muted-foreground text-[11px] leading-relaxed">
-              1. In machine screen (LIS Tab), enter <strong className="text-foreground">LIS IP: 192.168.1.6</strong> and <strong className="text-foreground">Port: 5100</strong>.<br/>
+              1. In machine screen (LIS Tab), enter <strong className="text-foreground">LIS IP: 192.168.1.6</strong> and <strong className="text-foreground">Port: 5100</strong>.<br />
               2. Check <strong className="text-foreground">[✔] Auto Communication</strong> and press Save. Tests stream automatically over LAN!
             </p>
           </div>
@@ -675,144 +675,10 @@ pause
               <span>Option B: RS-232 Serial Cable (Nihon Kohden / Mindray / Erba)</span>
             </div>
             <p className="text-muted-foreground text-[11px] leading-relaxed">
-              1. Connect DB9 Serial to USB cable into PC (e.g. COM1 or COM3).<br/>
+              1. Connect DB9 Serial to USB cable into PC (e.g. COM1 or COM3).<br />
               2. Set machine Baud Rate: <strong className="text-foreground">9600</strong>, Protocol: <strong className="text-foreground">ASTM E1394</strong>, 8-N-1. Data auto-captures on test!
             </p>
           </div>
-        </div>
-      </div>
-
-      {/* ── Active Configured Analyzers ── */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="font-display font-bold text-sm text-foreground flex items-center gap-2">
-              <Cpu className="h-4 w-4 text-primary shrink-0" />
-              <span>Configured Analyzers ({instruments.length})</span>
-            </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Readings stream directly to your reports when clicking &quot;Fetch from Machine&quot; in Enter Results.
-            </p>
-          </div>
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold shadow-xs hover:brightness-105 active:scale-98 transition-all cursor-pointer w-full sm:w-auto"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Add Analyzer</span>
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {instruments.map((inst) => (
-            <div
-              key={inst.id}
-              className={`p-3.5 sm:p-4 rounded-xl border transition-all ${
-                inst.is_active
-                  ? "bg-card border-border/90 shadow-xs"
-                  : "bg-muted/40 border-border/50 opacity-75"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div
-                    className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
-                      inst.category === "Haematology"
-                        ? "bg-rose-500/10 text-rose-600 border border-rose-500/20"
-                        : "bg-blue-500/10 text-blue-600 border border-blue-500/20"
-                    }`}
-                  >
-                    <HardDrive className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="text-xs font-bold text-foreground truncate">{inst.name}</h4>
-                      <span
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md shrink-0 ${
-                          inst.is_active
-                            ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
-                            : "bg-slate-500/10 text-slate-500"
-                        }`}
-                      >
-                        {inst.is_active ? "ACTIVE" : "PAUSED"}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                      {inst.model || inst.category} · <span className="font-mono text-foreground font-semibold">{inst.protocol}</span>
-                    </p>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground mt-2 font-mono">
-                      {inst.connection_type === "TCP_IP" ? (
-                        <span>Port: <strong className="text-foreground">{inst.port} (TCP)</strong></span>
-                      ) : (
-                        <span>Port: <strong className="text-foreground">{inst.com_port || "COM3"} @ {inst.baud_rate} baud</strong></span>
-                      )}
-                      <span>Mode: <strong className="text-foreground">{inst.connection_type === "TCP_IP" ? "LAN / TCP" : "RS-232 Cable"}</strong></span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleDeleteInstrument(inst.id)}
-                  className="text-muted-foreground hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition-colors cursor-pointer shrink-0"
-                  title="Remove Machine"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              {/* Toggles Footer */}
-              <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between gap-2 text-xs flex-wrap sm:flex-nowrap">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={inst.auto_apply}
-                    onChange={() => handleToggleAutoApply(inst)}
-                    className="rounded text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer shrink-0"
-                  />
-                  <span className="text-[11px] font-medium text-foreground">Auto-fill matching report</span>
-                </label>
-
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  {/* Visual Parameter Mapper Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleOpenMappingDrawer(inst)}
-                    className={`text-[11px] font-bold hover:underline cursor-pointer shrink-0 flex items-center gap-1 ${
-                      (inst.unmapped_codes?.length || 0) > 0
-                        ? "text-amber-600 dark:text-amber-400 font-extrabold"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                    title="Open Visual Parameter Mapping"
-                  >
-                    <Sliders className="h-3 w-3" />
-                    <span>Mapping</span>
-                    {(inst.unmapped_codes?.length || 0) > 0 && (
-                      <span className="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 text-[9px] font-mono animate-pulse">
-                        {inst.unmapped_codes!.length} unmapped
-                      </span>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenSimulator(inst)}
-                    className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer shrink-0 flex items-center gap-1"
-                    title="Simulate test packet for this analyzer"
-                  >
-                    <Play className="h-3 w-3" />
-                    <span>Test Packet</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleToggleActive(inst)}
-                    className="text-[11px] font-bold text-primary hover:underline cursor-pointer shrink-0"
-                  >
-                    {inst.is_active ? "Disable" : "Enable"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
 
@@ -931,11 +797,10 @@ pause
                         key={cat.id}
                         type="button"
                         onClick={() => setCatalogCategory(cat.id)}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                          catalogCategory === cat.id
+                        className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${catalogCategory === cat.id
                             ? "bg-primary text-primary-foreground shadow-xs"
                             : "bg-background/90 text-muted-foreground hover:text-foreground border border-border/60 hover:bg-muted"
-                        }`}
+                          }`}
                       >
                         {cat.label}
                       </button>
@@ -983,11 +848,10 @@ pause
                             <div
                               key={a.id}
                               onClick={() => handleSelectPreset(a.id)}
-                              className={`p-2.5 sm:p-3 rounded-xl border text-xs transition-all cursor-pointer flex items-center justify-between gap-2.5 min-w-0 w-full overflow-hidden ${
-                                isCurrent
+                              className={`p-2.5 sm:p-3 rounded-xl border text-xs transition-all cursor-pointer flex items-center justify-between gap-2.5 min-w-0 w-full overflow-hidden ${isCurrent
                                   ? "bg-primary/10 border-primary shadow-xs ring-1 ring-primary/30"
                                   : "bg-card border-border/60 hover:border-primary/40 hover:bg-primary/5"
-                              }`}
+                                }`}
                             >
                               <div className="min-w-0 flex-1 overflow-hidden space-y-0.5">
                                 <div className="flex items-center gap-1.5 flex-wrap">
