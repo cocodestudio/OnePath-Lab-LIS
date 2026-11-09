@@ -7050,6 +7050,26 @@ assert(
   "[BACKEND INGEST TOKEN RESOLUTION] InstrumentController.php resolves token via PersonalAccessToken and tenant credentials"
 );
 
+// 87.6 Silent Background Service Batch Template Verification
+const silentBatSrc87 = fs.readFileSync(
+  path.resolve(__dirname, "../public/INSTALL_SILENT_SERVICE.bat"),
+  "utf8"
+);
+assert(
+  silentBatSrc87.includes("run_silent.vbs") &&
+  silentBatSrc87.includes("schtasks /create /tn \"OnePathLabInstrumentBridge\"") &&
+  silentBatSrc87.includes("wscript.exe"),
+  "[SILENT SERVICE INSTALLER BATCH] public/INSTALL_SILENT_SERVICE.bat configures silent VBScript & Windows Task Scheduler"
+);
+
+// 87.7 UI 1-Click Silent Background Service Generator
+assert(
+  machineTabSrc87.includes("handleDownloadSilentInstaller") &&
+  machineTabSrc87.includes("INSTALL_SILENT_SERVICE.bat") &&
+  machineTabSrc87.includes("1-Click Silent Auto-Start (.bat)"),
+  "[UI 1-CLICK SILENT SERVICE DOWNLOAD] machine-integration-tab.tsx provides 1-click download of INSTALL_SILENT_SERVICE.bat with inlined credentials"
+);
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 

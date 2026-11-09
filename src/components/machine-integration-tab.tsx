@@ -168,6 +168,123 @@ export function MachineIntegrationTab() {
     toastSuccess("Config Downloaded", "bridge-config.json downloaded! Place it in the same folder as OnePath-Bridge.exe.");
   };
 
+  const handleDownloadSilentInstaller = () => {
+    const batContent = `@echo off
+setlocal enabledelayedexpansion
+title OnePath Lab - Silent Background Service Installer
+cls
+
+net session >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo [ERROR] Please right-click this file and select "Run as Administrator".
+    echo Admin privileges are required to register the Windows Background Service.
+    echo.
+    pause
+    exit /b 1
+)
+
+echo ====================================================================
+echo      ONEPATH LIS - 1-CLICK SILENT BACKGROUND SERVICE INSTALLER
+echo   Auto-Sync for Biochemistry, Haematology & Electrolyte Analyzers
+echo ====================================================================
+echo.
+
+set "TARGET_DIR=C:\\OnePathLab\\Bridge"
+if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
+
+:: 1. Copy or download OnePath-Bridge.exe
+if exist "%~dp0OnePath-Bridge.exe" (
+    echo [1/4] Copying OnePath-Bridge.exe to %TARGET_DIR%...
+    copy /y "%~dp0OnePath-Bridge.exe" "%TARGET_DIR%\\OnePath-Bridge.exe" >nul
+) else (
+    echo [1/4] Downloading OnePath-Bridge.exe from Cloud LIS...
+    curl.exe -f -s -o "%TARGET_DIR%\\OnePath-Bridge.exe" "https://lis.onepathlab.com/OnePath-Bridge.exe"
+)
+
+:: 2. Auto-generate bridge-config.json with lab credentials
+echo [2/4] Writing pre-configured bridge-config.json...
+(
+    echo {
+    echo   "TCP_PORT": 5100,
+    echo   "COM_PORT": "COM3",
+    echo   "BAUD_RATE": 9600,
+    echo   "LIS_API_URL": "https://api.onepathlab.com/api/lis/instruments/webhook",
+    echo   "LAB_ID": "${currentLabId}",
+    echo   "LIS_TOKEN": "${currentToken || ""}"
+    echo }
+) > "%TARGET_DIR%\\bridge-config.json"
+
+:: 3. Create invisible/silent launcher VBScript (0 console windows, totally hidden)
+echo [3/4] Creating silent invisible launcher...
+(
+    echo Set WshShell = CreateObject^("WScript.Shell"^)
+    echo WshShell.Run chr^(34^) ^& "%TARGET_DIR%\\OnePath-Bridge.exe" ^& chr^(34^), 0, False
+) > "%TARGET_DIR%\\run_silent.vbs"
+
+:: 4. Register in Windows Task Scheduler (Runs on boot, restarts on failure, hidden)
+echo [4/4] Registering Windows Scheduled Background Task (Auto-Start on Boot)...
+schtasks /delete /tn "OnePathLabInstrumentBridge" /f >nul 2>&1
+schtasks /create /tn "OnePathLabInstrumentBridge" /tr "wscript.exe \\"%TARGET_DIR%\\run_silent.vbs\\"" /sc onlogon /rl highest /f >nul
+
+:: Create Desktop shortcut / helper to check status
+(
+    echo @echo off
+    echo title OnePath Bridge - Status Check
+    echo echo ====================================================================
+    echo echo               ONEPATH BRIDGE - BACKGROUND STATUS CHECK
+    echo echo ====================================================================
+    echo echo.
+    echo echo Checking OnePath-Bridge process...
+    echo tasklist /fi "imagename eq OnePath-Bridge.exe"
+    echo echo.
+    echo echo Listening Port 5100 Check (TCP Ready):
+    echo netstat -ano ^| findstr :5100
+    echo echo.
+    echo echo Log file location: %TARGET_DIR%\\machine_traffic.log
+    echo echo.
+    echo pause
+) > "%USERPROFILE%\\Desktop\\Check-OnePath-Bridge-Status.bat"
+
+:: Create Desktop uninstaller helper
+(
+    echo @echo off
+    echo title OnePath Bridge - Uninstaller
+    echo echo Stopping and removing OnePath Bridge background service...
+    echo schtasks /delete /tn "OnePathLabInstrumentBridge" /f >nul 2>&1
+    echo taskkill /f /im OnePath-Bridge.exe >nul 2>&1
+    echo.
+    echo [SUCCESS] OnePath Bridge background service removed.
+    echo pause
+) > "%USERPROFILE%\\Desktop\\Uninstall-OnePath-Bridge.bat"
+
+:: Terminate any previously running instance and start silent runner now
+taskkill /f /im OnePath-Bridge.exe >nul 2>&1
+wscript.exe "%TARGET_DIR%\\run_silent.vbs"
+
+echo.
+echo ====================================================================
+echo [SUCCESS] OnePath Machine Bridge is now running silently in BACKGROUND!
+echo.
+echo  * Zero Console Windows (No window to accidentally close)
+echo  * Automatic Start on Windows boot or restart
+echo  * Desktop helper created: "Check-OnePath-Bridge-Status.bat"
+echo ====================================================================
+echo.
+pause
+`;
+
+    const blob = new Blob([batContent], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "INSTALL_SILENT_SERVICE.bat";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toastSuccess("Silent Installer Downloaded", "INSTALL_SILENT_SERVICE.bat downloaded! Run as Administrator on the machine PC for permanent background operation.");
+  };
+
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
@@ -545,6 +662,15 @@ export function MachineIntegrationTab() {
             </a>
             <button
               type="button"
+              onClick={handleDownloadSilentInstaller}
+              className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-700 dark:text-purple-400 text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-98"
+              title="Download 1-Click Silent Background Service Installer - Auto starts on PC boot, 0 console windows"
+            >
+              <Zap className="h-4 w-4" />
+              <span>Silent Service (.bat)</span>
+            </button>
+            <button
+              type="button"
               onClick={handleDownloadBridgeConfig}
               className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-98"
               title="Download pre-configured bridge-config.json for your lab"
@@ -563,7 +689,7 @@ export function MachineIntegrationTab() {
               <span>Lab Bridge Authentication ({currentLabName})</span>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Put <code className="font-mono text-primary font-bold">bridge-config.json</code> in the same folder as <code className="font-mono text-primary font-bold">OnePath-Bridge.exe</code> on the machine PC.
+              Run <code className="font-mono text-primary font-bold">INSTALL_SILENT_SERVICE.bat</code> as Admin on machine PC for 24/7 background auto-sync without any open console window!
             </p>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground text-[11px] pt-0.5">
               <span>
@@ -588,12 +714,21 @@ export function MachineIntegrationTab() {
             )}
             <button
               type="button"
+              onClick={handleDownloadSilentInstaller}
+              className="flex-1 sm:flex-none justify-center px-3.5 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              title="Download 1-Click Installer to run permanently in background without black window"
+            >
+              <Zap className="h-3.5 w-3.5" />
+              <span>1-Click Silent Auto-Start (.bat)</span>
+            </button>
+            <button
+              type="button"
               onClick={handleDownloadBridgeConfig}
-              className="flex-1 sm:flex-none justify-center px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              className="flex-1 sm:flex-none justify-center px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
               title="Download bridge-config.json ready for OnePath-Bridge.exe"
             >
               <Download className="h-3.5 w-3.5" />
-              <span>Download bridge-config.json</span>
+              <span>Config (.json)</span>
             </button>
           </div>
         </div>
