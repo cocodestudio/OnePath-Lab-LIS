@@ -397,11 +397,25 @@ export default function DueReportsPage() {
     const paid = Number(updatedBill.paid_amount ?? updatedBill.paidAmount ?? 0);
     const remainingDue = Math.max(0, net - paid);
 
-    if (remainingDue <= 0 || updatedBill.status === "PAID") {
+    if (remainingDue <= 0.01) {
       setBills((prev) => prev.filter((b) => b.id !== updatedBill.id));
     } else {
       setBills((prev) =>
-        prev.map((b) => (b.id === updatedBill.id ? { ...b, ...updatedBill } : b))
+        prev.map((b) =>
+          b.id === updatedBill.id
+            ? {
+                ...b,
+                ...updatedBill,
+                calcTotal: Number(updatedBill.total || b.total || 0),
+                calcDiscount: Number(updatedBill.discount ?? b.discount ?? 0),
+                calcNetTotal: net,
+                calcPaid: paid,
+                calcDue: remainingDue,
+                paid_amount: paid,
+                status: "PARTIAL",
+              }
+            : b
+        )
       );
     }
     loadDueBills(false, undefined, undefined, selectedCenter);
@@ -668,9 +682,81 @@ export default function DueReportsPage() {
       {/* Main Container: Fixed Layout on Desktop (No Horizontal Scroll), Clean Responsive Cards on Mobile */}
       <div className="border border-border/80 rounded-xl bg-card shadow-card overflow-hidden">
         {loading && bills.length === 0 ? (
-          <div className="py-16 text-center text-muted-foreground">
-            <RefreshCw className="w-6 h-6 animate-spin mx-auto text-primary mb-2" />
-            <span>Loading due reports...</span>
+          <div>
+            {/* Desktop Shimmer Skeleton Table */}
+            <div className="hidden md:block w-full overflow-hidden">
+              <table className="w-full table-fixed text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border/80 bg-muted/40 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                    <th className="w-9 px-2 py-3 text-center"></th>
+                    <th className="w-24 px-3 py-3">Reg. No.</th>
+                    <th className="w-36 px-3 py-3">Date</th>
+                    <th className="px-4 py-3">Patient</th>
+                    <th className="w-36 px-3 py-3">Referred By</th>
+                    <th className="w-20 px-3 py-3 text-right">Total</th>
+                    <th className="w-20 px-3 py-3 text-right">Paid</th>
+                    <th className="w-28 px-3 py-3 text-center">Status</th>
+                    <th className="w-36 px-3 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {[...Array(6)].map((_, idx) => (
+                    <tr key={idx} className="animate-pulse bg-card">
+                      <td className="px-2 py-3.5 text-center">
+                        <div className="w-4 h-4 rounded bg-muted/70 mx-auto" />
+                      </td>
+                      <td className="px-3 py-3.5">
+                        <div className="w-16 h-3.5 rounded bg-muted/80" />
+                      </td>
+                      <td className="px-3 py-3.5">
+                        <div className="w-24 h-3.5 rounded bg-muted/70" />
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="space-y-1.5">
+                          <div className="w-36 h-3.5 rounded bg-muted/90" />
+                          <div className="w-20 h-2.5 rounded bg-muted/60" />
+                        </div>
+                      </td>
+                      <td className="px-3 py-3.5">
+                        <div className="w-24 h-3.5 rounded bg-muted/70" />
+                      </td>
+                      <td className="px-3 py-3.5 text-right">
+                        <div className="w-14 h-3.5 rounded bg-muted/80 ml-auto" />
+                      </td>
+                      <td className="px-3 py-3.5 text-right">
+                        <div className="w-14 h-3.5 rounded bg-muted/70 ml-auto" />
+                      </td>
+                      <td className="px-3 py-3.5 text-center">
+                        <div className="w-20 h-5 rounded-full bg-muted/70 mx-auto" />
+                      </td>
+                      <td className="px-3 py-3.5 text-right">
+                        <div className="w-20 h-6 rounded-md bg-muted/80 ml-auto" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Shimmer Skeleton Cards */}
+            <div className="md:hidden divide-y divide-border/60">
+              {[...Array(4)].map((_, idx) => (
+                <div key={idx} className="p-4 space-y-3 animate-pulse bg-card">
+                  <div className="flex justify-between items-center">
+                    <div className="w-24 h-4 bg-muted/80 rounded" />
+                    <div className="w-16 h-5 bg-muted/70 rounded-full" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="w-40 h-4 bg-muted/90 rounded" />
+                    <div className="w-28 h-3 bg-muted/60 rounded" />
+                  </div>
+                  <div className="flex justify-between pt-2">
+                    <div className="w-20 h-3 bg-muted/60 rounded" />
+                    <div className="w-20 h-4 bg-muted/80 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : filteredBills.length === 0 ? (
           <div className="py-16 text-center">
@@ -785,13 +871,12 @@ export default function DueReportsPage() {
                                   <span>Accept</span>
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                onClick={() => { if (typeof window !== "undefined" && window.innerWidth < 640) setInvoiceZoom(75); else setInvoiceZoom(100); setSelectedBillForInvoice(b); }}
+                              <Link
+                                href={`/dashboard/billing/dues/${b.id}`}
                                 className="text-primary hover:text-primary/80 font-semibold text-xs hover:underline cursor-pointer shrink-0"
                               >
                                 View bill
-                              </button>
+                              </Link>
                             </div>
                           </td>
                         </tr>
@@ -932,13 +1017,12 @@ export default function DueReportsPage() {
                           <span>Accept Due</span>
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedBillForInvoice(b)}
-                        className="px-3.5 py-2 rounded-lg border border-border bg-card hover:bg-muted font-semibold text-xs text-foreground transition-all cursor-pointer"
+                      <Link
+                        href={`/dashboard/billing/dues/${b.id}`}
+                        className="px-3.5 py-2 rounded-lg border border-border bg-card hover:bg-muted font-semibold text-xs text-foreground transition-all cursor-pointer text-center"
                       >
                         View bill
-                      </button>
+                      </Link>
                       <button
                         type="button"
                         onClick={() => toggleExpand(b.id)}
@@ -1064,103 +1148,6 @@ export default function DueReportsPage() {
           onSuccess={handleDueCollectedSuccess}
         />
       )}
-
-      {/* View Bill Invoice Modal (Responsive layout with Zoom Controls & Pristine View) */}
-      <Dialog
-        open={Boolean(selectedBillForInvoice)}
-        onOpenChange={(open) => !open && setSelectedBillForInvoice(null)}
-      >
-        <DialogContent className="max-w-4xl w-[calc(100vw-1.5rem)] sm:w-full max-h-[94vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl print:max-h-none print:max-w-none print:w-full print:border-none print:shadow-none print:rounded-none print:bg-white print:p-0 print:m-0 animate-in fade-in-0 zoom-in-95 duration-200">
-          <DialogTitle className="sr-only">Tax Invoice Preview</DialogTitle>
-
-          {/* Top Header */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-3 sm:px-6 py-3 sm:py-3.5 border-b border-border/80 bg-card shrink-0 gap-2.5 print:hidden pr-10 sm:pr-12">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <FileText className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <h3 className="text-xs sm:text-base font-bold text-foreground truncate">
-                    Tax Invoice Preview
-                  </h3>
-                  <span className="font-mono bg-primary/15 text-primary text-[10px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0">
-                    {selectedBillForInvoice?.regNo}
-                  </span>
-                </div>
-                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
-                  Patient: <strong className="text-foreground">{selectedBillForInvoice?.patientName}</strong> · PID: <span className="font-mono">{selectedBillForInvoice?.regNo}</span>
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  const el = document.getElementById("invoice-print-container");
-                  if (el) printInvoiceElement(el);
-                }}
-                className="h-9 px-4 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1.5 whitespace-nowrap w-full sm:w-auto"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Print</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Canvas */}
-          <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 bg-zinc-100 dark:bg-zinc-900/60 flex justify-center custom-scrollbar print:p-0 print:m-0 print:bg-white print:overflow-visible">
-            {selectedBillForInvoice && (
-              <div
-                id="invoice-print-container"
-                style={{
-                  transform: invoiceZoom !== 100 ? `scale(${invoiceZoom / 100})` : undefined,
-                  transformOrigin: "top center",
-                  transition: "transform 0.15s ease-out",
-                }}
-                className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 bg-white max-w-full print:shadow-none print:ring-0 print:border-none print:p-0 print:m-0 print:w-full"
-              >
-                <InvoiceSheet
-                  invoice={{
-                    id: selectedBillForInvoice.id,
-                    customId: selectedBillForInvoice.regNo,
-                    createdAt: selectedBillForInvoice.created_at || selectedBillForInvoice.createdAt,
-                    total: selectedBillForInvoice.calcTotal,
-                    discount: selectedBillForInvoice.calcDiscount,
-                    paidAmount: selectedBillForInvoice.calcPaid,
-                    status: selectedBillForInvoice.calcDue > 0 ? "PARTIAL" : "PAID",
-                    paymentMode: selectedBillForInvoice.payment_mode || "CASH",
-                    patient: {
-                      name: selectedBillForInvoice.patientName,
-                      customId: selectedBillForInvoice.regNo,
-                      phone: selectedBillForInvoice.patient?.phone || "—",
-                      age: selectedBillForInvoice.patient?.age || 25,
-                      gender: selectedBillForInvoice.patient?.gender || "Male",
-                      refDoctor: selectedBillForInvoice.refDoctor,
-                      address: selectedBillForInvoice.patient?.address || "—",
-                    },
-                    lab: {
-                      name: labData?.centreName || labData?.name || "OnePath Diagnostic Laboratory",
-                      email: labData?.email || "lab@onepath.com",
-                      address: labData?.address || "Main Diagnostic Center",
-                      phone: labData?.phone || "—",
-                      logoUrl: labData?.logo_url || null,
-                      bill_settings: billSettings,
-                    },
-                    tests: (selectedBillForInvoice.reports || []).map((r: any, i: number) => ({
-                      id: r.id || `T-${i}`,
-                      name: r.package_name || r.packageName || "Diagnostic Panel",
-                      price: selectedBillForInvoice.calcTotal,
-                    })),
-                  }}
-                  settings={billSettings}
-                />
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -48,17 +48,23 @@ export function extractPurePatientName(name?: string | null): string {
 /**
  * Format patient name for dashboard views: Reports Tab, Patients Tab, Billing Tab.
  * If title is blank, displays clean patient name without any "Untitled" prefix.
+ * Fully defensive against object inputs (e.g. patient entity object) or non-string values.
  */
-export function formatPatientListDisplayName(name?: string | null, designation?: string | null): string {
-  if (!name || !name.trim()) return "—";
+export function formatPatientListDisplayName(name?: any, designation?: any): string {
+  if (typeof name === "object" && name !== null) {
+    designation = designation ?? name.designation ?? name.title ?? name.salutation;
+    name = name.name ?? name.patient_name ?? name.patientName ?? "";
+  }
+
+  if (typeof name !== "string" || !name.trim()) return "—";
 
   const trimmedName = name.trim();
+  const safeDes = typeof designation === "string" ? designation.trim() : "";
 
   // If a valid designation was provided and is not blank, it ALWAYS takes precedence
-  if (designation && !isBlankDesignation(designation)) {
-    const des = designation.trim();
+  if (safeDes && !isBlankDesignation(safeDes)) {
     const pure = extractPurePatientName(trimmedName);
-    return `${des} ${pure || trimmedName}`.trim();
+    return `${safeDes} ${pure || trimmedName}`.trim();
   }
 
   // Check if name already starts with a recognized title like "Mr.", "Mrs.", "Dr.", etc.
@@ -80,14 +86,21 @@ export function formatPatientListDisplayName(name?: string | null, designation?:
 /**
  * Format patient name for Report Print & Download (Report Sheet, Fullscreen Modal, Batch Print, PDF, Public link).
  * When title is blank, NO title is displayed. Name starts cleanly from the beginning.
+ * Fully defensive against object inputs or non-string values.
  */
-export function cleanPatientNameForReport(name?: string | null, designation?: string | null): string {
-  if (!name || !name.trim()) return "—";
+export function cleanPatientNameForReport(name?: any, designation?: any): string {
+  if (typeof name === "object" && name !== null) {
+    designation = designation ?? name.designation ?? name.title ?? name.salutation;
+    name = name.name ?? name.patient_name ?? name.patientName ?? "";
+  }
+
+  if (typeof name !== "string" || !name.trim()) return "—";
 
   const trimmedName = name.trim();
+  const safeDes = typeof designation === "string" ? designation.trim() : "";
 
   // If title is blank / unselected, strip any "Untitled" and any leading title
-  if (isBlankDesignation(designation)) {
+  if (isBlankDesignation(safeDes)) {
     const pure = extractPurePatientName(trimmedName);
     return pure || trimmedName;
   }

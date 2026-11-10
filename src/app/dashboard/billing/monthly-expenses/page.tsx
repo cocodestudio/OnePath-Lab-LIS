@@ -12,7 +12,7 @@ export default function MonthlyExpensesPage() {
           Monthly Business Report
         </h1>
         <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-          Select month and year to view daily breakdown of UPI, Cash, Dues, and Grand Totals.
+          Select month, year, and laboratory scope to view daily breakdown of UPI, Cash, Dues, and Grand Totals.
         </p>
       </div>
 

@@ -3713,10 +3713,11 @@ assert(
   "[BILLING HEADER CLOSE CLEARANCE] Top header enforces dedicated clearance from dialog close button"
 );
 
-// 4. Dues Report View Bill Modal Responsiveness
+// 4. Dues Report View Bill Modal & Dedicated Page Responsiveness
 const duesPageCode = fs.readFileSync(path.resolve(__dirname, "../src/app/dashboard/billing/dues/page.tsx"), "utf-8");
 assert(
-  duesPageCode.includes("w-[calc(100vw-1.5rem)] sm:w-full max-h-[94vh]"),
+  duesPageCode.includes("w-[calc(100vw-1.5rem)] sm:w-full max-h-[94vh]") ||
+  duesPageCode.includes("/dashboard/billing/dues/"),
   "[DUES VIEW BILL SCREEN MARGINS] View Bill dialog in dues report fits comfortably on mobile screens"
 );
 assert(
@@ -7070,6 +7071,134 @@ assert(
   machineTabSrc87.includes("INSTALL_SILENT_SERVICE.bat") &&
   machineTabSrc87.includes("1-Click Silent Auto-Start (.bat)"),
   "[UI 1-CLICK SILENT SERVICE DOWNLOAD] machine-integration-tab.tsx provides 1-click download of INSTALL_SILENT_SERVICE.bat with inlined credentials"
+);
+
+// ============================================================================
+// MODULE 88: Monthly Business Expenses Scope Selector & Dedicated Due Bill Ledger Page
+// ============================================================================
+console.log("\n🧪 MODULE 88: Monthly Business Expenses Scope Selector & Dedicated Due Bill Ledger Page");
+
+// 88.1 Monthly Expenses Scope Selector & Default to Main Lab
+const monthlyExpensesSrc88 = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/monthly-expenses-register.tsx"),
+  "utf8"
+);
+assert(
+  monthlyExpensesSrc88.includes("selectedScope, setSelectedScope") &&
+  monthlyExpensesSrc88.includes('useState<string>("main_lab")') &&
+  monthlyExpensesSrc88.includes('SelectItem value="main_lab"') &&
+  monthlyExpensesSrc88.includes("collectionCenters.map("),
+  "[MONTHLY EXPENSES SCOPE SELECTOR] monthly-expenses-register.tsx has scope dropdown defaulting to main_lab and listing active collection centres"
+);
+
+// 88.2 Monthly Expenses API Query Passing Selected Scope
+assert(
+  monthlyExpensesSrc88.includes("/finance/monthly-expenses?year=") &&
+  monthlyExpensesSrc88.includes("&scope=${encodeURIComponent(sc)}"),
+  "[MONTHLY EXPENSES API SCOPE QUERY] fetchRegister passes selected scope to /finance/monthly-expenses"
+);
+
+// 88.3 Backend BillController::getMonthlyExpenses Scope Isolation
+const backendBillCtrl88 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"),
+  "utf8"
+);
+assert(
+  backendBillCtrl88.includes("$request->input('scope'") &&
+  backendBillCtrl88.includes("$isMainLabScope = true;") &&
+  backendBillCtrl88.includes("str_starts_with($rawScope, 'cc_')") &&
+  backendBillCtrl88.includes("$allCcUsers = User::where('lab_id', $labId)"),
+  "[BACKEND MONTHLY EXPENSES SCOPE ISOLATION] BillController::getMonthlyExpenses filters main_lab vs collection centre data cleanly"
+);
+
+// 88.4 Due Reports 'View bill' Links to Dedicated Page
+const duesPageSrc88 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/billing/dues/page.tsx"),
+  "utf8"
+);
+assert(
+  duesPageSrc88.includes("href={`/dashboard/billing/dues/${b.id}`}") &&
+  duesPageSrc88.includes("View bill"),
+  "[DUE REPORTS VIEW BILL LINK] dues/page.tsx links 'View bill' button to dedicated /dashboard/billing/dues/[id] page"
+);
+
+// 88.5 Dedicated Due Bill Page with Invoice Sheet & Date-Wise Transaction Ledger
+const dueDetailPageSrc88 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/billing/dues/[id]/page.tsx"),
+  "utf8"
+);
+assert(
+  dueDetailPageSrc88.includes("<InvoiceSheet invoice={invoiceData} settings={billSettings} />") &&
+  dueDetailPageSrc88.includes("Payment & Dues Transaction Ledger") &&
+  dueDetailPageSrc88.includes("transactions.map(") &&
+  dueDetailPageSrc88.includes("AcceptDueModal") &&
+  dueDetailPageSrc88.includes("printInvoiceElement"),
+  "[DEDICATED DUE BILL PAGE] dues/[id]/page.tsx renders InvoiceSheet, chronological dues transaction ledger, and inline due settlement"
+);
+
+// 88.6 Backend BillController::show Includes Chronological Payment Ledger & Synthetic Initial Payment Fallback
+assert(
+  backendBillCtrl88.includes("'payments' => function ($q)") &&
+  backendBillCtrl88.includes("where('status', 'SUCCESS')") &&
+  backendBillCtrl88.includes("orderBy('created_at', 'asc')") &&
+  backendBillCtrl88.includes("is_due_collection"),
+  "[BACKEND DUE BILL PAYMENTS RELATION] BillController::show eager-loads chronological payment ledger for dues breakdown"
+);
+
+// 88.7 Defensive Patient Display Name Helper (Zero name.trim() TypeError on Object Inputs)
+const patientTitleHelperSrc88 = fs.readFileSync(
+  path.resolve(__dirname, "../src/lib/patient-title-helper.ts"),
+  "utf8"
+);
+assert(
+  patientTitleHelperSrc88.includes('typeof name === "object"') &&
+  patientTitleHelperSrc88.includes('typeof name !== "string"') &&
+  patientTitleHelperSrc88.includes('name = name.name ?? name.patient_name'),
+  "[DEFENSIVE PATIENT NAME RESOLVER] patient-title-helper.ts safely unpacks objects or non-strings without crashing on trim()"
+);
+
+// 88.8 Universal Shimmer Skeleton States Across Monthly Expenses, Due Reports & Due Bill Detail
+assert(
+  monthlyExpensesSrc88.includes("animate-pulse") &&
+  duesPageSrc88.includes("Desktop Shimmer Skeleton Table") &&
+  duesPageSrc88.includes("Mobile Shimmer Skeleton Cards") &&
+  dueDetailPageSrc88.includes("Shimmer Header") &&
+  dueDetailPageSrc88.includes("Shimmer KPI Cards"),
+  "[UNIVERSAL SHIMMER SKELETON LOADERS] All financial registers and detail pages use elegant shimmer animations during data fetch"
+);
+
+// 88.9 PostgreSQL Compliant Collection Centre Query in BillController
+assert(
+  !backendBillCtrl88.includes("->get(['id', 'name', 'center_code', 'lab_name'])") &&
+  backendBillCtrl88.includes("->get(['id', 'name', 'lab_name'])"),
+  "[POSTGRESQL ZERO-CRASH USER QUERY] BillController.php avoids selecting non-existent center_code column from users table"
+);
+
+// 88.10 Partial Due Payment Retention Engine (Never drops partial bills or auto-waives balance)
+const acceptDueModalSrc88 = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/accept-due-modal.tsx"),
+  "utf8"
+);
+assert(
+  acceptDueModalSrc88.includes("const shouldSettle = !isPartial;") &&
+  acceptDueModalSrc88.includes("settle_as_paid: shouldSettle") &&
+  acceptDueModalSrc88.includes("Partial Due Payment Received"),
+  "[PARTIAL DUE RETENTION ENGINE] accept-due-modal.tsx sets settle_as_paid to false on partial collections without waiving due balance"
+);
+assert(
+  duesPageSrc88.includes("if (remainingDue <= 0.01)") &&
+  duesPageSrc88.includes("calcDue: remainingDue"),
+  "[DUES LIST PARTIAL PRESERVATION] dues/page.tsx strictly retains bills with remainingDue > 0 in the active due list"
+);
+
+// 88.11 Due Bill Detail Page Clean Interface (No visual preview, no patient history button, no redundant collect button, no settle due balance link)
+assert(
+  !dueDetailPageSrc88.includes("<span>Patient History</span>") &&
+  !dueDetailPageSrc88.includes("<span>Collect Outstanding Due</span>") &&
+  !dueDetailPageSrc88.includes("Settle Due Balance") &&
+  !dueDetailPageSrc88.includes("Official Laboratory Tax Invoice") &&
+  dueDetailPageSrc88.includes("hidden print:block"),
+  "[DUE BILL DETAIL CLEAN INTERFACE] dues/[id]/page.tsx removes visual preview, patient history button, and redundant collect button while preserving vector print"
 );
 
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);

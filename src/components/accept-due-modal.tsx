@@ -28,7 +28,7 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
   const [amount, setAmount] = useState<string>("");
   const [paymentMode, setPaymentMode] = useState<string>("CASH");
   const [paymentDate, setPaymentDate] = useState<string>(getTodayStr());
-  const [settleAsPaid, setSettleAsPaid] = useState<boolean>(true);
+  const [settleAsPaid, setSettleAsPaid] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,7 +41,7 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
   useEffect(() => {
     if (isOpen && bill) {
       setAmount(dueAmount > 0 ? String(dueAmount) : "");
-      setSettleAsPaid(true);
+      setSettleAsPaid(false);
       setPaymentMode("CASH");
       setPaymentDate(getTodayStr());
       setError(null);
@@ -85,7 +85,7 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
     setIsSubmitting(true);
     setError(null);
 
-    const shouldSettle = !isPartial ? true : settleAsPaid;
+    const shouldSettle = !isPartial;
 
     try {
       const res = await fetchFromLaravel(`/bills/${bill.id}/collect-due`, {
@@ -99,11 +99,12 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
       });
 
       if (res && (res.status === "success" || res.bill || res.id)) {
-        const waivedAmount = Number(res.waived_amount || 0);
-        const waivedMsg = waivedAmount > 0 ? ` (₹${waivedAmount.toFixed(2)} waived as discount waiver)` : "";
+        const remainingBal = Math.max(0, dueAmount - collectNum);
         toast.success(
-          shouldSettle ? "Invoice Settled & Paid" : "Payment Received",
-          `Due payment of ₹${collectNum.toFixed(2)} recorded for ${patientName}${waivedMsg}.`
+          !isPartial ? "Invoice Cleared & Paid" : "Partial Due Payment Received",
+          !isPartial
+            ? `Full due payment of ₹${collectNum.toFixed(2)} received for ${patientName}. Invoice is now completely paid.`
+            : `Partial payment of ₹${collectNum.toFixed(2)} recorded for ${patientName}. Remaining Due: ₹${remainingBal.toFixed(2)}.`
         );
         markApiCacheStale("/bills");
         onSuccess(res.bill || res);
@@ -301,9 +302,9 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
                 <>
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>
-                    {!isPartial || settleAsPaid
-                      ? `Accept ₹${Number(amount || 0).toFixed(2)} & Settle Paid`
-                      : `Accept Partial ₹${Number(amount || 0).toFixed(2)}`}
+                    {!isPartial
+                      ? `Accept ₹${Number(amount || 0).toFixed(2)} & Clear Due`
+                      : `Accept Partial ₹${Number(amount || 0).toFixed(2)} (Due: ₹${Math.max(0, dueAmount - collectNum).toFixed(2)})`}
                   </span>
                 </>
               )}
