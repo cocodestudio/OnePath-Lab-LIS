@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import {
   BarChart3,
@@ -20,11 +20,22 @@ import {
   Layers,
   IndianRupee,
   Download,
-  Calculator
+  Calculator,
+  Building2,
+  MapPin,
+  Check,
+  CheckCircle2
 } from "lucide-react";
 import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface TestUsageItem {
   test_id: string;
@@ -32,6 +43,7 @@ interface TestUsageItem {
   code: string;
   category: string;
   price: number;
+  cost_price?: number;
   count: number;
   percentage: number;
 }
@@ -60,7 +72,46 @@ export default function TestsCountPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Per-test cost configured by the laboratory, persisted in localStorage per lab tenant
+  // Scope: Main Lab vs Collection Centre
+  const [selectedScope, setSelectedScope] = useState<string>("main_lab");
+  const [collectionCenters, setCollectionCenters] = useState<any[]>([]);
+
+  // User & Role detection
+  const [currentUser, setCurrentUser] = useState<any>(() => getStoredUser());
+  useEffect(() => {
+    const u = getStoredUser();
+    if (u) setCurrentUser(u);
+  }, []);
+  const userRole = String(currentUser?.role || "").toUpperCase();
+  const isCollectionCenter = userRole === "COLLECTION_CENTER" || userRole === "COLLECTION_CENTRE";
+
+  // Fetch active collection centres for admin dropdown
+  useEffect(() => {
+    fetchFromLaravel("/collection-centers")
+      .then((res) => {
+        if (Array.isArray(res)) {
+          const active = res.filter((c: any) => {
+            const role = String(c.role || "").toUpperCase();
+            const status = String(c.status || "").toLowerCase();
+            return (
+              (role === "COLLECTION_CENTER" || role === "COLLECTION_CENTRE") &&
+              status !== "inactive" &&
+              status !== "suspended"
+            );
+          });
+          setCollectionCenters(active);
+        }
+      })
+      .catch((err) => console.warn("Could not fetch collection centers for test counts:", err));
+  }, []);
+
+  const selectedCenterObj = useMemo(() => {
+    if (selectedScope === "main_lab") return null;
+    const id = selectedScope.startsWith("cc_") ? selectedScope.slice(3) : selectedScope;
+    return collectionCenters.find((c) => String(c.id) === String(id)) || null;
+  }, [selectedScope, collectionCenters]);
+
+  // Per-test cost configured by the laboratory, synced with PostgreSQL database and cached locally
   const [testCosts, setTestCosts] = useState<Record<string, number | string>>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -72,6 +123,11 @@ export default function TestsCountPage() {
     }
     return {};
   });
+
+  // DB Sync tracking for instantaneous visual feedback
+  const [savingTestIds, setSavingTestIds] = useState<Record<string, boolean>>({});
+  const [savedTestIds, setSavedTestIds] = useState<Record<string, boolean>>({});
+  const saveTimeoutRefs = useRef<Record<string, NodeJS.Timeout>>({});
 
   const [summary, setSummary] = useState<UsageSummary>({
     period: "this_month",
@@ -91,6 +147,7 @@ export default function TestsCountPage() {
         period,
         page: String(page),
         per_page: "15",
+        scope: selectedScope,
       });
 
       if (period === "custom") {
@@ -123,6 +180,21 @@ export default function TestsCountPage() {
             last_page: Number(res.pagination.last_page || 1),
           });
         }
+
+        // Permanently sync costs from DB: DB is the single source of truth
+        if (Array.isArray(res.data)) {
+          setTestCosts((prev) => {
+            const next = { ...prev };
+            res.data.forEach((item: any) => {
+              if (item.cost_price !== undefined && item.cost_price !== null && Number(item.cost_price) > 0) {
+                next[item.test_id] = Number(item.cost_price);
+              } else if (next[item.test_id] === undefined && item.cost_price !== undefined) {
+                next[item.test_id] = item.cost_price > 0 ? item.cost_price : "";
+              }
+            });
+            return next;
+          });
+        }
       }
     } catch (err) {
       console.error("Failed to load test usage counts:", err);
@@ -130,13 +202,43 @@ export default function TestsCountPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [period, fromDate, toDate, search, page]);
+  }, [period, fromDate, toDate, search, page, selectedScope]);
 
   useEffect(() => {
     fetchUsageData();
   }, [fetchUsageData]);
 
-  // Handle lab editing per-test cost
+  // Permanently save cost price to database via API
+  const saveCostToDb = useCallback(async (testId: string, val: string | number) => {
+    const num = Math.max(0, Number(val || 0));
+    setSavingTestIds((prev) => ({ ...prev, [testId]: true }));
+    try {
+      await fetchFromLaravel(`/tests/${encodeURIComponent(testId)}/cost-price`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cost_price: num }),
+        skipCache: true,
+      });
+      setSavedTestIds((prev) => ({ ...prev, [testId]: true }));
+      setTimeout(() => {
+        setSavedTestIds((prev) => {
+          const next = { ...prev };
+          delete next[testId];
+          return next;
+        });
+      }, 2000);
+    } catch (err) {
+      console.error(`Failed to save cost price for test ${testId}:`, err);
+    } finally {
+      setSavingTestIds((prev) => {
+        const next = { ...prev };
+        delete next[testId];
+        return next;
+      });
+    }
+  }, []);
+
+  // Handle lab editing per-test cost with instant local state + debounced DB persistence
   const handleCostChange = (testId: string, val: string) => {
     setTestCosts((prev) => {
       const next = { ...prev, [testId]: val };
@@ -149,6 +251,21 @@ export default function TestsCountPage() {
       }
       return next;
     });
+
+    if (saveTimeoutRefs.current[testId]) {
+      clearTimeout(saveTimeoutRefs.current[testId]);
+    }
+    saveTimeoutRefs.current[testId] = setTimeout(() => {
+      saveCostToDb(testId, val);
+    }, 500);
+  };
+
+  // Immediate save on blur
+  const handleCostBlur = (testId: string) => {
+    if (saveTimeoutRefs.current[testId]) {
+      clearTimeout(saveTimeoutRefs.current[testId]);
+    }
+    saveCostToDb(testId, testCosts[testId] ?? 0);
   };
 
   const filteredList = summary.data;
@@ -228,7 +345,7 @@ export default function TestsCountPage() {
   return (
     <div className="w-full max-w-7xl mx-auto space-y-5 sm:space-y-6 pb-20 animate-fade-in text-foreground px-2.5 sm:px-4 md:px-6 overflow-x-hidden">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 border-b border-border/80 pb-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 sm:gap-4 border-b border-border/80 pb-4">
         <div>
           <div className="flex items-start sm:items-center gap-2.5">
             <div className="h-9 w-9 rounded-xl gradient-primary text-primary-foreground flex items-center justify-center shadow-xs shrink-0 mt-0.5 sm:mt-0">
@@ -240,6 +357,12 @@ export default function TestsCountPage() {
                 <span className="text-xs font-semibold text-primary tracking-normal">
                   · Live Costing
                 </span>
+                {selectedScope !== "main_lab" && selectedCenterObj && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                    <MapPin className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                    <span>{selectedCenterObj.name || selectedCenterObj.lab_name}</span>
+                  </span>
+                )}
               </h1>
               <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-relaxed">
                 Monitor laboratory test volume, configure cost per test, and analyze total production expenses across bookings.
@@ -248,7 +371,62 @@ export default function TestsCountPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-start sm:self-auto w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto w-full lg:w-auto">
+          {/* Collection Centre / Main Lab Scope Selector */}
+          {!isCollectionCenter && (
+            <div className="w-full sm:w-auto">
+              <Select
+                value={selectedScope}
+                onValueChange={(val) => {
+                  setSelectedScope(val);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger
+                  className={`h-9 text-xs rounded-xl border-border bg-card px-3 font-semibold shadow-2xs gap-2 min-w-[200px] cursor-pointer ${
+                    selectedScope !== "main_lab"
+                      ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300"
+                      : "text-foreground"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <Building2 className={`w-3.5 h-3.5 shrink-0 ${selectedScope !== "main_lab" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`} />
+                    <span className="truncate">
+                      {selectedScope === "main_lab"
+                        ? "Main Lab (In-House)"
+                        : selectedCenterObj
+                        ? (selectedCenterObj.name || selectedCenterObj.lab_name || "Collection Centre")
+                        : "Main Lab (In-House)"}
+                    </span>
+                  </div>
+                </SelectTrigger>
+                <SelectContent align="end" className="w-64 max-h-80 p-1.5 rounded-xl border-border shadow-xl">
+                  <SelectItem value="main_lab" className="text-xs font-medium cursor-pointer py-2 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <span>🔬</span>
+                      <span className="font-semibold">Main Lab (In-House)</span>
+                    </div>
+                  </SelectItem>
+                  {collectionCenters.length > 0 && (
+                    <>
+                      <div className="my-1.5 border-t border-border/70 px-2 pt-2 pb-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Collection Centres</p>
+                      </div>
+                      {collectionCenters.map((cc) => (
+                        <SelectItem key={String(cc.id)} value={`cc_${cc.id}`} className="text-xs font-medium cursor-pointer py-1.5 rounded-lg">
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="text-xs shrink-0">📍</span>
+                            <span className="truncate">{cc.name || cc.lab_name || "Collection Centre"}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -595,9 +773,9 @@ export default function TestsCountPage() {
                         </span>
                       </td>
 
-                      {/* Cost per Test (Editable price/cost setting) */}
+                      {/* Cost per Test (Editable price/cost setting with automatic DB sync) */}
                       <td className="py-2.5 sm:py-3 px-2 sm:px-3 text-right">
-                        <div className="relative inline-flex items-center w-full max-w-[95px] sm:max-w-[120px] ml-auto">
+                        <div className="relative inline-flex items-center w-full max-w-[105px] sm:max-w-[130px] ml-auto">
                           <span className="absolute left-2 text-muted-foreground font-semibold text-xs pointer-events-none">
                             ₹
                           </span>
@@ -608,9 +786,23 @@ export default function TestsCountPage() {
                             placeholder="0.00"
                             value={testCosts[item.test_id] ?? ""}
                             onChange={(e) => handleCostChange(item.test_id, e.target.value)}
-                            className="w-full h-7 sm:h-8 pl-5 sm:pl-6 pr-2 text-right rounded-lg border border-border bg-background text-xs font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs transition-all"
-                            title="Set test cost for your laboratory"
+                            onBlur={() => handleCostBlur(item.test_id)}
+                            className={`w-full h-7 sm:h-8 pl-5 sm:pl-6 pr-5 text-right rounded-lg border bg-background text-xs font-mono font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs transition-all ${
+                              savedTestIds[item.test_id]
+                                ? "border-emerald-500 ring-1 ring-emerald-500/30"
+                                : "border-border"
+                            }`}
+                            title="Set test cost for your laboratory (saved automatically to database)"
                           />
+                          {savingTestIds[item.test_id] ? (
+                            <span className="absolute right-1.5 pointer-events-none">
+                              <RefreshCw className="w-2.5 h-2.5 text-primary animate-spin" />
+                            </span>
+                          ) : savedTestIds[item.test_id] ? (
+                            <span className="absolute right-1.5 pointer-events-none" title="Permanently saved to database">
+                              <Check className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 font-bold" />
+                            </span>
+                          ) : null}
                         </div>
                       </td>
 

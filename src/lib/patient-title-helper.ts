@@ -16,16 +16,16 @@ import { ALL_DESIGNATIONS } from "./report-settings";
 
 const BLANK_DESIGNATION_VALUES = new Set(["", "blank", "null", "none", "untitled", "unselected"]);
 
-export function isBlankDesignation(designation?: string | null): boolean {
-  if (!designation) return true;
+export function isBlankDesignation(designation?: any): boolean {
+  if (typeof designation !== "string" || !designation) return true;
   return BLANK_DESIGNATION_VALUES.has(designation.trim().toLowerCase());
 }
 
 /**
  * Returns clean name without any leading designation / salutation / "Untitled" / "Blank".
  */
-export function extractPurePatientName(name?: string | null): string {
-  if (!name) return "";
+export function extractPurePatientName(name?: any): string {
+  if (typeof name !== "string" || !name) return "";
   let clean = name.trim();
 
   // Strip leading "Untitled" or "Blank" (including repeated occurrences)
@@ -106,7 +106,7 @@ export function cleanPatientNameForReport(name?: any, designation?: any): string
   }
 
   // If a valid designation exists, format properly
-  const des = designation!.trim();
+  const des = safeDes;
   if (trimmedName.toLowerCase().startsWith(des.toLowerCase())) {
     return trimmedName;
   }

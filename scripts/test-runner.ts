@@ -7201,6 +7201,95 @@ assert(
   "[DUE BILL DETAIL CLEAN INTERFACE] dues/[id]/page.tsx removes visual preview, patient history button, and redundant collect button while preserving vector print"
 );
 
+// ============================================================================
+// MODULE 89: Tests Count Scope Selector & PostgreSQL Cost Price Auto-Save Engine
+// ============================================================================
+console.log("\n🧪 MODULE 89: Tests Count Scope Selector & PostgreSQL Cost Price Auto-Save Engine");
+
+const testCountPageSrc89 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/tests/count/page.tsx"),
+  "utf8"
+);
+const backendTestCtrl89 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/TestController.php"),
+  "utf8"
+);
+const backendTestModel89 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Models/Test.php"),
+  "utf8"
+);
+const backendRoutes89 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/routes/api.php"),
+  "utf8"
+);
+
+// 89.1 Tests Count Scope Selector (Default to Main Lab & List Active CCs)
+assert(
+  testCountPageSrc89.includes("selectedScope, setSelectedScope") &&
+  testCountPageSrc89.includes('useState<string>("main_lab")') &&
+  testCountPageSrc89.includes('SelectItem value="main_lab"') &&
+  testCountPageSrc89.includes("collectionCenters.map("),
+  "[TESTS COUNT SCOPE SELECTOR] tests/count/page.tsx renders Main Lab vs Collection Centre dropdown defaulting to main_lab"
+);
+
+// 89.2 Tests Count API Query Scoping
+assert(
+  testCountPageSrc89.includes("scope: selectedScope") &&
+  testCountPageSrc89.includes("/tests/usage-counts?${params.toString()}"),
+  "[TESTS COUNT API QUERY SCOPE] tests/count/page.tsx sends selectedScope param to /tests/usage-counts"
+);
+
+// 89.3 Backend TestController::getUsageCounts Scope Isolation
+assert(
+  backendTestCtrl89.includes("$scopedCcUser = null;") &&
+  backendTestCtrl89.includes("$isMainLabScope = true;") &&
+  backendTestCtrl89.includes("$allCcUsers = User::where('lab_id', $labId)") &&
+  backendTestCtrl89.includes("'scope' => $scopedCcUser ? ('cc_' . $scopedCcUser->id) : ($isMainLabScope ? 'main_lab' : 'all')"),
+  "[BACKEND TESTS COUNT SCOPING] TestController::getUsageCounts isolates main_lab vs collection centre report test volumes"
+);
+
+// 89.4 PostgreSQL Cost Price Field in Model & Migration
+assert(
+  backendTestModel89.includes("'cost_price'") &&
+  backendTestModel89.includes("'cost_price' => 'float'"),
+  "[POSTGRESQL TEST COST MODEL] Test.php model has cost_price in fillable and cast as float"
+);
+
+// 89.5 Dedicated Cost Price Endpoints in routes/api.php
+assert(
+  backendRoutes89.includes("tests/{id}/cost-price") &&
+  backendRoutes89.includes("updateCostPrice") &&
+  backendRoutes89.includes("tests/batch-cost-prices") &&
+  backendRoutes89.includes("updateBatchCostPrices"),
+  "[TEST COST PRICE API ROUTES] routes/api.php defines dedicated endpoints for atomic and batch cost price updates"
+);
+
+// 89.6 Backend Atomic Cost Price Persistence with is_json_override Flag
+assert(
+  backendTestCtrl89.includes("public function updateCostPrice") &&
+  backendTestCtrl89.includes("$test->cost_price = $costPrice;") &&
+  backendTestCtrl89.includes("$test->is_json_override = true;") &&
+  backendTestCtrl89.includes("Cache::forget(\"lis_tests_{$labId}\");"),
+  "[BACKEND ATOMIC COST PRICE PERSISTENCE] TestController::updateCostPrice saves cost_price with is_json_override=true so it never resets"
+);
+
+// 89.7 Frontend DB Cost Price Hydration
+assert(
+  testCountPageSrc89.includes("next[item.test_id] = Number(item.cost_price)") &&
+  testCountPageSrc89.includes("cost_price?: number;"),
+  "[FRONTEND DB COST HYDRATION] tests/count/page.tsx hydrates test costs directly from PostgreSQL query response"
+);
+
+// 89.8 Frontend Instant Live Input + Debounced DB Auto-Save
+assert(
+  testCountPageSrc89.includes("saveCostToDb") &&
+  testCountPageSrc89.includes("handleCostChange") &&
+  testCountPageSrc89.includes("handleCostBlur") &&
+  testCountPageSrc89.includes("/tests/${encodeURIComponent(testId)}/cost-price") &&
+  testCountPageSrc89.includes("savedTestIds[item.test_id]"),
+  "[FRONTEND REALTIME DB AUTO-SAVE] tests/count/page.tsx automatically persists entered cost price to database with visual feedback"
+);
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 
