@@ -156,7 +156,7 @@ export default function DoctorPortalManagementPage() {
     const docNameClean = doc.name.replace(/^(dr\.?|doctor)\s+/i, "").trim() || "Doctor";
     const defaultPortalUrl = "https://doctor.onepathlab.com";
     const labName = labInfo?.name || "OnePath Diagnostic Lab";
-    const defaultFallbackMsg = `Dear Dr. ${docNameClean},\n\nYour digital Doctor Portal access from ${labName} is ready:\n👉 1-Click Link: https://doctor.onepathlab.com\n\nLogin Credentials:\n• User ID: ${finalPhone}\n• Default Password: onepathlab\n\nPlease click the link to view and download diagnostic reports for all your referred patients online.\n\nThank you,\nRegards, ${labName} Team.`;
+    const defaultFallbackMsg = `Dear Dr. ${docNameClean},\n\nYour digital Doctor Portal access from ${labName} is ready:\n👉 Portal Link: https://doctor.onepathlab.com\n\nPlease visit the link and login with your mobile number (+${finalPhone}) via OTP to view and download diagnostic reports for all your referred patients online.\n\nThank you,\nRegards, ${labName} Team.`;
     const defaultWaLink = doc.whatsapp_link || (finalPhone ? `https://wa.me/${finalPhone}?text=${encodeURIComponent(defaultFallbackMsg)}` : "");
 
     try {
