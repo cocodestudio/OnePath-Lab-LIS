@@ -18,6 +18,7 @@ import { B2BOverview } from "@/components/b2b-overview";
 import { DashboardShimmer } from "@/components/dashboard-shimmer";
 import { LabSetupProgress } from "@/components/lab-setup-progress";
 import { AcceptDueModal } from "@/components/accept-due-modal";
+import { DoctorShareExpensesWidget } from "@/components/doctor-share-expenses-widget";
 
 interface Stats {
   patientsToday: number;
@@ -722,16 +723,6 @@ export default function DashboardOverviewPage() {
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">Current month revenue collection & daily trajectory (from 1st {new Date().toLocaleString("en-US", { month: "short" })})</p>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs font-bold">
-                  <span className="text-[10px] uppercase font-semibold text-muted-foreground">Month Sales:</span>
-                  <span>₹{Number(totalMonthSales || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/60 text-muted-foreground border border-border/60 text-[11px] font-medium">
-                  <span className="text-[10px] uppercase font-semibold text-muted-foreground">Today:</span>
-                  <span className="font-semibold text-foreground">₹{Number(stats.revenue || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
-                </div>
-              </div>
             </div>
 
             <div className="h-56 min-w-0 w-full" style={{ minHeight: 224 }}>
@@ -928,110 +919,13 @@ export default function DashboardOverviewPage() {
           </div>
         </div>
 
-        {/* Report Status & Diagnostic Operations Card (6 cols) */}
-        <div className="col-span-12 lg:col-span-6 bg-card border border-border/70 rounded-xl p-5 sm:p-6 shadow-card flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <div className="min-w-0">
-                <h3 className="font-display text-base sm:text-lg font-semibold text-foreground truncate">Diagnostic Report Status</h3>
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">Monthly laboratory completion & clinical throughput</p>
-              </div>
-              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap shrink-0 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>{completionPct}% Completed</span>
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center mt-2">
-              {/* Donut Chart & Completion Bar */}
-              <div className="flex flex-col items-center justify-center">
-                <div className="relative flex items-center justify-center w-full min-h-[160px] min-w-0">
-                  {isMounted && (monthTotalReports > 0 || stats.totalReports > 0) ? (
-                    <>
-                      <ResponsiveContainer width="100%" height={160} minWidth={0} minHeight={0} debounce={50}>
-                        <PieChart>
-                          <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={3} dataKey="value" strokeWidth={0}>
-                            {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                          </Pie>
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="font-display text-2xl font-semibold text-foreground leading-none tnum">{monthTotalReports}</span>
-                        <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground mt-1">This Month</span>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">No reports recorded</p>
-                  )}
-                </div>
-
-                {/* Progress bar under donut */}
-                <div className="w-full max-w-[200px] mt-1 space-y-1">
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
-                    <span>Turnaround</span>
-                    <span className="text-foreground">{completionPct}%</span>
-                  </div>
-                  <div className="w-full bg-muted/60 h-1.5 rounded-full overflow-hidden">
-                    <div
-                      className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, Math.max(0, completionPct))}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Status Breakdown & Quick Action Links */}
-              <div className="space-y-2.5">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/30 border border-border/40">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "hsl(160 58% 32%)" }} />
-                      <span className="text-muted-foreground font-medium">Completed / Approved</span>
-                    </div>
-                    <span className="font-bold tnum text-foreground">{monthCompletedReports}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/30 border border-border/40">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "hsl(36 72% 50%)" }} />
-                      <span className="text-muted-foreground font-medium">Pending In-Review</span>
-                    </div>
-                    <span className="font-bold tnum text-foreground">{monthPendingReports}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-muted/20 border border-border/30">
-                    <span className="text-muted-foreground font-medium">Today's Intake Completed</span>
-                    <span className="font-bold tnum text-foreground">{stats.todayCompletedReports} / {stats.todayReports}</span>
-                  </div>
-                </div>
-
-                {/* 2 Quick Navigation Shortcuts */}
-                <div className="grid grid-cols-2 gap-2 pt-0.5">
-                  <Link
-                    href="/dashboard/reports"
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold transition-colors"
-                  >
-                    <FileText className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">All Reports</span>
-                  </Link>
-                  <Link
-                    href="/dashboard/patients"
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-muted/60 hover:bg-muted text-foreground text-xs font-semibold border border-border/60 transition-colors"
-                  >
-                    <UserPlus className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">New Booking</span>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-3 border-t border-border/50 mt-3 flex items-center justify-between text-xs text-muted-foreground">
-            <span>Overall Turnaround Health</span>
-            <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Operational Active
-            </span>
-          </div>
-        </div>
+        {/* Monthly Doctor Share, Operational Expenses & Referral Analytics Card (6 cols) */}
+        <DoctorShareExpensesWidget
+          monthRevenue={totalMonthSales}
+          chartData={chartData}
+          isMounted={isMounted}
+          labId={user?.lab_id || user?.labId}
+        />
       </div>
 
       {/* Accept Due Payment Modal */}

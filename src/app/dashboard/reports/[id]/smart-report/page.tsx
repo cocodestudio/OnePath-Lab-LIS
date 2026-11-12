@@ -126,7 +126,7 @@ export default function SmartReportGeneratedPage() {
                 if (parsed.smartReport) {
                   settingsToUse = { ...defaultSmartReportSettings, ...parsed.smartReport };
                 }
-              } catch {}
+              } catch { }
             }
           }
 
@@ -222,7 +222,7 @@ export default function SmartReportGeneratedPage() {
       if (typeof document !== "undefined" && document.fonts) {
         try {
           await document.fonts.ready;
-        } catch {}
+        } catch { }
       }
     },
     onAfterPrint: () => {
@@ -271,7 +271,7 @@ export default function SmartReportGeneratedPage() {
   }, [handlePrint]);
 
   // Handle WhatsApp Dispatch
-  const handleWhatsApp = async (overridePhone?: string) => {
+  const handleWhatsApp = (overridePhone?: string) => {
     const rawTarget = overridePhone || customPhone || report?.patient?.phone || "";
     const cleanPhone = rawTarget.replace(/\D/g, "").slice(-10);
 
@@ -280,45 +280,43 @@ export default function SmartReportGeneratedPage() {
       return;
     }
 
-    setIsSendingWhatsApp(true);
-    const toastId = (toast as any).loading?.("Sending WhatsApp...", "Compiling smart clinical report & sending...")
-      || toast.show({ title: "Sending WhatsApp...", description: "Compiling smart clinical report & sending...", type: "loading" as any });
+    setIsPhonePromptOpen(false);
 
-    try {
-      let pdfBase64: string | null = null;
-      if (reportContainerRef.current) {
-        try {
-          pdfBase64 = await getNativePdfBase64({
-            printContainer: reportContainerRef.current,
-            filename: `AI_SmartReport_${report?.customId || "Report"}.pdf`,
-          });
-        } catch {}
-      }
+    // Instant Success Popup (Optimistic Instant Response)
+    toast.success("Sent on WhatsApp!", `AI Smart Report is being delivered to +91 ${cleanPhone}`);
 
-      const res = await fetchFromLaravel(`/reports/${report.id}/send-whatsapp`, {
-        method: "POST",
-        body: JSON.stringify({
-          pdf_base64: pdfBase64,
-          phone: cleanPhone,
-          save_phone: savePhoneToProfile,
-          message_type: "smart_report",
-          async: true,
-        }),
-      });
+    // Run PDF generation & delivery in background without blocking user
+    (async () => {
+      try {
+        let pdfBase64: string | null = null;
+        if (reportContainerRef.current) {
+          try {
+            pdfBase64 = await getNativePdfBase64({
+              printContainer: reportContainerRef.current,
+              filename: `AI_SmartReport_${report?.customId || "Report"}.pdf`,
+            });
+          } catch { }
+        }
 
-      toast.dismiss(toastId);
-      if (res?.status === "success" || res?.success || res?.queued) {
-        toast.success("Sent on WhatsApp!", `AI Smart Report delivered to +91 ${cleanPhone} successfully!`);
-      } else {
+        const res = await fetchFromLaravel(`/reports/${report.id}/send-whatsapp`, {
+          method: "POST",
+          body: JSON.stringify({
+            pdf_base64: pdfBase64,
+            phone: cleanPhone,
+            save_phone: savePhoneToProfile,
+            message_type: "smart_report",
+            async: true,
+          }),
+        });
+
+        if (res && (res.status === "error" || res.error)) {
+          openWhatsAppDirectLink(cleanPhone);
+        }
+      } catch (err: any) {
+        console.warn("Backend WhatsApp dispatch failed, opening direct link:", err);
         openWhatsAppDirectLink(cleanPhone);
       }
-    } catch (err: any) {
-      toast.dismiss(toastId);
-      console.warn("Backend WhatsApp dispatch failed, opening direct link:", err);
-      openWhatsAppDirectLink(cleanPhone);
-    } finally {
-      setIsSendingWhatsApp(false);
-    }
+    })();
   };
 
   const openWhatsAppDirectLink = (phone: string) => {
@@ -510,12 +508,12 @@ export default function SmartReportGeneratedPage() {
 
   return (
     <div className="min-h-screen bg-zinc-900/95 dark:bg-zinc-950 text-foreground pb-16 print:bg-white print:p-0 print:m-0">
-      
+
       {/* ═════════════════════════════════════════════════════════════════
           TOP ACTION BAR: STRICTLY 2 MAIN ACTION OPTIONS (no-print)
       ═════════════════════════════════════════════════════════════════ */}
       <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b border-border/80 px-3 sm:px-6 py-2.5 sm:py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 shadow-sm no-print">
-        
+
         {/* Left: Back & Patient Details */}
         <div className="flex items-center justify-between sm:justify-start gap-2.5">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -720,1015 +718,998 @@ export default function SmartReportGeneratedPage() {
             }}
           >
 
-          {/* ─────────────────────────────────────────────────────────────
+            {/* ─────────────────────────────────────────────────────────────
               PAGE 1: SMART REPORT COVER PAGE
           ───────────────────────────────────────────────────────────── */}
-          <div
-            className="smart-report-a4-page w-[794px] h-[1123px] bg-white text-zinc-900 shadow-2xl relative flex flex-col justify-between overflow-hidden rounded-xl"
-            style={{ fontFamily: "'Inter', sans-serif" }}
-          >
-            {/* Design Accents based on coverDesign */}
-            {isClassic && (
-              <>
-                <div
-                  className="absolute top-12 right-12 text-6xl font-black select-none pointer-events-none opacity-20"
-                  style={{ color: themeColor }}
-                >
-                  +
-                </div>
-                <div
-                  className="absolute top-44 left-10 text-5xl font-black select-none pointer-events-none opacity-20"
-                  style={{ color: themeColor }}
-                >
-                  +
-                </div>
-                <div
-                  className="absolute bottom-48 right-16 text-7xl font-black select-none pointer-events-none opacity-15"
-                  style={{ color: themeColor }}
-                >
-                  +
-                </div>
-              </>
-            )}
-
-            {isModern && (
-              <div
-                className="absolute top-0 right-0 w-[460px] h-[460px] rounded-bl-full opacity-10 pointer-events-none"
-                style={{ backgroundColor: themeColor }}
-              />
-            )}
-
-            {isTech && (
-              <div className="absolute top-0 left-0 right-0 h-3" style={{ backgroundColor: themeColor }} />
-            )}
-
-            {isWellness && (
-              <div
-                className="absolute top-0 left-0 right-0 h-32 opacity-15"
-                style={{
-                  background: `linear-gradient(135deg, ${themeColor}, transparent)`,
-                }}
-              />
-            )}
-
-            {isGradient && (
-              <div
-                className="absolute top-0 left-0 right-0 h-72 opacity-15 pointer-events-none"
-                style={{ background: `linear-gradient(180deg, ${themeColor}, transparent)` }}
-              />
-            )}
-
-            {isMinimal && (
-              <div className="absolute bottom-0 left-0 right-0 h-2" style={{ backgroundColor: themeColor }} />
-            )}
-
-            {/* Header: Lab Logo & AI Tag */}
-            <div className="pt-10 px-12 flex items-center justify-between z-10">
-              {smartSettings.showLogo && smartSettings.logoUrl ? (
-                <img
-                  src={smartSettings.logoUrl}
-                  alt="Lab Logo"
-                  className="h-14 max-w-[280px] object-contain"
-                />
-              ) : (
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="h-10 w-10 rounded-xl flex items-center justify-center text-white font-extrabold text-xl shadow-xs"
-                    style={{ backgroundColor: themeColor }}
-                  >
-                    +
-                  </div>
-                  <div>
-                    <span className="font-extrabold text-base tracking-wide text-zinc-900 block leading-tight">
-                      {smartSettings.labName || "ONEPATH LABORATORY"}
-                    </span>
-                    <span className="text-[10px] text-zinc-500 font-medium">Diagnostic &amp; Pathology Intelligence</span>
-                  </div>
-                </div>
-              )}
-
-              {(smartSettings.aiGeneratedTag || smartSettings.showAiTag) && (
-                <div
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold border tracking-wide uppercase shadow-2xs"
-                  style={{
-                    backgroundColor: `${themeColor}12`,
-                    borderColor: `${themeColor}40`,
-                    color: themeColor,
-                  }}
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  <span>AI Powered Health Intelligence</span>
-                </div>
-              )}
-            </div>
-
-            {/* Center Content: Title, Doctor Graphic, Patient Info */}
-            <div className="my-auto px-12 text-center flex flex-col items-center z-10 space-y-6">
-              <div>
-                <span
-                  className="text-xs font-bold uppercase tracking-[0.25em] block mb-2"
-                  style={{ color: themeColor }}
-                >
-                  Advanced Diagnostic Evaluation
-                </span>
-                <h1 className="text-4xl sm:text-5xl font-extrabold text-zinc-900 tracking-tight leading-tight">
-                  SMART<br />HEALTH REPORT
-                </h1>
-              </div>
-
-              {/* Template Doctor / Diagnostic Visual Art */}
-              <div className="relative my-3">
-                {isClassic ? (
-                  <div className="relative">
-                    <div
-                      className="absolute -inset-4 opacity-15 rounded-3xl"
-                      style={{ backgroundColor: themeColor }}
-                    />
-                    <div className="w-60 h-68 mx-auto rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 flex flex-col items-center justify-center relative shadow-md">
-                      <Stethoscope
-                        className="h-24 w-24 opacity-30 stroke-[1.5]"
-                        style={{ color: themeColor }}
-                      />
-                      <div className="absolute bottom-4 bg-white/95 backdrop-blur-xs px-3.5 py-1.5 rounded-full text-xs font-bold text-zinc-800 shadow-2xs flex items-center gap-1.5">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                        <span>Verified Pathologist Review</span>
-                      </div>
-                    </div>
-                  </div>
-                ) : isModern ? (
-                  <div className="w-60 h-64 mx-auto rounded-3xl border-2 border-dashed border-zinc-300 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-zinc-50 to-white shadow-xs">
-                    <Activity className="h-20 w-20 mb-2" style={{ color: themeColor }} />
-                    <span className="text-sm font-bold text-zinc-800">Biomarker Analytics Matrix</span>
-                    <span className="text-xs text-zinc-500 mt-1">Multi-Organ Health Profiling</span>
-                  </div>
-                ) : isTech ? (
-                  <div className="w-68 h-60 mx-auto rounded-2xl bg-zinc-900 text-white p-6 flex flex-col justify-between text-left shadow-xl">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-mono tracking-widest text-sky-400">HIGH-TECH DIAGNOSTIC MATRIX</span>
-                      <Sparkles className="h-4 w-4 text-amber-300" />
-                    </div>
-                    <div>
-                      <span className="text-xl font-bold block">Biochemical Profiling</span>
-                      <span className="text-xs text-zinc-400">Cellular Biomarker Health Evaluation</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-zinc-700 rounded-full overflow-hidden">
-                      <div className="h-full w-4/5 rounded-full" style={{ backgroundColor: themeColor }} />
-                    </div>
-                  </div>
-                ) : isWellness ? (
-                  <div className="w-64 h-60 mx-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-md flex flex-col items-center justify-center text-center">
-                    <HeartPulse className="h-20 w-20 mb-2" style={{ color: themeColor }} />
-                    <span className="text-base font-bold text-zinc-800">Preventive Wellness Index</span>
-                    <span className="text-xs text-zinc-500 mt-1">Holistic Health Biomarkers</span>
-                  </div>
-                ) : isGradient ? (
-                  <div
-                    className="w-64 h-60 mx-auto rounded-3xl flex flex-col items-center justify-center text-white shadow-xl p-6"
-                    style={{ background: `linear-gradient(135deg, ${themeColor}, ${themeColor}99)` }}
-                  >
-                    <Sparkles className="h-16 w-16 mb-3 opacity-90" />
-                    <span className="font-black text-xl tracking-wide">Health Intelligence</span>
-                    <span className="text-xs opacity-80 mt-1">AI-Powered Precision Diagnostics</span>
-                  </div>
-                ) : (
-                  <div className="w-64 h-56 mx-auto rounded-2xl border-2 border-zinc-200 bg-white p-6 shadow-xs flex flex-col justify-between text-left">
-                    <div className="flex gap-2 items-center">
-                      <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: themeColor }} />
-                      <span className="text-xs font-bold text-zinc-700">Minimalist Clinical Report</span>
-                    </div>
-                    <div className="space-y-2.5">
-                      <div className="h-1 bg-zinc-100 rounded w-full" />
-                      <div className="h-1 bg-zinc-100 rounded w-5/6" />
-                      <div className="h-1 bg-zinc-100 rounded w-2/3" />
-                    </div>
-                    <div className="h-1.5 w-full rounded-full" style={{ backgroundColor: themeColor }} />
-                  </div>
-                )}
-              </div>
-
-              {/* Patient Information Box */}
-              <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-5 w-full max-w-lg text-left shadow-2xs">
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-zinc-400 block">Patient Name</span>
-                    <span className="font-extrabold text-zinc-800 text-base">{patient.name || "N/A"}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-zinc-400 block">Patient ID / File</span>
-                    <span className="font-mono font-bold text-zinc-800 text-sm">{report.customId}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-zinc-400 block">Age / Gender</span>
-                    <span className="font-semibold text-zinc-700">{patient.age ? `${patient.age} Y` : "N/A"} / {patient.gender || "N/A"}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-zinc-400 block">Report Date</span>
-                    <span className="font-semibold text-zinc-700">
-                      {new Date(report.reportDate || report.createdAt).toLocaleDateString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </span>
-                  </div>
-                  {patient.refDoctor && (
-                    <div className="col-span-2 pt-1 border-t border-slate-200/60">
-                      <span className="text-[10px] uppercase font-bold text-zinc-400 block">Referred By</span>
-                      <span className="font-semibold text-zinc-700">{patient.refDoctor}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Footer: Lab Branding & Address */}
-            <div className="p-8 border-t border-slate-100 bg-slate-50/70 text-center text-xs space-y-1.5 z-10">
-              <p className="font-extrabold text-zinc-800 tracking-wide uppercase text-sm">
-                {smartSettings.labName || "ONEPATH LABORATORY"}
-              </p>
-              <p className="text-zinc-500 text-xs max-w-lg mx-auto">
-                {smartSettings.labAddress || "Main Bazar, Connaught Place, New Delhi"}
-              </p>
-              {(smartSettings.email || smartSettings.emailAddress) && (
-                <p className="font-semibold text-xs" style={{ color: themeColor }}>
-                  {smartSettings.email || smartSettings.emailAddress}
-                </p>
-              )}
-              {smartSettings.footerText && (
-                <p className="text-[10.5px] text-zinc-400 italic pt-1">
-                  {smartSettings.footerText}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* ─────────────────────────────────────────────────────────────
-              PAGE 2: EXECUTIVE SUMMARY & ORGAN HEALTH MATRIX
-          ───────────────────────────────────────────────────────────── */}
-          <div
-            className={`smart-report-a4-page w-[794px] h-[1123px] bg-white text-zinc-900 shadow-2xl relative p-10 flex flex-col justify-between rounded-xl ${
-              isInteriorAccent ? "border-l-[8px]" : ""
-            }`}
-            style={{
-              fontFamily: "'Inter', sans-serif",
-              borderColor: isInteriorAccent ? themeColor : undefined,
-            }}
-          >
-            <div>
-              {/* Lab Mini Header */}
-              <div
-                className={`flex items-center justify-between pb-4 mb-5 ${
-                  isInteriorPremium ? "border-b-4 border-double" : "border-b-2"
-                }`}
-                style={{ borderColor: themeColor }}
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    {isInteriorPremium && (
-                      <span className="h-5 w-1 rounded-full" style={{ backgroundColor: themeColor }} />
-                    )}
-                    <h2 className="text-xl font-black text-zinc-900 tracking-tight">
-                      {smartSettings.labName || "ONEPATH LABORATORY"}
-                    </h2>
-                  </div>
-                  <p className="text-xs text-zinc-500 mt-0.5">{smartSettings.labAddress}</p>
-                </div>
-                <div className="text-right text-xs text-zinc-600">
-                  <span className="font-bold text-zinc-800 block">AI Smart Health Summary</span>
-                  <span>{smartSettings.email || smartSettings.emailAddress}</span>
-                </div>
-              </div>
-
-              {/* Patient Banner */}
-              <div
-                className={`flex justify-between items-center text-xs mb-6 ${
-                  isInteriorCard
-                    ? "bg-slate-50/90 border border-slate-200/90 rounded-2xl p-4 shadow-xs"
-                    : isInteriorPremium
-                    ? "bg-amber-50/30 border-y border-amber-200/60 p-3.5"
-                    : "bg-slate-50 border border-slate-200 rounded-xl p-3.5"
-                }`}
-              >
-                <div>
-                  <span className="font-extrabold text-zinc-900 text-sm">{patient.name || "Patient"}</span>
-                  <span className="text-zinc-500 ml-2">
-                    {patient.age ? `${patient.age} Y` : ""} / {patient.gender || ""} {patient.refDoctor ? `· Ref: ${patient.refDoctor}` : ""}
-                  </span>
-                </div>
-                <div className="font-mono text-xs font-semibold text-zinc-700">
-                  ID: {report.customId} · {new Date().toLocaleDateString("en-IN")}
-                </div>
-              </div>
-
-              {/* Executive Summary */}
-              {smartSettings.showExecutiveSummary && (
-                <div
-                  className={`p-5 mb-6 text-xs ${
-                    isInteriorCard
-                      ? "rounded-2xl border shadow-xs"
-                      : isInteriorPremium
-                      ? "rounded-xl border-l-4"
-                      : "rounded-2xl border"
-                  }`}
-                  style={{
-                    backgroundColor: `${themeColor}08`,
-                    borderColor: `${themeColor}35`,
-                    borderLeftColor: isInteriorPremium ? themeColor : undefined,
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <Sparkles className="h-4 w-4" style={{ color: themeColor }} />
-                    <h3 className="font-extrabold text-sm text-zinc-900 tracking-tight">
-                      Executive Clinical Summary
-                    </h3>
-                  </div>
-
-                  <div className="space-y-2 text-zinc-700 text-xs leading-relaxed">
-                    {analysis.executiveSummary.map((paragraph: string, idx: number) => (
-                      <p key={idx} className="text-zinc-700 leading-relaxed text-[11.5px]">
-                        {paragraph}
-                      </p>
-                    ))}
-                  </div>
-
-                  {/* Overall Health Vitality Banner */}
-                  <div className="mt-4 pt-3 border-t border-slate-200/80 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-zinc-700">Overall Physiological Health Index:</span>
-                      <span
-                        className="text-xs font-extrabold px-2 py-0.5 rounded-full"
-                        style={{
-                          backgroundColor: `${themeColor}15`,
-                          color: themeColor,
-                        }}
-                      >
-                        {analysis.overallStatusLabel}
-                      </span>
-                    </div>
-                    <div className="text-xs font-mono font-bold text-zinc-800">
-                      Score: <span className="text-sm font-black" style={{ color: themeColor }}>{analysis.overallHealthScore}</span> / 100
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Organ Health Gauges */}
-              {(smartSettings.showOrganHealth || smartSettings.showOrganHealthGauges) && (
-                <div className="space-y-3 mb-6">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800 flex items-center gap-2">
-                      <Activity className="h-4 w-4" style={{ color: themeColor }} />
-                      <span>Organ Health Systems Scorecard</span>
-                    </h3>
-                    <span className="text-[10.5px] font-mono text-zinc-400">Biological Score (0 - 100)</span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {analysis.organScores.map((org: OrganHealthScore) => {
-                      const badgeColor = org.color || "#10b981";
-
-                      return (
-                        <div
-                          key={org.id}
-                          className={`p-3.5 flex flex-col justify-between ${
-                            isInteriorCard
-                              ? "border border-slate-200/90 rounded-2xl bg-white shadow-2xs"
-                              : "border border-slate-200 rounded-xl bg-slate-50/60 shadow-2xs"
-                          }`}
-                        >
-                          <div>
-                            <div className="flex justify-between items-start gap-1">
-                              <span className="text-xs font-bold text-zinc-800 line-clamp-1">{org.name}</span>
-                              <span
-                                className="text-[9.5px] font-extrabold px-1.5 py-0.5 rounded-sm shrink-0 uppercase tracking-wider"
-                                style={{
-                                  backgroundColor: `${badgeColor}18`,
-                                  color: badgeColor,
-                                }}
-                              >
-                                {org.statusLabel}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-zinc-500 mt-1 line-clamp-1">{org.summary}</p>
-                          </div>
-
-                          <div className="mt-3">
-                            <div className="flex items-baseline justify-between mb-1">
-                              <span className="text-2xl font-black text-zinc-900">{org.score}</span>
-                              <span className="text-[10px] font-mono text-zinc-400">/ 100</span>
-                            </div>
-                            <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all duration-500"
-                                style={{
-                                  width: `${org.score}%`,
-                                  backgroundColor: badgeColor,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Specialist Guidance */}
-              {analysis.recommendedSpecialist && (
-                <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3.5 text-xs text-amber-900 flex items-start gap-2.5 mb-4">
-                  <Stethoscope className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold block text-xs">Recommended Specialist Review:</span>
-                    <span className="text-[11.5px] text-amber-800/90 leading-snug">
-                      Based on your biological parameters, consultation with a <strong>{analysis.recommendedSpecialist}</strong> is advised for comprehensive clinical correlation.
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Page 2 Footer */}
-            <div className={`border-t pt-3 text-[10px] text-zinc-400 flex justify-between items-center ${isInteriorPremium ? "border-double border-t-2" : ""}`}>
-              <span>{smartSettings.footerText || "OnePath Pathology Laboratory"}</span>
-              <span className="font-mono">Page 2 of {totalPages}</span>
-            </div>
-          </div>
-
-          {/* ─────────────────────────────────────────────────────────────
-              PAGES 3+: COMPLETE DIAGNOSTIC INVESTIGATION RESULTS TABLE
-          ───────────────────────────────────────────────────────────── */}
-          {resultPages.map((pageResults, pageIdx) => {
-            const pageNum = 3 + pageIdx;
-
-            return (
-              <div
-                key={`result-page-${pageIdx}`}
-                className={`smart-report-a4-page w-[794px] h-[1123px] bg-white text-zinc-900 shadow-2xl relative p-10 flex flex-col justify-between rounded-xl overflow-hidden ${
-                  isInteriorAccent ? "border-l-[8px]" : ""
-                }`}
-                style={{
-                  fontFamily: "'Inter', sans-serif",
-                  borderColor: isInteriorAccent ? themeColor : undefined,
-                }}
-              >
-                <div>
-                  {/* Lab Mini Header */}
-                  <div
-                    className={`flex items-center justify-between pb-3.5 mb-4 ${
-                      isInteriorPremium ? "border-b-4 border-double" : "border-b-2"
-                    }`}
-                    style={{ borderColor: themeColor }}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        {isInteriorPremium && (
-                          <span className="h-5 w-1 rounded-full" style={{ backgroundColor: themeColor }} />
-                        )}
-                        <h2 className="text-xl font-black text-zinc-900 tracking-tight">
-                          {smartSettings.labName || "ONEPATH LABORATORY"}
-                        </h2>
-                      </div>
-                      <p className="text-xs text-zinc-500 mt-0.5">{smartSettings.labAddress}</p>
-                    </div>
-                    <div className="text-right text-xs text-zinc-600">
-                      <span className="font-bold text-zinc-800 block">Diagnostic Investigations</span>
-                      <span>{patient.name} · {report.customId}</span>
-                    </div>
-                  </div>
-
-                  {/* Patient Demographics Strip */}
-                  <div
-                    className={`flex justify-between items-center text-xs mb-4 ${
-                      isInteriorCard
-                        ? "bg-slate-50/90 border border-slate-200/90 rounded-2xl p-3 shadow-xs"
-                        : isInteriorPremium
-                        ? "bg-amber-50/30 border-y border-amber-200/60 p-2.5"
-                        : "bg-slate-50 border border-slate-200 rounded-xl p-2.5"
-                    }`}
-                  >
-                    <div>
-                      <span className="font-extrabold text-zinc-900 text-sm">{patient.name || "Patient"}</span>
-                      <span className="text-zinc-500 ml-2">
-                        {patient.age ? `${patient.age} Y` : ""} / {patient.gender || ""} {patient.refDoctor ? `· Ref: ${patient.refDoctor}` : ""}
-                      </span>
-                    </div>
-                    <div className="font-mono text-xs font-semibold text-zinc-700">
-                      File {report.customId} · {new Date().toLocaleDateString("en-IN")}
-                    </div>
-                  </div>
-
-                  {/* Section Heading Banner */}
-                  <div className="flex items-center justify-between border-b pb-2 mb-3">
-                    <div className="flex items-center gap-2">
-                      <Activity className="h-4 w-4" style={{ color: themeColor }} />
-                      <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
-                        Laboratory Investigation Parameters &amp; Quantitative Values
-                      </h3>
-                    </div>
-                    <span className="text-[10.5px] font-mono text-zinc-500 font-semibold">
-                      Page {pageIdx + 1} of {resultPages.length} (Results)
-                    </span>
-                  </div>
-
-                  {/* Diagnostic Results Table */}
-                  <div className="overflow-hidden rounded-xl border border-slate-200 shadow-2xs">
-                    <table className="w-full text-left text-xs border-collapse table-fixed">
-                      <colgroup>
-                        <col style={{ width: "38%" }} />
-                        <col style={{ width: "18%" }} />
-                        <col style={{ width: "20%" }} />
-                        <col style={{ width: "10%" }} />
-                        <col style={{ width: "14%" }} />
-                      </colgroup>
-                      <thead>
-                        <tr className="bg-slate-100/90 border-b border-slate-200 text-[10.5px] font-black uppercase text-zinc-700 tracking-wider">
-                          <th className="py-2.5 px-3">Investigation / Biomarker</th>
-                          <th className="py-2.5 px-3 text-center">Observed Result</th>
-                          <th className="py-2.5 px-3">Reference Interval</th>
-                          <th className="py-2.5 px-2.5 text-center">Unit</th>
-                          <th className="py-2.5 px-3 text-right">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {pageResults.map((item: any, rIdx: number) => {
-                          const isHigh = item.flag === "HIGH";
-                          const isLow = item.flag === "LOW";
-
-                          return (
-                            <tr
-                              key={item.id || rIdx}
-                              className={`transition-colors ${
-                                isHigh
-                                  ? "bg-rose-50/50"
-                                  : isLow
-                                  ? "bg-amber-50/50"
-                                  : rIdx % 2 === 1
-                                  ? "bg-slate-50/60"
-                                  : "bg-white"
-                              }`}
-                            >
-                              <td className="py-2.5 px-3 font-semibold text-zinc-900">
-                                <div className="flex items-center gap-2">
-                                  <span>{item.name}</span>
-                                  {item.category && (
-                                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-zinc-500 font-normal">
-                                      {item.category}
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="py-2.5 px-3 text-center font-mono font-black text-sm text-zinc-900">
-                                <span
-                                  className={`inline-block px-2.5 py-0.5 rounded-md font-bold ${
-                                    isHigh
-                                      ? "bg-rose-100 text-rose-800 border border-rose-200"
-                                      : isLow
-                                      ? "bg-amber-100 text-amber-800 border border-amber-200"
-                                      : "text-zinc-900"
-                                  }`}
-                                >
-                                  {item.result}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-3 font-mono text-[11px] text-zinc-600">
-                                {item.refRange}
-                              </td>
-                              <td className="py-2.5 px-2.5 text-center font-mono text-[11px] text-zinc-500">
-                                {item.unit || "—"}
-                              </td>
-                              <td className="py-2.5 px-3 text-right">
-                                {isHigh ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-rose-600 uppercase bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-                                    ▲ High
-                                  </span>
-                                ) : isLow ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-600 uppercase bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                                    ▼ Low
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                                    <CheckCircle2 className="h-3 w-3" /> Normal
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Page Footer */}
-                <div
-                  className={`border-t pt-3 text-[10px] text-zinc-400 flex justify-between items-center ${
-                    isInteriorPremium ? "border-double border-t-2" : ""
-                  }`}
-                >
-                  <span>{smartSettings.footerText || "OnePath Pathology Laboratory · Official Diagnostic Results"}</span>
-                  <span className="font-mono">
-                    Page {pageNum} of {totalPages}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* ─────────────────────────────────────────────────────────────
-              BIOMARKER INTELLIGENCE & ABNORMAL DEEP DIVE (PAGINATED MAX 3 CARDS PER PAGE)
-          ───────────────────────────────────────────────────────────── */}
-          {abnormalPages.map((pageCards, pageIdx) => {
-            const currentAbnormalPageNum = biomarkerStartPage + pageIdx;
-            const isLastAbnormalPage = pageIdx === abnormalPages.length - 1;
-
-            return (
-              <div
-                key={`abnormal-page-${pageIdx}`}
-                className={`smart-report-a4-page w-[794px] h-[1123px] bg-white text-zinc-900 shadow-2xl relative p-10 flex flex-col justify-between rounded-xl overflow-hidden ${
-                  isInteriorAccent ? "border-l-[8px]" : ""
-                }`}
-                style={{
-                  fontFamily: "'Inter', sans-serif",
-                  borderColor: isInteriorAccent ? themeColor : undefined,
-                }}
-              >
-                <div>
-                  {/* Lab Mini Header */}
-                  <div
-                    className={`flex items-center justify-between pb-4 mb-4 ${
-                      isInteriorPremium ? "border-b-4 border-double" : "border-b-2"
-                    }`}
-                    style={{ borderColor: themeColor }}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        {isInteriorPremium && (
-                          <span className="h-5 w-1 rounded-full" style={{ backgroundColor: themeColor }} />
-                        )}
-                        <h2 className="text-xl font-black text-zinc-900 tracking-tight">
-                          {smartSettings.labName || "ONEPATH LABORATORY"}
-                        </h2>
-                      </div>
-                      <p className="text-xs text-zinc-500 mt-0.5">{smartSettings.labAddress}</p>
-                    </div>
-                    <div className="text-right text-xs text-zinc-600">
-                      <span className="font-bold text-zinc-800 block">Biomarker Deep-Dive</span>
-                      <span>{patient.name} · {report.customId}</span>
-                    </div>
-                  </div>
-
-                  {/* Header Status Legend */}
-                  <div className="flex items-center justify-between border-b pb-2 mb-3.5">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800">
-                        Detailed Parameter Health Insights
-                      </h3>
-                      {abnormalPages.length > 1 && (
-                        <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-100 text-zinc-600">
-                          Part {pageIdx + 1} of {abnormalPages.length}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 text-[10px] font-bold">
-                      <span className="flex items-center gap-1 text-emerald-600">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" /> Normal
-                      </span>
-                      <span className="flex items-center gap-1 text-amber-600">
-                        <span className="h-2 w-2 rounded-full bg-amber-500" /> Borderline
-                      </span>
-                      <span className="flex items-center gap-1 text-rose-600">
-                        <span className="h-2 w-2 rounded-full bg-rose-500" /> Abnormal / Action
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Abnormal & Borderline Deep-Dive Cards (Strictly Max 3 per page) */}
-                  <div className="space-y-3 mb-4">
-                    {pageCards.length > 0 ? (
-                      pageCards.map((param: AbnormalParameterAnalysis) => {
-                        const isRed = param.flag === "HIGH" || param.flag === "LOW";
-                        const statusColor = isRed ? "#e11d48" : "#f59e0b";
-
-                        return (
-                          <div
-                            key={param.id}
-                            className={`p-3.5 bg-white space-y-2 ${
-                              isInteriorCard
-                                ? "rounded-2xl border shadow-xs"
-                                : "rounded-xl border shadow-2xs"
-                            }`}
-                            style={{
-                              borderColor: isRed ? "#fecdd3" : "#fef3c7",
-                            }}
-                          >
-                            {/* Title Bar */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="h-2.5 w-2.5 rounded-full shrink-0"
-                                  style={{ backgroundColor: statusColor }}
-                                />
-                                <div>
-                                  <span className="font-bold text-xs text-zinc-900 block leading-tight">{param.name}</span>
-                                  <span className="text-[10px] text-zinc-400 font-medium">{param.organ}</span>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-xs text-zinc-800">
-                                  {param.result} {param.unit}
-                                </span>
-                                <span
-                                  className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-sm border uppercase"
-                                  style={{
-                                    backgroundColor: `${statusColor}14`,
-                                    borderColor: `${statusColor}40`,
-                                    color: statusColor,
-                                  }}
-                                >
-                                  {param.flag}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Reference Range Bar */}
-                            <div className="text-[10.5px] text-zinc-500 bg-slate-50 p-2 rounded-lg border border-slate-100 flex justify-between items-center">
-                              <span>
-                                Biological Reference Interval: <strong>{param.referenceRange}</strong>
-                              </span>
-                              <span className="italic text-zinc-500 text-[10px]">
-                                {param.flag === "HIGH" ? "Elevated above normal limits" : "Decreased below optimal range"}
-                              </span>
-                            </div>
-
-                            {/* Reasons & Impact */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-0.5">
-                              <div className="pl-3 border-l-2" style={{ borderColor: statusColor }}>
-                                <span className="font-bold text-zinc-800 text-[10.5px] block">Common Root Causes:</span>
-                                <p className="text-zinc-600 text-[10.5px] leading-snug mt-0.5">
-                                  {param.commonReasons?.join(", ") || "Clinical variation requiring dietary or medical assessment."}
-                                </p>
-                              </div>
-                              <div className="pl-3 border-l-2 border-slate-300">
-                                <span className="font-bold text-zinc-800 text-[10.5px] block">Impact On Body:</span>
-                                <p className="text-zinc-600 text-[10.5px] leading-snug mt-0.5">
-                                  {param.impactOnBody}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="p-6 rounded-2xl bg-emerald-50/60 border border-emerald-200 text-center">
-                        <CheckCircle2 className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
-                        <h4 className="font-bold text-sm text-emerald-900">All Biomarkers Within Reference Limits!</h4>
-                        <p className="text-xs text-emerald-700 mt-1">
-                          No parameters were flagged as abnormal or requiring acute clinical intervention in this test battery.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Normal Parameters Count Summary (Rendered on last abnormal page) */}
-                  {isLastAbnormalPage && analysis.totalNormal > 0 && (
-                    <div className="p-2.5 bg-emerald-50/50 border border-emerald-200/70 rounded-xl flex items-center justify-between text-xs text-emerald-900">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                        <span className="font-semibold text-[11.5px]">
-                          {analysis.totalNormal} parameters within healthy standard biological ranges
-                        </span>
-                      </div>
-                      <span className="text-[11px] font-mono font-bold text-emerald-700">
-                        {Math.round((analysis.totalNormal / analysis.totalTested) * 100)}% Normal
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Biomarker Deep-Dive Footer */}
-                <div className={`border-t pt-3 text-[10px] text-zinc-400 flex justify-between items-center ${isInteriorPremium ? "border-double border-t-2" : ""}`}>
-                  <span>{smartSettings.footerText || "OnePath Pathology Laboratory"}</span>
-                  <span className="font-mono">Page {currentAbnormalPageNum} of {totalPages}</span>
-                </div>
-              </div>
-            );
-          })}
-
-          {/* ─────────────────────────────────────────────────────────────
-              PAGE 4: PERSONALIZED DIET, LIFESTYLE & CLINICAL DISCLAIMER
-          ───────────────────────────────────────────────────────────── */}
-          <div
-            className={`smart-report-a4-page w-[794px] h-[1123px] bg-white text-zinc-900 shadow-2xl relative p-10 flex flex-col justify-between rounded-xl ${
-              isInteriorAccent ? "border-l-[8px]" : ""
-            }`}
-            style={{
-              fontFamily: "'Inter', sans-serif",
-              borderColor: isInteriorAccent ? themeColor : undefined,
-            }}
-          >
-            <div>
-              {/* Lab Mini Header */}
-              <div
-                className={`flex items-center justify-between pb-4 mb-5 ${
-                  isInteriorPremium ? "border-b-4 border-double" : "border-b-2"
-                }`}
-                style={{ borderColor: themeColor }}
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    {isInteriorPremium && (
-                      <span className="h-5 w-1 rounded-full" style={{ backgroundColor: themeColor }} />
-                    )}
-                    <h2 className="text-xl font-black text-zinc-900 tracking-tight">
-                      {smartSettings.labName || "ONEPATH LABORATORY"}
-                    </h2>
-                  </div>
-                  <p className="text-xs text-zinc-500 mt-0.5">{smartSettings.labAddress}</p>
-                </div>
-                <div className="text-right text-xs text-zinc-600">
-                  <span className="font-bold text-zinc-800 block">Personalized Nutrition &amp; Wellness</span>
-                  <span>{smartSettings.email || smartSettings.emailAddress}</span>
-                </div>
-              </div>
-
-              {/* Diet & Lifestyle Guidance */}
-              {(smartSettings.showDietTips || smartSettings.showDietLifestyleTips) && (
-                <div className="space-y-4 mb-6">
-                  <div className="flex items-center gap-2 border-b pb-2">
-                    <Apple className="h-4 w-4 text-emerald-600" />
-                    <h3 className="font-extrabold text-sm text-zinc-900">
-                      Personalized Nutrition &amp; Lifestyle Plan
-                    </h3>
-                  </div>
-
-                  {/* Dietary Recommendations */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {/* Foods to Include */}
-                    <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-4 text-xs space-y-2">
-                      <span className="font-extrabold text-emerald-900 flex items-center gap-1.5 text-xs">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                        <span>Foods to Prioritize &amp; Add</span>
-                      </span>
-                      <ul className="space-y-1.5 text-[11px] text-zinc-700 pl-4 list-disc">
-                        {analysis.lifestyleDietAdvice.foodsToInclude.map((food: string, i: number) => (
-                          <li key={i}>{food}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Foods to Limit */}
-                    <div className="bg-rose-50/60 border border-rose-200/80 rounded-xl p-4 text-xs space-y-2">
-                      <span className="font-extrabold text-rose-900 flex items-center gap-1.5 text-xs">
-                        <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
-                        <span>Foods to Moderate &amp; Avoid</span>
-                      </span>
-                      <ul className="space-y-1.5 text-[11px] text-zinc-700 pl-4 list-disc">
-                        {analysis.lifestyleDietAdvice.foodsToLimit.map((food: string, i: number) => (
-                          <li key={i}>{food}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* Lifestyle Habits */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs space-y-2">
-                    <span className="font-extrabold text-zinc-800 flex items-center gap-1.5 text-xs">
-                      <HeartPulse className="h-3.5 w-3.5" style={{ color: themeColor }} />
-                      <span>Recommended Daily Physical Habits &amp; Wellness</span>
-                    </span>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                      {analysis.lifestyleDietAdvice.lifestyleTips.map((rec: string, i: number) => (
-                        <div key={i} className="bg-white p-2.5 rounded-lg border border-slate-200/70 text-[11px] text-zinc-700">
-                          {rec}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Legal & Clinical Disclaimer */}
-              <div
-                className={`p-4 text-zinc-600 space-y-2 mb-6 ${
-                  isInteriorCard
-                    ? "bg-slate-50/90 border border-slate-200/90 rounded-2xl shadow-xs"
-                    : "bg-slate-50 border border-slate-200/90 rounded-xl"
-                }`}
-              >
-                <span className="font-bold text-zinc-800 text-xs block uppercase tracking-wider">
-                  Clinical Use &amp; Regulatory Disclaimer
-                </span>
-                <div
-                  className="text-[10px] leading-relaxed space-y-1 text-zinc-600 prose prose-xs max-w-none"
-                  dangerouslySetInnerHTML={{
-                    __html: sanitizeHtml(
-                      smartSettings.disclaimerText ||
-                      smartSettings.disclaimer ||
-                      analysis.clinicalDisclaimer ||
-                      ""
-                    ),
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Nutrition & Disclaimer Footer */}
-            <div className={`border-t pt-3 text-[10px] text-zinc-400 flex justify-between items-center ${isInteriorPremium ? "border-double border-t-2" : ""}`}>
-              <span>{smartSettings.footerText || "OnePath Pathology Laboratory"}</span>
-              <span className="font-mono">Page {guidancePageNum} of {totalPages}</span>
-            </div>
-          </div>
-
-          {/* ─────────────────────────────────────────────────────────────
-              PAGE 5: OPTIONAL BACK COVER / EXTERIOR DESIGN
-          ───────────────────────────────────────────────────────────── */}
-          {hasExterior && (
             <div
               className="smart-report-a4-page w-[794px] h-[1123px] bg-white text-zinc-900 shadow-2xl relative flex flex-col justify-between overflow-hidden rounded-xl"
               style={{ fontFamily: "'Inter', sans-serif" }}
             >
-              {smartSettings.exteriorDesign === "exterior-gradient" && (
+              {/* Design Accents based on coverDesign */}
+              {isClassic && (
                 <>
-                  <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${themeColor}, #1e1b4b)` }} />
-                  <div className="relative z-10 flex flex-col items-center justify-center h-full text-white text-center px-16 gap-6">
-                    <div className="h-20 w-20 rounded-3xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-2xl">
-                      <Sparkles className="h-10 w-10 text-white" />
-                    </div>
-                    <h2 className="text-4xl font-extrabold tracking-tight">Thank You</h2>
-                    <p className="text-lg opacity-90 font-medium max-w-md">Your Health &amp; Precision Diagnostics Are Our Highest Priority</p>
-                    <div className="w-24 h-1 bg-white/40 rounded-full my-2" />
-                    <div className="space-y-1 text-sm opacity-80">
-                      <p className="font-bold text-base text-white">{smartSettings.labName || "OnePath Laboratory"}</p>
-                      <p>{smartSettings.labAddress}</p>
-                      {(smartSettings.email || smartSettings.emailAddress) && <p>{smartSettings.email || smartSettings.emailAddress}</p>}
-                    </div>
-                    {smartSettings.footerText && (
-                      <p className="text-xs opacity-60 italic max-w-sm mt-4 border-t border-white/20 pt-4">
-                        {smartSettings.footerText}
-                      </p>
-                    )}
+                  <div
+                    className="absolute top-12 right-12 text-6xl font-black select-none pointer-events-none opacity-20"
+                    style={{ color: themeColor }}
+                  >
+                    +
                   </div>
-                  <div className="relative z-10 p-6 text-center text-xs text-white/50 border-t border-white/10">
-                    Page {exteriorPageNum} of {totalPages} · Official Diagnostic Document
+                  <div
+                    className="absolute top-44 left-10 text-5xl font-black select-none pointer-events-none opacity-20"
+                    style={{ color: themeColor }}
+                  >
+                    +
+                  </div>
+                  <div
+                    className="absolute bottom-48 right-16 text-7xl font-black select-none pointer-events-none opacity-15"
+                    style={{ color: themeColor }}
+                  >
+                    +
                   </div>
                 </>
               )}
 
-              {smartSettings.exteriorDesign === "exterior-qr" && (
-                <div className="flex flex-col justify-between h-full p-16 text-center">
-                  <div className="pt-6">
-                    <span className="text-xs font-bold uppercase tracking-widest text-zinc-400 block mb-1">Authentic Laboratory Record</span>
-                    <h2 className="text-2xl font-black text-zinc-900">{smartSettings.labName || "OnePath Laboratory"}</h2>
-                  </div>
-
-                  <div className="flex flex-col items-center justify-center gap-5 my-auto">
-                    <div className="p-6 bg-slate-50 border-2 rounded-3xl shadow-sm flex flex-col items-center gap-3" style={{ borderColor: themeColor }}>
-                      <QrCode className="h-32 w-32" style={{ color: themeColor }} />
-                      <span className="text-xs font-bold text-zinc-700">Scan to Verify Report Authenticity</span>
-                    </div>
-                    <p className="text-xs text-zinc-500 max-w-sm">
-                      Each diagnostic report contains an encrypted cryptographic hash verifying the authenticity of laboratory results.
-                    </p>
-                  </div>
-
-                  <div className="border-t pt-6 space-y-1.5 text-xs text-zinc-500">
-                    <p className="font-bold text-zinc-800">{smartSettings.labAddress}</p>
-                    <p>{smartSettings.email || smartSettings.emailAddress}</p>
-                    {smartSettings.footerText && <p className="text-zinc-400 italic text-[11px] pt-1">{smartSettings.footerText}</p>}
-                    <p className="text-[10px] text-zinc-400 font-mono pt-2">Page {exteriorPageNum} of {totalPages}</p>
-                  </div>
-                </div>
+              {isModern && (
+                <div
+                  className="absolute top-0 right-0 w-[460px] h-[460px] rounded-bl-full opacity-10 pointer-events-none"
+                  style={{ backgroundColor: themeColor }}
+                />
               )}
 
-              {smartSettings.exteriorDesign === "exterior-minimal" && (
-                <div className="flex flex-col justify-between h-full p-16">
-                  <div className="pt-8">
-                    <div className="h-1.5 w-16 rounded-full mb-6" style={{ backgroundColor: themeColor }} />
-                    <h2 className="text-2xl font-black text-zinc-900 tracking-tight">{smartSettings.labName || "ONEPATH LABORATORY"}</h2>
-                    <p className="text-xs text-zinc-500 mt-1">Quality Healthcare &amp; Clinical Pathology</p>
-                  </div>
+              {isTech && (
+                <div className="absolute top-0 left-0 right-0 h-3" style={{ backgroundColor: themeColor }} />
+              )}
 
-                  <div className="space-y-4 my-auto max-w-md">
-                    <p className="text-sm text-zinc-700 leading-relaxed">
-                      Thank you for choosing {smartSettings.labName || "OnePath Laboratory"} for your diagnostic evaluation. For any clinical queries, second opinions, or test interpretation, please reach out to our team of consultant pathologists.
-                    </p>
-                    <div className="p-4 bg-slate-50 border rounded-xl text-xs space-y-1">
-                      <span className="font-bold text-zinc-800 block">Laboratory Contact &amp; Support:</span>
-                      <p className="text-zinc-600">{smartSettings.labAddress}</p>
-                      <p className="text-zinc-600">{smartSettings.email || smartSettings.emailAddress}</p>
+              {isWellness && (
+                <div
+                  className="absolute top-0 left-0 right-0 h-32 opacity-15"
+                  style={{
+                    background: `linear-gradient(135deg, ${themeColor}, transparent)`,
+                  }}
+                />
+              )}
+
+              {isGradient && (
+                <div
+                  className="absolute top-0 left-0 right-0 h-72 opacity-15 pointer-events-none"
+                  style={{ background: `linear-gradient(180deg, ${themeColor}, transparent)` }}
+                />
+              )}
+
+              {isMinimal && (
+                <div className="absolute bottom-0 left-0 right-0 h-2" style={{ backgroundColor: themeColor }} />
+              )}
+
+              {/* Header: Lab Logo & AI Tag */}
+              <div className="pt-10 px-12 flex items-center justify-between z-10">
+                {smartSettings.showLogo && smartSettings.logoUrl ? (
+                  <img
+                    src={smartSettings.logoUrl}
+                    alt="Lab Logo"
+                    className="h-14 max-w-[280px] object-contain"
+                  />
+                ) : (
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="h-10 w-10 rounded-xl flex items-center justify-center text-white font-extrabold text-xl shadow-xs"
+                      style={{ backgroundColor: themeColor }}
+                    >
+                      +
+                    </div>
+                    <div>
+                      <span className="font-extrabold text-base tracking-wide text-zinc-900 block leading-tight">
+                        {smartSettings.labName || "ONEPATH LABORATORY"}
+                      </span>
+                      <span className="text-[10px] text-zinc-500 font-medium">Diagnostic &amp; Pathology Intelligence</span>
                     </div>
                   </div>
+                )}
 
-                  <div className="border-t pt-6 flex justify-between items-center text-xs text-zinc-400">
-                    <span>{smartSettings.footerText || "OnePath AI Diagnostics"}</span>
-                    <span className="font-mono">Page {exteriorPageNum} of {totalPages}</span>
+                {(smartSettings.aiGeneratedTag || smartSettings.showAiTag) && (
+                  <div
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold border tracking-wide uppercase shadow-2xs"
+                    style={{
+                      backgroundColor: `${themeColor}12`,
+                      borderColor: `${themeColor}40`,
+                      color: themeColor,
+                    }}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>AI Powered Health Intelligence</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Center Content: Title, Doctor Graphic, Patient Info */}
+              <div className="my-auto px-12 text-center flex flex-col items-center z-10 space-y-6">
+                <div>
+                  <span
+                    className="text-xs font-bold uppercase tracking-[0.25em] block mb-2"
+                    style={{ color: themeColor }}
+                  >
+                    Advanced Diagnostic Evaluation
+                  </span>
+                  <h1 className="text-4xl sm:text-5xl font-extrabold text-zinc-900 tracking-tight leading-tight">
+                    SMART<br />HEALTH REPORT
+                  </h1>
+                </div>
+
+                {/* Template Doctor / Diagnostic Visual Art */}
+                <div className="relative my-3">
+                  {isClassic ? (
+                    <div className="relative">
+                      <div
+                        className="absolute -inset-4 opacity-15 rounded-3xl"
+                        style={{ backgroundColor: themeColor }}
+                      />
+                      <div className="w-60 h-68 mx-auto rounded-2xl overflow-hidden bg-slate-50 border border-slate-200 flex flex-col items-center justify-center relative shadow-md">
+                        <Stethoscope
+                          className="h-24 w-24 opacity-30 stroke-[1.5]"
+                          style={{ color: themeColor }}
+                        />
+                        <div className="absolute bottom-4 bg-white/95 backdrop-blur-xs px-3.5 py-1.5 rounded-full text-xs font-bold text-zinc-800 shadow-2xs flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>Verified Pathologist Review</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : isModern ? (
+                    <div className="w-60 h-64 mx-auto rounded-3xl border-2 border-dashed border-zinc-300 flex flex-col items-center justify-center p-6 bg-gradient-to-b from-zinc-50 to-white shadow-xs">
+                      <Activity className="h-20 w-20 mb-2" style={{ color: themeColor }} />
+                      <span className="text-sm font-bold text-zinc-800">Biomarker Analytics Matrix</span>
+                      <span className="text-xs text-zinc-500 mt-1">Multi-Organ Health Profiling</span>
+                    </div>
+                  ) : isTech ? (
+                    <div className="w-68 h-60 mx-auto rounded-2xl bg-zinc-900 text-white p-6 flex flex-col justify-between text-left shadow-xl">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-mono tracking-widest text-sky-400">HIGH-TECH DIAGNOSTIC MATRIX</span>
+                        <Sparkles className="h-4 w-4 text-amber-300" />
+                      </div>
+                      <div>
+                        <span className="text-xl font-bold block">Biochemical Profiling</span>
+                        <span className="text-xs text-zinc-400">Cellular Biomarker Health Evaluation</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-zinc-700 rounded-full overflow-hidden">
+                        <div className="h-full w-4/5 rounded-full" style={{ backgroundColor: themeColor }} />
+                      </div>
+                    </div>
+                  ) : isWellness ? (
+                    <div className="w-64 h-60 mx-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-md flex flex-col items-center justify-center text-center">
+                      <HeartPulse className="h-20 w-20 mb-2" style={{ color: themeColor }} />
+                      <span className="text-base font-bold text-zinc-800">Preventive Wellness Index</span>
+                      <span className="text-xs text-zinc-500 mt-1">Holistic Health Biomarkers</span>
+                    </div>
+                  ) : isGradient ? (
+                    <div
+                      className="w-64 h-60 mx-auto rounded-3xl flex flex-col items-center justify-center text-white shadow-xl p-6"
+                      style={{ background: `linear-gradient(135deg, ${themeColor}, ${themeColor}99)` }}
+                    >
+                      <Sparkles className="h-16 w-16 mb-3 opacity-90" />
+                      <span className="font-black text-xl tracking-wide">Health Intelligence</span>
+                      <span className="text-xs opacity-80 mt-1">AI-Powered Precision Diagnostics</span>
+                    </div>
+                  ) : (
+                    <div className="w-64 h-56 mx-auto rounded-2xl border-2 border-zinc-200 bg-white p-6 shadow-xs flex flex-col justify-between text-left">
+                      <div className="flex gap-2 items-center">
+                        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: themeColor }} />
+                        <span className="text-xs font-bold text-zinc-700">Minimalist Clinical Report</span>
+                      </div>
+                      <div className="space-y-2.5">
+                        <div className="h-1 bg-zinc-100 rounded w-full" />
+                        <div className="h-1 bg-zinc-100 rounded w-5/6" />
+                        <div className="h-1 bg-zinc-100 rounded w-2/3" />
+                      </div>
+                      <div className="h-1.5 w-full rounded-full" style={{ backgroundColor: themeColor }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Patient Information Box */}
+                <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-5 w-full max-w-lg text-left shadow-2xs">
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-zinc-400 block">Patient Name</span>
+                      <span className="font-extrabold text-zinc-800 text-base">{patient.name || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-zinc-400 block">Patient ID / File</span>
+                      <span className="font-mono font-bold text-zinc-800 text-sm">{report.customId}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-zinc-400 block">Age / Gender</span>
+                      <span className="font-semibold text-zinc-700">{patient.age ? `${patient.age} Y` : "N/A"} / {patient.gender || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-zinc-400 block">Report Date</span>
+                      <span className="font-semibold text-zinc-700">
+                        {new Date(report.reportDate || report.createdAt).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </div>
+                    {patient.refDoctor && (
+                      <div className="col-span-2 pt-1 border-t border-slate-200/60">
+                        <span className="text-[10px] uppercase font-bold text-zinc-400 block">Referred By</span>
+                        <span className="font-semibold text-zinc-700">{patient.refDoctor}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
+              </div>
+
+              {/* Footer: Lab Branding & Address */}
+              <div className="p-8 border-t border-slate-100 bg-slate-50/70 text-center text-xs space-y-1.5 z-10">
+                <p className="font-extrabold text-zinc-800 tracking-wide uppercase text-sm">
+                  {smartSettings.labName || "ONEPATH LABORATORY"}
+                </p>
+                <p className="text-zinc-500 text-xs max-w-lg mx-auto">
+                  {smartSettings.labAddress || "Main Bazar, Connaught Place, New Delhi"}
+                </p>
+                {(smartSettings.email || smartSettings.emailAddress) && (
+                  <p className="font-semibold text-xs" style={{ color: themeColor }}>
+                    {smartSettings.email || smartSettings.emailAddress}
+                  </p>
+                )}
+                {smartSettings.footerText && (
+                  <p className="text-[10.5px] text-zinc-400 italic pt-1">
+                    {smartSettings.footerText}
+                  </p>
+                )}
+              </div>
             </div>
-          )}
+
+            {/* ─────────────────────────────────────────────────────────────
+              PAGE 2: EXECUTIVE SUMMARY & ORGAN HEALTH MATRIX
+          ───────────────────────────────────────────────────────────── */}
+            <div
+              className={`smart-report-a4-page w-[794px] h-[1123px] bg-white text-zinc-900 shadow-2xl relative p-10 flex flex-col justify-between rounded-xl ${isInteriorAccent ? "border-l-[8px]" : ""
+                }`}
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                borderColor: isInteriorAccent ? themeColor : undefined,
+              }}
+            >
+              <div>
+                {/* Lab Mini Header */}
+                <div
+                  className={`flex items-center justify-between pb-4 mb-5 ${isInteriorPremium ? "border-b-4 border-double" : "border-b-2"
+                    }`}
+                  style={{ borderColor: themeColor }}
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {isInteriorPremium && (
+                        <span className="h-5 w-1 rounded-full" style={{ backgroundColor: themeColor }} />
+                      )}
+                      <h2 className="text-xl font-black text-zinc-900 tracking-tight">
+                        {smartSettings.labName || "ONEPATH LABORATORY"}
+                      </h2>
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-0.5">{smartSettings.labAddress}</p>
+                  </div>
+                  <div className="text-right text-xs text-zinc-600">
+                    <span className="font-bold text-zinc-800 block">AI Smart Health Summary</span>
+                    <span>{smartSettings.email || smartSettings.emailAddress}</span>
+                  </div>
+                </div>
+
+                {/* Patient Banner */}
+                <div
+                  className={`flex justify-between items-center text-xs mb-6 ${isInteriorCard
+                      ? "bg-slate-50/90 border border-slate-200/90 rounded-2xl p-4 shadow-xs"
+                      : isInteriorPremium
+                        ? "bg-amber-50/30 border-y border-amber-200/60 p-3.5"
+                        : "bg-slate-50 border border-slate-200 rounded-xl p-3.5"
+                    }`}
+                >
+                  <div>
+                    <span className="font-extrabold text-zinc-900 text-sm">{patient.name || "Patient"}</span>
+                    <span className="text-zinc-500 ml-2">
+                      {patient.age ? `${patient.age} Y` : ""} / {patient.gender || ""} {patient.refDoctor ? `· Ref: ${patient.refDoctor}` : ""}
+                    </span>
+                  </div>
+                  <div className="font-mono text-xs font-semibold text-zinc-700">
+                    ID: {report.customId} · {new Date().toLocaleDateString("en-IN")}
+                  </div>
+                </div>
+
+                {/* Executive Summary */}
+                {smartSettings.showExecutiveSummary && (
+                  <div
+                    className={`p-5 mb-6 text-xs ${isInteriorCard
+                        ? "rounded-2xl border shadow-xs"
+                        : isInteriorPremium
+                          ? "rounded-xl border-l-4"
+                          : "rounded-2xl border"
+                      }`}
+                    style={{
+                      backgroundColor: `${themeColor}08`,
+                      borderColor: `${themeColor}35`,
+                      borderLeftColor: isInteriorPremium ? themeColor : undefined,
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <Sparkles className="h-4 w-4" style={{ color: themeColor }} />
+                      <h3 className="font-extrabold text-sm text-zinc-900 tracking-tight">
+                        Executive Clinical Summary
+                      </h3>
+                    </div>
+
+                    <div className="space-y-2 text-zinc-700 text-xs leading-relaxed">
+                      {analysis.executiveSummary.map((paragraph: string, idx: number) => (
+                        <p key={idx} className="text-zinc-700 leading-relaxed text-[11.5px]">
+                          {paragraph}
+                        </p>
+                      ))}
+                    </div>
+
+                    {/* Overall Health Vitality Banner */}
+                    <div className="mt-4 pt-3 border-t border-slate-200/80 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-zinc-700">Overall Physiological Health Index:</span>
+                        <span
+                          className="text-xs font-extrabold px-2 py-0.5 rounded-full"
+                          style={{
+                            backgroundColor: `${themeColor}15`,
+                            color: themeColor,
+                          }}
+                        >
+                          {analysis.overallStatusLabel}
+                        </span>
+                      </div>
+                      <div className="text-xs font-mono font-bold text-zinc-800">
+                        Score: <span className="text-sm font-black" style={{ color: themeColor }}>{analysis.overallHealthScore}</span> / 100
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Organ Health Gauges */}
+                {(smartSettings.showOrganHealth || smartSettings.showOrganHealthGauges) && (
+                  <div className="space-y-3 mb-6">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800 flex items-center gap-2">
+                        <Activity className="h-4 w-4" style={{ color: themeColor }} />
+                        <span>Organ Health Systems Scorecard</span>
+                      </h3>
+                      <span className="text-[10.5px] font-mono text-zinc-400">Biological Score (0 - 100)</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {analysis.organScores.map((org: OrganHealthScore) => {
+                        const badgeColor = org.color || "#10b981";
+
+                        return (
+                          <div
+                            key={org.id}
+                            className={`p-3.5 flex flex-col justify-between ${isInteriorCard
+                                ? "border border-slate-200/90 rounded-2xl bg-white shadow-2xs"
+                                : "border border-slate-200 rounded-xl bg-slate-50/60 shadow-2xs"
+                              }`}
+                          >
+                            <div>
+                              <div className="flex justify-between items-start gap-1">
+                                <span className="text-xs font-bold text-zinc-800 line-clamp-1">{org.name}</span>
+                                <span
+                                  className="text-[9.5px] font-extrabold px-1.5 py-0.5 rounded-sm shrink-0 uppercase tracking-wider"
+                                  style={{
+                                    backgroundColor: `${badgeColor}18`,
+                                    color: badgeColor,
+                                  }}
+                                >
+                                  {org.statusLabel}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-zinc-500 mt-1 line-clamp-1">{org.summary}</p>
+                            </div>
+
+                            <div className="mt-3">
+                              <div className="flex items-baseline justify-between mb-1">
+                                <span className="text-2xl font-black text-zinc-900">{org.score}</span>
+                                <span className="text-[10px] font-mono text-zinc-400">/ 100</span>
+                              </div>
+                              <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-500"
+                                  style={{
+                                    width: `${org.score}%`,
+                                    backgroundColor: badgeColor,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Specialist Guidance */}
+                {analysis.recommendedSpecialist && (
+                  <div className="bg-amber-50/60 border border-amber-200/80 rounded-xl p-3.5 text-xs text-amber-900 flex items-start gap-2.5 mb-4">
+                    <Stethoscope className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold block text-xs">Recommended Specialist Review:</span>
+                      <span className="text-[11.5px] text-amber-800/90 leading-snug">
+                        Based on your biological parameters, consultation with a <strong>{analysis.recommendedSpecialist}</strong> is advised for comprehensive clinical correlation.
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Page 2 Footer */}
+              <div className={`border-t pt-3 text-[10px] text-zinc-400 flex justify-between items-center ${isInteriorPremium ? "border-double border-t-2" : ""}`}>
+                <span>{smartSettings.footerText || "OnePath Pathology Laboratory"}</span>
+                <span className="font-mono">Page 2 of {totalPages}</span>
+              </div>
+            </div>
+
+            {/* ─────────────────────────────────────────────────────────────
+              PAGES 3+: COMPLETE DIAGNOSTIC INVESTIGATION RESULTS TABLE
+          ───────────────────────────────────────────────────────────── */}
+            {resultPages.map((pageResults, pageIdx) => {
+              const pageNum = 3 + pageIdx;
+
+              return (
+                <div
+                  key={`result-page-${pageIdx}`}
+                  className={`smart-report-a4-page w-[794px] h-[1123px] bg-white text-zinc-900 shadow-2xl relative p-10 flex flex-col justify-between rounded-xl overflow-hidden ${isInteriorAccent ? "border-l-[8px]" : ""
+                    }`}
+                  style={{
+                    fontFamily: "'Inter', sans-serif",
+                    borderColor: isInteriorAccent ? themeColor : undefined,
+                  }}
+                >
+                  <div>
+                    {/* Lab Mini Header */}
+                    <div
+                      className={`flex items-center justify-between pb-3.5 mb-4 ${isInteriorPremium ? "border-b-4 border-double" : "border-b-2"
+                        }`}
+                      style={{ borderColor: themeColor }}
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          {isInteriorPremium && (
+                            <span className="h-5 w-1 rounded-full" style={{ backgroundColor: themeColor }} />
+                          )}
+                          <h2 className="text-xl font-black text-zinc-900 tracking-tight">
+                            {smartSettings.labName || "ONEPATH LABORATORY"}
+                          </h2>
+                        </div>
+                        <p className="text-xs text-zinc-500 mt-0.5">{smartSettings.labAddress}</p>
+                      </div>
+                      <div className="text-right text-xs text-zinc-600">
+                        <span className="font-bold text-zinc-800 block">Diagnostic Investigations</span>
+                        <span>{patient.name} · {report.customId}</span>
+                      </div>
+                    </div>
+
+                    {/* Patient Demographics Strip */}
+                    <div
+                      className={`flex justify-between items-center text-xs mb-4 ${isInteriorCard
+                          ? "bg-slate-50/90 border border-slate-200/90 rounded-2xl p-3 shadow-xs"
+                          : isInteriorPremium
+                            ? "bg-amber-50/30 border-y border-amber-200/60 p-2.5"
+                            : "bg-slate-50 border border-slate-200 rounded-xl p-2.5"
+                        }`}
+                    >
+                      <div>
+                        <span className="font-extrabold text-zinc-900 text-sm">{patient.name || "Patient"}</span>
+                        <span className="text-zinc-500 ml-2">
+                          {patient.age ? `${patient.age} Y` : ""} / {patient.gender || ""} {patient.refDoctor ? `· Ref: ${patient.refDoctor}` : ""}
+                        </span>
+                      </div>
+                      <div className="font-mono text-xs font-semibold text-zinc-700">
+                        File {report.customId} · {new Date().toLocaleDateString("en-IN")}
+                      </div>
+                    </div>
+
+                    {/* Section Heading Banner */}
+                    <div className="flex items-center justify-between border-b pb-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <Activity className="h-4 w-4" style={{ color: themeColor }} />
+                        <h3 className="text-xs font-black uppercase tracking-wider text-zinc-900">
+                          Laboratory Investigation Parameters &amp; Quantitative Values
+                        </h3>
+                      </div>
+                      <span className="text-[10.5px] font-mono text-zinc-500 font-semibold">
+                        Page {pageIdx + 1} of {resultPages.length} (Results)
+                      </span>
+                    </div>
+
+                    {/* Diagnostic Results Table */}
+                    <div className="overflow-hidden rounded-xl border border-slate-200 shadow-2xs">
+                      <table className="w-full text-left text-xs border-collapse table-fixed">
+                        <colgroup>
+                          <col style={{ width: "38%" }} />
+                          <col style={{ width: "18%" }} />
+                          <col style={{ width: "20%" }} />
+                          <col style={{ width: "10%" }} />
+                          <col style={{ width: "14%" }} />
+                        </colgroup>
+                        <thead>
+                          <tr className="bg-slate-100/90 border-b border-slate-200 text-[10.5px] font-black uppercase text-zinc-700 tracking-wider">
+                            <th className="py-2.5 px-3">Investigation / Biomarker</th>
+                            <th className="py-2.5 px-3 text-center">Observed Result</th>
+                            <th className="py-2.5 px-3">Reference Interval</th>
+                            <th className="py-2.5 px-2.5 text-center">Unit</th>
+                            <th className="py-2.5 px-3 text-right">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {pageResults.map((item: any, rIdx: number) => {
+                            const isHigh = item.flag === "HIGH";
+                            const isLow = item.flag === "LOW";
+
+                            return (
+                              <tr
+                                key={item.id || rIdx}
+                                className={`transition-colors ${isHigh
+                                    ? "bg-rose-50/50"
+                                    : isLow
+                                      ? "bg-amber-50/50"
+                                      : rIdx % 2 === 1
+                                        ? "bg-slate-50/60"
+                                        : "bg-white"
+                                  }`}
+                              >
+                                <td className="py-2.5 px-3 font-semibold text-zinc-900">
+                                  <div className="flex items-center gap-2">
+                                    <span>{item.name}</span>
+                                    {item.category && (
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-zinc-500 font-normal">
+                                        {item.category}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3 text-center font-mono font-black text-sm text-zinc-900">
+                                  <span
+                                    className={`inline-block px-2.5 py-0.5 rounded-md font-bold ${isHigh
+                                        ? "bg-rose-100 text-rose-800 border border-rose-200"
+                                        : isLow
+                                          ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                          : "text-zinc-900"
+                                      }`}
+                                  >
+                                    {item.result}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-[11px] text-zinc-600">
+                                  {item.refRange}
+                                </td>
+                                <td className="py-2.5 px-2.5 text-center font-mono text-[11px] text-zinc-500">
+                                  {item.unit || "—"}
+                                </td>
+                                <td className="py-2.5 px-3 text-right">
+                                  {isHigh ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-rose-600 uppercase bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                                      ▲ High
+                                    </span>
+                                  ) : isLow ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-600 uppercase bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                      ▼ Low
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                                      <CheckCircle2 className="h-3 w-3" /> Normal
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Page Footer */}
+                  <div
+                    className={`border-t pt-3 text-[10px] text-zinc-400 flex justify-between items-center ${isInteriorPremium ? "border-double border-t-2" : ""
+                      }`}
+                  >
+                    <span>{smartSettings.footerText || "OnePath Pathology Laboratory · Official Diagnostic Results"}</span>
+                    <span className="font-mono">
+                      Page {pageNum} of {totalPages}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* ─────────────────────────────────────────────────────────────
+              BIOMARKER INTELLIGENCE & ABNORMAL DEEP DIVE (PAGINATED MAX 3 CARDS PER PAGE)
+          ───────────────────────────────────────────────────────────── */}
+            {abnormalPages.map((pageCards, pageIdx) => {
+              const currentAbnormalPageNum = biomarkerStartPage + pageIdx;
+              const isLastAbnormalPage = pageIdx === abnormalPages.length - 1;
+
+              return (
+                <div
+                  key={`abnormal-page-${pageIdx}`}
+                  className={`smart-report-a4-page w-[794px] h-[1123px] bg-white text-zinc-900 shadow-2xl relative p-10 flex flex-col justify-between rounded-xl overflow-hidden ${isInteriorAccent ? "border-l-[8px]" : ""
+                    }`}
+                  style={{
+                    fontFamily: "'Inter', sans-serif",
+                    borderColor: isInteriorAccent ? themeColor : undefined,
+                  }}
+                >
+                  <div>
+                    {/* Lab Mini Header */}
+                    <div
+                      className={`flex items-center justify-between pb-4 mb-4 ${isInteriorPremium ? "border-b-4 border-double" : "border-b-2"
+                        }`}
+                      style={{ borderColor: themeColor }}
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          {isInteriorPremium && (
+                            <span className="h-5 w-1 rounded-full" style={{ backgroundColor: themeColor }} />
+                          )}
+                          <h2 className="text-xl font-black text-zinc-900 tracking-tight">
+                            {smartSettings.labName || "ONEPATH LABORATORY"}
+                          </h2>
+                        </div>
+                        <p className="text-xs text-zinc-500 mt-0.5">{smartSettings.labAddress}</p>
+                      </div>
+                      <div className="text-right text-xs text-zinc-600">
+                        <span className="font-bold text-zinc-800 block">Biomarker Deep-Dive</span>
+                        <span>{patient.name} · {report.customId}</span>
+                      </div>
+                    </div>
+
+                    {/* Header Status Legend */}
+                    <div className="flex items-center justify-between border-b pb-2 mb-3.5">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-800">
+                          Detailed Parameter Health Insights
+                        </h3>
+                        {abnormalPages.length > 1 && (
+                          <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-100 text-zinc-600">
+                            Part {pageIdx + 1} of {abnormalPages.length}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 text-[10px] font-bold">
+                        <span className="flex items-center gap-1 text-emerald-600">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500" /> Normal
+                        </span>
+                        <span className="flex items-center gap-1 text-amber-600">
+                          <span className="h-2 w-2 rounded-full bg-amber-500" /> Borderline
+                        </span>
+                        <span className="flex items-center gap-1 text-rose-600">
+                          <span className="h-2 w-2 rounded-full bg-rose-500" /> Abnormal / Action
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Abnormal & Borderline Deep-Dive Cards (Strictly Max 3 per page) */}
+                    <div className="space-y-3 mb-4">
+                      {pageCards.length > 0 ? (
+                        pageCards.map((param: AbnormalParameterAnalysis) => {
+                          const isRed = param.flag === "HIGH" || param.flag === "LOW";
+                          const statusColor = isRed ? "#e11d48" : "#f59e0b";
+
+                          return (
+                            <div
+                              key={param.id}
+                              className={`p-3.5 bg-white space-y-2 ${isInteriorCard
+                                  ? "rounded-2xl border shadow-xs"
+                                  : "rounded-xl border shadow-2xs"
+                                }`}
+                              style={{
+                                borderColor: isRed ? "#fecdd3" : "#fef3c7",
+                              }}
+                            >
+                              {/* Title Bar */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="h-2.5 w-2.5 rounded-full shrink-0"
+                                    style={{ backgroundColor: statusColor }}
+                                  />
+                                  <div>
+                                    <span className="font-bold text-xs text-zinc-900 block leading-tight">{param.name}</span>
+                                    <span className="text-[10px] text-zinc-400 font-medium">{param.organ}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-bold text-xs text-zinc-800">
+                                    {param.result} {param.unit}
+                                  </span>
+                                  <span
+                                    className="text-[9.5px] font-extrabold px-2 py-0.5 rounded-sm border uppercase"
+                                    style={{
+                                      backgroundColor: `${statusColor}14`,
+                                      borderColor: `${statusColor}40`,
+                                      color: statusColor,
+                                    }}
+                                  >
+                                    {param.flag}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Reference Range Bar */}
+                              <div className="text-[10.5px] text-zinc-500 bg-slate-50 p-2 rounded-lg border border-slate-100 flex justify-between items-center">
+                                <span>
+                                  Biological Reference Interval: <strong>{param.referenceRange}</strong>
+                                </span>
+                                <span className="italic text-zinc-500 text-[10px]">
+                                  {param.flag === "HIGH" ? "Elevated above normal limits" : "Decreased below optimal range"}
+                                </span>
+                              </div>
+
+                              {/* Reasons & Impact */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-0.5">
+                                <div className="pl-3 border-l-2" style={{ borderColor: statusColor }}>
+                                  <span className="font-bold text-zinc-800 text-[10.5px] block">Common Root Causes:</span>
+                                  <p className="text-zinc-600 text-[10.5px] leading-snug mt-0.5">
+                                    {param.commonReasons?.join(", ") || "Clinical variation requiring dietary or medical assessment."}
+                                  </p>
+                                </div>
+                                <div className="pl-3 border-l-2 border-slate-300">
+                                  <span className="font-bold text-zinc-800 text-[10.5px] block">Impact On Body:</span>
+                                  <p className="text-zinc-600 text-[10.5px] leading-snug mt-0.5">
+                                    {param.impactOnBody}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="p-6 rounded-2xl bg-emerald-50/60 border border-emerald-200 text-center">
+                          <CheckCircle2 className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
+                          <h4 className="font-bold text-sm text-emerald-900">All Biomarkers Within Reference Limits!</h4>
+                          <p className="text-xs text-emerald-700 mt-1">
+                            No parameters were flagged as abnormal or requiring acute clinical intervention in this test battery.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Normal Parameters Count Summary (Rendered on last abnormal page) */}
+                    {isLastAbnormalPage && analysis.totalNormal > 0 && (
+                      <div className="p-2.5 bg-emerald-50/50 border border-emerald-200/70 rounded-xl flex items-center justify-between text-xs text-emerald-900">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                          <span className="font-semibold text-[11.5px]">
+                            {analysis.totalNormal} parameters within healthy standard biological ranges
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-mono font-bold text-emerald-700">
+                          {Math.round((analysis.totalNormal / analysis.totalTested) * 100)}% Normal
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Biomarker Deep-Dive Footer */}
+                  <div className={`border-t pt-3 text-[10px] text-zinc-400 flex justify-between items-center ${isInteriorPremium ? "border-double border-t-2" : ""}`}>
+                    <span>{smartSettings.footerText || "OnePath Pathology Laboratory"}</span>
+                    <span className="font-mono">Page {currentAbnormalPageNum} of {totalPages}</span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* ─────────────────────────────────────────────────────────────
+              PAGE 4: PERSONALIZED DIET, LIFESTYLE & CLINICAL DISCLAIMER
+          ───────────────────────────────────────────────────────────── */}
+            <div
+              className={`smart-report-a4-page w-[794px] h-[1123px] bg-white text-zinc-900 shadow-2xl relative p-10 flex flex-col justify-between rounded-xl ${isInteriorAccent ? "border-l-[8px]" : ""
+                }`}
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                borderColor: isInteriorAccent ? themeColor : undefined,
+              }}
+            >
+              <div>
+                {/* Lab Mini Header */}
+                <div
+                  className={`flex items-center justify-between pb-4 mb-5 ${isInteriorPremium ? "border-b-4 border-double" : "border-b-2"
+                    }`}
+                  style={{ borderColor: themeColor }}
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      {isInteriorPremium && (
+                        <span className="h-5 w-1 rounded-full" style={{ backgroundColor: themeColor }} />
+                      )}
+                      <h2 className="text-xl font-black text-zinc-900 tracking-tight">
+                        {smartSettings.labName || "ONEPATH LABORATORY"}
+                      </h2>
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-0.5">{smartSettings.labAddress}</p>
+                  </div>
+                  <div className="text-right text-xs text-zinc-600">
+                    <span className="font-bold text-zinc-800 block">Personalized Nutrition &amp; Wellness</span>
+                    <span>{smartSettings.email || smartSettings.emailAddress}</span>
+                  </div>
+                </div>
+
+                {/* Diet & Lifestyle Guidance */}
+                {(smartSettings.showDietTips || smartSettings.showDietLifestyleTips) && (
+                  <div className="space-y-4 mb-6">
+                    <div className="flex items-center gap-2 border-b pb-2">
+                      <Apple className="h-4 w-4 text-emerald-600" />
+                      <h3 className="font-extrabold text-sm text-zinc-900">
+                        Personalized Nutrition &amp; Lifestyle Plan
+                      </h3>
+                    </div>
+
+                    {/* Dietary Recommendations */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      {/* Foods to Include */}
+                      <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-xl p-4 text-xs space-y-2">
+                        <span className="font-extrabold text-emerald-900 flex items-center gap-1.5 text-xs">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>Foods to Prioritize &amp; Add</span>
+                        </span>
+                        <ul className="space-y-1.5 text-[11px] text-zinc-700 pl-4 list-disc">
+                          {analysis.lifestyleDietAdvice.foodsToInclude.map((food: string, i: number) => (
+                            <li key={i}>{food}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Foods to Limit */}
+                      <div className="bg-rose-50/60 border border-rose-200/80 rounded-xl p-4 text-xs space-y-2">
+                        <span className="font-extrabold text-rose-900 flex items-center gap-1.5 text-xs">
+                          <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
+                          <span>Foods to Moderate &amp; Avoid</span>
+                        </span>
+                        <ul className="space-y-1.5 text-[11px] text-zinc-700 pl-4 list-disc">
+                          {analysis.lifestyleDietAdvice.foodsToLimit.map((food: string, i: number) => (
+                            <li key={i}>{food}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    {/* Lifestyle Habits */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs space-y-2">
+                      <span className="font-extrabold text-zinc-800 flex items-center gap-1.5 text-xs">
+                        <HeartPulse className="h-3.5 w-3.5" style={{ color: themeColor }} />
+                        <span>Recommended Daily Physical Habits &amp; Wellness</span>
+                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                        {analysis.lifestyleDietAdvice.lifestyleTips.map((rec: string, i: number) => (
+                          <div key={i} className="bg-white p-2.5 rounded-lg border border-slate-200/70 text-[11px] text-zinc-700">
+                            {rec}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Legal & Clinical Disclaimer */}
+                <div
+                  className={`p-4 text-zinc-600 space-y-2 mb-6 ${isInteriorCard
+                      ? "bg-slate-50/90 border border-slate-200/90 rounded-2xl shadow-xs"
+                      : "bg-slate-50 border border-slate-200/90 rounded-xl"
+                    }`}
+                >
+                  <span className="font-bold text-zinc-800 text-xs block uppercase tracking-wider">
+                    Clinical Use &amp; Regulatory Disclaimer
+                  </span>
+                  <div
+                    className="text-[10px] leading-relaxed space-y-1 text-zinc-600 prose prose-xs max-w-none"
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeHtml(
+                        smartSettings.disclaimerText ||
+                        smartSettings.disclaimer ||
+                        analysis.clinicalDisclaimer ||
+                        ""
+                      ),
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Nutrition & Disclaimer Footer */}
+              <div className={`border-t pt-3 text-[10px] text-zinc-400 flex justify-between items-center ${isInteriorPremium ? "border-double border-t-2" : ""}`}>
+                <span>{smartSettings.footerText || "OnePath Pathology Laboratory"}</span>
+                <span className="font-mono">Page {guidancePageNum} of {totalPages}</span>
+              </div>
+            </div>
+
+            {/* ─────────────────────────────────────────────────────────────
+              PAGE 5: OPTIONAL BACK COVER / EXTERIOR DESIGN
+          ───────────────────────────────────────────────────────────── */}
+            {hasExterior && (
+              <div
+                className="smart-report-a4-page w-[794px] h-[1123px] bg-white text-zinc-900 shadow-2xl relative flex flex-col justify-between overflow-hidden rounded-xl"
+                style={{ fontFamily: "'Inter', sans-serif" }}
+              >
+                {smartSettings.exteriorDesign === "exterior-gradient" && (
+                  <>
+                    <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${themeColor}, #1e1b4b)` }} />
+                    <div className="relative z-10 flex flex-col items-center justify-center h-full text-white text-center px-16 gap-6">
+                      <div className="h-20 w-20 rounded-3xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-2xl">
+                        <Sparkles className="h-10 w-10 text-white" />
+                      </div>
+                      <h2 className="text-4xl font-extrabold tracking-tight">Thank You</h2>
+                      <p className="text-lg opacity-90 font-medium max-w-md">Your Health &amp; Precision Diagnostics Are Our Highest Priority</p>
+                      <div className="w-24 h-1 bg-white/40 rounded-full my-2" />
+                      <div className="space-y-1 text-sm opacity-80">
+                        <p className="font-bold text-base text-white">{smartSettings.labName || "OnePath Laboratory"}</p>
+                        <p>{smartSettings.labAddress}</p>
+                        {(smartSettings.email || smartSettings.emailAddress) && <p>{smartSettings.email || smartSettings.emailAddress}</p>}
+                      </div>
+                      {smartSettings.footerText && (
+                        <p className="text-xs opacity-60 italic max-w-sm mt-4 border-t border-white/20 pt-4">
+                          {smartSettings.footerText}
+                        </p>
+                      )}
+                    </div>
+                    <div className="relative z-10 p-6 text-center text-xs text-white/50 border-t border-white/10">
+                      Page {exteriorPageNum} of {totalPages} · Official Diagnostic Document
+                    </div>
+                  </>
+                )}
+
+                {smartSettings.exteriorDesign === "exterior-qr" && (
+                  <div className="flex flex-col justify-between h-full p-16 text-center">
+                    <div className="pt-6">
+                      <span className="text-xs font-bold uppercase tracking-widest text-zinc-400 block mb-1">Authentic Laboratory Record</span>
+                      <h2 className="text-2xl font-black text-zinc-900">{smartSettings.labName || "OnePath Laboratory"}</h2>
+                    </div>
+
+                    <div className="flex flex-col items-center justify-center gap-5 my-auto">
+                      <div className="p-6 bg-slate-50 border-2 rounded-3xl shadow-sm flex flex-col items-center gap-3" style={{ borderColor: themeColor }}>
+                        <QrCode className="h-32 w-32" style={{ color: themeColor }} />
+                        <span className="text-xs font-bold text-zinc-700">Scan to Verify Report Authenticity</span>
+                      </div>
+                      <p className="text-xs text-zinc-500 max-w-sm">
+                        Each diagnostic report contains an encrypted cryptographic hash verifying the authenticity of laboratory results.
+                      </p>
+                    </div>
+
+                    <div className="border-t pt-6 space-y-1.5 text-xs text-zinc-500">
+                      <p className="font-bold text-zinc-800">{smartSettings.labAddress}</p>
+                      <p>{smartSettings.email || smartSettings.emailAddress}</p>
+                      {smartSettings.footerText && <p className="text-zinc-400 italic text-[11px] pt-1">{smartSettings.footerText}</p>}
+                      <p className="text-[10px] text-zinc-400 font-mono pt-2">Page {exteriorPageNum} of {totalPages}</p>
+                    </div>
+                  </div>
+                )}
+
+                {smartSettings.exteriorDesign === "exterior-minimal" && (
+                  <div className="flex flex-col justify-between h-full p-16">
+                    <div className="pt-8">
+                      <div className="h-1.5 w-16 rounded-full mb-6" style={{ backgroundColor: themeColor }} />
+                      <h2 className="text-2xl font-black text-zinc-900 tracking-tight">{smartSettings.labName || "ONEPATH LABORATORY"}</h2>
+                      <p className="text-xs text-zinc-500 mt-1">Quality Healthcare &amp; Clinical Pathology</p>
+                    </div>
+
+                    <div className="space-y-4 my-auto max-w-md">
+                      <p className="text-sm text-zinc-700 leading-relaxed">
+                        Thank you for choosing {smartSettings.labName || "OnePath Laboratory"} for your diagnostic evaluation. For any clinical queries, second opinions, or test interpretation, please reach out to our team of consultant pathologists.
+                      </p>
+                      <div className="p-4 bg-slate-50 border rounded-xl text-xs space-y-1">
+                        <span className="font-bold text-zinc-800 block">Laboratory Contact &amp; Support:</span>
+                        <p className="text-zinc-600">{smartSettings.labAddress}</p>
+                        <p className="text-zinc-600">{smartSettings.email || smartSettings.emailAddress}</p>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-6 flex justify-between items-center text-xs text-zinc-400">
+                      <span>{smartSettings.footerText || "OnePath AI Diagnostics"}</span>
+                      <span className="font-mono">Page {exteriorPageNum} of {totalPages}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
           </div>
         </div>

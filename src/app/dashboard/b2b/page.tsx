@@ -315,7 +315,7 @@ export default function B2bSalesPage() {
     }
   };
 
-  const handleSendWhatsAppInvoice = async () => {
+  const handleSendWhatsAppInvoice = () => {
     if (!selectedPatientForInvoice) return;
     const phone = selectedPatientForInvoice.phone;
     const digitsOnly = phone ? phone.replace(/[^0-9]/g, "") : "";
@@ -328,42 +328,49 @@ export default function B2bSalesPage() {
       return;
     }
 
-    setIsSendingWhatsApp(true);
-    try {
-      const pName = (selectedPatientForInvoice.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
-      const invNo = (selectedPatientForInvoice.bill?.custom_id || selectedPatientForInvoice.bill_custom_id || selectedPatientForInvoice.custom_id).replace(/[^a-zA-Z0-9_-]/g, "_");
-      const filename = `Invoice_${invNo}_${pName}.pdf`;
+    const billId = selectedPatientForInvoice.bill?.id || selectedPatientForInvoice.bill_id;
+    if (!billId) {
+      toast.error("Bill ID Missing", "This patient does not have an attached bill record.");
+      return;
+    }
 
-      const pdfBase64 = await getNativePdfBase64({
-        printContainer: invoicePrintRef.current,
-        filename,
-      });
+    const tenDigits = digitsOnly.slice(-10);
 
-      const billId = selectedPatientForInvoice.bill?.id || selectedPatientForInvoice.bill_id;
-      if (billId) {
+    // Instant Success Popup (Optimistic Instant Response)
+    toast.success("Sent on WhatsApp!", `Invoice PDF is being delivered to +91  in the background.${tenDigits}`);
+
+    // Run PDF generation & delivery in background without blocking user
+    (async () => {
+      try {
+        const container = invoicePrintRef.current;
+        if (!container) return;
+
+        const pName = (selectedPatientForInvoice.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const invNo = (selectedPatientForInvoice.bill?.custom_id || selectedPatientForInvoice.bill_custom_id || selectedPatientForInvoice.custom_id).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const filename = `Invoice_${invNo}_${pName}.pdf`;
+
+        const pdfBase64 = await getNativePdfBase64({
+          printContainer: container,
+          filename,
+        });
+
         const res = await fetchFromLaravel(`/bills/${billId}/send-whatsapp`, {
           method: "POST",
           body: JSON.stringify({
             pdf_base64: pdfBase64,
-            phone: digitsOnly.slice(-10),
+            phone: tenDigits,
             async: true,
           }),
         });
 
-        if (res?.status === "success" || res?.success || res?.queued) {
-          toast.success("Sent on WhatsApp!", "Invoice PDF sent to patient's WhatsApp successfully.");
-        } else {
+        if (res && (res.status === "error" || res.error)) {
           toast.error("WhatsApp Dispatch Failed", res?.message || "Could not deliver WhatsApp message.");
         }
-      } else {
-        toast.error("Bill ID Missing", "This patient does not have an attached bill record.");
+      } catch (err: any) {
+        console.error("WhatsApp invoice dispatch error:", err);
+        toast.error("WhatsApp Error", err?.message || "An unexpected error occurred while sending WhatsApp.");
       }
-    } catch (err: any) {
-      console.error("WhatsApp invoice dispatch error:", err);
-      toast.error("WhatsApp Error", err?.message || "An unexpected error occurred while sending WhatsApp.");
-    } finally {
-      setIsSendingWhatsApp(false);
-    }
+    })();
   };
 
   const invoiceData: InvoiceData | null = useMemo(() => {
@@ -382,21 +389,21 @@ export default function B2bSalesPage() {
 
     const testItems = (b?.tests && Array.isArray(b.tests) && b.tests.length > 0)
       ? b.tests.map((t: any) => ({
-          id: String(t.id || t.name),
-          name: t.name,
-          price: Number(t.price || 0),
-          code: t.code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
-          category: t.category || "Pathology",
-        }))
+        id: String(t.id || t.name),
+        name: t.name,
+        price: Number(t.price || 0),
+        code: t.code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
+        category: t.category || "Pathology",
+      }))
       : (selectedPatientForInvoice.tests && selectedPatientForInvoice.tests.length > 0)
-      ? selectedPatientForInvoice.tests.map((testName: string, idx: number) => ({
+        ? selectedPatientForInvoice.tests.map((testName: string, idx: number) => ({
           id: `t-${idx}`,
           name: testName,
           price: Number(billTotal / (selectedPatientForInvoice.tests.length || 1)),
           code: `T-${testName.substring(0, 3).toUpperCase()}`,
           category: "Pathology",
         }))
-      : [{
+        : [{
           id: "std-1",
           name: "Standard Diagnostic Profile",
           price: billTotal,
@@ -498,11 +505,10 @@ export default function B2bSalesPage() {
                 <button
                   type="button"
                   onClick={() => handlePartnerTypeChange("B2B")}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs transition-colors cursor-pointer ${
-                    partnerType === "B2B"
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs transition-colors cursor-pointer ${partnerType === "B2B"
                       ? "bg-primary/10 text-primary font-bold"
                       : "text-foreground hover:bg-muted font-medium"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
@@ -519,11 +525,10 @@ export default function B2bSalesPage() {
                 <button
                   type="button"
                   onClick={() => handlePartnerTypeChange("COLLECTION_CENTER")}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs transition-colors cursor-pointer mt-1 ${
-                    partnerType === "COLLECTION_CENTER"
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs transition-colors cursor-pointer mt-1 ${partnerType === "COLLECTION_CENTER"
                       ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold"
                       : "text-foreground hover:bg-muted font-medium"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <div className="h-7 w-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
@@ -565,8 +570,8 @@ export default function B2bSalesPage() {
               {selectedClient
                 ? `${selectedClient.lab_name || selectedClient.name} Sales`
                 : partnerType === "COLLECTION_CENTER"
-                ? "Total Collection Centre Sales"
-                : "Total All B2B Sales"}{" "}
+                  ? "Total Collection Centre Sales"
+                  : "Total All B2B Sales"}{" "}
               ({period === "all" ? "All Time" : period === "today" ? "Today" : period === "this_month" ? "This Month" : "Custom"})
             </span>
             {isLoadingSales ? (
@@ -716,11 +721,10 @@ export default function B2bSalesPage() {
                   setSelectedB2bId("");
                   setPage(1);
                 }}
-                className={`min-w-[240px] max-w-[280px] text-left p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between shrink-0 ${
-                  selectedB2bId === ""
+                className={`min-w-[240px] max-w-[280px] text-left p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between shrink-0 ${selectedB2bId === ""
                     ? "bg-primary/10 border-primary shadow-xs ring-2 ring-primary/20"
                     : "bg-card border-border/80 hover:bg-muted/50"
-                }`}
+                  }`}
               >
                 <div>
                   <div className="flex items-center justify-between">
@@ -768,23 +772,21 @@ export default function B2bSalesPage() {
                       setSelectedB2bId(String(c.id));
                       setPage(1);
                     }}
-                    className={`min-w-[240px] max-w-[280px] text-left p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between shrink-0 ${
-                      isSelected
+                    className={`min-w-[240px] max-w-[280px] text-left p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between shrink-0 ${isSelected
                         ? "bg-primary/10 border-primary shadow-xs ring-2 ring-primary/20"
                         : "bg-card border-border/80 hover:bg-muted/50"
-                    }`}
+                      }`}
                   >
                     <div>
                       <div className="flex items-center justify-between gap-1">
-                        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${
-                          c.rate_list_name
+                        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${c.rate_list_name
                             ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20"
                             : c.rate_tier === "LOW"
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                            : c.rate_tier === "MEDIUM"
-                            ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                            : "bg-purple-500/10 text-purple-600 dark:text-purple-400"
-                        }`}>
+                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : c.rate_tier === "MEDIUM"
+                                ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                                : "bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                          }`}>
                           {c.rate_list_name ? c.rate_list_name : `Tier: ${c.rate_tier || "HIGH"}`}
                         </span>
                         <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-mono">
@@ -803,11 +805,10 @@ export default function B2bSalesPage() {
                     <div className="mt-3 pt-2 border-t border-border/60 space-y-1 text-xs">
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] text-muted-foreground font-semibold">Wallet Balance:</span>
-                        <span className={`font-bold font-mono ${
-                          Number(c.wallet_balance) <= 0
+                        <span className={`font-bold font-mono ${Number(c.wallet_balance) <= 0
                             ? "text-rose-600 dark:text-rose-400"
                             : "text-emerald-600 dark:text-emerald-400"
-                        }`}>
+                          }`}>
                           {formatCurrency(c.wallet_balance || 0)}
                         </span>
                       </div>
@@ -1031,8 +1032,8 @@ export default function B2bSalesPage() {
                       {search
                         ? "Try adjusting your search criteria"
                         : partnerType === "COLLECTION_CENTER"
-                        ? "When collection centres register patients, they will appear here."
-                        : "When B2B clients register patients, they will appear here."}
+                          ? "When collection centres register patients, they will appear here."
+                          : "When B2B clients register patients, they will appear here."}
                     </p>
                   </td>
                 </tr>

@@ -290,7 +290,7 @@ export default function BillingPage() {
       try {
         const cached = localStorage.getItem("lis_cached_lab");
         if (cached) return JSON.parse(cached);
-      } catch {}
+      } catch { }
     }
     return null;
   });
@@ -299,7 +299,7 @@ export default function BillingPage() {
       try {
         const cached = localStorage.getItem("lis_cached_bill_settings");
         if (cached) return normalizeBillSettings(JSON.parse(cached));
-      } catch {}
+      } catch { }
     }
     return normalizeBillSettings({});
   });
@@ -311,7 +311,7 @@ export default function BillingPage() {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
-      } catch {}
+      } catch { }
     }
     return [];
   });
@@ -325,7 +325,7 @@ export default function BillingPage() {
             return parsed.filter((t: any) => !t.parentId && !t.parent_id);
           }
         }
-      } catch {}
+      } catch { }
     }
     return [];
   });
@@ -433,7 +433,7 @@ export default function BillingPage() {
           }
         }
       }
-    } catch {}
+    } catch { }
 
     fetchBills(false);
     fetchStaffUsers();
@@ -445,7 +445,7 @@ export default function BillingPage() {
 
     try {
       setAvailablePackages(getStoredPackages());
-    } catch (e) {}
+    } catch (e) { }
 
     const handleSync = (e?: any) => {
       const prefix = e?.detail?.prefix;
@@ -507,7 +507,7 @@ export default function BillingPage() {
       if (currentMode === "single" && effectiveDate === getTodayStr()) {
         try {
           localStorage.setItem("lis_cached_bills", JSON.stringify(billsList));
-        } catch {}
+        } catch { }
       }
 
       // Background fetch lab info if not cached yet
@@ -521,13 +521,13 @@ export default function BillingPage() {
               setBillSettings(parsedBill);
               try {
                 localStorage.setItem("lis_cached_bill_settings", JSON.stringify(parsedBill));
-              } catch {}
+              } catch { }
             }
             try {
               localStorage.setItem("lis_cached_lab", JSON.stringify(labRes));
-            } catch {}
+            } catch { }
           }
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } catch (err) {
       console.error("Error fetching bills:", err);
@@ -575,7 +575,7 @@ export default function BillingPage() {
     };
   }, [search]);
 
-    useEffect(() => {
+  useEffect(() => {
     fetchBills(false);
     fetchAvailableTests(false);
   }, [dateMode, filterDate, startDate, endDate, fetchBills]);
@@ -601,7 +601,7 @@ export default function BillingPage() {
         setAvailableMainTests(mainTestsOnly);
         try {
           localStorage.setItem("lis_cached_tests", JSON.stringify(list));
-        } catch {}
+        } catch { }
       }
     } catch (err) {
       console.error("Error fetching tests:", err);
@@ -637,7 +637,7 @@ export default function BillingPage() {
       fetchAvailableTests();
     }
     setEditingBill(bill);
-    
+
     // Extract currently attached MAIN tests only (no single sub-parameters)
     const currentTests: Test[] = [];
     const mainItems = getMainBillItems(bill, allTestsMap);
@@ -680,8 +680,8 @@ export default function BillingPage() {
     (pkg.tests || []).forEach(pt => {
       const matched = allRawTests.find(
         at => at.id === pt.id ||
-              (pt.code && (at.code || "").toLowerCase() === (pt.code || "").toLowerCase()) ||
-              ((at.name || "").toLowerCase().trim() === (pt.name || "").toLowerCase().trim())
+          (pt.code && (at.code || "").toLowerCase() === (pt.code || "").toLowerCase()) ||
+          ((at.name || "").toLowerCase().trim() === (pt.name || "").toLowerCase().trim())
       );
       const testToAdd: Test = matched ? {
         id: matched.id,
@@ -781,7 +781,7 @@ export default function BillingPage() {
             const updatedList = list.map((b: any) => (b.id === normalized.id ? normalized : b));
             localStorage.setItem("lis_cached_bills", JSON.stringify(updatedList));
           }
-        } catch {}
+        } catch { }
 
         toast.success(
           newStatus === "PAID" ? "Marked as Paid" : "Marked as Unpaid",
@@ -840,7 +840,7 @@ export default function BillingPage() {
             const updatedList = list.map((b: any) => (b.id === normalized.id ? normalized : b));
             localStorage.setItem("lis_cached_bills", JSON.stringify(updatedList));
           }
-        } catch {}
+        } catch { }
       }
 
       // Close modal immediately for a snappy, instantaneous experience
@@ -891,7 +891,7 @@ export default function BillingPage() {
     }
   };
 
-  const handleSendWhatsAppInvoice = async () => {
+  const handleSendWhatsAppInvoice = () => {
     if (!selectedBillForInvoice) return;
     const phone = selectedBillForInvoice.patient?.phone;
     const digitsOnly = phone ? phone.replace(/[^0-9]/g, "") : "";
@@ -904,37 +904,43 @@ export default function BillingPage() {
       return;
     }
 
-    setIsSendingWhatsApp(true);
-    try {
-      const pName = (selectedBillForInvoice.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
-      const invNo = getBillInvoiceNo(selectedBillForInvoice).replace(/[^a-zA-Z0-9_-]/g, "_");
-      const filename = `Invoice_${invNo}_${pName}.pdf`;
+    const tenDigits = digitsOnly.slice(-10);
 
-      const pdfBase64 = await getNativePdfBase64({
-        printContainer: invoicePrintRef.current,
-        filename,
-      });
+    // Instant Success Popup (Optimistic Instant Response)
+    toast.success("Sent on WhatsApp!", `Tax invoice PDF is being delivered to +91 ${tenDigits}`);
 
-      const res = await fetchFromLaravel(`/bills/${selectedBillForInvoice.id}/send-whatsapp`, {
-        method: "POST",
-        body: JSON.stringify({
-          pdf_base64: pdfBase64,
-          phone: digitsOnly.slice(-10),
-          async: true,
-        }),
-      });
+    // Run PDF generation & delivery in background without blocking user
+    (async () => {
+      try {
+        const container = invoicePrintRef.current;
+        if (!container) return;
 
-      if (res?.status === "success" || res?.success || res?.queued) {
-        toast.success("Sent on WhatsApp!", "Tax invoice PDF sent to patient's WhatsApp successfully.");
-      } else {
-        toast.error("WhatsApp Dispatch Failed", res?.message || "Could not deliver WhatsApp message via Meta Cloud API.");
+        const pName = (selectedBillForInvoice.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const invNo = getBillInvoiceNo(selectedBillForInvoice).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const filename = `Invoice_${invNo}_${pName}.pdf`;
+
+        const pdfBase64 = await getNativePdfBase64({
+          printContainer: container,
+          filename,
+        });
+
+        const res = await fetchFromLaravel(`/bills/${selectedBillForInvoice.id}/send-whatsapp`, {
+          method: "POST",
+          body: JSON.stringify({
+            pdf_base64: pdfBase64,
+            phone: tenDigits,
+            async: true,
+          }),
+        });
+
+        if (res && (res.status === "error" || res.error)) {
+          toast.error("WhatsApp Dispatch Failed", res?.message || "Could not deliver WhatsApp message via Meta Cloud API.");
+        }
+      } catch (err: any) {
+        console.error("WhatsApp invoice dispatch error:", err);
+        toast.error("WhatsApp Error", err?.message || "An unexpected error occurred while delivering invoice via WhatsApp.");
       }
-    } catch (err: any) {
-      console.error("WhatsApp invoice dispatch error:", err);
-      toast.error("WhatsApp Error", err?.message || "An unexpected error occurred while delivering invoice via WhatsApp.");
-    } finally {
-      setIsSendingWhatsApp(false);
-    }
+    })();
   };
 
   const handleDownloadInvoicePdf = async () => {
@@ -1010,8 +1016,8 @@ export default function BillingPage() {
     const matchesDate = q.length > 0
       ? true
       : dateMode === "range"
-      ? ((!startDate || billDate >= startDate) && (!endDate || billDate <= endDate))
-      : (filterDate ? billDate === filterDate : true);
+        ? ((!startDate || billDate >= startDate) && (!endDate || billDate <= endDate))
+        : (filterDate ? billDate === filterDate : true);
 
     const matchesSource = (() => {
       if (sourceFilter === "ALL") return true;
@@ -1656,22 +1662,20 @@ export default function BillingPage() {
                             isB2B
                               ? "B2B auto-settled"
                               : effectiveStatus === "PAID"
-                              ? "Click to switch to UNPAID"
-                              : "Click to switch to PAID"
+                                ? "Click to switch to UNPAID"
+                                : "Click to switch to PAID"
                           }
-                          className={`group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold transition-all shadow-xs select-none ${
-                            updatingBillId === bill.id
+                          className={`group inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-extrabold transition-all shadow-xs select-none ${updatingBillId === bill.id
                               ? "opacity-70 cursor-wait"
                               : isB2B
-                              ? "cursor-default"
-                              : "cursor-pointer hover:scale-105 active:scale-95"
-                          } ${
-                            effectiveStatus === "PAID"
+                                ? "cursor-default"
+                                : "cursor-pointer hover:scale-105 active:scale-95"
+                            } ${effectiveStatus === "PAID"
                               ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25"
                               : effectiveStatus === "PARTIAL"
-                              ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-500/30 hover:bg-blue-500/25"
-                              : "bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 hover:bg-rose-500/25 animate-pulse"
-                          }`}
+                                ? "bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-500/30 hover:bg-blue-500/25"
+                                : "bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 hover:bg-rose-500/25 animate-pulse"
+                            }`}
                         >
                           {updatingBillId === bill.id ? (
                             <Loader2 className="h-3 w-3 animate-spin text-current" />
@@ -1926,7 +1930,7 @@ export default function BillingPage() {
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-5xl w-full max-h-[92vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl bg-card border border-border/80 shadow-2xl">
           <DialogTitle className="sr-only">Edit Invoice & Manage Tests</DialogTitle>
-          
+
           {/* Header */}
           <div className="flex items-center justify-between px-7 py-4 border-b border-border/80 bg-card shrink-0">
             <div className="flex items-center gap-3">
@@ -1965,7 +1969,7 @@ export default function BillingPage() {
             )}
 
             <form onSubmit={handleSaveBill} className="grid grid-cols-1 lg:grid-cols-12 gap-7 text-xs">
-              
+
               {/* Left Column: Main Diagnostic Panels Selection & Attached List */}
               <div className="lg:col-span-7 space-y-4">
                 <div className="flex items-center justify-between border-b border-border/80 pb-2.5">
@@ -2062,11 +2066,10 @@ export default function BillingPage() {
                                     type="button"
                                     disabled={isAlreadyAdded}
                                     onClick={() => handleAddTestToBill(t)}
-                                    className={`px-2.5 py-1 rounded-md font-bold text-[10px] transition-colors cursor-pointer ${
-                                      isAlreadyAdded
+                                    className={`px-2.5 py-1 rounded-md font-bold text-[10px] transition-colors cursor-pointer ${isAlreadyAdded
                                         ? "bg-muted text-muted-foreground cursor-not-allowed"
                                         : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs"
-                                    }`}
+                                      }`}
                                   >
                                     {isAlreadyAdded ? "Added" : "+ Add Panel"}
                                   </button>
@@ -2127,11 +2130,10 @@ export default function BillingPage() {
                       <Wallet className="h-4 w-4 text-primary" />
                       Invoice Payment Calculation
                     </span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                      isFullyPaid 
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${isFullyPaid
                         ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
                         : "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30"
-                    }`}>
+                      }`}>
                       {isFullyPaid ? "PAID" : "UNPAID / DUE"}
                     </span>
                   </div>
@@ -2146,15 +2148,13 @@ export default function BillingPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
-                      isFullyPaid 
-                        ? "bg-emerald-500/10 border-emerald-500/30" 
+                    <div className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${isFullyPaid
+                        ? "bg-emerald-500/10 border-emerald-500/30"
                         : "bg-amber-500/10 border-amber-500/30"
-                    }`}>
+                      }`}>
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
-                          isFullyPaid ? "bg-emerald-600 text-white" : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
-                        }`}>
+                        <div className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${isFullyPaid ? "bg-emerald-600 text-white" : "bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                          }`}>
                           {isFullyPaid ? <CheckCircle2 className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
                         </div>
                         <div className="min-w-0">
@@ -2170,11 +2170,10 @@ export default function BillingPage() {
                       <button
                         type="button"
                         onClick={() => handleTogglePaidFull()}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs ${
-                          isFullyPaid
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs ${isFullyPaid
                             ? "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground border border-border"
                             : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20"
-                        }`}
+                          }`}
                       >
                         {isFullyPaid ? (
                           <span>Reset Unpaid</span>

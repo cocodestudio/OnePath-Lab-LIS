@@ -715,7 +715,7 @@ function RegisterPatientPage() {
     // 1. Check assigned rate list map
     const fromMap = test?.id ? b2bRatesMap.get(String(test.id))
       : (test?.test_code ? b2bRatesMap.get(test.test_code.toLowerCase().trim())
-      : (test?.name ? b2bRatesMap.get(test.name.toLowerCase().trim()) : null));
+        : (test?.name ? b2bRatesMap.get(test.name.toLowerCase().trim()) : null));
 
     if (fromMap && (fromMap.b2b_price > 0 || fromMap.mrp > 0)) {
       return {
@@ -765,7 +765,7 @@ function RegisterPatientPage() {
     // 1. Check assigned rate list map
     const fromMap = pkg?.id ? b2bRatesMap.get(String(pkg.id))
       : (pkg?.code ? b2bRatesMap.get(pkg.code.toLowerCase().trim())
-      : (pkg?.name ? b2bRatesMap.get(pkg.name.toLowerCase().trim()) : null));
+        : (pkg?.name ? b2bRatesMap.get(pkg.name.toLowerCase().trim()) : null));
 
     if (fromMap && (fromMap.b2b_price > 0 || fromMap.mrp > 0)) {
       return {
@@ -816,7 +816,7 @@ function RegisterPatientPage() {
         try {
           testSearchInputRef.current?.focus();
           testSearchInputRef.current?.select();
-        } catch (_) {}
+        } catch (_) { }
       }, 60);
       return () => clearTimeout(timer);
     }
@@ -907,7 +907,7 @@ function RegisterPatientPage() {
     }
   };
 
-  const handleSendWhatsAppInvoice = async () => {
+  const handleSendWhatsAppInvoice = () => {
     if (!successDetails?.billId) return;
     const targetPhone = successDetails.patientPhone || phone || newPatient?.phone || "";
     const digitsOnly = targetPhone.replace(/[^0-9]/g, "");
@@ -920,37 +920,43 @@ function RegisterPatientPage() {
       return;
     }
 
-    setIsSendingWhatsApp(true);
-    try {
-      const pName = (successDetails?.patientName || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
-      const invNo = (successDetails?.billCustomId || "Receipt").replace(/[^a-zA-Z0-9_-]/g, "_");
-      const filename = `Invoice_${invNo}_${pName}.pdf`;
+    const tenDigits = digitsOnly.slice(-10);
 
-      const pdfBase64 = await getNativePdfBase64({
-        printContainer: registerPrintRef.current,
-        filename,
-      });
+    // Instant Success Popup (Optimistic Instant Response)
+    toastSuccess("Sent on WhatsApp!", `Tax invoice is being delivered to +91  in the background.${tenDigits}`);
 
-      const res = await fetchFromLaravel(`/bills/${successDetails.billId}/send-whatsapp`, {
-        method: "POST",
-        body: JSON.stringify({
-          pdf_base64: pdfBase64,
-          phone: digitsOnly.slice(-10),
-          async: true,
-        }),
-      });
+    // Run PDF generation & delivery in background without blocking user
+    (async () => {
+      try {
+        const container = registerPrintRef.current;
+        if (!container) return;
 
-      if (res?.status === "success" || res?.success || res?.queued) {
-        toastSuccess("Sent on WhatsApp!", "Tax invoice PDF sent to patient's WhatsApp successfully.");
-      } else {
-        toastError("WhatsApp Dispatch Failed", res?.message || "Could not deliver WhatsApp message via Meta Cloud API.");
+        const pName = (successDetails?.patientName || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const invNo = (successDetails?.billCustomId || "Receipt").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const filename = `Invoice_${invNo}_${pName}.pdf`;
+
+        const pdfBase64 = await getNativePdfBase64({
+          printContainer: container,
+          filename,
+        });
+
+        const res = await fetchFromLaravel(`/bills/${successDetails.billId}/send-whatsapp`, {
+          method: "POST",
+          body: JSON.stringify({
+            pdf_base64: pdfBase64,
+            phone: tenDigits,
+            async: true,
+          }),
+        });
+
+        if (res && (res.status === "error" || res.error)) {
+          toastError("WhatsApp Dispatch Failed", res?.message || "Could not deliver WhatsApp message via Meta Cloud API.");
+        }
+      } catch (err: any) {
+        console.error("WhatsApp invoice dispatch error:", err);
+        toastError("WhatsApp Error", err?.message || "An unexpected error occurred while delivering invoice via WhatsApp.");
       }
-    } catch (err: any) {
-      console.error("WhatsApp invoice dispatch error:", err);
-      toastError("WhatsApp Error", err?.message || "An unexpected error occurred while delivering invoice via WhatsApp.");
-    } finally {
-      setIsSendingWhatsApp(false);
-    }
+    })();
   };
 
   // Automatically scroll to the top of the page / DashboardScroller container
@@ -1572,10 +1578,10 @@ function RegisterPatientPage() {
             const list = Array.isArray(data) ? data : (data?.data || []);
             if (list.length > 0) {
               setAvailableTests(list);
-              try { localStorage.setItem("lis_cached_tests", JSON.stringify(list)); } catch {}
+              try { localStorage.setItem("lis_cached_tests", JSON.stringify(list)); } catch { }
             }
           })
-          .catch(() => {});
+          .catch(() => { });
       }
     };
     window.addEventListener("lis_cache_invalidated", handleCacheInvalidated);
@@ -1595,7 +1601,7 @@ function RegisterPatientPage() {
             setCachedPartnerLabs(labsData);
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [catalogMode, outsourcePartnerLabsList.length]);
 
@@ -4359,7 +4365,7 @@ function RegisterPatientPage() {
                           onClick={(e) => {
                             try {
                               (e.target as HTMLInputElement).showPicker?.();
-                            } catch (_) {}
+                            } catch (_) { }
                           }}
                           disabled={registering || (!!newPatient && !isEditMode)}
                         />
@@ -5120,13 +5126,12 @@ function RegisterPatientPage() {
                     <div className="space-y-1.5 pt-2 border-t border-border/60">
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground font-medium text-xs">Payment Mode</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                          selectedPaymentMode === "UNPAID"
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${selectedPaymentMode === "UNPAID"
                             ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
                             : selectedPaymentMode === "UPI"
                               ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
                               : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-                        }`}>
+                          }`}>
                           {selectedPaymentMode === "UNPAID"
                             ? "Unpaid · Payment Due"
                             : selectedPaymentMode === "UPI"
@@ -5141,11 +5146,10 @@ function RegisterPatientPage() {
                             setSelectedPaymentMode("UNPAID");
                           }}
                           disabled={isEditLoading}
-                          className={`py-2 px-2 sm:px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
-                            selectedPaymentMode === "UNPAID"
+                          className={`py-2 px-2 sm:px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${selectedPaymentMode === "UNPAID"
                               ? "bg-amber-500/15 border-amber-500 text-amber-700 dark:text-amber-300 shadow-xs ring-1 ring-amber-500/30"
                               : "bg-background border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                          }`}
+                            }`}
                         >
                           <Clock className="h-3.5 w-3.5 shrink-0" />
                           <span>Unpaid</span>
@@ -5157,11 +5161,10 @@ function RegisterPatientPage() {
                             setPaidAmount("0");
                           }}
                           disabled={isEditLoading}
-                          className={`py-2 px-2 sm:px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
-                            selectedPaymentMode === "CASH"
+                          className={`py-2 px-2 sm:px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${selectedPaymentMode === "CASH"
                               ? "bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-xs ring-1 ring-emerald-500/30"
                               : "bg-background border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                          }`}
+                            }`}
                         >
                           <Banknote className="h-3.5 w-3.5 shrink-0" />
                           <span>Cash</span>
@@ -5173,11 +5176,10 @@ function RegisterPatientPage() {
                             setPaidAmount("0");
                           }}
                           disabled={isEditLoading}
-                          className={`py-2 px-2 sm:px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
-                            selectedPaymentMode === "UPI"
+                          className={`py-2 px-2 sm:px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${selectedPaymentMode === "UPI"
                               ? "bg-blue-500/15 border-blue-500 text-blue-600 dark:text-blue-400 shadow-xs ring-1 ring-blue-500/30"
                               : "bg-background border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                          }`}
+                            }`}
                         >
                           <QrCode className="h-3.5 w-3.5 shrink-0" />
                           <span>UPI</span>
@@ -5205,8 +5207,7 @@ function RegisterPatientPage() {
                         <Skeleton className="h-7 w-24 rounded" />
                       ) : (
                         <div className="text-right">
-                          <span className={`font-display text-2xl font-bold font-mono ${
-                            (isAutoPaidMode && grandTotal > 0 && !userEnteredPartial) || (balanceDue <= 0 && grandTotal > 0)
+                          <span className={`font-display text-2xl font-bold font-mono ${(isAutoPaidMode && grandTotal > 0 && !userEnteredPartial) || (balanceDue <= 0 && grandTotal > 0)
                               ? "text-emerald-600 dark:text-emerald-400"
                               : balanceDue > 0 && parsedPaid > 0
                                 ? "text-amber-600 dark:text-amber-400"
@@ -5222,8 +5223,7 @@ function RegisterPatientPage() {
                       <span className="text-muted-foreground">
                         Bill Status:
                       </span>
-                      <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
-                        (isAutoPaidMode && grandTotal > 0 && !userEnteredPartial) || (balanceDue <= 0 && grandTotal > 0)
+                      <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${(isAutoPaidMode && grandTotal > 0 && !userEnteredPartial) || (balanceDue <= 0 && grandTotal > 0)
                           ? "bg-emerald-500/15 text-emerald-600 border border-emerald-500/30"
                           : parsedPaid > 0
                             ? "bg-amber-500/15 text-amber-600 border border-amber-500/30"
@@ -6320,73 +6320,73 @@ function RegisterPatientPage() {
                 }}
                 className="shadow-2xl ring-1 ring-border rounded-lg shrink-0 bg-white print:shadow-none print:ring-0 print:border-none print:p-0 print:m-0 print:w-full print:transform-none"
               >
-              <InvoiceSheet
-                settings={billSettings}
-                invoice={{
-                  id: successDetails?.billId,
-                  customId: successDetails?.billCustomId || "INV-001",
-                  createdAt: new Date().toISOString(),
-                  total: Number(successDetails?.total ?? grandTotal),
-                  discount: Number(successDetails?.discount ?? parsedDiscount),
-                  paidAmount: Number(
-                    successDetails?.paymentStatus === "PAID"
-                      ? (successDetails?.total ?? grandTotal)
-                      : (successDetails?.paidAmount ?? 0)
-                  ),
-                  advanceAmount: Number(successDetails?.paidAmount ?? 0),
-                  status: (
-                    successDetails?.paymentStatus === "PAID" ||
-                    (Number(successDetails?.balanceDue ?? 0) <= 0 && Number(successDetails?.total ?? grandTotal) > 0 && successDetails?.paymentMode !== "UNPAID")
-                  )
-                    ? "PAID"
-                    : (Number(successDetails?.paidAmount ?? 0) > 0 ? "PARTIAL" : "UNPAID"),
-                  paymentMode: successDetails?.paymentMode || (selectedPaymentMode === "UNPAID" ? "UNPAID" : selectedPaymentMode) || "UNPAID",
-                  billedBy: "Billing / Reception Desk",
-                  reportId: successDetails?.reportId,
-                  packageName: successDetails?.packageName || selectedPackage?.name || null,
-                  patient: {
-                    customId: successDetails?.patientCustomId || newPatient?.customId || "",
-                    name: successDetails?.patientName || newPatient?.name || "",
-                    phone: phone || newPatient?.phone || "",
-                    age: Number(ageYears) || newPatient?.age || 0,
-                    gender: gender || newPatient?.gender || "Male",
-                    refDoctor: refDoctorSelect || newPatient?.refDoctor || "Self",
-                    secondReferral: secondReferral || (newPatient as any)?.secondReferral || "",
-                    address: address || newPatient?.address || "",
-                    aadhaarNo: aadhaarNo || (newPatient as any)?.aadhaarNo || "",
-                    insuranceNo: insuranceNo || (newPatient as any)?.insuranceNo || "",
-                    hfrId: hfrId || (newPatient as any)?.hfrId || "",
-                    uhid: uhid || (newPatient as any)?.uhid || "",
-                    corporateName: corporateName || (newPatient as any)?.corporateName || govPanel || "",
-                    vialBarcode: Object.values(vialBarcodes).find(Boolean) || (newPatient as any)?.vialBarcode || (newPatient as any)?.vial_barcode || "",
-                    abhaNumber: abhaNumber || (newPatient as any)?.abhaNumber || "",
-                    abhaAddress: abhaAddress || (newPatient as any)?.abhaAddress || "",
-                  },
-                  lab: {
-                    name: labInfo?.name || labInfo?.centre_name || labInfo?.centreName || "OnePath Pathology Laboratory",
-                    email: labInfo?.email || "support@onepathlab.com",
-                    address: labInfo?.address || "Medical Diagnostic Center",
-                    phone: labInfo?.phone || "",
-                    logoUrl: billSettings.logoImage || labInfo?.logo_url || labInfo?.logoUrl || "/onepath-logo.png",
-                    pincode: labInfo?.pincode || "",
-                    city: labInfo?.city || "",
-                    district: labInfo?.district || labInfo?.city || "",
-                    state: labInfo?.state || "",
-                    gstin: billSettings.gst?.number || labInfo?.gstin || "",
-                    bill_settings: billSettings,
-                  },
-                  tests: (successDetails?.tests && successDetails.tests.length > 0 ? successDetails.tests : selectedTestObjects).map((t: any) => ({
-                    id: t.id,
-                    name: t.name,
-                    code: t.code || t.testCode || t.test_code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
-                    price: Number(t.price || 0),
-                    category: t.category,
-                    sampleType: t.sampleType || t.sample_type || undefined,
-                    barcode: Object.values(vialBarcodes).find(Boolean) || (newPatient as any)?.vialBarcode || (newPatient as any)?.vial_barcode || "",
-                  })),
-                }}
-              />
-            </div>
+                <InvoiceSheet
+                  settings={billSettings}
+                  invoice={{
+                    id: successDetails?.billId,
+                    customId: successDetails?.billCustomId || "INV-001",
+                    createdAt: new Date().toISOString(),
+                    total: Number(successDetails?.total ?? grandTotal),
+                    discount: Number(successDetails?.discount ?? parsedDiscount),
+                    paidAmount: Number(
+                      successDetails?.paymentStatus === "PAID"
+                        ? (successDetails?.total ?? grandTotal)
+                        : (successDetails?.paidAmount ?? 0)
+                    ),
+                    advanceAmount: Number(successDetails?.paidAmount ?? 0),
+                    status: (
+                      successDetails?.paymentStatus === "PAID" ||
+                      (Number(successDetails?.balanceDue ?? 0) <= 0 && Number(successDetails?.total ?? grandTotal) > 0 && successDetails?.paymentMode !== "UNPAID")
+                    )
+                      ? "PAID"
+                      : (Number(successDetails?.paidAmount ?? 0) > 0 ? "PARTIAL" : "UNPAID"),
+                    paymentMode: successDetails?.paymentMode || (selectedPaymentMode === "UNPAID" ? "UNPAID" : selectedPaymentMode) || "UNPAID",
+                    billedBy: "Billing / Reception Desk",
+                    reportId: successDetails?.reportId,
+                    packageName: successDetails?.packageName || selectedPackage?.name || null,
+                    patient: {
+                      customId: successDetails?.patientCustomId || newPatient?.customId || "",
+                      name: successDetails?.patientName || newPatient?.name || "",
+                      phone: phone || newPatient?.phone || "",
+                      age: Number(ageYears) || newPatient?.age || 0,
+                      gender: gender || newPatient?.gender || "Male",
+                      refDoctor: refDoctorSelect || newPatient?.refDoctor || "Self",
+                      secondReferral: secondReferral || (newPatient as any)?.secondReferral || "",
+                      address: address || newPatient?.address || "",
+                      aadhaarNo: aadhaarNo || (newPatient as any)?.aadhaarNo || "",
+                      insuranceNo: insuranceNo || (newPatient as any)?.insuranceNo || "",
+                      hfrId: hfrId || (newPatient as any)?.hfrId || "",
+                      uhid: uhid || (newPatient as any)?.uhid || "",
+                      corporateName: corporateName || (newPatient as any)?.corporateName || govPanel || "",
+                      vialBarcode: Object.values(vialBarcodes).find(Boolean) || (newPatient as any)?.vialBarcode || (newPatient as any)?.vial_barcode || "",
+                      abhaNumber: abhaNumber || (newPatient as any)?.abhaNumber || "",
+                      abhaAddress: abhaAddress || (newPatient as any)?.abhaAddress || "",
+                    },
+                    lab: {
+                      name: labInfo?.name || labInfo?.centre_name || labInfo?.centreName || "OnePath Pathology Laboratory",
+                      email: labInfo?.email || "support@onepathlab.com",
+                      address: labInfo?.address || "Medical Diagnostic Center",
+                      phone: labInfo?.phone || "",
+                      logoUrl: billSettings.logoImage || labInfo?.logo_url || labInfo?.logoUrl || "/onepath-logo.png",
+                      pincode: labInfo?.pincode || "",
+                      city: labInfo?.city || "",
+                      district: labInfo?.district || labInfo?.city || "",
+                      state: labInfo?.state || "",
+                      gstin: billSettings.gst?.number || labInfo?.gstin || "",
+                      bill_settings: billSettings,
+                    },
+                    tests: (successDetails?.tests && successDetails.tests.length > 0 ? successDetails.tests : selectedTestObjects).map((t: any) => ({
+                      id: t.id,
+                      name: t.name,
+                      code: t.code || t.testCode || t.test_code || `T-${(t.name || "").substring(0, 3).toUpperCase()}`,
+                      price: Number(t.price || 0),
+                      category: t.category,
+                      sampleType: t.sampleType || t.sample_type || undefined,
+                      barcode: Object.values(vialBarcodes).find(Boolean) || (newPatient as any)?.vialBarcode || (newPatient as any)?.vial_barcode || "",
+                    })),
+                  }}
+                />
+              </div>
             </div>
           </div>
         </DialogContent>

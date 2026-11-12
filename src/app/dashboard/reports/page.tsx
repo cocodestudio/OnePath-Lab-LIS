@@ -25,9 +25,9 @@ import { getNativePdfBase64 } from "@/lib/pdf-report-downloader";
 import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate, getDaysAgoStr } from "@/lib/date-utils";
 import { formatPatientListDisplayName } from "@/lib/patient-title-helper";
 
-interface Test { 
-  name: string; 
-  category: string; 
+interface Test {
+  name: string;
+  category: string;
   fieldType?: string;
   parentId?: string | null;
   parent?: Test | null;
@@ -124,7 +124,7 @@ function getCachedReportsForDate(dateKey: string): any[] | null {
           return parsed;
         }
       }
-    } catch {}
+    } catch { }
   }
   return null;
 }
@@ -140,7 +140,7 @@ function setCachedReportsForDate(dateKey: string, list: any[]) {
       if (cleanKey === getTodayStr() || cleanKey === "all") {
         localStorage.setItem("lis_cached_reports", JSON.stringify(list));
       }
-    } catch {}
+    } catch { }
   }
 }
 
@@ -155,7 +155,7 @@ export default function ReportsListPage() {
         if (stored && stored !== "null" && stored !== "undefined" && stored !== '""') {
           return stored;
         }
-      } catch {}
+      } catch { }
     }
     return getTodayStr();
   })();
@@ -189,7 +189,7 @@ export default function ReportsListPage() {
       try {
         const stored = sessionStorage.getItem("lis_reports_date_mode");
         if (stored === "single" || stored === "range") return stored;
-      } catch {}
+      } catch { }
     }
     return "single";
   });
@@ -198,7 +198,7 @@ export default function ReportsListPage() {
       try {
         const stored = sessionStorage.getItem("lis_reports_start_date");
         if (stored) return stored;
-      } catch {}
+      } catch { }
     }
     return getDaysAgoStr(6);
   });
@@ -207,7 +207,7 @@ export default function ReportsListPage() {
       try {
         const stored = sessionStorage.getItem("lis_reports_end_date");
         if (stored) return stored;
-      } catch {}
+      } catch { }
     }
     return getTodayStr();
   });
@@ -220,7 +220,7 @@ export default function ReportsListPage() {
         sessionStorage.setItem("lis_reports_filter_date", filterDate);
         sessionStorage.setItem("lis_reports_start_date", startDate);
         sessionStorage.setItem("lis_reports_end_date", endDate);
-      } catch {}
+      } catch { }
     }
   }, [dateMode, filterDate, startDate, endDate]);
 
@@ -245,7 +245,7 @@ export default function ReportsListPage() {
     }
     setFilterDate(nextDate);
     if (typeof window !== "undefined") {
-      try { sessionStorage.setItem("lis_reports_filter_date", nextDate); } catch {}
+      try { sessionStorage.setItem("lis_reports_filter_date", nextDate); } catch { }
     }
   };
 
@@ -265,7 +265,7 @@ export default function ReportsListPage() {
     }
     setFilterDate(targetDate);
     if (typeof window !== "undefined") {
-      try { sessionStorage.setItem("lis_reports_filter_date", targetDate); } catch {}
+      try { sessionStorage.setItem("lis_reports_filter_date", targetDate); } catch { }
     }
   };
 
@@ -421,7 +421,7 @@ export default function ReportsListPage() {
       }
       params.append("sort", sortOrder);
 
-      const data = await fetchFromLaravel(`/reports?${params.toString()}`, { 
+      const data = await fetchFromLaravel(`/reports?${params.toString()}`, {
         skipCache: isForce,
         timeoutMs: 10000,
       });
@@ -649,8 +649,8 @@ export default function ReportsListPage() {
       bgImage,
       headerHeight: lab.printHeaderHeight ?? lab.print_header_height ?? (hasBg ? 185 : 40),
       footerHeight: lab.printFooterHeight ?? lab.print_footer_height ?? (hasBg ? 95 : 40),
-      marginLeft:   lab.printMarginLeft  ?? lab.print_margin_left  ?? (hasBg ? 32 : 40),
-      marginRight:  lab.printMarginRight ?? lab.print_margin_right ?? (hasBg ? 32 : 40),
+      marginLeft: lab.printMarginLeft ?? lab.print_margin_left ?? (hasBg ? 32 : 40),
+      marginRight: lab.printMarginRight ?? lab.print_margin_right ?? (hasBg ? 32 : 40),
     };
   }, [whatsAppReportData, currentUser]);
 
@@ -729,121 +729,115 @@ export default function ReportsListPage() {
       }
     }
 
-    setSendingWhatsAppId(rep.id);
-    const toastId = (toast as any).loading?.("Sending WhatsApp...", "Generating PDF & dispatching to patient...")
-      || (toast as any)({ title: "Sending WhatsApp...", description: "Generating PDF & dispatching to patient...", type: "loading" as any });
+    // Instant Success Popup (Optimistic Instant Response)
+    toast({
+      variant: "success",
+      title: "Sent on WhatsApp!",
+      description: `Report is being delivered to patient's WhatsApp (${tenDigits})`,
+    });
 
-    try {
-      const fullReport = await fetchFromLaravel(`/reports/${rep.id}`);
-      const currentLab = fullReport.lab || currentUser?.lab || DEFAULT_LAB;
+    // Run background generation & dispatch without blocking the user
+    (async () => {
+      try {
+        const fullReport = await fetchFromLaravel(`/reports/${rep.id}`);
+        const currentLab = fullReport.lab || currentUser?.lab || DEFAULT_LAB;
 
-      const rawLabSettings = currentLab?.reportSettings ?? currentLab?.report_settings;
-      let labReportSettings: any = {};
-      if (typeof rawLabSettings === "string") {
-        try { labReportSettings = JSON.parse(rawLabSettings || "{}"); } catch { labReportSettings = {}; }
-      } else if (rawLabSettings && typeof rawLabSettings === "object") {
-        labReportSettings = { ...rawLabSettings };
-      }
+        const rawLabSettings = currentLab?.reportSettings ?? currentLab?.report_settings;
+        let labReportSettings: any = {};
+        if (typeof rawLabSettings === "string") {
+          try { labReportSettings = JSON.parse(rawLabSettings || "{}"); } catch { labReportSettings = {}; }
+        } else if (rawLabSettings && typeof rawLabSettings === "object") {
+          labReportSettings = { ...rawLabSettings };
+        }
 
-      if (!labReportSettings.doctorSignatures && !labReportSettings.doctor_signatures && !labReportSettings.doctorSignature && !labReportSettings.doctor_signature) {
-        try {
-          if (typeof window !== "undefined") {
-            const cached = localStorage.getItem("lis_cached_report_settings");
-            if (cached) {
-              const parsed = JSON.parse(cached);
-              if (parsed && typeof parsed === "object") {
-                labReportSettings = { ...parsed, ...labReportSettings };
+        if (!labReportSettings.doctorSignatures && !labReportSettings.doctor_signatures && !labReportSettings.doctorSignature && !labReportSettings.doctor_signature) {
+          try {
+            if (typeof window !== "undefined") {
+              const cached = localStorage.getItem("lis_cached_report_settings");
+              if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed && typeof parsed === "object") {
+                  labReportSettings = { ...parsed, ...labReportSettings };
+                }
               }
             }
-          }
-        } catch {}
-      }
-
-      let cachedLetterhead: string | null = null;
-      try {
-        if (typeof window !== "undefined") {
-          cachedLetterhead = localStorage.getItem("lis_cached_letterhead");
+          } catch { }
         }
-      } catch {}
 
-      const rawBg = currentLab?.printBgImage || currentLab?.print_bg_image || cachedLetterhead;
-      const cleanBg = (rawBg && rawBg !== "null" && rawBg !== "undefined" && rawBg !== "none")
-        ? getCleanLetterheadUrl(rawBg)
-        : null;
+        let cachedLetterhead: string | null = null;
+        try {
+          if (typeof window !== "undefined") {
+            cachedLetterhead = localStorage.getItem("lis_cached_letterhead");
+          }
+        } catch { }
 
-      const formattedReportData: ReportSheetData = {
-        ...fullReport,
-        lab: {
-          ...currentLab,
-          reportSettings: labReportSettings,
-          report_settings: labReportSettings,
-          printBgImage: cleanBg,
-        },
-      };
+        const rawBg = currentLab?.printBgImage || currentLab?.print_bg_image || cachedLetterhead;
+        const cleanBg = (rawBg && rawBg !== "null" && rawBg !== "undefined" && rawBg !== "none")
+          ? getCleanLetterheadUrl(rawBg)
+          : null;
 
-      setWhatsAppReportData(formattedReportData);
+        const formattedReportData: ReportSheetData = {
+          ...fullReport,
+          lab: {
+            ...currentLab,
+            reportSettings: labReportSettings,
+            report_settings: labReportSettings,
+            printBgImage: cleanBg,
+          },
+        };
 
-      // Wait a moment for offscreen DOM container to mount and layout
-      await new Promise((r) => setTimeout(r, 220));
+        setWhatsAppReportData(formattedReportData);
 
-      if (!whatsAppOffscreenRef.current) {
-        throw new Error("Report print engine was not ready.");
-      }
+        // Wait a moment for offscreen DOM container to mount and layout
+        await new Promise((r) => setTimeout(r, 220));
 
-      const pName = (fullReport?.patient?.name || rep.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
-      const rCode = (fullReport?.custom_id || fullReport?.customId || rep.custom_id || rep.customId || rep.id).replace(/[^a-zA-Z0-9_-]/g, "_");
-      const filename = `LabReport_${rCode}_${pName}.pdf`;
+        if (!whatsAppOffscreenRef.current) {
+          throw new Error("Report print engine was not ready.");
+        }
 
-      const pdfBase64 = await getNativePdfBase64({
-        printContainer: whatsAppOffscreenRef.current,
-        filename,
-      });
+        const pName = (fullReport?.patient?.name || rep.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+        const rCode = (fullReport?.custom_id || fullReport?.customId || rep.custom_id || rep.customId || rep.id).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const filename = `LabReport_${rCode}_${pName}.pdf`;
 
-      const res = await fetchFromLaravel(`/reports/${rep.id}/send-whatsapp`, {
-        method: "POST",
-        body: JSON.stringify({
-          pdf_base64: pdfBase64,
-          phone: tenDigits,
-          save_phone: false,
-          async: true,
-        }),
-      });
-
-      if (res?.status === "success" || res?.success || res?.queued) {
-        if (toastId) (toast as any).dismiss?.(toastId);
-        toast({
-          variant: "success",
-          title: "Sent on WhatsApp!",
-          description: res?.queued
-            ? `Report delivery queued for patient WhatsApp (${tenDigits}).`
-            : `Report PDF sent to patient's WhatsApp (${tenDigits}) successfully.`,
+        const pdfBase64 = await getNativePdfBase64({
+          printContainer: whatsAppOffscreenRef.current,
+          filename,
         });
-      } else {
-        if (toastId) (toast as any).dismiss?.(toastId);
-        const errorMsg = res?.message || "Could not deliver WhatsApp message via server gateway.";
-        toast({
-          variant: "warning",
-          title: "Gateway Alert",
-          description: `${errorMsg} Opening direct WhatsApp chat...`,
+
+        const res = await fetchFromLaravel(`/reports/${rep.id}/send-whatsapp`, {
+          method: "POST",
+          body: JSON.stringify({
+            pdf_base64: pdfBase64,
+            phone: tenDigits,
+            save_phone: false,
+            async: true,
+          }),
         });
-        const tenDigits = digitsOnly.slice(-10);
-        const text = encodeURIComponent(
-          `Dear ${rep.patient?.name || "Patient"}, your diagnostic laboratory report #${rCode} from ${currentLab.name || "OnePath Lab"} is ready.`
-        );
-        window.open(`https://wa.me/91${tenDigits}?text=${text}`, "_blank");
+
+        if (res && (res.status === "error" || res.error)) {
+          const errorMsg = res?.message || "Could not deliver WhatsApp message via server gateway.";
+          toast({
+            variant: "warning",
+            title: "Gateway Alert",
+            description: `${errorMsg} Opening direct WhatsApp chat...`,
+          });
+          const text = encodeURIComponent(
+            `Dear ${rep.patient?.name || "Patient"}, your diagnostic laboratory report #${rCode} from ${currentLab.name || "OnePath Lab"} is ready.`
+          );
+          window.open(`https://wa.me/91${tenDigits}?text=${text}`, "_blank");
+        }
+      } catch (err: any) {
+        console.error("WhatsApp background dispatch error:", err);
+        toast({
+          variant: "error",
+          title: "WhatsApp Dispatch Failed",
+          description: err?.message || "An error occurred while preparing and sending the report PDF.",
+        });
+      } finally {
+        setSendingWhatsAppId(null);
+        setWhatsAppReportData(null);
       }
-    } catch (err: any) {
-      if (toastId) (toast as any).dismiss?.(toastId);
-      console.error("WhatsApp dispatch error:", err);
-      toast({
-        variant: "error",
-        title: "WhatsApp Dispatch Failed",
-        description: err?.message || "An error occurred while preparing and sending the report PDF.",
-      });
-    } finally {
-      setSendingWhatsAppId(null);
-      setWhatsAppReportData(null);
-    }
+    })();
   };
 
   const safeReports = Array.isArray(reports) ? reports : [];
@@ -932,18 +926,18 @@ export default function ReportsListPage() {
             ...r,
             bill: r.bill
               ? {
-                  ...r.bill,
-                  status: targetStatus,
-                  paid_amount: targetPaidAmount,
-                  paidAmount: targetPaidAmount,
-                }
+                ...r.bill,
+                status: targetStatus,
+                paid_amount: targetPaidAmount,
+                paidAmount: targetPaidAmount,
+              }
               : {
-                  id: billId,
-                  status: targetStatus,
-                  total: billTotal,
-                  paid_amount: targetPaidAmount,
-                  paidAmount: targetPaidAmount,
-                },
+                id: billId,
+                status: targetStatus,
+                total: billTotal,
+                paid_amount: targetPaidAmount,
+                paidAmount: targetPaidAmount,
+              },
           };
         }
         return r;
@@ -978,16 +972,16 @@ export default function ReportsListPage() {
             const updated = list.map((item: any) =>
               item.id === rep.id
                 ? {
-                    ...item,
-                    bill: item.bill
-                      ? { ...item.bill, status: targetStatus, paid_amount: targetPaidAmount, paidAmount: targetPaidAmount }
-                      : item.bill,
-                  }
+                  ...item,
+                  bill: item.bill
+                    ? { ...item.bill, status: targetStatus, paid_amount: targetPaidAmount, paidAmount: targetPaidAmount }
+                    : item.bill,
+                }
                 : item
             );
             localStorage.setItem("lis_cached_reports", JSON.stringify(updated));
           }
-        } catch {}
+        } catch { }
       } else {
         fetchReports(false, activeDateRef.current);
       }
@@ -1059,17 +1053,17 @@ export default function ReportsListPage() {
         statusFilter === "NEW"
           ? r.status === "NEW" || r.status === "PENDING"
           : statusFilter === "IN_PROGRESS"
-          ? r.status === "IN_PROGRESS"
-          : statusFilter === "FINAL"
-          ? r.status === "FINAL"
-          : statusFilter === "APPROVED"
-          ? r.status === "COMPLETED" || r.status === "APPROVED"
-          : r.status === statusFilter
+            ? r.status === "IN_PROGRESS"
+            : statusFilter === "FINAL"
+              ? r.status === "FINAL"
+              : statusFilter === "APPROVED"
+                ? r.status === "COMPLETED" || r.status === "APPROVED"
+                : r.status === statusFilter
       ));
     const repSource = getReportSource(r);
     const matchesSource = sourceFilter === "ALL" || repSource === sourceFilter;
     const rawDateStr = String(r.createdAt || r.created_at || "");
-    
+
     // When searching, bypass date restriction!
     const matchesDate = dateMode === "range"
       ? (q.length > 0 || ((!startDate || repDate >= startDate) && (!endDate || repDate <= endDate)))
@@ -1136,7 +1130,7 @@ export default function ReportsListPage() {
           sessionStorage.setItem("lis_batch_print_initial_data", JSON.stringify(matched));
         }
       }
-    } catch {}
+    } catch { }
     const url = `/dashboard/reports/batch-print?ids=${selectedIds.join(",")}`;
     window.open(url, "_blank");
   };
@@ -1154,7 +1148,7 @@ export default function ReportsListPage() {
     if (typeof window !== "undefined") {
       try {
         sessionStorage.setItem("lis_reports_filter_date", "");
-      } catch {}
+      } catch { }
     }
   };
   const hasFilters = search || statusFilter !== "ALL" || sourceFilter !== "ALL" || (dateMode === "range" ? Boolean(startDate || endDate) : Boolean(filterDate)) || sortOrder !== "oldest";
@@ -1217,673 +1211,671 @@ export default function ReportsListPage() {
       )}
 
       <>
-          {/* Filters */}
-          <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card">
-        <div className="flex flex-col sm:flex-row flex-wrap items-start gap-4">
-          <div className="space-y-1.5 flex-1 min-w-[200px]">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Search</label>
-            <div className="relative">
-              {isSearching ? (
-                <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
-              ) : (
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-              )}
-              <Input
-                placeholder="Search report ID, patient name, phone, PID, barcode, invoice ID…"
-                className={`pl-9 ${search ? "pr-9" : "pr-3"} h-9 text-xs`}
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-              />
-              {search && (
-                <button
+        {/* Filters */}
+        <div className="bg-card border border-border/70 rounded-xl p-5 shadow-card">
+          <div className="flex flex-col sm:flex-row flex-wrap items-start gap-4">
+            <div className="space-y-1.5 flex-1 min-w-[200px]">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Search</label>
+              <div className="relative">
+                {isSearching ? (
+                  <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
+                ) : (
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
+                )}
+                <Input
+                  placeholder="Search report ID, patient name, phone, PID, barcode, invoice ID…"
+                  className={`pl-9 ${search ? "pr-9" : "pr-3"} h-9 text-xs`}
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => { setSearch(""); setSearchResults(null); setCurrentPage(1); }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
+                    title="Clear search"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <DateFilterRibbon
+              dateMode={dateMode}
+              onDateModeChange={(m) => { setDateMode(m); setCurrentPage(1); }}
+              singleDate={filterDate}
+              onSingleDateChange={(d) => {
+                const cleanD = (d && d !== "null" && d !== "undefined") ? d : "";
+                activeDateRef.current = cleanD;
+                const cached = getCachedReportsForDate(cleanD);
+                if (cached && cached.length > 0) {
+                  setReports(cached);
+                  setLoading(false);
+                  setIsFetching(false);
+                } else {
+                  setReports([]);
+                  setLoading(true);
+                  setIsFetching(true);
+                }
+                setFilterDate(cleanD);
+                setCurrentPage(1);
+                if (typeof window !== "undefined") {
+                  try { sessionStorage.setItem("lis_reports_filter_date", cleanD); } catch { }
+                }
+              }}
+              startDate={startDate}
+              onStartDateChange={(d) => { setStartDate(d); setCurrentPage(1); }}
+              endDate={endDate}
+              onEndDateChange={(d) => { setEndDate(d); setCurrentPage(1); }}
+              onShiftSingleDate={shiftDate}
+            />
+
+            {/* Status Dropdown */}
+            <div className="space-y-1.5 w-full sm:w-[170px]">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
+                Status
+              </label>
+              <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val)}>
+                <SelectTrigger className="h-10 w-full rounded-xl bg-background border border-border/80 font-medium text-xs hover:border-primary/50 transition-all shadow-xs focus:ring-2 focus:ring-primary/20 cursor-pointer">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border border-border/70 shadow-lg bg-popover/95 backdrop-blur-md p-1">
+                  <SelectItem value="ALL" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-slate-400" />
+                      All Statuses
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="NEW" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                    <span className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
+                      <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
+                      New
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="IN_PROGRESS" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                    <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                      <span className="w-2 h-2 rounded-full bg-amber-500" />
+                      In Progress
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="FINAL" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                    <span className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                      <span className="w-2 h-2 rounded-full bg-blue-500" />
+                      Final
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="APPROVED" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                    <span className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      Approved
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="REJECTED" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                    <span className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+                      <span className="w-2 h-2 rounded-full bg-rose-500" />
+                      Sample Rejected
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Lab / Source Dropdown */}
+            <div className="space-y-1.5 w-full sm:w-[210px]">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
+                Lab / Source
+              </label>
+              <Select value={sourceFilter} onValueChange={(val: any) => setSourceFilter(val)}>
+                <SelectTrigger className="h-10 w-full rounded-xl bg-background border border-border/80 font-medium text-xs hover:border-primary/50 transition-all shadow-xs focus:ring-2 focus:ring-primary/20 cursor-pointer">
+                  <SelectValue placeholder="All Labs / Sources" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border border-border/70 shadow-lg bg-popover/95 backdrop-blur-md p-1">
+                  <SelectItem value="ALL" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                    <span className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-slate-400" />
+                      All Labs (All Reports)
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="MAIN_LAB" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                    <span className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                      <span className="w-2 h-2 rounded-full bg-blue-500" />
+                      Main Lab (In-House)
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="B2B" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                    <span className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                      <span className="w-2 h-2 rounded-full bg-purple-500" />
+                      All B2B (Partners)
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="COLLECTION_CENTER" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                    <span className="flex items-center gap-2 text-teal-600 dark:text-teal-400">
+                      <span className="w-2 h-2 rounded-full bg-teal-500" />
+                      All CC (Collection Centres)
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Sort By Dropdown */}
+            <div className="space-y-1.5 w-full sm:w-[160px]">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
+                Sort By
+              </label>
+              <Select value={sortOrder} onValueChange={(val) => setSortOrder(val as "oldest" | "recent")}>
+                <SelectTrigger className="h-10 w-full rounded-xl bg-background border border-border/80 font-medium text-xs hover:border-primary/50 transition-all shadow-xs focus:ring-2 focus:ring-primary/20 cursor-pointer">
+                  <SelectValue placeholder="Sort order" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border border-border/70 shadow-lg bg-popover/95 backdrop-blur-md p-1">
+                  <SelectItem value="recent" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                    Recent First
+                  </SelectItem>
+                  <SelectItem value="oldest" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
+                    Oldest First
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {hasFilters && (
+              <div className="space-y-1.5 w-full sm:w-auto">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-transparent select-none hidden sm:flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-transparent" />
+                  Reset
+                </label>
+                <Button
                   type="button"
-                  onClick={() => { setSearch(""); setSearchResults(null); setCurrentPage(1); }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground p-0.5 rounded cursor-pointer"
-                  title="Clear search"
+                  onClick={clearFilters}
+                  variant="outline"
+                  className="h-10 px-4 rounded-xl text-xs font-semibold gap-1.5 border border-border/80 hover:border-destructive/40 hover:text-destructive hover:bg-destructive/5 dark:hover:bg-destructive/10 transition-all shadow-xs cursor-pointer w-full sm:w-auto flex items-center justify-center"
                 >
                   <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+                  <span>Clear Filters</span>
+                </Button>
+              </div>
+            )}
           </div>
-          
-          <DateFilterRibbon
-            dateMode={dateMode}
-            onDateModeChange={(m) => { setDateMode(m); setCurrentPage(1); }}
-            singleDate={filterDate}
-            onSingleDateChange={(d) => {
-              const cleanD = (d && d !== "null" && d !== "undefined") ? d : "";
-              activeDateRef.current = cleanD;
-              const cached = getCachedReportsForDate(cleanD);
-              if (cached && cached.length > 0) {
-                setReports(cached);
-                setLoading(false);
-                setIsFetching(false);
-              } else {
-                setReports([]);
-                setLoading(true);
-                setIsFetching(true);
-              }
-              setFilterDate(cleanD);
-              setCurrentPage(1);
-              if (typeof window !== "undefined") {
-                try { sessionStorage.setItem("lis_reports_filter_date", cleanD); } catch {}
-              }
-            }}
-            startDate={startDate}
-            onStartDateChange={(d) => { setStartDate(d); setCurrentPage(1); }}
-            endDate={endDate}
-            onEndDateChange={(d) => { setEndDate(d); setCurrentPage(1); }}
-            onShiftSingleDate={shiftDate}
-          />
-
-          {/* Status Dropdown */}
-          <div className="space-y-1.5 w-full sm:w-[170px]">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
-              Status
-            </label>
-            <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val)}>
-              <SelectTrigger className="h-10 w-full rounded-xl bg-background border border-border/80 font-medium text-xs hover:border-primary/50 transition-all shadow-xs focus:ring-2 focus:ring-primary/20 cursor-pointer">
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border border-border/70 shadow-lg bg-popover/95 backdrop-blur-md p-1">
-                <SelectItem value="ALL" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
-                  <span className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-slate-400" />
-                    All Statuses
-                  </span>
-                </SelectItem>
-                <SelectItem value="NEW" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
-                  <span className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
-                    <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
-                    New
-                  </span>
-                </SelectItem>
-                <SelectItem value="IN_PROGRESS" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
-                  <span className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    In Progress
-                  </span>
-                </SelectItem>
-                <SelectItem value="FINAL" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
-                  <span className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    Final
-                  </span>
-                </SelectItem>
-                <SelectItem value="APPROVED" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
-                  <span className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    Approved
-                  </span>
-                </SelectItem>
-                <SelectItem value="REJECTED" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
-                  <span className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
-                    <span className="w-2 h-2 rounded-full bg-rose-500" />
-                    Sample Rejected
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Lab / Source Dropdown */}
-          <div className="space-y-1.5 w-full sm:w-[210px]">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
-              Lab / Source
-            </label>
-            <Select value={sourceFilter} onValueChange={(val: any) => setSourceFilter(val)}>
-              <SelectTrigger className="h-10 w-full rounded-xl bg-background border border-border/80 font-medium text-xs hover:border-primary/50 transition-all shadow-xs focus:ring-2 focus:ring-primary/20 cursor-pointer">
-                <SelectValue placeholder="All Labs / Sources" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border border-border/70 shadow-lg bg-popover/95 backdrop-blur-md p-1">
-                <SelectItem value="ALL" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
-                  <span className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-slate-400" />
-                    All Labs (All Reports)
-                  </span>
-                </SelectItem>
-                <SelectItem value="MAIN_LAB" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
-                  <span className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    Main Lab (In-House)
-                  </span>
-                </SelectItem>
-                <SelectItem value="B2B" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
-                  <span className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
-                    <span className="w-2 h-2 rounded-full bg-purple-500" />
-                    All B2B (Partners)
-                  </span>
-                </SelectItem>
-                <SelectItem value="COLLECTION_CENTER" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
-                  <span className="flex items-center gap-2 text-teal-600 dark:text-teal-400">
-                    <span className="w-2 h-2 rounded-full bg-teal-500" />
-                    All CC (Collection Centres)
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Sort By Dropdown */}
-          <div className="space-y-1.5 w-full sm:w-[160px]">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary/70" />
-              Sort By
-            </label>
-            <Select value={sortOrder} onValueChange={(val) => setSortOrder(val as "oldest" | "recent")}>
-              <SelectTrigger className="h-10 w-full rounded-xl bg-background border border-border/80 font-medium text-xs hover:border-primary/50 transition-all shadow-xs focus:ring-2 focus:ring-primary/20 cursor-pointer">
-                <SelectValue placeholder="Sort order" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border border-border/70 shadow-lg bg-popover/95 backdrop-blur-md p-1">
-                <SelectItem value="recent" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
-                  Recent First
-                </SelectItem>
-                <SelectItem value="oldest" className="rounded-lg text-xs font-semibold py-2 cursor-pointer">
-                  Oldest First
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {hasFilters && (
-            <div className="space-y-1.5 w-full sm:w-auto">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-transparent select-none hidden sm:flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-transparent" />
-                Reset
-              </label>
-              <Button
-                type="button"
-                onClick={clearFilters}
-                variant="outline"
-                className="h-10 px-4 rounded-xl text-xs font-semibold gap-1.5 border border-border/80 hover:border-destructive/40 hover:text-destructive hover:bg-destructive/5 dark:hover:bg-destructive/10 transition-all shadow-xs cursor-pointer w-full sm:w-auto flex items-center justify-center"
-              >
-                <X className="h-3.5 w-3.5" />
-                <span>Clear Filters</span>
-              </Button>
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* Bulk Selection Action Bar */}
-      {selectedIds.length > 0 && (
-        <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 sm:px-4 sm:py-3 flex flex-wrap items-center justify-between gap-3 animate-fade-in shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs shadow-xs">
-              {selectedIds.length}
+        {/* Bulk Selection Action Bar */}
+        {selectedIds.length > 0 && (
+          <div className="bg-primary/10 border border-primary/20 rounded-xl p-3 sm:px-4 sm:py-3 flex flex-wrap items-center justify-between gap-3 animate-fade-in shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs shadow-xs">
+                {selectedIds.length}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-foreground">
+                  {selectedIds.length} {selectedIds.length === 1 ? "Report" : "Reports"} Selected
+                </p>
+                <p className="text-[11px] text-muted-foreground hidden sm:block">
+                  Print all selected patient reports together in one continuous printer queue
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-bold text-foreground">
-                {selectedIds.length} {selectedIds.length === 1 ? "Report" : "Reports"} Selected
-              </p>
-              <p className="text-[11px] text-muted-foreground hidden sm:block">
-                Print all selected patient reports together in one continuous printer queue
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            {sortedReports.length > currentRows.length && selectedIds.length < sortedReports.length && (
+            <div className="flex items-center gap-2">
+              {sortedReports.length > currentRows.length && selectedIds.length < sortedReports.length && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedIds(sortedReports.map((r: any) => r.id))}
+                  className="h-9 text-xs text-primary hover:text-primary font-semibold cursor-pointer"
+                >
+                  Select all {sortedReports.length} reports
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setSelectedIds(sortedReports.map((r: any) => r.id))}
-                className="h-9 text-xs text-primary hover:text-primary font-semibold cursor-pointer"
+                onClick={() => setSelectedIds([])}
+                className="h-9 text-xs text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
               >
-                Select all {sortedReports.length} reports
+                <X className="h-3.5 w-3.5" /> Clear
               </Button>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelectedIds([])}
-              className="h-9 text-xs text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
-            >
-              <X className="h-3.5 w-3.5" /> Clear
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleOpenBatchPrint}
-              className="h-9 px-4 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md gap-2 cursor-pointer hover:opacity-95"
-            >
-              <Printer className="h-4 w-4" />
-              <span>Print Selected Reports ({selectedIds.length})</span>
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Table */}
-      <div className="w-full max-w-full bg-card border border-border/70 rounded-xl shadow-card overflow-hidden relative">
-        {/* Top Micro-Progress Bar for Date Switch / Revalidation Feedback */}
-        {isFetching && (
-          <div className="w-full h-1 bg-muted/60 overflow-hidden relative shrink-0">
-            <div className="h-full bg-primary animate-pulse w-full origin-left" />
-          </div>
-        )}
-        {isFetching && safeReports.length > 0 && (
-          <div className="absolute top-3 right-4 z-20 flex items-center gap-1.5 px-3 py-1 rounded-full bg-background/95 border border-primary/30 shadow-md backdrop-blur-md text-[11px] font-semibold text-primary animate-pulse pointer-events-none">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            <span>Fetching {dateMode === "range" ? `${startDate} to ${endDate}` : (filterDate ? filterDate : "all records")}…</span>
-          </div>
-        )}
-
-        <div className={`w-full max-w-full overflow-x-auto table-responsive-container transition-opacity duration-200 ${isFetching && safeReports.length > 0 ? "opacity-60 pointer-events-none" : ""}`}>
-          {loading && safeReports.length === 0 ? (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-muted/30 border-b border-border/60">
-                  <th className="w-10 px-2 py-2.5 sm:py-3 text-center">
-                    <div className="h-4 w-4 rounded bg-muted/60 mx-auto" />
-                  </th>
-                  {["Report ID", "Patient", "Tests", "Status", "Payment", "Received", "Actions"].map((h, i) => (
-                    <th key={h + i} className={`px-3.5 py-2.5 sm:py-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${h === "Tests" ? "hidden lg:table-cell" : h === "Received" ? "hidden xl:table-cell" : ""} ${h === "Actions" ? "text-right" : ""}`}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/30">
-                {Array.from({ length: 8 }).map((_, idx) => (
-                  <tr key={idx} className="animate-fade-in">
-                    <td className="w-10 px-2 py-2.5 sm:py-3 text-center"><div className="h-4 w-4 rounded shimmer-gradient mx-auto" /></td>
-                    <td className="px-3.5 py-2.5 sm:py-3"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
-                    <td className="px-3.5 py-2.5 sm:py-3"><div className="h-4 w-28 rounded shimmer-gradient" /></td>
-                    <td className="px-3.5 py-2.5 sm:py-3 hidden lg:table-cell"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
-                    <td className="px-3.5 py-2.5 sm:py-3"><div className="h-5 w-18 rounded-full shimmer-gradient" /></td>
-                    <td className="px-3.5 py-2.5 sm:py-3"><div className="h-5 w-16 rounded-full shimmer-gradient" /></td>
-                    <td className="px-3.5 py-2.5 sm:py-3 hidden xl:table-cell"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
-                    <td className="px-3.5 py-2.5 sm:py-3 text-right"><div className="h-7 w-24 rounded-lg shimmer-gradient ml-auto" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : sortedReports.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2 px-4 text-center">
-              <Filter className="h-10 w-10 opacity-25 mb-1" />
-              {filterDate ? (
-                <>
-                  <p className="text-sm font-semibold text-foreground">
-                    No reports found for {filterDate === getTodayStr() ? "Today" : filterDate}.
-                  </p>
-                  <p className="text-xs text-muted-foreground max-w-sm">
-                    No diagnostic investigations were booked on this date. Click below to view all reports across all dates.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setFilterDate("")}
-                    className="mt-2 text-xs font-semibold"
-                  >
-                    View All Reports
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm font-medium">No reports match your criteria.</p>
-                  <p className="text-xs text-muted-foreground/70">Try clearing filters or starting a new registration.</p>
-                  {hasFilters && (
-                    <Button variant="outline" size="sm" onClick={clearFilters} className="mt-2 text-xs">
-                      Clear All Filters
-                    </Button>
-                  )}
-                </>
-              )}
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleOpenBatchPrint}
+                className="h-9 px-4 rounded-xl gradient-primary text-primary-foreground font-bold text-xs shadow-md gap-2 cursor-pointer hover:opacity-95"
+              >
+                <Printer className="h-4 w-4" />
+                <span>Print Selected Reports ({selectedIds.length})</span>
+              </Button>
             </div>
-          ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-muted/30 border-b border-border/60">
-                  <th className="w-10 px-2 py-2.5 sm:py-3 text-center">
-                    <Checkbox
-                      checked={isAllCurrentPageSelected}
-                      onCheckedChange={toggleSelectAllCurrentPage}
-                      aria-label="Select all reports on this page"
-                    />
-                  </th>
-                  {["Report ID", "Patient", "Tests", "Status", "Payment", "Received", "Actions"].map((h, i) => (
-                    <th key={h + i} className={`px-3.5 py-2.5 sm:py-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${h === "Tests" ? "hidden lg:table-cell" : h === "Received" ? "hidden xl:table-cell" : ""} ${h === "Actions" ? "text-right" : ""}`}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {currentRows.map((rep: any) => {
-                  const isSelected = selectedIds.includes(rep.id);
-                  const distinctTests = getDistinctReportTests(rep);
-                  const resultsList = distinctTests;
-                  const rawResults = Array.isArray(rep.results) ? rep.results : [];
-                  const abnormalCount = rawResults.filter((r: any) => r.isAbnormal || r.is_abnormal).length;
-                  const patName = formatPatientListDisplayName(rep.patient?.name, rep.patient?.designation);
-                  const repId = rep.custom_id || rep.customId || "REP";
-                  const repDate = rep.created_at || rep.createdAt;
+          </div>
+        )}
 
-                  return (
-                    <tr
-                      key={rep.id}
-                      className={`border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors ${
-                        isSelected ? "bg-primary/5 dark:bg-primary/10" : ""
-                      }`}
+        {/* Table */}
+        <div className="w-full max-w-full bg-card border border-border/70 rounded-xl shadow-card overflow-hidden relative">
+          {/* Top Micro-Progress Bar for Date Switch / Revalidation Feedback */}
+          {isFetching && (
+            <div className="w-full h-1 bg-muted/60 overflow-hidden relative shrink-0">
+              <div className="h-full bg-primary animate-pulse w-full origin-left" />
+            </div>
+          )}
+          {isFetching && safeReports.length > 0 && (
+            <div className="absolute top-3 right-4 z-20 flex items-center gap-1.5 px-3 py-1 rounded-full bg-background/95 border border-primary/30 shadow-md backdrop-blur-md text-[11px] font-semibold text-primary animate-pulse pointer-events-none">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>Fetching {dateMode === "range" ? `${startDate} to ${endDate}` : (filterDate ? filterDate : "all records")}…</span>
+            </div>
+          )}
+
+          <div className={`w-full max-w-full overflow-x-auto table-responsive-container transition-opacity duration-200 ${isFetching && safeReports.length > 0 ? "opacity-60 pointer-events-none" : ""}`}>
+            {loading && safeReports.length === 0 ? (
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-muted/30 border-b border-border/60">
+                    <th className="w-10 px-2 py-2.5 sm:py-3 text-center">
+                      <div className="h-4 w-4 rounded bg-muted/60 mx-auto" />
+                    </th>
+                    {["Report ID", "Patient", "Tests", "Status", "Payment", "Received", "Actions"].map((h, i) => (
+                      <th key={h + i} className={`px-3.5 py-2.5 sm:py-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${h === "Tests" ? "hidden lg:table-cell" : h === "Received" ? "hidden xl:table-cell" : ""} ${h === "Actions" ? "text-right" : ""}`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/30">
+                  {Array.from({ length: 8 }).map((_, idx) => (
+                    <tr key={idx} className="animate-fade-in">
+                      <td className="w-10 px-2 py-2.5 sm:py-3 text-center"><div className="h-4 w-4 rounded shimmer-gradient mx-auto" /></td>
+                      <td className="px-3.5 py-2.5 sm:py-3"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
+                      <td className="px-3.5 py-2.5 sm:py-3"><div className="h-4 w-28 rounded shimmer-gradient" /></td>
+                      <td className="px-3.5 py-2.5 sm:py-3 hidden lg:table-cell"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
+                      <td className="px-3.5 py-2.5 sm:py-3"><div className="h-5 w-18 rounded-full shimmer-gradient" /></td>
+                      <td className="px-3.5 py-2.5 sm:py-3"><div className="h-5 w-16 rounded-full shimmer-gradient" /></td>
+                      <td className="px-3.5 py-2.5 sm:py-3 hidden xl:table-cell"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
+                      <td className="px-3.5 py-2.5 sm:py-3 text-right"><div className="h-7 w-24 rounded-lg shimmer-gradient ml-auto" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : sortedReports.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2 px-4 text-center">
+                <Filter className="h-10 w-10 opacity-25 mb-1" />
+                {filterDate ? (
+                  <>
+                    <p className="text-sm font-semibold text-foreground">
+                      No reports found for {filterDate === getTodayStr() ? "Today" : filterDate}.
+                    </p>
+                    <p className="text-xs text-muted-foreground max-w-sm">
+                      No diagnostic investigations were booked on this date. Click below to view all reports across all dates.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setFilterDate("")}
+                      className="mt-2 text-xs font-semibold"
                     >
-                      <td className="w-10 px-2 py-2.5 sm:py-3 text-center">
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleSelectReport(rep.id)}
-                          aria-label={`Select report ${repId}`}
-                        />
-                      </td>
-                      <td className="px-3.5 py-2.5 sm:py-3 font-mono text-xs font-bold text-primary whitespace-nowrap">
-                        {repId}
-                      </td>
-                      <td className="px-3 py-2.5 sm:py-3">
-                        <p className="font-semibold text-foreground text-xs sm:text-sm tracking-tight truncate max-w-[140px] lg:max-w-[170px] xl:max-w-[200px]" title={patName}>
-                          {patName}
-                        </p>
-                      </td>
-                      <td className="px-3.5 py-2.5 sm:py-3 hidden lg:table-cell whitespace-nowrap">
-                        {resultsList.length === 0 ? (
-                          <span className="text-[11px] text-muted-foreground/70 italic">No tests</span>
-                        ) : (
-                          <div
-                            className="flex items-center gap-1.5 cursor-pointer"
-                            onMouseEnter={(e) => handleOpenPopover(e, repId, resultsList)}
-                            onMouseLeave={handleScheduleClosePopover}
-                          >
-                            <span
-                              className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-muted/70 text-foreground border border-border/50 max-w-[130px] truncate hover:border-primary/50 transition-colors"
-                              title={resultsList[0].name}
+                      View All Reports
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium">No reports match your criteria.</p>
+                    <p className="text-xs text-muted-foreground/70">Try clearing filters or starting a new registration.</p>
+                    {hasFilters && (
+                      <Button variant="outline" size="sm" onClick={clearFilters} className="mt-2 text-xs">
+                        Clear All Filters
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-muted/30 border-b border-border/60">
+                    <th className="w-10 px-2 py-2.5 sm:py-3 text-center">
+                      <Checkbox
+                        checked={isAllCurrentPageSelected}
+                        onCheckedChange={toggleSelectAllCurrentPage}
+                        aria-label="Select all reports on this page"
+                      />
+                    </th>
+                    {["Report ID", "Patient", "Tests", "Status", "Payment", "Received", "Actions"].map((h, i) => (
+                      <th key={h + i} className={`px-3.5 py-2.5 sm:py-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground whitespace-nowrap ${h === "Tests" ? "hidden lg:table-cell" : h === "Received" ? "hidden xl:table-cell" : ""} ${h === "Actions" ? "text-right" : ""}`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentRows.map((rep: any) => {
+                    const isSelected = selectedIds.includes(rep.id);
+                    const distinctTests = getDistinctReportTests(rep);
+                    const resultsList = distinctTests;
+                    const rawResults = Array.isArray(rep.results) ? rep.results : [];
+                    const abnormalCount = rawResults.filter((r: any) => r.isAbnormal || r.is_abnormal).length;
+                    const patName = formatPatientListDisplayName(rep.patient?.name, rep.patient?.designation);
+                    const repId = rep.custom_id || rep.customId || "REP";
+                    const repDate = rep.created_at || rep.createdAt;
+
+                    return (
+                      <tr
+                        key={rep.id}
+                        className={`border-b border-border/30 last:border-0 hover:bg-muted/25 transition-colors ${isSelected ? "bg-primary/5 dark:bg-primary/10" : ""
+                          }`}
+                      >
+                        <td className="w-10 px-2 py-2.5 sm:py-3 text-center">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelectReport(rep.id)}
+                            aria-label={`Select report ${repId}`}
+                          />
+                        </td>
+                        <td className="px-3.5 py-2.5 sm:py-3 font-mono text-xs font-bold text-primary whitespace-nowrap">
+                          {repId}
+                        </td>
+                        <td className="px-3 py-2.5 sm:py-3">
+                          <p className="font-semibold text-foreground text-xs sm:text-sm tracking-tight truncate max-w-[140px] lg:max-w-[170px] xl:max-w-[200px]" title={patName}>
+                            {patName}
+                          </p>
+                        </td>
+                        <td className="px-3.5 py-2.5 sm:py-3 hidden lg:table-cell whitespace-nowrap">
+                          {resultsList.length === 0 ? (
+                            <span className="text-[11px] text-muted-foreground/70 italic">No tests</span>
+                          ) : (
+                            <div
+                              className="flex items-center gap-1.5 cursor-pointer"
+                              onMouseEnter={(e) => handleOpenPopover(e, repId, resultsList)}
+                              onMouseLeave={handleScheduleClosePopover}
                             >
-                              {resultsList[0].name}
-                            </span>
-                            {resultsList.length > 1 && (
                               <span
-                                className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors cursor-pointer select-none"
+                                className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-muted/70 text-foreground border border-border/50 max-w-[130px] truncate hover:border-primary/50 transition-colors"
+                                title={resultsList[0].name}
                               >
-                                +{resultsList.length - 1} more
+                                {resultsList[0].name}
+                              </span>
+                              {resultsList.length > 1 && (
+                                <span
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors cursor-pointer select-none"
+                                >
+                                  +{resultsList.length - 1} more
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 sm:py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {(() => {
+                              const isRejected = rep.status === "REJECTED" || rep.meta?.sample_status === "REJECTED" || rep.patient?.meta?.sample_status === "REJECTED";
+                              const rejectionReason = rep.meta?.rejection_reason || rep.patient?.meta?.rejection_reason || "Sample Rejected";
+
+                              if (isRejected) {
+                                return (
+                                  <div className="space-y-1">
+                                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-500/15 text-rose-600 border border-rose-500/30">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse" />
+                                      Sample Rejected
+                                    </span>
+                                    <p className="text-[10px] font-medium text-rose-600 leading-tight">
+                                      {rejectionReason}
+                                    </p>
+                                    {isB2B && (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                        Fresh sample required
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              }
+
+                              if (rep.status === "APPROVED" || rep.status === "COMPLETED") {
+                                return (
+                                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                    APPROVED
+                                  </span>
+                                );
+                              }
+
+                              if (rep.status === "FINAL") {
+                                return (
+                                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                    FINAL
+                                  </span>
+                                );
+                              }
+
+                              if (rep.status === "IN_PROGRESS") {
+                                return (
+                                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                    IN PROGRESS
+                                  </span>
+                                );
+                              }
+
+                              return (
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                                  NEW
+                                </span>
+                              );
+                            })()}
+                            {rep.status !== "REJECTED" && !rep.meta?.sample_status && (rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && abnormalCount > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-[9px] font-bold text-destructive uppercase tracking-wide whitespace-nowrap">
+                                <AlertTriangle className="h-3 w-3" /> {abnormalCount} abnormal
                               </span>
                             )}
+                            {(rep.abdm_status === "LINKED" || rep.abdmStatus === "LINKED") && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-teal-500/10 px-2 py-0.5 text-[9px] font-extrabold text-teal-700 dark:text-teal-400 uppercase tracking-wide border border-teal-500/25 whitespace-nowrap" title="ABDM M2 Care Context Linked & FHIR Record Pushed">
+                                <Shield className="h-3 w-3 text-teal-600 dark:text-teal-400" /> ABDM M2 Synced
+                              </span>
+                            )}
+                            {isB2B && rep.status !== "REJECTED" && (rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && (
+                              rep.is_b2b_paid || rep.isB2bPaid ? (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[9px] font-extrabold text-emerald-600 uppercase tracking-wide border border-emerald-500/20 whitespace-nowrap">
+                                  <CheckCircle2 className="h-3 w-3" /> Paid & Unlocked
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-md bg-purple-500/10 px-2 py-0.5 text-[9px] font-bold text-purple-600 border border-purple-500/20 whitespace-nowrap">
+                                  Rate: ₹{Number(rep.b2b_price ?? rep.b2bPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                </span>
+                              )
+                            )}
                           </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 sm:py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {(() => {
-                            const isRejected = rep.status === "REJECTED" || rep.meta?.sample_status === "REJECTED" || rep.patient?.meta?.sample_status === "REJECTED";
-                            const rejectionReason = rep.meta?.rejection_reason || rep.patient?.meta?.rejection_reason || "Sample Rejected";
+                        </td>
 
-                            if (isRejected) {
+                        {/* Payment Status Column */}
+                        <td className="px-3 py-2.5 sm:py-3 whitespace-nowrap">
+                          {(() => {
+                            const isB2BReport = rep.is_b2b_paid || rep.isB2bPaid;
+                            const bill = rep.bill;
+                            const isUpdating = updatingReportBillId === rep.id;
+
+                            let isPaid = false;
+                            let isPartial = false;
+                            let billTotal = 0;
+                            let billPaid = 0;
+
+                            if (isB2BReport) {
+                              isPaid = true;
+                            } else if (bill) {
+                              billTotal = Number(bill.total || 0);
+                              billPaid = Number(bill.paid_amount ?? bill.paidAmount ?? 0);
+                              const bStatus = String(bill.status || "").toUpperCase();
+                              if (bStatus === "PAID") {
+                                isPaid = true;
+                              } else if (bStatus === "PARTIAL") {
+                                isPartial = true;
+                              } else if (billTotal > 0 && billPaid >= billTotal) {
+                                isPaid = true;
+                              } else if (billPaid > 0) {
+                                isPartial = true;
+                              }
+                            } else if (rep.patient?.meta?.payment_status === "PAID" || rep.meta?.payment_status === "PAID") {
+                              isPaid = true;
+                            }
+
+                            const canToggle = Boolean(bill?.id || rep.bill_id) && !isB2B;
+
+                            if (isPaid) {
                               return (
-                                <div className="space-y-1">
-                                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-500/15 text-rose-600 border border-rose-500/30">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse" />
-                                    Sample Rejected
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 cursor-default select-none shadow-xs"
+                                    title="Payment received in full"
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                                    <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                                    <span>PAID</span>
                                   </span>
-                                  <p className="text-[10px] font-medium text-rose-600 leading-tight">
-                                    {rejectionReason}
-                                  </p>
-                                  {isB2B && (
-                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                                      Fresh sample required
-                                    </span>
-                                  )}
                                 </div>
                               );
                             }
 
-                            if (rep.status === "APPROVED" || rep.status === "COMPLETED") {
+                            if (isPartial) {
                               return (
-                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                  APPROVED
-                                </span>
-                              );
-                            }
-
-                            if (rep.status === "FINAL") {
-                              return (
-                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                  FINAL
-                                </span>
-                              );
-                            }
-
-                            if (rep.status === "IN_PROGRESS") {
-                              return (
-                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                  IN PROGRESS
-                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 cursor-default select-none shadow-xs"
+                                    title="Partial payment received"
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                    <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                                    <span>PARTIAL</span>
+                                  </span>
+                                </div>
                               );
                             }
 
                             return (
-                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">
-                                <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-                                NEW
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span
+                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 cursor-default select-none shadow-xs"
+                                  title="Payment pending"
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
+                                  <AlertCircle className="h-3 w-3 text-rose-600 dark:text-rose-400" />
+                                  <span>UNPAID</span>
+                                </span>
+                              </div>
                             );
                           })()}
-                          {rep.status !== "REJECTED" && !rep.meta?.sample_status && (rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && abnormalCount > 0 && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-[9px] font-bold text-destructive uppercase tracking-wide whitespace-nowrap">
-                              <AlertTriangle className="h-3 w-3" /> {abnormalCount} abnormal
-                            </span>
-                          )}
-                          {(rep.abdm_status === "LINKED" || rep.abdmStatus === "LINKED") && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-teal-500/10 px-2 py-0.5 text-[9px] font-extrabold text-teal-700 dark:text-teal-400 uppercase tracking-wide border border-teal-500/25 whitespace-nowrap" title="ABDM M2 Care Context Linked & FHIR Record Pushed">
-                              <Shield className="h-3 w-3 text-teal-600 dark:text-teal-400" /> ABDM M2 Synced
-                            </span>
-                          )}
-                          {isB2B && rep.status !== "REJECTED" && (rep.status === "APPROVED" || rep.status === "COMPLETED" || rep.status === "FINAL") && (
-                            rep.is_b2b_paid || rep.isB2bPaid ? (
-                              <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-0.5 text-[9px] font-extrabold text-emerald-600 uppercase tracking-wide border border-emerald-500/20 whitespace-nowrap">
-                                <CheckCircle2 className="h-3 w-3" /> Paid & Unlocked
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 rounded-md bg-purple-500/10 px-2 py-0.5 text-[9px] font-bold text-purple-600 border border-purple-500/20 whitespace-nowrap">
-                                Rate: ₹{Number(rep.b2b_price ?? rep.b2bPrice ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                              </span>
-                            )
-                          )}
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Payment Status Column */}
-                      <td className="px-3 py-2.5 sm:py-3 whitespace-nowrap">
-                        {(() => {
-                          const isB2BReport = rep.is_b2b_paid || rep.isB2bPaid;
-                          const bill = rep.bill;
-                          const isUpdating = updatingReportBillId === rep.id;
+                        {/* Received Date Column */}
+                        <td className="px-3.5 py-2.5 sm:py-3 text-muted-foreground text-xs hidden xl:table-cell whitespace-nowrap">
+                          {repDate ? new Date(repDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "N/A"}
+                        </td>
 
-                          let isPaid = false;
-                          let isPartial = false;
-                          let billTotal = 0;
-                          let billPaid = 0;
-
-                          if (isB2BReport) {
-                            isPaid = true;
-                          } else if (bill) {
-                            billTotal = Number(bill.total || 0);
-                            billPaid = Number(bill.paid_amount ?? bill.paidAmount ?? 0);
-                            const bStatus = String(bill.status || "").toUpperCase();
-                            if (bStatus === "PAID") {
-                              isPaid = true;
-                            } else if (bStatus === "PARTIAL") {
-                              isPartial = true;
-                            } else if (billTotal > 0 && billPaid >= billTotal) {
-                              isPaid = true;
-                            } else if (billPaid > 0) {
-                              isPartial = true;
+                        <td className="px-3 py-2.5 sm:py-3 text-right">
+                          {(() => {
+                            const isRejected = rep.status === "REJECTED" || rep.meta?.sample_status === "REJECTED" || rep.patient?.meta?.sample_status === "REJECTED";
+                            if (isRejected) {
+                              return (
+                                <div className="flex items-center justify-end">
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-500/10 px-2.5 py-1 rounded-lg border border-rose-500/20 whitespace-nowrap">
+                                    <Ban className="h-3.5 w-3.5" /> Sample Rejected
+                                  </span>
+                                </div>
+                              );
                             }
-                          } else if (rep.patient?.meta?.payment_status === "PAID" || rep.meta?.payment_status === "PAID") {
-                            isPaid = true;
-                          }
 
-                          const canToggle = Boolean(bill?.id || rep.bill_id) && !isB2B;
-
-                          if (isPaid) {
                             return (
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 cursor-default select-none shadow-xs"
-                                  title="Payment received in full"
-                                >
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
-                                  <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                                  <span>PAID</span>
-                                </span>
-                              </div>
-                            );
-                          }
-
-                          if (isPartial) {
-                            return (
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 cursor-default select-none shadow-xs"
-                                  title="Partial payment received"
-                                >
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                  <Clock className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                                  <span>PARTIAL</span>
-                                </span>
-                              </div>
-                            );
-                          }
-
-                          return (
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-rose-500/15 text-rose-700 dark:text-rose-400 border border-rose-500/30 cursor-default select-none shadow-xs"
-                                title="Payment pending"
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.6)]" />
-                                <AlertCircle className="h-3 w-3 text-rose-600 dark:text-rose-400" />
-                                <span>UNPAID</span>
-                              </span>
-                            </div>
-                          );
-                        })()}
-                      </td>
-
-                      {/* Received Date Column */}
-                      <td className="px-3.5 py-2.5 sm:py-3 text-muted-foreground text-xs hidden xl:table-cell whitespace-nowrap">
-                        {repDate ? new Date(repDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "N/A"}
-                      </td>
-
-                      <td className="px-3 py-2.5 sm:py-3 text-right">
-                        {(() => {
-                          const isRejected = rep.status === "REJECTED" || rep.meta?.sample_status === "REJECTED" || rep.patient?.meta?.sample_status === "REJECTED";
-                          if (isRejected) {
-                            return (
-                              <div className="flex items-center justify-end">
-                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-500/10 px-2.5 py-1 rounded-lg border border-rose-500/20 whitespace-nowrap">
-                                  <Ban className="h-3.5 w-3.5" /> Sample Rejected
-                                </span>
-                              </div>
-                            );
-                          }
-
-                          return (
-                            <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
-                              {!isPartnerOrCC && (
-                                <Link href={`/dashboard/reports/${rep.id}/edit`}>
-                                  <Button size="sm" className="h-8 px-2 xl:px-2.5 gap-1 sm:gap-1.5 font-bold text-xs cursor-pointer shadow-xs rounded-xl" title="Enter Results">
-                                    <Edit3 className="h-3.5 w-3.5" />
-                                    <span className="hidden xl:inline">Results</span>
-                                  </Button>
-                                </Link>
-                              )}
-                              <Button 
-                                type="button"
-                                variant={isPartnerOrCC ? "default" : "outline"} 
-                                size="sm" 
-                                onClick={() => triggerPrint(rep)} 
-                                disabled={printingId === rep.id}
-                                className={`h-8 px-2 xl:px-2.5 gap-1 font-bold text-xs rounded-xl cursor-pointer shadow-xs ${
-                                  isPartnerOrCC ? "gradient-primary text-primary-foreground ring-inset-top" : "border border-border/80 hover:bg-muted text-foreground"
-                                }`}
-                                title={isPartnerOrCC && !(rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED") ? "Report is awaiting final approval from central lab" : "Print report"}
-                              >
-                                {printingId === rep.id ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <Printer className="h-3.5 w-3.5" />
+                              <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                                {!isPartnerOrCC && (
+                                  <Link href={`/dashboard/reports/${rep.id}/edit`}>
+                                    <Button size="sm" className="h-8 px-2 xl:px-2.5 gap-1 sm:gap-1.5 font-bold text-xs cursor-pointer shadow-xs rounded-xl" title="Enter Results">
+                                      <Edit3 className="h-3.5 w-3.5" />
+                                      <span className="hidden xl:inline">Results</span>
+                                    </Button>
+                                  </Link>
                                 )}
-                                <span className="hidden xl:inline">
-                                  {isB2B
-                                    ? rep.is_b2b_paid || rep.isB2bPaid
-                                      ? "Print"
-                                      : (rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED")
-                                      ? `₹${Number(rep.b2b_price ?? rep.b2bPrice ?? 0).toLocaleString("en-IN")}`
-                                      : "Awaiting"
-                                    : isCollectionCenter
-                                    ? (rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED")
-                                      ? "Print"
-                                      : "Awaiting"
-                                    : "Print"}
-                                </span>
-                              </Button>
+                                <Button
+                                  type="button"
+                                  variant={isPartnerOrCC ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => triggerPrint(rep)}
+                                  disabled={printingId === rep.id}
+                                  className={`h-8 px-2 xl:px-2.5 gap-1 font-bold text-xs rounded-xl cursor-pointer shadow-xs ${isPartnerOrCC ? "gradient-primary text-primary-foreground ring-inset-top" : "border border-border/80 hover:bg-muted text-foreground"
+                                    }`}
+                                  title={isPartnerOrCC && !(rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED") ? "Report is awaiting final approval from central lab" : "Print report"}
+                                >
+                                  {printingId === rep.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Printer className="h-3.5 w-3.5" />
+                                  )}
+                                  <span className="hidden xl:inline">
+                                    {isB2B
+                                      ? rep.is_b2b_paid || rep.isB2bPaid
+                                        ? "Print"
+                                        : (rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED")
+                                          ? `₹${Number(rep.b2b_price ?? rep.b2bPrice ?? 0).toLocaleString("en-IN")}`
+                                          : "Awaiting"
+                                      : isCollectionCenter
+                                        ? (rep.status === "FINAL" || rep.status === "APPROVED" || rep.status === "COMPLETED")
+                                          ? "Print"
+                                          : "Awaiting"
+                                        : "Print"}
+                                  </span>
+                                </Button>
 
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => triggerWhatsApp(rep)}
-                                disabled={sendingWhatsAppId === rep.id}
-                                className="h-8 px-2 xl:px-2.5 gap-1 font-bold text-xs rounded-xl cursor-pointer border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
-                                title="Send report directly to patient's WhatsApp"
-                              >
-                                <MessageCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                <span className="hidden xl:inline">WhatsApp</span>
-                              </Button>
-                            </div>
-                          );
-                        })()}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => triggerWhatsApp(rep)}
+                                  disabled={sendingWhatsAppId === rep.id}
+                                  className="h-8 px-2 xl:px-2.5 gap-1 font-bold text-xs rounded-xl cursor-pointer border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all shadow-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                                  title="Send report directly to patient's WhatsApp"
+                                >
+                                  <MessageCircle className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                  <span className="hidden xl:inline">WhatsApp</span>
+                                </Button>
+                              </div>
+                            );
+                          })()}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {totalRows > 0 && (
+            <div className="bg-muted/20 px-6 py-3.5 border-t border-border/60 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-muted-foreground">
+                Showing <span className="font-semibold text-foreground">{indexOfFirstRow + 1}</span>–<span className="font-semibold text-foreground">{Math.min(indexOfLastRow, totalRows)}</span> of <span className="font-semibold text-foreground">{totalRows}</span> reports
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Rows per page:</span>
+                  <Select value={String(rowsPerPage)} onValueChange={(val) => { setRowsPerPage(Number(val)); setCurrentPage(1); }}>
+                    <SelectTrigger className="h-8 w-16 text-xs bg-background">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} variant="outline" size="icon" className="h-8 w-8"><ChevronLeft className="h-4 w-4" /></Button>
+                  <span className="text-xs font-semibold text-foreground px-2">{currentPage} / {totalPages}</span>
+                  <Button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} variant="outline" size="icon" className="h-8 w-8"><ChevronRight className="h-4 w-4" /></Button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
-
-        {totalRows > 0 && (
-          <div className="bg-muted/20 px-6 py-3.5 border-t border-border/60 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-xs text-muted-foreground">
-              Showing <span className="font-semibold text-foreground">{indexOfFirstRow + 1}</span>–<span className="font-semibold text-foreground">{Math.min(indexOfLastRow, totalRows)}</span> of <span className="font-semibold text-foreground">{totalRows}</span> reports
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Rows per page:</span>
-                <Select value={String(rowsPerPage)} onValueChange={(val) => { setRowsPerPage(Number(val)); setCurrentPage(1); }}>
-                  <SelectTrigger className="h-8 w-16 text-xs bg-background">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="25">25</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} variant="outline" size="icon" className="h-8 w-8"><ChevronLeft className="h-4 w-4" /></Button>
-                <span className="text-xs font-semibold text-foreground px-2">{currentPage} / {totalPages}</span>
-                <Button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} variant="outline" size="icon" className="h-8 w-8"><ChevronRight className="h-4 w-4" /></Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
       </>
 
-      <FullscreenPrintReportModal 
-        open={showPrintOptions} 
+      <FullscreenPrintReportModal
+        open={showPrintOptions}
         onOpenChange={(open) => {
           setShowPrintOptions(open);
           if (!open) {
@@ -1892,7 +1884,7 @@ export default function ReportsListPage() {
             setIsHydratingReport(false);
             fetchReports();
           }
-        }} 
+        }}
         report={printReport}
         isHydrating={isHydratingReport}
       />
@@ -2011,11 +2003,10 @@ export default function ReportsListPage() {
               return (
                 <div
                   key={t.id || idx}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                    isAbn
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${isAbn
                       ? "bg-destructive/10 border-destructive/30 text-destructive font-bold"
                       : "bg-muted/60 border-border/60 text-foreground hover:bg-muted"
-                  }`}
+                    }`}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isAbn ? "bg-destructive animate-pulse" : "bg-emerald-500"}`} />
                   <span className="truncate max-w-[240px]" title={name}>

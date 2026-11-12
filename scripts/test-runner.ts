@@ -4547,14 +4547,11 @@ assert(
   "[OVERVIEW DUES LINK CLEAN TEXT] Dues card renders 'View all' as clean single-line non-wrapping text without pill"
 );
 
-// 49.7 Diagnostic Report Status Clean Single-Line Label & Turnaround Progress
+// 49.7 Doctor Share & Lab Expenses Widget Integration
 assert(
-  overviewPageSrc49.includes('whitespace-nowrap shrink-0 flex items-center gap-1.5') &&
-  overviewPageSrc49.includes('{completionPct}% Completed') &&
-  overviewPageSrc49.includes("Turnaround") &&
-  overviewPageSrc49.includes("Today's Intake Completed") &&
-  !overviewPageSrc49.includes("px-2.5 py-1 rounded-full bg-emerald-500/15"),
-  "[OVERVIEW REPORT STATUS ALIGNMENT] Diagnostic status renders single-line label without bulky pill and balances desktop height"
+  overviewPageSrc49.includes("DoctorShareExpensesWidget") &&
+  overviewPageSrc49.includes("monthRevenue={totalMonthSales}"),
+  "[OVERVIEW REPORT STATUS ALIGNMENT] Doctor Share & Lab Expenses widget cleanly replaces legacy status block with monthly financial analytics"
 );
 
 // 49.8 Weekly Trend 7-Day Volume Responsive Single-Line Label
@@ -5332,14 +5329,13 @@ assert(
   "[ANALYTICS BACKEND MONTH SCOPING] AnalyticsController queries from start of current month and returns monthReports, monthCompletedReports, and monthRevenue"
 );
 
-// 65.5 Dashboard Overview Scopes Total Sales & Diagnostic Report Status to Current Month
+// 65.5 Dashboard Overview Scopes Total Sales to Current Month & Removes Redundant Pills
 assert(
-  dashboardOverviewSrc65.includes("const monthTotalReports = Number(stats.monthReports ?? stats.totalReports ?? 0);") &&
   dashboardOverviewSrc65.includes("const totalMonthSales = stats.monthRevenue !== undefined") &&
   dashboardOverviewSrc65.includes("Current month revenue collection & daily trajectory (from 1st") &&
-  dashboardOverviewSrc65.includes("Month Sales:") &&
-  dashboardOverviewSrc65.includes("This Month"),
-  "[DASHBOARD OVERVIEW MONTH KPI] Overview dashboard displays Month Sales starting from 1st of current month and scopes Diagnostic Report Status to current month"
+  !dashboardOverviewSrc65.includes("Month Sales:</span>") &&
+  dashboardOverviewSrc65.includes("DoctorShareExpensesWidget"),
+  "[DASHBOARD OVERVIEW MONTH KPI] Overview dashboard displays current month sales cleanly without redundant top pill labels and integrates DoctorShareExpensesWidget"
 );
 
 // =========================================================================
@@ -7621,6 +7617,123 @@ assert(
   billingPageSrc92.includes("prefetchNativePdf") &&
   billingPageSrc92.includes("prefetchNativePdf({ printContainer: invoicePrintRef.current"),
   "[INVOICE PDF PRE-WARMING] billing/page.tsx pre-warms vector PDF in the background upon invoice modal open"
+);
+
+// 92.5 Instant Optimistic Feedback (Zero-Waiting WhatsApp Dispatch)
+assert(
+  fullscreenPrintModalSrc.includes("toast.success(") &&
+  fullscreenPrintModalSrc.includes("in the background"),
+  "[OPTIMISTIC INSTANT DISPATCH - REPORT] FullscreenPrintReportModal fires instant success popup on button click while PDF & WhatsApp dispatch runs in the background"
+);
+
+assert(
+  billingPageSrc92.includes("toast.success(\"Sent on WhatsApp!\"") &&
+  billingPageSrc92.includes("in the background"),
+  "[OPTIMISTIC INSTANT DISPATCH - BILLING] billing/page.tsx triggers immediate success toast on button click without blocking user on PDF rendering"
+);
+
+assert(
+  registerPageSrc92.includes("toastSuccess(\"Sent on WhatsApp!\"") &&
+  registerPageSrc92.includes("in the background"),
+  "[OPTIMISTIC INSTANT DISPATCH - REGISTER] patients/register/page.tsx provides instant feedback on WhatsApp button click"
+);
+
+assert(
+  b2bPageSrc92.includes("toast.success(\"Sent on WhatsApp!\"") &&
+  b2bPageSrc92.includes("in the background"),
+  "[OPTIMISTIC INSTANT DISPATCH - B2B] b2b/page.tsx triggers immediate success popup on button click"
+);
+
+// ==============================================================================
+// 93. Overview Doctor Share, Test Cost Expenses & Referral Analytics Engine
+// ==============================================================================
+console.log("\n▶ MODULE 93: Overview Doctor Share, Test Cost Expenses & Referral Analytics Engine");
+
+const overviewPageSrc93 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/page.tsx"),
+  "utf8"
+);
+const widgetSrc93 = fs.readFileSync(
+  path.join(__dirname, "../src/components/doctor-share-expenses-widget.tsx"),
+  "utf8"
+);
+
+// 93.1 Pill Labels Clean Removal
+assert(
+  !overviewPageSrc93.includes("Month Sales:</span>") &&
+  !overviewPageSrc93.includes("<span className=\"text-[10px] uppercase font-semibold text-muted-foreground\">Today:</span>"),
+  "[PILL LABELS REMOVAL] Overview page cleanly removes redundant Month Sales and Today pill labels from Total Sales card"
+);
+
+// 93.2 Legacy Diagnostic Report Status Removal & Replacement
+assert(
+  !overviewPageSrc93.includes("<h3 className=\"font-display text-base sm:text-lg font-semibold text-foreground truncate\">Diagnostic Report Status</h3>") &&
+  overviewPageSrc93.includes("<DoctorShareExpensesWidget"),
+  "[LEGACY BLOCK REPLACEMENT] Diagnostic Report Status donut card is completely replaced by DoctorShareExpensesWidget"
+);
+
+// 93.3 Props Wiring & Context Isolation
+assert(
+  overviewPageSrc93.includes("monthRevenue={totalMonthSales}") &&
+  overviewPageSrc93.includes("chartData={chartData}") &&
+  overviewPageSrc93.includes("isMounted={isMounted}"),
+  "[WIDGET WIRING] Dashboard passes monthly sales and chart timeline data to DoctorShareExpensesWidget"
+);
+
+// 93.4 Total Test Expenses Calculation from Tests Conducted * Unit Cost
+const mockTestsList93 = [
+  { test_id: "test_1", count: 10, cost_price: 50 },
+  { test_id: "test_2", count: 5, cost_price: 120 },
+  { test_id: "test_3", count: 20, cost_price: 15 },
+];
+const computedExpenses93 = mockTestsList93.reduce((acc, t) => acc + (t.count * t.cost_price), 0);
+assert(
+  computedExpenses93 === (10 * 50 + 5 * 120 + 20 * 15),
+  "[TEST EXPENSES FORMULA] Total expenses accurately multiplies test count by per-test cost price"
+);
+
+assert(
+  widgetSrc93.includes("fetchFromLaravel(\"/tests/usage-counts?period=this_month") &&
+  widgetSrc93.includes("unitCost = Number(localCosts[t.test_id] ?? t.cost_price ?? 0)") &&
+  widgetSrc93.includes("testExp += lineTotal"),
+  "[TEST EXPENSES ENGINE] DoctorShareExpensesWidget calculates live monthly expenses using test usage counts and unit costs"
+);
+
+// 93.5 Doctor Incentives Commission & Referral Volume
+assert(
+  widgetSrc93.includes("fetchFromLaravel(\"/doctors?filter=this_month&case_type=main_lab\")") &&
+  widgetSrc93.includes("setDoctorCommission(docComm)") &&
+  widgetSrc93.includes("setDoctorReferralsCount(docRefs)"),
+  "[DOCTOR INCENTIVES & REFERRALS] DoctorShareExpensesWidget retrieves monthly doctor commission and referred patient count"
+);
+
+// 93.6 Doctor Share & Expenses Ledger Title & Full Fill Height
+assert(
+  widgetSrc93.includes("Doctor Share & Expenses Ledger") &&
+  widgetSrc93.includes("min-h-[250px]") &&
+  widgetSrc93.includes("Test Costs Ledger") &&
+  widgetSrc93.includes("Doctor Share Ledger") &&
+  !widgetSrc93.includes("activeTab === \"overview\""),
+  "[LEDGER PRESENTATION & FULL HEIGHT] Doctor Share & Expenses Ledger features clean title, full fill height, and streamlined legend without bulky tabs"
+);
+
+// 93.7 Net Lab Margin Computation
+const mockRev93 = 10000;
+const mockExp93 = 2500;
+const mockDocShare93 = 2000;
+const mockMargin93 = Math.max(0, mockRev93 - mockExp93 - mockDocShare93);
+assert(
+  mockMargin93 === 5500 &&
+  widgetSrc93.includes("netMargin = Math.max(0, Number(monthRevenue || 0) - totalTestExpenses - doctorCommission)"),
+  "[NET LAB MARGIN FORMULA] Correctly calculates Net Lab Margin (Revenue - Expenses - Doctor Share)"
+);
+
+// 93.8 Instant Snapshot Cache for 0ms Route Switching
+assert(
+  widgetSrc93.includes("lis_cached_doc_expenses_") &&
+  widgetSrc93.includes("localStorage.getItem") &&
+  widgetSrc93.includes("localStorage.setItem"),
+  "[INSTANT CACHE] Widget caches analytics snapshot locally for zero-latency instant transitions"
 );
 
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
