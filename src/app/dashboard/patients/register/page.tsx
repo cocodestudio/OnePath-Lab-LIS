@@ -36,7 +36,7 @@ import { getStoredPackages, type LabPackage, saveReportPackage, resolvePackageTe
 const InvoiceSheet = dynamic(() => import("@/components/invoice-sheet").then(m => m.InvoiceSheet), { ssr: false });
 import { normalizeBillSettings, type BillLayoutSettings } from "@/lib/bill-settings";
 import { printInvoiceElement } from "@/lib/print-invoice";
-import { getNativePdfBase64, downloadNativePdf } from "@/lib/pdf-report-downloader";
+import { getNativePdfBase64, downloadNativePdf, prefetchNativePdf } from "@/lib/pdf-report-downloader";
 import { useToast } from "@/components/ui/toast";
 import type { AbhaVerifiedPatient } from "@/components/abha-link-modal";
 const AbhaLinkModal = dynamic(() => import("@/components/abha-link-modal").then(m => m.AbhaLinkModal), { ssr: false });
@@ -935,11 +935,12 @@ function RegisterPatientPage() {
         method: "POST",
         body: JSON.stringify({
           pdf_base64: pdfBase64,
-          phone: digitsOnly,
+          phone: digitsOnly.slice(-10),
+          async: true,
         }),
       });
 
-      if (res?.status === "success" || res?.success) {
+      if (res?.status === "success" || res?.success || res?.queued) {
         toastSuccess("Sent on WhatsApp!", "Tax invoice PDF sent to patient's WhatsApp successfully.");
       } else {
         toastError("WhatsApp Dispatch Failed", res?.message || "Could not deliver WhatsApp message via Meta Cloud API.");

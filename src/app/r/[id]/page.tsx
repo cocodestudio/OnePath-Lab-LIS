@@ -4,7 +4,8 @@ import React, { useEffect, useState, useRef, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { 
   ShieldCheck, Download, AlertCircle, Loader2, 
-  Calendar, Lock, Check, ZoomIn, ZoomOut, Eye, Share2
+  Calendar, Lock, Check, ZoomIn, ZoomOut, Eye, Share2,
+  CreditCard, Clock, Phone, ShieldAlert, AlertTriangle
 } from "lucide-react";
 import { ReportSheet } from "@/components/report-sheet";
 import { getCleanLetterheadUrl } from "@/lib/api-client";
@@ -271,6 +272,34 @@ export default function PublicReportVerificationPage() {
     };
   }, [lab, letterheadBase64]);
 
+  // Security & Billing Guardrails: Unpaid Bills and Unapproved Reports Cannot be Downloaded
+  const bill = report?.bill || {};
+  const rawBillStatus = String(bill?.status || "").toUpperCase().trim();
+  const rawBillTotal = Number(bill?.total || 0);
+  const rawBillPaid = Number(bill?.paid_amount ?? bill?.paidAmount ?? 0);
+  const isBillUnpaid =
+    (report?.can_download === false && report?.download_block_reason === "BILL_UNPAID") ||
+    rawBillStatus === "UNPAID" ||
+    (rawBillTotal > 0 && rawBillPaid <= 0 && rawBillStatus !== "PAID");
+
+  const rawReportStatus = String(report?.status || "").toUpperCase().trim();
+  const isReportApproved =
+    (rawReportStatus === "APPROVED" || rawReportStatus === "FINAL" || rawReportStatus === "COMPLETED") &&
+    report?.download_block_reason !== "NOT_APPROVED";
+
+  const isDownloadBlocked = Boolean(
+    report?.can_download === false ||
+    isBillUnpaid ||
+    !isReportApproved
+  );
+
+  const blockReason = isBillUnpaid ? "BILL_UNPAID" : (!isReportApproved ? "NOT_APPROVED" : (report?.download_block_reason || null));
+  const blockMessage = report?.download_block_message || (
+    isBillUnpaid
+      ? "Payment Pending: The invoice for this diagnostic report is currently UNPAID. Please clear the pending dues at the laboratory billing counter to download your official report."
+      : "Report Pending Approval: Laboratory analysis is in progress. The official report will be available for download once reviewed and approved by the pathologist."
+  );
+
   // Native Vector PDF Download (Approach 1: Zero overlap, 100% Vector Quality)
   const patientName = (patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
   const code = report?.custom_id || report?.customId || reportId;
@@ -278,9 +307,19 @@ export default function PublicReportVerificationPage() {
   const handleNativePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `Report_${patientName}_${code}`,
+    onBeforePrint: async () => {
+      if (isDownloadBlocked) {
+        alert(blockMessage);
+        throw new Error(blockMessage);
+      }
+    },
   });
 
   const handleDownloadPdf = async () => {
+    if (isDownloadBlocked) {
+      alert(blockMessage);
+      return;
+    }
     if (!printRef.current || !sheetData) return;
 
     setIsDownloading(true);
@@ -405,9 +444,15 @@ export default function PublicReportVerificationPage() {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs sm:text-sm font-bold text-slate-900 tracking-tight">Verified Diagnostic Report</span>
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <Check className="h-2.5 w-2.5 stroke-[3]" /> OFFICIAL AUTHENTIC
-                </span>
+                {isDownloadBlocked ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                    <Lock className="h-2.5 w-2.5" /> ACCESS RESTRICTED
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <Check className="h-2.5 w-2.5 stroke-[3]" /> OFFICIAL AUTHENTIC
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-slate-500 truncate mt-0.5">
                 {lab.name || "OnePath Diagnostic Lab"} · <span className="font-mono font-semibold text-slate-700">Ref: {report.custom_id || report.customId}</span>
@@ -415,7 +460,7 @@ export default function PublicReportVerificationPage() {
             </div>
           </div>
 
-          {/* Desktop/Tablet Top Action: ONLY Download PDF */}
+          {/* Desktop/Tablet Top Action */}
           <div className="hidden sm:flex items-center gap-2 shrink-0">
             <button
               onClick={handleWhatsAppShare}
@@ -425,23 +470,33 @@ export default function PublicReportVerificationPage() {
               <Share2 className="h-3.5 w-3.5" />
               <span>Share</span>
             </button>
-            <button
-              onClick={handleDownloadPdf}
-              disabled={isDownloading}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-75"
-            >
-              {isDownloading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Generating Official PDF...</span>
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4" />
-                  <span>Download Official PDF</span>
-                </>
-              )}
-            </button>
+            {isDownloadBlocked ? (
+              <div
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold shadow-xs select-none cursor-not-allowed"
+                title={blockMessage}
+              >
+                <Lock className="h-3.5 w-3.5 text-amber-700" />
+                <span>Download Locked ({blockReason === "BILL_UNPAID" ? "Payment Due" : "Approval Pending"})</span>
+              </div>
+            ) : (
+              <button
+                onClick={handleDownloadPdf}
+                disabled={isDownloading}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-75"
+              >
+                {isDownloading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Generating Official PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" />
+                    <span>Download Official PDF</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -477,77 +532,177 @@ export default function PublicReportVerificationPage() {
         </div>
       </section>
 
-      {/* ── Mobile Zoom & Screen Fit Controller ── */}
-      <div className="max-w-5xl mx-auto w-full px-3 sm:px-4 pt-2 pb-1 flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
-          <Eye className="h-3.5 w-3.5" />
-          <span>Official A4 Report Canvas</span>
-        </span>
-
-        <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2 py-1 rounded-xl shadow-2xs text-xs">
-          <button
-            onClick={() => setScale((prev) => Math.max(0.3, Number((prev - 0.05).toFixed(2))))}
-            className="p-1 rounded hover:bg-slate-100 text-slate-700"
-            title="Zoom Out"
-          >
-            <ZoomOut className="h-3.5 w-3.5" />
-          </button>
-          <span className="font-mono text-[11px] font-bold text-slate-800 px-1">
-            {Math.round(scale * 100)}%
+      {/* ── Mobile Zoom & Screen Fit Controller (Only when report viewable) ── */}
+      {!isDownloadBlocked && (
+        <div className="max-w-5xl mx-auto w-full px-3 sm:px-4 pt-2 pb-1 flex items-center justify-between">
+          <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+            <Eye className="h-3.5 w-3.5" />
+            <span>Official A4 Report Canvas</span>
           </span>
-          <button
-            onClick={() => setScale((prev) => Math.min(1.2, Number((prev + 0.05).toFixed(2))))}
-            className="p-1 rounded hover:bg-slate-100 text-slate-700"
-            title="Zoom In"
-          >
-            <ZoomIn className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => setScale(fitScale)}
-            className="ml-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg transition-colors"
-          >
-            Fit Phone
-          </button>
-          <button
-            onClick={() => setScale(1)}
-            className="text-[10px] font-bold text-slate-600 hover:bg-slate-100 px-2 py-0.5 rounded-lg transition-colors hidden sm:inline"
-          >
-            100% A4
-          </button>
-        </div>
-      </div>
 
-      {/* ── Main Report Sheet: Dynamic Scaling & Ref Container ── */}
-      <main className="flex-1 px-2 sm:px-4 py-3 flex justify-center items-start overflow-x-auto">
-        <div className="flex justify-center">
-          <ReportSheet
-            ref={printRef}
-            report={sheetData}
-            settings={labSettings}
-            scale={scale}
-          />
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2 py-1 rounded-xl shadow-2xs text-xs">
+            <button
+              onClick={() => setScale((prev) => Math.max(0.3, Number((prev - 0.05).toFixed(2))))}
+              className="p-1 rounded hover:bg-slate-100 text-slate-700"
+              title="Zoom Out"
+            >
+              <ZoomOut className="h-3.5 w-3.5" />
+            </button>
+            <span className="font-mono text-[11px] font-bold text-slate-800 px-1">
+              {Math.round(scale * 100)}%
+            </span>
+            <button
+              onClick={() => setScale((prev) => Math.min(1.2, Number((prev + 0.05).toFixed(2))))}
+              className="p-1 rounded hover:bg-slate-100 text-slate-700"
+              title="Zoom In"
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setScale(fitScale)}
+              className="ml-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-lg transition-colors"
+            >
+              Fit Phone
+            </button>
+            <button
+              onClick={() => setScale(1)}
+              className="text-[10px] font-bold text-slate-600 hover:bg-slate-100 px-2 py-0.5 rounded-lg transition-colors hidden sm:inline"
+            >
+              100% A4
+            </button>
+          </div>
         </div>
+      )}
+
+      {/* ── Main Content: Access Blocked Card or Official Report Sheet ── */}
+      <main className="flex-1 px-2 sm:px-4 py-3 flex justify-center items-start overflow-x-auto">
+        {isDownloadBlocked ? (
+          <div className="max-w-xl w-full my-6 bg-white border border-amber-200 rounded-3xl p-6 sm:p-8 shadow-sm text-center space-y-6">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shadow-xs">
+              {blockReason === "BILL_UNPAID" ? (
+                <CreditCard className="h-8 w-8 stroke-[1.75]" />
+              ) : (
+                <Clock className="h-8 w-8 stroke-[1.75]" />
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+                <ShieldAlert className="h-3.5 w-3.5 text-amber-700" />
+                {blockReason === "BILL_UNPAID" ? "Invoice Payment Required" : "Pathologist Verification Pending"}
+              </span>
+              <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+                {blockReason === "BILL_UNPAID"
+                  ? "Report Download Locked (Unpaid Invoice)"
+                  : "Results Under Clinical Review"}
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+                {blockMessage}
+              </p>
+            </div>
+
+            {/* Structured Audit & Billing Reference Box */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-left text-xs space-y-2.5">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                <span className="text-slate-500 font-medium">Patient Name</span>
+                <span className="font-semibold text-slate-800">
+                  {cleanPatientNameForReport(patient.name, patient.designation)} ({patient.age}Y/{patient.gender})
+                </span>
+              </div>
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                <span className="text-slate-500 font-medium">Report Reference</span>
+                <span className="font-mono font-semibold text-slate-800">{report.custom_id || report.customId || reportId}</span>
+              </div>
+              {report.bill && (
+                <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                  <span className="text-slate-500 font-medium">Invoice Number</span>
+                  <span className="font-mono font-semibold text-slate-800">{report.bill.custom_id || report.bill.id}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                <span className="text-slate-500 font-medium">Bill Payment Status</span>
+                <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] uppercase ${
+                  isBillUnpaid ? "bg-rose-100 text-rose-700 border border-rose-200" : "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                }`}>
+                  {report.bill?.payment_status || (isBillUnpaid ? "UNPAID" : "PAID")}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500 font-medium">Clinical Approval Status</span>
+                <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] uppercase ${
+                  isReportApproved ? "bg-emerald-100 text-emerald-700 border border-emerald-200" : "bg-amber-100 text-amber-700 border border-amber-200"
+                }`}>
+                  {report.status || (isReportApproved ? "APPROVED" : "PENDING")}
+                </span>
+              </div>
+            </div>
+
+            {/* Assistance Guidance & Lab Hotline */}
+            <div className="pt-1 flex flex-col sm:flex-row items-center justify-center gap-3">
+              {(lab?.phone || lab?.mobile || lab?.contact_phone) && (
+                <a
+                  href={`tel:${lab.phone || lab.mobile || lab.contact_phone}`}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer"
+                >
+                  <Phone className="h-4 w-4" />
+                  <span>Call Laboratory ({lab.phone || lab.mobile || lab.contact_phone})</span>
+                </a>
+              )}
+              <div className="text-[11px] text-slate-500 text-center sm:text-left">
+                Visit the billing counter or refresh once payment/approval is completed.
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-center">
+            <ReportSheet
+              ref={printRef}
+              report={sheetData}
+              settings={labSettings}
+              scale={scale}
+            />
+          </div>
+        )}
       </main>
 
-      {/* ── Mobile Sticky Bottom Action Bar: ONLY Download PDF ── */}
+      {/* ── Mobile Sticky Bottom Action Bar ── */}
       <div className="sm:hidden sticky bottom-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 p-2.5 shadow-lg">
-        <button
-          onClick={handleDownloadPdf}
-          disabled={isDownloading}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 active:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all disabled:opacity-75 cursor-pointer"
-        >
-          {isDownloading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Generating Official PDF...</span>
-            </>
-          ) : (
-            <>
-              <Download className="h-4 w-4" />
-              <span>Download Official Report (PDF)</span>
-            </>
-          )}
-        </button>
+        {isDownloadBlocked ? (
+          <div className="w-full flex items-center justify-between gap-3 py-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <Lock className="h-4 w-4 text-amber-600 shrink-0" />
+              <span className="font-semibold truncate">
+                {blockReason === "BILL_UNPAID" ? "Payment Due — Locked" : "Approval Pending"}
+              </span>
+            </div>
+            {(lab?.phone || lab?.mobile || lab?.contact_phone) && (
+              <a
+                href={`tel:${lab.phone || lab.mobile || lab.contact_phone}`}
+                className="px-3 py-1.5 rounded-lg bg-amber-600 active:bg-amber-700 text-white font-bold text-[11px] shrink-0"
+              >
+                Call Lab
+              </a>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={handleDownloadPdf}
+            disabled={isDownloading}
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-emerald-600 active:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all disabled:opacity-75 cursor-pointer"
+          >
+            {isDownloading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Generating Official PDF...</span>
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" />
+                <span>Download Official Report (PDF)</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* ── Footer ── */}

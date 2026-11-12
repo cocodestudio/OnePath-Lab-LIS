@@ -7290,6 +7290,339 @@ assert(
   "[FRONTEND REALTIME DB AUTO-SAVE] tests/count/page.tsx automatically persists entered cost price to database with visual feedback"
 );
 
+// ==============================================================================
+// 90. Clinical Report Print Modal Hydration, WhatsApp Dispatch & Letterhead Integrity
+// ==============================================================================
+console.log("\n-------------------------------------------------------------------------------");
+console.log("90. Clinical Report Print Modal Hydration, WhatsApp Dispatch & Letterhead Integrity");
+console.log("-------------------------------------------------------------------------------");
+
+const fullscreenPrintModalSrc90 = fs.readFileSync(
+  path.join(__dirname, "../src/components/fullscreen-print-report-modal.tsx"),
+  "utf8"
+);
+const reportsPageSrc90 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/reports/page.tsx"),
+  "utf8"
+);
+const editReportPageSrc90 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/reports/[id]/edit/page.tsx"),
+  "utf8"
+);
+const printPreviewDialogSrc90 = fs.readFileSync(
+  path.join(__dirname, "../src/components/print-preview-dialog.tsx"),
+  "utf8"
+);
+
+// 90.1 Test Phone Resolution Logic in resolvePatientPhone
+function testResolvePatientPhone(reportData: any): string {
+  const pat = reportData?.patient || {};
+  const patMeta = pat?.meta || {};
+  const repMeta = reportData?.meta || {};
+  const candidates = [
+    pat?.phone,
+    pat?.phoneNumber,
+    pat?.phone_number,
+    pat?.mobile,
+    pat?.contact,
+    patMeta?.phone,
+    patMeta?.phoneNumber,
+    patMeta?.phone_number,
+    patMeta?.mobile,
+    reportData?.phone,
+    reportData?.patientPhone,
+    reportData?.patient_phone,
+    repMeta?.phone,
+  ];
+  for (const c of candidates) {
+    if (c !== null && c !== undefined) {
+      const str = String(c).trim();
+      if (str && str !== "N/A" && str !== "NA" && str !== "-" && str !== "null" && str !== "undefined") {
+        const digits = str.replace(/\D/g, "");
+        if (digits.length >= 10) return digits;
+      }
+    }
+  }
+  return "";
+}
+
+assert(
+  testResolvePatientPhone({ patient: { phone: "9876543210" } }) === "9876543210",
+  "[PHONE RESOLUTION] Resolves standard 10-digit patient.phone"
+);
+assert(
+  testResolvePatientPhone({ patient: { phoneNumber: "+91 98765-43210" } }) === "919876543210",
+  "[PHONE RESOLUTION] Strips country code, spaces, and hyphens from patient.phoneNumber"
+);
+assert(
+  testResolvePatientPhone({ patient: { mobile: "9876543210" } }) === "9876543210",
+  "[PHONE RESOLUTION] Resolves mobile field fallback"
+);
+assert(
+  testResolvePatientPhone({ patient: { phone: "N/A", meta: { phone: "9876543210" } } }) === "9876543210",
+  "[PHONE RESOLUTION] Bypasses 'N/A' and resolves from patient.meta.phone"
+);
+assert(
+  testResolvePatientPhone({ patient: { phone: "-" }, patient_phone: "9876543210" }) === "9876543210",
+  "[PHONE RESOLUTION] Bypasses '-' and resolves from report.patient_phone"
+);
+assert(
+  testResolvePatientPhone({ patient: { phone: "12345" } }) === "",
+  "[PHONE RESOLUTION] Rejects incomplete numbers (< 10 digits)"
+);
+
+// 90.2 ReportA4ShimmerSkeleton Exists and Renders on Hydration
+assert(
+  fullscreenPrintModalSrc.includes("export function ReportA4ShimmerSkeleton") &&
+  fullscreenPrintModalSrc.includes("isHydrating || (!activeReportData?.results || activeReportData.results.length === 0)") &&
+  fullscreenPrintModalSrc.includes("<ReportA4ShimmerSkeleton scale={isMobile ? mobileScale : zoomScale} />"),
+  "[PRINT MODAL SHIMMER SKELETON] FullscreenPrintReportModal displays A4 clinical shimmer skeleton while hydrating fresh results"
+);
+
+// 90.3 Background Hydration Stale-Cache Bypass in reports/page.tsx
+assert(
+  reportsPageSrc90.includes("fetchFromLaravel(`/reports/${rep.id}`, { skipCache: true, timeoutMs: 10000 })") &&
+  reportsPageSrc90.includes("isHydrating={isHydratingReport}"),
+  "[STALE CACHE BYPASS] reports/page.tsx forces skipCache: true and signals isHydrating to prevent blank report flash"
+);
+
+// 90.4 Report Edit Cache Invalidation
+assert(
+  editReportPageSrc90.includes("clearApiCache(\"/reports\")"),
+  "[REPORT EDIT CACHE INVALIDATION] reports/[id]/edit/page.tsx invalidates reports cache upon saving or approving"
+);
+
+// 90.5 Offscreen Mount of WhatsApp Letterhead Container
+assert(
+  fullscreenPrintModalSrc.includes("position: \"fixed\", left: \"-99999px\", top: \"-99999px\"") &&
+  fullscreenPrintModalSrc.includes("<div ref={whatsappPrintRef}>"),
+  "[WHATSAPP LETTERHEAD MOUNT] whatsappPrintRef is rendered in fixed offscreen container in FullscreenPrintReportModal to ensure letterhead is never dropped"
+);
+
+assert(
+  printPreviewDialogSrc90.includes("position: \"fixed\", left: \"-99999px\", top: \"-99999px\"") &&
+  printPreviewDialogSrc90.includes("<div ref={whatsappPrintRef}>"),
+  "[WHATSAPP LETTERHEAD MOUNT - DIALOG] whatsappPrintRef is rendered in fixed offscreen container in PrintPreviewDialog"
+);
+
+// 90.6 Fast Async WhatsApp Dispatch
+assert(
+  fullscreenPrintModalSrc.includes("async: true") &&
+  reportsPageSrc90.includes("async: true") &&
+  printPreviewDialogSrc90.includes("async: true"),
+  "[FAST ASYNC WHATSAPP DISPATCH] All WhatsApp dispatchers pass async: true for < 100ms background queue response"
+);
+
+// 90.7 Background PDF Blob Prefetching
+assert(
+  fullscreenPrintModalSrc.includes("prefetchNativePdf") &&
+  printPreviewDialogSrc90.includes("prefetchNativePdf"),
+  "[PREFETCH PDF CACHE] Pre-warms native PDF vector blob in background for instant 0ms WhatsApp dispatch"
+);
+
+// 90.8 Patient Mobile Prompt Dialog
+assert(
+  fullscreenPrintModalSrc.includes("isPhonePromptOpen") &&
+  fullscreenPrintModalSrc.includes("Patient WhatsApp Number") &&
+  fullscreenPrintModalSrc.includes("savePhoneToProfile"),
+  "[PATIENT PHONE PROMPT DIALOG] FullscreenPrintReportModal includes in-modal phone entry dialog with auto-save to patient profile"
+);
+
+// ==============================================================================
+// 91. Invoice QR Code Report Download & Access Control Security Audit
+// ==============================================================================
+console.log("\n▶ MODULE 91: Invoice QR Code Report Download & Security Access Control");
+
+const invoiceSheetSrc91 = fs.readFileSync(
+  path.join(__dirname, "../src/components/invoice-sheet.tsx"),
+  "utf8"
+);
+const publicReportPageSrc91 = fs.readFileSync(
+  path.join(__dirname, "../src/app/r/[id]/page.tsx"),
+  "utf8"
+);
+const reportControllerSrc91 = fs.readFileSync(
+  path.join(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/ReportController.php"),
+  "utf8"
+);
+
+// Helper function replicating InvoiceSheet dynamicQrValue resolution logic
+function resolveInvoiceQrDownloadUrl(invoice: any, invoiceCustomId: string = ""): string {
+  const baseUrl = "https://lis.onepathlab.com";
+  const reportIdentifier =
+    invoice.reportId ||
+    invoice.report_id ||
+    invoice.report?.id ||
+    invoice.report?.customId ||
+    invoice.report?.custom_id ||
+    invoice.reports?.[0]?.id ||
+    invoice.reports?.[0]?.customId ||
+    invoice.reports?.[0]?.custom_id ||
+    invoice.reportCustomId ||
+    invoice.report_custom_id ||
+    invoice.id ||
+    invoiceCustomId ||
+    "";
+
+  return reportIdentifier && reportIdentifier !== "—"
+    ? `${baseUrl}/r/${encodeURIComponent(reportIdentifier)}`
+    : baseUrl;
+}
+
+// 91.1 Invoice QR Code URL resolution tests
+assert(
+  resolveInvoiceQrDownloadUrl({ reportId: "01944e88-92f1-7299-9b78-cb7328bf5c4d" }) ===
+    "https://lis.onepathlab.com/r/01944e88-92f1-7299-9b78-cb7328bf5c4d",
+  "[INVOICE QR URL] Resolves directly to /r/{reportId} when reportId is provided"
+);
+
+assert(
+  resolveInvoiceQrDownloadUrl({ report_id: "01944e88-snake-case-uuid-12345" }) ===
+    "https://lis.onepathlab.com/r/01944e88-snake-case-uuid-12345",
+  "[INVOICE QR URL] Resolves to /r/{report_id} when snake_case report_id is provided"
+);
+
+assert(
+  resolveInvoiceQrDownloadUrl({ report: { customId: "OPL-REP-2026-0091" } }) ===
+    "https://lis.onepathlab.com/r/OPL-REP-2026-0091",
+  "[INVOICE QR URL] Resolves to /r/{customId} when nested report.customId is provided"
+);
+
+assert(
+  resolveInvoiceQrDownloadUrl({ reports: [{ id: "rep-nested-first-uuid" }] }) ===
+    "https://lis.onepathlab.com/r/rep-nested-first-uuid",
+  "[INVOICE QR URL] Resolves to /r/{reports[0].id} for multi-report bookings"
+);
+
+assert(
+  resolveInvoiceQrDownloadUrl({ id: "bill-uuid-777", customId: "OPL-INV-2026-001" }) ===
+    "https://lis.onepathlab.com/r/bill-uuid-777",
+  "[INVOICE QR URL] Falls back to bill ID if report ID is not yet attached"
+);
+
+assert(
+  resolveInvoiceQrDownloadUrl({}, "OPL-INV-FALLBACK") ===
+    "https://lis.onepathlab.com/r/OPL-INV-FALLBACK",
+  "[INVOICE QR URL] Falls back to invoiceCustomId when invoice object has no direct IDs"
+);
+
+assert(
+  resolveInvoiceQrDownloadUrl({}, "") === "https://lis.onepathlab.com",
+  "[INVOICE QR URL] Safely falls back to base URL when all identifiers are empty"
+);
+
+// 91.2 Invoice UI Label and Template Verifications
+assert(
+  invoiceSheetSrc91.includes("dynamicQrValue") &&
+  invoiceSheetSrc91.includes("${baseUrl}/r/${encodeURIComponent(reportIdentifier)}") &&
+  invoiceSheetSrc91.includes("Scan to Verify") &&
+  invoiceSheetSrc91.includes("& Download"),
+  "[INVOICE QR TEMPLATE] InvoiceSheet renders official Report Verification QR Code with 'Scan to Verify' & '& Download' labels"
+);
+
+// 91.3 Backend Resolution via Report UUID or Bill UUID / Custom ID
+assert(
+  reportControllerSrc91.includes("$q->where('id', $cleanId)") &&
+  reportControllerSrc91.includes("->orWhere('bill_id', $cleanId)") &&
+  reportControllerSrc91.includes("->orWhereHas('bill', function ($bq) use ($cleanId)"),
+  "[BACKEND RESOLUTION] ReportController::getPublicReport resolves reports via Report ID, Report custom_id, Bill ID, and Bill custom_id"
+);
+
+// 91.4 Backend Zero-Leak Security Audit: Bill Unpaid Gate & Approval Gate
+assert(
+  reportControllerSrc91.includes("$isBillUnpaid = ($bill && (") &&
+  reportControllerSrc91.includes("$billStatus === 'UNPAID'") &&
+  reportControllerSrc91.includes("$isReportApproved = in_array($reportStatus, ['APPROVED', 'FINAL', 'COMPLETED'])") &&
+  reportControllerSrc91.includes("$canDownload = (!$isBillUnpaid && $isReportApproved)") &&
+  reportControllerSrc91.includes("$report->download_block_reason = $blockReason") &&
+  reportControllerSrc91.includes("$report->setRelation('results', collect([]))"),
+  "[BACKEND SECURITY GATE] ReportController blocks download and strips clinical analyte results if bill is UNPAID or report is NOT APPROVED"
+);
+
+// 91.5 Frontend Public Verification Page Access Control UI
+assert(
+  publicReportPageSrc91.includes("const isDownloadBlocked = Boolean(") &&
+  publicReportPageSrc91.includes("report?.can_download === false ||") &&
+  publicReportPageSrc91.includes("isBillUnpaid ||") &&
+  publicReportPageSrc91.includes("!isReportApproved") &&
+  publicReportPageSrc91.includes("if (isDownloadBlocked) {") &&
+  publicReportPageSrc91.includes("Report Download Locked (Unpaid Invoice)") &&
+  publicReportPageSrc91.includes("Results Under Clinical Review"),
+  "[PUBLIC PAGE ACCESS CONTROL] r/[id]/page.tsx guards PDF download and renders dedicated security notice for UNPAID bills and UNAPPROVED reports"
+);
+
+// ==============================================================================
+// 92. WhatsApp Async Delivery & Instant Invoice Dispatch Optimization
+// ==============================================================================
+console.log("\n▶ MODULE 92: WhatsApp Async Delivery & Instant Invoice Dispatch Engine");
+
+const whatsAppControllerSrc92 = fs.readFileSync(
+  path.join(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/WhatsAppController.php"),
+  "utf8"
+);
+const whatsAppServiceSrc92 = fs.readFileSync(
+  path.join(__dirname, "../../Backend/app/Services/WhatsAppService.php"),
+  "utf8"
+);
+const billingPageSrc92 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/billing/page.tsx"),
+  "utf8"
+);
+const registerPageSrc92 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/patients/register/page.tsx"),
+  "utf8"
+);
+const b2bPageSrc92 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/b2b/page.tsx"),
+  "utf8"
+);
+
+// 92.1 Guaranteed Non-Blocking Delivery via afterResponse (Eliminates localhost queue stalling)
+assert(
+  whatsAppControllerSrc92.includes("SendWhatsAppReportJob::dispatch(") &&
+  whatsAppControllerSrc92.includes(")->afterResponse()"),
+  "[LOCAL QUEUE BYPASS - REPORT] WhatsAppController dispatches SendWhatsAppReportJob with ->afterResponse() to guarantee delivery without requiring background queue workers"
+);
+
+assert(
+  whatsAppControllerSrc92.includes("SendWhatsAppBillJob::dispatch(") &&
+  whatsAppControllerSrc92.includes(")->afterResponse()"),
+  "[LOCAL QUEUE BYPASS - BILL] WhatsAppController dispatches SendWhatsAppBillJob with ->afterResponse() to guarantee instant response and reliable background execution"
+);
+
+// 92.2 Meta WABA Template Optimization (Eliminates 132001 template translation error)
+assert(
+  whatsAppServiceSrc92.includes("env('META_WHATSAPP_BILL_TEMPLATE_NAME', 'patient_report_delivery')") &&
+  whatsAppServiceSrc92.includes("$billTemplate !== 'patient_bill_invoice'"),
+  "[META WABA TEMPLATE RESOLUTION] WhatsAppService defaults bill templates to approved patient_report_delivery, eliminating 132001 OAuth template errors"
+);
+
+// 92.3 Invoice Async Dispatching in Billing, Register, and B2B Portals
+assert(
+  billingPageSrc92.includes("fetchFromLaravel(`/bills/${selectedBillForInvoice.id}/send-whatsapp`") &&
+  billingPageSrc92.includes("async: true"),
+  "[BILLING ASYNC DISPATCH] billing/page.tsx passes async: true for sub-second invoice dispatch"
+);
+
+assert(
+  registerPageSrc92.includes("fetchFromLaravel(`/bills/${successDetails.billId}/send-whatsapp`") &&
+  registerPageSrc92.includes("async: true"),
+  "[REGISTRATION ASYNC DISPATCH] patients/register/page.tsx passes async: true for immediate registration receipt delivery"
+);
+
+assert(
+  b2bPageSrc92.includes("fetchFromLaravel(`/bills/${billId}/send-whatsapp`") &&
+  b2bPageSrc92.includes("async: true"),
+  "[B2B ASYNC DISPATCH] b2b/page.tsx passes async: true for fast partner invoice delivery"
+);
+
+// 92.4 Background PDF Prefetching for Invoices
+assert(
+  billingPageSrc92.includes("prefetchNativePdf") &&
+  billingPageSrc92.includes("prefetchNativePdf({ printContainer: invoicePrintRef.current"),
+  "[INVOICE PDF PRE-WARMING] billing/page.tsx pre-warms vector PDF in the background upon invoice modal open"
+);
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 

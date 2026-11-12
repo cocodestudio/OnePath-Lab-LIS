@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ClinicalResultDropdown } from "@/components/clinical-result-dropdown";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/toast";
-import { fetchFromLaravel, getCleanLetterheadUrl, getStoredUser } from "@/lib/api-client";
+import { fetchFromLaravel, getCleanLetterheadUrl, getStoredUser, clearApiCache } from "@/lib/api-client";
 import {
   FlaskConical, ArrowLeft, Loader2, CheckCircle2, AlertTriangle,
   User, AlertCircle, TrendingUp, History, ExternalLink, ClipboardList, Plus, Trash2,
@@ -1550,6 +1550,9 @@ function ResultEntryContent() {
       if (reportRef.current) {
         reportRef.current.status = resolvedStatus;
       }
+
+      // Purge cached reports so returning to the reports list or print preview loads fresh results immediately
+      clearApiCache("/reports");
 
       if (andNext) {
         if (nextReportId) {

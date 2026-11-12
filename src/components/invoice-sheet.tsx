@@ -332,10 +332,26 @@ export const InvoiceSheet = React.forwardRef<
     ? `upi://pay?pa=${encodeURIComponent(billSettings.upi.upiId)}&pn=${encodeURIComponent(labName)}&am=${balance.toFixed(2)}&cu=INR`
     : "";
 
-  // Dynamic QR Code encoding: when scanned, displays Invoice number, Patient name, Net amount, and Verify link
-  const dynamicQrValue = invoiceCustomId && invoiceCustomId !== "—"
-    ? `INVOICE NO: ${invoiceCustomId}\nPATIENT: ${patientName} (PID: ${patientCustomId})\nDATE: ${billDateStr}\nAMOUNT: ₹${Number(invoice.total || 0).toFixed(2)}\nSTATUS: ${invoice.status || "CONFIRMED"}\nLAB: ${labName}\nVERIFY: https://lis.onepathlab.com/track-report?inv=${encodeURIComponent(invoiceCustomId)}`
-    : "https://lis.onepathlab.com";
+  const baseUrl = "https://lis.onepathlab.com";
+  const reportIdentifier =
+    invoice.reportId ||
+    (invoice as any).report_id ||
+    (invoice as any).report?.id ||
+    (invoice as any).report?.customId ||
+    (invoice as any).report?.custom_id ||
+    (invoice as any).reports?.[0]?.id ||
+    (invoice as any).reports?.[0]?.customId ||
+    (invoice as any).reports?.[0]?.custom_id ||
+    (invoice as any).reportCustomId ||
+    (invoice as any).report_custom_id ||
+    invoice.id ||
+    invoiceCustomId ||
+    "";
+
+  // Dynamic QR Code encoding: points directly to official diagnostic report verification & download page
+  const dynamicQrValue = reportIdentifier && reportIdentifier !== "—"
+    ? `${baseUrl}/r/${encodeURIComponent(reportIdentifier)}`
+    : baseUrl;
 
   // Calculations for safe background overlay
   const letterheadBg = billSettings.bgImage || (lab.print_with_letterhead ? (lab.print_bg_image || lab.printBgImage) : null);
@@ -512,7 +528,7 @@ export const InvoiceSheet = React.forwardRef<
                   </div>
                 </div>
 
-                {/* Dynamic QR Code on Right (if enabled) */}
+                {/* Dynamic QR Code on Right (points directly to diagnostic report verification & download) */}
                 {billSettings.showQrCode && (
                   <div className="shrink-0 flex flex-col items-center justify-center border-l border-zinc-200 pl-2.5 min-w-[70px]">
                     <div className="bg-white p-1 rounded border border-zinc-300 shadow-2xs">
@@ -523,7 +539,10 @@ export const InvoiceSheet = React.forwardRef<
                         includeMargin={false}
                       />
                     </div>
-                    <span className="text-[7px] font-bold text-zinc-600 uppercase tracking-wider block mt-1">Invoice QR</span>
+                    <div className="mt-0.5 text-center leading-none">
+                      <span className="text-[7px] font-bold text-zinc-700 uppercase tracking-tighter block">Scan to Verify</span>
+                      <span className="text-[6px] font-semibold text-emerald-700 uppercase tracking-tighter block mt-0.5">& Download</span>
+                    </div>
                   </div>
                 )}
               </div>

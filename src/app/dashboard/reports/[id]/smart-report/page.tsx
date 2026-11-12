@@ -302,11 +302,12 @@ export default function SmartReportGeneratedPage() {
           phone: cleanPhone,
           save_phone: savePhoneToProfile,
           message_type: "smart_report",
+          async: true,
         }),
       });
 
       toast.dismiss(toastId);
-      if (res?.status === "success" || res?.success) {
+      if (res?.status === "success" || res?.success || res?.queued) {
         toast.success("Sent on WhatsApp!", `AI Smart Report delivered to +91 ${cleanPhone} successfully!`);
       } else {
         openWhatsAppDirectLink(cleanPhone);

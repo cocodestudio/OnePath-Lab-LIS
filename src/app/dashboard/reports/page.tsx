@@ -17,7 +17,7 @@ import {
   MessageCircle
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FullscreenPrintReportModal } from "@/components/fullscreen-print-report-modal";
+import { FullscreenPrintReportModal, resolvePatientPhone } from "@/components/fullscreen-print-report-modal";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DateFilterRibbon } from "@/components/date-filter-ribbon";
 import { fetchFromLaravel, getStoredUser, getCleanLetterheadUrl } from "@/lib/api-client";
@@ -270,6 +270,7 @@ export default function ReportsListPage() {
   };
 
   const [printReport, setPrintReport] = useState<any | null>(null);
+  const [isHydratingReport, setIsHydratingReport] = useState<boolean>(false);
   const [showPrintOptions, setShowPrintOptions] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [sendingWhatsAppId, setSendingWhatsAppId] = useState<string | null>(null);
@@ -589,11 +590,20 @@ export default function ReportsListPage() {
       // Instant modal open (0ms) using in-memory cached report or eager-loaded row metadata
       activePrintIdRef.current = rep.id;
       const cached = reportDetailCache.get(rep.id);
-      setPrintReport(cached || { ...rep, lab: rep.lab || DEFAULT_LAB });
+      const hasFullResults = Array.isArray(cached?.results) && cached.results.length > 0;
+      const isStatusMatch = cached?.status === rep.status;
+
+      if (hasFullResults && isStatusMatch) {
+        setPrintReport(cached);
+        setIsHydratingReport(false);
+      } else {
+        setPrintReport(cached || { ...rep, lab: rep.lab || DEFAULT_LAB });
+        setIsHydratingReport(true);
+      }
       setShowPrintOptions(true);
 
-      // Asynchronously hydrate detailed clinical results and interpretations in background
-      fetchFromLaravel(`/reports/${rep.id}`)
+      // Asynchronously hydrate fresh detailed clinical results and interpretations in background
+      fetchFromLaravel(`/reports/${rep.id}`, { skipCache: true, timeoutMs: 10000 })
         .then((data) => {
           if (!data) return;
           reportDetailCache.set(rep.id, data);
@@ -607,10 +617,16 @@ export default function ReportsListPage() {
                 lab: data.lab || prev?.lab || DEFAULT_LAB,
               };
             });
+            setIsHydratingReport(false);
           }
         })
         .catch((err) => {
           console.warn("Background report hydration note:", err);
+        })
+        .finally(() => {
+          if (activePrintIdRef.current === rep.id) {
+            setIsHydratingReport(false);
+          }
         });
     } catch (err: any) {
       toast({
@@ -651,9 +667,9 @@ export default function ReportsListPage() {
       return;
     }
 
-    const rawPhone = (rep.patient?.phone || rep.patient_phone || "").trim();
+    const rawPhone = resolvePatientPhone(rep);
     const digitsOnly = rawPhone.replace(/\D/g, "");
-    if (!rawPhone || rawPhone === "N/A" || rawPhone === "NA" || rawPhone === "-" || digitsOnly.length < 10) {
+    if (!digitsOnly || digitsOnly.length < 10) {
       toast({
         variant: "warning",
         title: "Phone Number Missing",
@@ -661,6 +677,7 @@ export default function ReportsListPage() {
       });
       return;
     }
+    const tenDigits = digitsOnly.slice(-10);
 
     // Enforce B2B wallet deduction if needed
     if (isB2B) {
@@ -786,17 +803,20 @@ export default function ReportsListPage() {
         method: "POST",
         body: JSON.stringify({
           pdf_base64: pdfBase64,
-          phone: digitsOnly,
+          phone: tenDigits,
           save_phone: false,
+          async: true,
         }),
       });
 
-      if (res?.status === "success" || res?.success) {
+      if (res?.status === "success" || res?.success || res?.queued) {
         if (toastId) (toast as any).dismiss?.(toastId);
         toast({
           variant: "success",
           title: "Sent on WhatsApp!",
-          description: `Report PDF sent to patient's WhatsApp (${digitsOnly}) successfully.`,
+          description: res?.queued
+            ? `Report delivery queued for patient WhatsApp (${tenDigits}).`
+            : `Report PDF sent to patient's WhatsApp (${tenDigits}) successfully.`,
         });
       } else {
         if (toastId) (toast as any).dismiss?.(toastId);
@@ -1869,10 +1889,12 @@ export default function ReportsListPage() {
           if (!open) {
             activePrintIdRef.current = null;
             setPrintReport(null);
+            setIsHydratingReport(false);
             fetchReports();
           }
         }} 
         report={printReport}
+        isHydrating={isHydratingReport}
       />
 
       {/* Offscreen Target for Instant WhatsApp Vector PDF Rendering */}

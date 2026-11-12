@@ -21,7 +21,7 @@ import { fetchFromLaravel, getStoredUser } from "@/lib/api-client";
 import { InvoiceSheet } from "@/components/invoice-sheet";
 import { normalizeBillSettings, type BillLayoutSettings } from "@/lib/bill-settings";
 import { printInvoiceElement } from "@/lib/print-invoice";
-import { getNativePdfBase64, downloadNativePdf } from "@/lib/pdf-report-downloader";
+import { getNativePdfBase64, downloadNativePdf, prefetchNativePdf } from "@/lib/pdf-report-downloader";
 import { useToast } from "@/components/ui/toast";
 import { DateFilterRibbon } from "@/components/date-filter-ribbon";
 import { getTodayStr, getYesterdayStr, getRecordLocalDate, shiftDate as calcShiftDate } from "@/lib/date-utils";
@@ -858,6 +858,21 @@ export default function BillingPage() {
 
   const invoicePrintRef = useRef<HTMLDivElement>(null);
 
+  // Pre-warm the native vector PDF blob in the background when the invoice modal opens
+  useEffect(() => {
+    if (isInvoiceModalOpen && selectedBillForInvoice && invoicePrintRef.current) {
+      const pName = (selectedBillForInvoice.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
+      const invNo = getBillInvoiceNo(selectedBillForInvoice).replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filename = `Invoice_${invNo}_${pName}.pdf`;
+      const timer = setTimeout(() => {
+        if (invoicePrintRef.current) {
+          prefetchNativePdf({ printContainer: invoicePrintRef.current, filename });
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isInvoiceModalOpen, selectedBillForInvoice]);
+
   const handleOpenInvoiceModal = (bill: Bill) => {
     setSelectedBillForInvoice(bill);
     if (typeof window !== "undefined" && window.innerWidth < 640) {
@@ -904,11 +919,12 @@ export default function BillingPage() {
         method: "POST",
         body: JSON.stringify({
           pdf_base64: pdfBase64,
-          phone: digitsOnly,
+          phone: digitsOnly.slice(-10),
+          async: true,
         }),
       });
 
-      if (res?.status === "success" || res?.success) {
+      if (res?.status === "success" || res?.success || res?.queued) {
         toast.success("Sent on WhatsApp!", "Tax invoice PDF sent to patient's WhatsApp successfully.");
       } else {
         toast.error("WhatsApp Dispatch Failed", res?.message || "Could not deliver WhatsApp message via Meta Cloud API.");

@@ -23,6 +23,7 @@ import { useReactToPrint } from "react-to-print";
 import { ReportSheet, PaginatedReportPreview, type PrintSettings, type ReportTest } from "@/components/report-sheet";
 import { WhatsAppQrDialog } from "@/components/whatsapp-qr-dialog";
 import { AiReportGenerationModal } from "@/components/ai-report-generation-modal";
+import { resolvePatientPhone } from "@/components/fullscreen-print-report-modal";
 import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
 import { downloadNativePdf, getNativePdfBase64, prefetchNativePdf } from "@/lib/pdf-report-downloader";
@@ -867,26 +868,52 @@ export function PrintPreviewDialog({
     }
   };
 
+  // Prefetch PDF blob in background once modal is open and activeReport is available
+  useEffect(() => {
+    if (!open || !activeReport || !whatsappPrintRef.current) return;
+    const timer = setTimeout(() => {
+      if (whatsappPrintRef.current) {
+        prefetchNativePdf({
+          printContainer: whatsappPrintRef.current,
+          filename: `LabReport_${activeReport.customId || activeReport.id || "preview"}.pdf`,
+        }).catch(() => {});
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [open, activeReport]);
+
   const handleWhatsApp = async () => {
-    const rawPhone = (report?.patient?.phone || "").trim();
+    const rawPhone = resolvePatientPhone(activeReport || report);
     const digitsOnly = rawPhone.replace(/\D/g, "");
-    const isInvalidPhone = !rawPhone || rawPhone === "N/A" || rawPhone === "NA" || rawPhone === "-" || digitsOnly.length < 10;
-
-    if (isInvalidPhone) {
-      toast.error("Phone Number Missing", "Patient has no phone number registered. Please add a mobile number during patient registration.");
+    if (!digitsOnly || digitsOnly.length < 10) {
+      toast.error("Phone Number Missing", "Patient has no 10-digit mobile number registered. Please update patient details with mobile number.");
       return;
     }
-
-    const targetRef = whatsappPrintRef.current || printRef.current;
-    if (!targetRef || !activeReport) {
-      toast.error("Not Ready", "Report preview is still rendering. Please wait a moment.");
-      return;
-    }
+    const tenDigits = digitsOnly.slice(-10);
 
     setIsSendingWhatsApp(true);
     const toastId = toast.loading("Sending WhatsApp...", "Generating PDF & dispatching to patient...");
 
     try {
+      // Allow React state update to mount the dedicated full-letterhead offscreen container
+      let targetRef = whatsappPrintRef.current;
+      if (!targetRef) {
+        await new Promise((r) => setTimeout(r, 120));
+        targetRef = whatsappPrintRef.current;
+      }
+      if (!targetRef) {
+        await new Promise((r) => setTimeout(r, 150));
+        targetRef = whatsappPrintRef.current;
+      }
+      if (!targetRef) {
+        targetRef = printRef.current;
+      }
+
+      if (!targetRef || !activeReport) {
+        toast.dismiss(toastId);
+        toast.error("Not Ready", "Report preview is still rendering. Please wait a moment.");
+        return;
+      }
       const pName = (report?.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
       const rCode = (report?.customId || report?.id || "Report").replace(/[^a-zA-Z0-9_-]/g, "_");
       const filename = `LabReport_${rCode}_${pName}.pdf`;
@@ -900,7 +927,7 @@ export function PrintPreviewDialog({
         method: "POST",
         body: JSON.stringify({
           pdf_base64: pdfBase64,
-          phone: digitsOnly,
+          phone: tenDigits,
           save_phone: false,
           async: true,
         }),
@@ -908,7 +935,7 @@ export function PrintPreviewDialog({
 
       toast.dismiss(toastId);
       if (res?.status === "success" || res?.success || res?.queued) {
-        toast.success("Sent on WhatsApp!", res?.queued ? "Report delivery queued for patient WhatsApp." : "Report PDF sent to patient's WhatsApp successfully.");
+        toast.success("Sent on WhatsApp!", res?.queued ? "Report delivery queued for patient WhatsApp." : `Report PDF sent to patient's WhatsApp (${tenDigits}) successfully.`);
       } else {
         toast.error("Dispatch Failed", res?.message || "Could not deliver WhatsApp message via Meta Cloud API.");
       }
@@ -938,9 +965,9 @@ export function PrintPreviewDialog({
           </div>
         </div>
 
-        {/* ── Dedicated WhatsApp Print Target (Always with full Letterhead, rendered on-demand) ── */}
+        {/* ── Dedicated WhatsApp Print Target (Always with full Letterhead, rendered on-demand during dispatch) ── */}
         {isSendingWhatsApp && (
-          <div style={{ position: "absolute", left: "-9999px", top: "-9999px", opacity: 0, pointerEvents: "none" }} aria-hidden>
+          <div style={{ position: "fixed", left: "-99999px", top: "-99999px", opacity: 0, pointerEvents: "none", zIndex: -100 }} aria-hidden>
             <div ref={whatsappPrintRef}>
               <ReportSheet report={activeReport} settings={whatsappPrintSettings} hideInterpretation={!showInterpretation} />
             </div>

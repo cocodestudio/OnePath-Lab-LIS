@@ -345,11 +345,12 @@ export default function B2bSalesPage() {
           method: "POST",
           body: JSON.stringify({
             pdf_base64: pdfBase64,
-            phone: digitsOnly,
+            phone: digitsOnly.slice(-10),
+            async: true,
           }),
         });
 
-        if (res?.status === "success" || res?.success) {
+        if (res?.status === "success" || res?.success || res?.queued) {
           toast.success("Sent on WhatsApp!", "Invoice PDF sent to patient's WhatsApp successfully.");
         } else {
           toast.error("WhatsApp Dispatch Failed", res?.message || "Could not deliver WhatsApp message.");

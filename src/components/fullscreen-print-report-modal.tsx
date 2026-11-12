@@ -30,12 +30,155 @@ import { AiReportGenerationModal } from "@/components/ai-report-generation-modal
 import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getCleanLetterheadUrl } from "@/lib/api-client";
 import { getReportPackage } from "@/lib/packages";
-import { downloadNativePdf, getNativePdfBase64 } from "@/lib/pdf-report-downloader";
+import { downloadNativePdf, getNativePdfBase64, prefetchNativePdf } from "@/lib/pdf-report-downloader";
+
+export function resolvePatientPhone(reportData: any): string {
+  const pat = reportData?.patient || {};
+  const patMeta = pat?.meta || {};
+  const repMeta = reportData?.meta || {};
+  const candidates = [
+    pat?.phone,
+    pat?.phoneNumber,
+    pat?.phone_number,
+    pat?.mobile,
+    pat?.contact,
+    patMeta?.phone,
+    patMeta?.phoneNumber,
+    patMeta?.phone_number,
+    patMeta?.mobile,
+    reportData?.phone,
+    reportData?.patientPhone,
+    reportData?.patient_phone,
+    repMeta?.phone,
+  ];
+  for (const c of candidates) {
+    if (c !== null && c !== undefined) {
+      const str = String(c).trim();
+      if (str && str !== "N/A" && str !== "NA" && str !== "-" && str !== "null" && str !== "undefined") {
+        const digits = str.replace(/\D/g, "");
+        if (digits.length >= 10) return digits;
+      }
+    }
+  }
+  return "";
+}
+
+/**
+ * Realistic clinical A4 Report Shimmer Skeleton.
+ * Emulates exact A4 typography, margins and layout while fresh results hydrate,
+ * preventing any flash of 'No investigations recorded' or layout jumping.
+ */
+export function ReportA4ShimmerSkeleton({ scale = 1 }: { scale?: number }) {
+  return (
+    <div
+      style={{
+        transform: `scale(${scale})`,
+        transformOrigin: "top center",
+        marginBottom: `${(scale - 1) * 1123}px`,
+      }}
+      className="transition-transform duration-150 ease-out select-none"
+    >
+      <div
+        style={{ width: "794px", height: "1123px" }}
+        className="bg-white rounded-none shadow-2xl border border-zinc-200 relative overflow-hidden flex flex-col p-8 box-border"
+      >
+        {/* Subtle moving shimmer highlight */}
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-zinc-100/60 to-transparent -translate-x-full animate-[shimmer_1.8s_infinite] pointer-events-none z-10" />
+
+        {/* 1. Header Area Shimmer */}
+        <div className="flex items-center justify-between pb-6 border-b border-zinc-200">
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-2xl bg-zinc-200 animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-5 w-52 bg-zinc-200 rounded-md animate-pulse" />
+              <div className="h-3 w-64 bg-zinc-100 rounded-md animate-pulse" />
+              <div className="h-2.5 w-40 bg-zinc-100 rounded-md animate-pulse" />
+            </div>
+          </div>
+          <div className="space-y-2 text-right">
+            <div className="h-3 w-28 bg-zinc-200 rounded-md animate-pulse ml-auto" />
+            <div className="h-2.5 w-36 bg-zinc-100 rounded-md animate-pulse ml-auto" />
+            <div className="h-2.5 w-24 bg-zinc-100 rounded-md animate-pulse ml-auto" />
+          </div>
+        </div>
+
+        {/* 2. Patient Demographics Card Shimmer */}
+        <div className="my-5 p-4 rounded-xl border border-zinc-200 bg-zinc-50/60">
+          <div className="grid grid-cols-2 gap-y-3 gap-x-8">
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-24 bg-zinc-200 rounded animate-pulse" />
+              <div className="h-3.5 w-36 bg-zinc-300 rounded font-bold animate-pulse" />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-20 bg-zinc-200 rounded animate-pulse" />
+              <div className="h-3.5 w-28 bg-zinc-200 rounded animate-pulse" />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-24 bg-zinc-200 rounded animate-pulse" />
+              <div className="h-3.5 w-32 bg-zinc-200 rounded animate-pulse" />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="h-3 w-20 bg-zinc-200 rounded animate-pulse" />
+              <div className="h-3.5 w-36 bg-zinc-200 rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Department Heading */}
+        <div className="my-3 flex items-center justify-center">
+          <div className="h-4 w-44 bg-zinc-300 rounded animate-pulse" />
+        </div>
+
+        {/* 4. Test Table Shimmer */}
+        <div className="border-t border-b border-zinc-300 py-2 mb-3 flex items-center justify-between bg-zinc-100/80 px-2 rounded">
+          <div className="h-3 w-24 bg-zinc-300 rounded animate-pulse" />
+          <div className="h-3 w-16 bg-zinc-300 rounded animate-pulse" />
+          <div className="h-3 w-12 bg-zinc-300 rounded animate-pulse" />
+          <div className="h-3 w-24 bg-zinc-300 rounded animate-pulse" />
+          <div className="h-3 w-14 bg-zinc-300 rounded animate-pulse" />
+        </div>
+
+        <div className="space-y-3 flex-1">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="flex items-center justify-between px-2 py-1.5 border-b border-zinc-100">
+              <div className={`h-3 ${i % 2 === 0 ? "w-48" : "w-36"} bg-zinc-200 rounded animate-pulse`} />
+              <div className="h-3 w-14 bg-zinc-300 rounded animate-pulse font-mono" />
+              <div className="h-2.5 w-8 bg-zinc-200 rounded animate-pulse" />
+              <div className="h-2.5 w-20 bg-zinc-200 rounded animate-pulse" />
+              <div className="h-2.5 w-12 bg-zinc-200 rounded animate-pulse" />
+            </div>
+          ))}
+
+          {/* Clinical Interpretation Table placeholder shimmer */}
+          <div className="mt-6 p-3 rounded-lg border border-zinc-200 bg-zinc-50/50 space-y-2">
+            <div className="h-3 w-48 bg-zinc-200 rounded animate-pulse" />
+            <div className="h-2 w-full bg-zinc-100 rounded animate-pulse" />
+            <div className="h-2 w-5/6 bg-zinc-100 rounded animate-pulse" />
+          </div>
+        </div>
+
+        {/* 5. Footer & Doctor Signatures Shimmer */}
+        <div className="pt-6 border-t border-zinc-200 flex items-end justify-between mt-auto">
+          <div className="space-y-1.5">
+            <div className="h-2.5 w-32 bg-zinc-200 rounded animate-pulse" />
+            <div className="h-2 w-48 bg-zinc-100 rounded animate-pulse" />
+          </div>
+          <div className="text-right space-y-2">
+            <div className="h-10 w-24 bg-zinc-200 rounded-md animate-pulse ml-auto" />
+            <div className="h-3 w-36 bg-zinc-300 rounded animate-pulse ml-auto" />
+            <div className="h-2 w-28 bg-zinc-100 rounded animate-pulse ml-auto" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface FullscreenPrintReportModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   report: any;
+  isHydrating?: boolean;
   enteredValues?: Record<string, string>;
   abnormalOverrides?: Record<string, boolean>;
   paramRemarks?: Record<string, string>;
@@ -49,6 +192,7 @@ export function FullscreenPrintReportModal({
   open,
   onOpenChange,
   report,
+  isHydrating = false,
   enteredValues,
   abnormalOverrides,
   paramRemarks,
@@ -466,28 +610,60 @@ export function FullscreenPrintReportModal({
     }
   };
 
+  // ── Prefetch PDF blob in background once modal is open and activeReportData is available ──
+  useEffect(() => {
+    if (!open || !activeReportData || !whatsappPrintRef.current) return;
+    const hasResults = Array.isArray(activeReportData.results) && activeReportData.results.length > 0;
+    if (!hasResults) return;
+
+    const timer = setTimeout(() => {
+      if (whatsappPrintRef.current) {
+        prefetchNativePdf({
+          printContainer: whatsappPrintRef.current,
+          filename: `LabReport_${activeReportData.customId || activeReportData.id || "preview"}.pdf`,
+        }).catch(() => {});
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [open, activeReportData]);
+
   // ── Automated WhatsApp Dispatch via Meta Cloud API ──────────────────
-  const handleWhatsApp = async () => {
-    const rawPhone = (report?.patient?.phone || "").trim();
-    const digitsOnly = rawPhone.replace(/\D/g, "");
-    const isInvalidPhone = !rawPhone || rawPhone === "N/A" || rawPhone === "NA" || rawPhone === "-" || digitsOnly.length < 10;
+  const handleWhatsApp = async (overridePhone?: string) => {
+    const candidatePhone = overridePhone ? overridePhone.trim() : resolvePatientPhone(activeReportData || report);
+    const digitsOnly = candidatePhone.replace(/\D/g, "");
 
-    if (isInvalidPhone) {
-      toast.error("Phone Number Missing", "Patient has no phone number registered. Please add a mobile number during patient registration.");
+    if (!digitsOnly || digitsOnly.length < 10) {
+      setCustomPhone(digitsOnly);
+      setIsPhonePromptOpen(true);
       return;
     }
 
-    const targetRef = whatsappPrintRef.current || printRef.current;
-    if (!targetRef || !activeReportData) {
-      toast.error("Not Ready", "Report preview is still rendering. Please wait a moment.");
-      return;
-    }
+    const tenDigits = digitsOnly.slice(-10);
 
     setIsSendingWhatsApp(true);
     const toastId = (toast as any).loading?.("Sending WhatsApp...", "Generating PDF & dispatching to patient...")
       || toast.show({ title: "Sending WhatsApp...", description: "Generating PDF & dispatching to patient...", type: "loading" as any });
 
     try {
+      // Allow React to mount the dedicated full-letterhead offscreen container
+      let targetRef = whatsappPrintRef.current;
+      if (!targetRef) {
+        await new Promise((r) => setTimeout(r, 120));
+        targetRef = whatsappPrintRef.current;
+      }
+      if (!targetRef) {
+        await new Promise((r) => setTimeout(r, 150));
+        targetRef = whatsappPrintRef.current;
+      }
+      if (!targetRef) {
+        targetRef = printRef.current;
+      }
+
+      if (!targetRef || !activeReportData) {
+        toast.dismiss(toastId);
+        toast.error("Not Ready", "Report preview is still rendering. Please wait a moment.");
+        return;
+      }
       const pName = (report?.patient?.name || "Patient").replace(/[^a-zA-Z0-9_-]/g, "_");
       const rCode = (report?.customId || report?.id || "Report").replace(/[^a-zA-Z0-9_-]/g, "_");
       const filename = `LabReport_${rCode}_${pName}.pdf`;
@@ -501,14 +677,21 @@ export function FullscreenPrintReportModal({
         method: "POST",
         body: JSON.stringify({
           pdf_base64: pdfBase64,
-          phone: digitsOnly,
-          save_phone: false,
+          phone: tenDigits,
+          save_phone: Boolean(overridePhone && savePhoneToProfile),
+          async: true,
         }),
       });
 
       toast.dismiss(toastId);
-      if (res?.status === "success" || res?.success) {
-        toast.success("Sent on WhatsApp!", "Report PDF sent to patient's WhatsApp successfully.");
+      if (res?.status === "success" || res?.success || res?.queued) {
+        toast.success(
+          "Sent on WhatsApp!",
+          res?.queued
+            ? "Report delivery queued for instant WhatsApp delivery."
+            : `Report PDF sent to patient's WhatsApp (${tenDigits}) successfully.`
+        );
+        setIsPhonePromptOpen(false);
       } else {
         toast.error("Dispatch Failed", res?.message || "Could not deliver WhatsApp message via Meta Cloud API.");
       }
@@ -754,15 +937,19 @@ export function FullscreenPrintReportModal({
             {/* Live Center Sheet Viewport: Fixed fit on mobile, no horizontal drag/pan, vertically scrollable */}
             <div className="flex-1 overflow-auto sheet-pan-canvas p-2 sm:p-8 flex justify-center items-start custom-scrollbar">
               <div className="w-full flex flex-col items-center">
-                <PaginatedReportPreview
-                  ref={printRef}
-                  report={activeReportData}
-                  settings={printSettings}
-                  scale={isMobile ? mobileScale : zoomScale}
-                  hideInterpretation={!showClinicalInterpretation}
-                  autoFitToFooter={autoFitToFooter}
-                  onPageCount={setTotalPages}
-                />
+                {isHydrating || (!activeReportData?.results || activeReportData.results.length === 0) ? (
+                  <ReportA4ShimmerSkeleton scale={isMobile ? mobileScale : zoomScale} />
+                ) : (
+                  <PaginatedReportPreview
+                    ref={printRef}
+                    report={activeReportData}
+                    settings={printSettings}
+                    scale={isMobile ? mobileScale : zoomScale}
+                    hideInterpretation={!showClinicalInterpretation}
+                    autoFitToFooter={autoFitToFooter}
+                    onPageCount={setTotalPages}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -952,9 +1139,9 @@ export function FullscreenPrintReportModal({
 
         </div>
 
-        {/* ── Always-With-Letterhead Print Target for WhatsApp Delivery (rendered on-demand) ── */}
+        {/* ── Always-With-Letterhead Print Target for WhatsApp Delivery (rendered on-demand during dispatch) ── */}
         {isSendingWhatsApp && (
-          <div style={{ position: "absolute", left: "-9999px", top: "-9999px", opacity: 0, pointerEvents: "none" }} aria-hidden>
+          <div style={{ position: "fixed", left: "-99999px", top: "-99999px", opacity: 0, pointerEvents: "none", zIndex: -100 }} aria-hidden>
             <div ref={whatsappPrintRef}>
               <PaginatedReportPreview
                 report={activeReportData}
@@ -966,6 +1153,99 @@ export function FullscreenPrintReportModal({
             </div>
           </div>
         )}
+
+        {/* WhatsApp Mobile Number Prompt Modal (when phone is missing or needs confirmation) */}
+        <Dialog open={isPhonePromptOpen} onOpenChange={setIsPhonePromptOpen}>
+          <DialogContent className="sm:max-w-md bg-card border border-border shadow-2xl rounded-2xl p-6 z-[9999]">
+            <DialogHeader className="space-y-2">
+              <div className="flex items-center gap-2.5 text-emerald-600">
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                  <Phone className="h-5 w-5" />
+                </div>
+                <DialogTitle className="text-base font-bold text-foreground">
+                  Patient WhatsApp Number
+                </DialogTitle>
+              </div>
+              <DialogDescription className="text-xs text-muted-foreground leading-relaxed">
+                Enter the 10-digit mobile number for <span className="font-semibold text-foreground">{report?.patient?.name || "Patient"}</span> to deliver this diagnostic report directly on WhatsApp.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleWhatsApp(customPhone);
+              }}
+              className="space-y-4 pt-2"
+            >
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                  <span>Mobile Number</span>
+                  <span className="text-[11px] font-normal text-muted-foreground">10 Digits</span>
+                </label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-xs font-bold text-muted-foreground select-none pointer-events-none">
+                    +91
+                  </span>
+                  <Input
+                    type="tel"
+                    value={customPhone}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "").slice(0, 10);
+                      setCustomPhone(digits);
+                    }}
+                    placeholder="9876543210"
+                    autoFocus
+                    className="pl-12 font-mono text-sm tracking-wide h-10 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <Checkbox
+                  id="savePhoneCheck"
+                  checked={savePhoneToProfile}
+                  onCheckedChange={(checked) => setSavePhoneToProfile(Boolean(checked))}
+                />
+                <label
+                  htmlFor="savePhoneCheck"
+                  className="text-xs text-muted-foreground hover:text-foreground cursor-pointer select-none"
+                >
+                  Save this number permanently to patient profile
+                </label>
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0 pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsPhonePromptOpen(false)}
+                  disabled={isSendingWhatsApp}
+                  className="rounded-xl h-9 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSendingWhatsApp || customPhone.replace(/\D/g, "").length < 10}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-9 text-xs gap-1.5 shadow-sm"
+                >
+                  {isSendingWhatsApp ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Sending…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-3.5 w-3.5" />
+                      <span>Send Report</span>
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* WhatsApp QR Pairing Dialog Modal */}
         <WhatsAppQrDialog
