@@ -158,6 +158,7 @@ export default function DueReportsPage() {
       const params = new URLSearchParams();
       params.append("with_due", "1");
       params.append("include_b2b", "1");
+      params.append("include_outsource", "1");
       params.append("page", String(activePage));
       params.append("limit", String(activeLimit));
       if (activeCenter) {
@@ -346,6 +347,8 @@ export default function DueReportsPage() {
         (b.id ? String(b.id).slice(0, 8) : "—");
       const patientName = b.patient?.name || b.patientName || "Unknown Patient";
       const refDoctor = b.patient?.ref_doctor || b.patient?.refDoctor || "Dr. Self";
+      const isOutsource = Boolean(b.patient?.meta?.is_outsource || b.patient?.meta?.has_outsource);
+      const partnerLab = b.patient?.meta?.outsource_partner_lab || b.patient?.meta?.partner_lab || "";
 
       return {
         ...b,
@@ -357,6 +360,8 @@ export default function DueReportsPage() {
         regNo,
         patientName,
         refDoctor,
+        isOutsource,
+        partnerLab,
       };
     });
   }, [bills]);
@@ -573,7 +578,7 @@ export default function DueReportsPage() {
                     </div>
                   </SelectItem>
 
-                  {/* 2. All Dues (Across All Centers & Main Lab) */}
+                  {/* 2. All Dues (Across All Centers, Main Lab & Outsource) */}
                   <SelectItem value="ALL">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-foreground">All Dues</span>
@@ -581,7 +586,15 @@ export default function DueReportsPage() {
                     </div>
                   </SelectItem>
 
-                  {/* 3. Collection Centres & B2B Partners */}
+                  {/* 3. Outsource Cases (Partner Labs) */}
+                  <SelectItem value="OUTSOURCE">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground">Outsource Cases</span>
+                      <span className="text-[10px] text-muted-foreground">(Partner Labs)</span>
+                    </div>
+                  </SelectItem>
+
+                  {/* 4. Collection Centres & B2B Partners */}
                   {collectionCenters.length > 0 && (
                     <>
                       <div className="px-2 py-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-t border-border/40 mt-1">
@@ -822,7 +835,14 @@ export default function DueReportsPage() {
 
                           {/* Patient Name */}
                           <td className="px-4 py-3 min-w-0">
-                            <p className="font-semibold text-foreground truncate">{b.patientName}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-semibold text-foreground truncate">{b.patientName}</p>
+                              {b.isOutsource && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 whitespace-nowrap">
+                                  Outsource{b.partnerLab ? ` · ${b.partnerLab}` : ""}
+                                </span>
+                              )}
+                            </div>
                             {b.patient?.phone && (
                               <p className="text-[10px] text-muted-foreground font-mono truncate">
                                 {b.patient.phone}
@@ -976,7 +996,14 @@ export default function DueReportsPage() {
                   <div key={b.id} className="pt-3 first:pt-0 space-y-2.5">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="font-bold text-sm text-foreground">{b.patientName}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-bold text-sm text-foreground">{b.patientName}</p>
+                          {b.isOutsource && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 whitespace-nowrap">
+                              Outsource{b.partnerLab ? ` · ${b.partnerLab}` : ""}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-muted-foreground font-mono mt-0.5">
                           Reg #{b.regNo} · {formatDisplayDate(b.created_at || b.createdAt)}
                         </p>

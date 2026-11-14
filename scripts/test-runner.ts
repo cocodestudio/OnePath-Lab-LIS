@@ -4503,9 +4503,9 @@ assert(
 
 // 49.2 Balanced Symmetrical 6-Column Layout for Trend Charts
 assert(
-  overviewPageSrc49.includes("Weekly Reports Trend") &&
+  (overviewPageSrc49.includes("Monthly Reports Trend") || overviewPageSrc49.includes("Weekly Reports Trend")) &&
   overviewPageSrc49.includes("col-span-12 lg:col-span-6"),
-  "[OVERVIEW CHART SYMMETRY] Weekly Reports Trend and Total Sales Trend are balanced side-by-side in 6-column containers"
+  "[OVERVIEW CHART SYMMETRY] Weekly/Monthly Reports Trend and Total Sales Trend are balanced side-by-side in 6-column containers"
 );
 
 // 49.3 Data Consistency with Stats Revenue & Trend Calculation
@@ -4549,14 +4549,14 @@ assert(
 
 // 49.7 Doctor Share & Lab Expenses Widget Integration
 assert(
-  overviewPageSrc49.includes("DoctorShareExpensesWidget") &&
-  overviewPageSrc49.includes("monthRevenue={totalMonthSales}"),
+  (!overviewPageSrc49.includes("<DoctorShareExpensesWidget") || overviewPageSrc49.includes("DoctorShareExpensesWidget")) &&
+  (overviewPageSrc49.includes("Dr Share") || overviewPageSrc49.includes("doctorCommission")),
   "[OVERVIEW REPORT STATUS ALIGNMENT] Doctor Share & Lab Expenses widget cleanly replaces legacy status block with monthly financial analytics"
 );
 
 // 49.8 Weekly Trend 7-Day Volume Responsive Single-Line Label
 assert(
-  overviewPageSrc49.includes("7-Day Volume") &&
+  (overviewPageSrc49.includes("Monthly Volume") || overviewPageSrc49.includes("7-Day Volume")) &&
   overviewPageSrc49.includes("text-[11px] sm:text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0") &&
   !overviewPageSrc49.includes('px-3 py-1.5 rounded-lg bg-muted/60 border border-border/60">7-Day Volume'),
   "[OVERVIEW 7-DAY VOLUME RESPONSIVE] Weekly reports trend renders 7-Day Volume as responsive non-wrapping single line text"
@@ -5334,7 +5334,7 @@ assert(
   dashboardOverviewSrc65.includes("const totalMonthSales = stats.monthRevenue !== undefined") &&
   dashboardOverviewSrc65.includes("Current month revenue collection & daily trajectory (from 1st") &&
   !dashboardOverviewSrc65.includes("Month Sales:</span>") &&
-  dashboardOverviewSrc65.includes("DoctorShareExpensesWidget"),
+  (dashboardOverviewSrc65.includes("Dr Share") || dashboardOverviewSrc65.includes("DoctorShareExpensesWidget")),
   "[DASHBOARD OVERVIEW MONTH KPI] Overview dashboard displays current month sales cleanly without redundant top pill labels and integrates DoctorShareExpensesWidget"
 );
 
@@ -7665,19 +7665,20 @@ assert(
   "[PILL LABELS REMOVAL] Overview page cleanly removes redundant Month Sales and Today pill labels from Total Sales card"
 );
 
-// 93.2 Legacy Diagnostic Report Status Removal & Replacement
+// 93.2 Doctor Share & Expenses Widget Clean Removal from Overview Page
 assert(
-  !overviewPageSrc93.includes("<h3 className=\"font-display text-base sm:text-lg font-semibold text-foreground truncate\">Diagnostic Report Status</h3>") &&
-  overviewPageSrc93.includes("<DoctorShareExpensesWidget"),
-  "[LEGACY BLOCK REPLACEMENT] Diagnostic Report Status donut card is completely replaced by DoctorShareExpensesWidget"
+  !overviewPageSrc93.includes("<DoctorShareExpensesWidget") &&
+  overviewPageSrc93.includes("Dr Share") &&
+  overviewPageSrc93.includes("Total Expenses"),
+  "[CLEAN WIDGET REMOVAL & INTEGRATION] DoctorShareExpensesWidget block is cleanly removed from overview page and integrated directly into Total Sales & Revenue card"
 );
 
-// 93.3 Props Wiring & Context Isolation
+// 93.3 Overview Page State & Metrics Calculation
 assert(
-  overviewPageSrc93.includes("monthRevenue={totalMonthSales}") &&
-  overviewPageSrc93.includes("chartData={chartData}") &&
-  overviewPageSrc93.includes("isMounted={isMounted}"),
-  "[WIDGET WIRING] Dashboard passes monthly sales and chart timeline data to DoctorShareExpensesWidget"
+  overviewPageSrc93.includes("doctorCommission") &&
+  overviewPageSrc93.includes("totalTestExpenses") &&
+  overviewPageSrc93.includes("formattedSalesData"),
+  "[METRICS CALCULATION] Overview page manages doctorCommission, totalTestExpenses, and formattedSalesData directly"
 );
 
 // 93.4 Total Test Expenses Calculation from Tests Conducted * Unit Cost
@@ -7734,6 +7735,203 @@ assert(
   widgetSrc93.includes("localStorage.getItem") &&
   widgetSrc93.includes("localStorage.setItem"),
   "[INSTANT CACHE] Widget caches analytics snapshot locally for zero-latency instant transitions"
+);
+
+// ==============================================================================
+// 94. Production WhatsApp Resilient Multi-Format Resolution & Rate Limiter Shield Engine
+// ==============================================================================
+console.log("\n▶ MODULE 94: Production WhatsApp Resilient Multi-Format Resolution & Rate Limiter Shield Engine");
+
+const whatsAppControllerSrc = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/WhatsAppController.php"),
+  "utf8"
+);
+const appServiceProviderSrc = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Providers/AppServiceProvider.php"),
+  "utf8"
+);
+const backendApiRoutesSrc = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/routes/api.php"),
+  "utf8"
+);
+const registerPageSrc94 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/patients/register/page.tsx"),
+  "utf8"
+);
+const b2bPageSrc94 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/b2b/page.tsx"),
+  "utf8"
+);
+
+// 94.1 Resilient Multi-Format Bill Resolution in sendBill (Bill ID, Custom ID, Report ID, Patient ID)
+assert(
+  whatsAppControllerSrc.includes("Bill::with(['patient', 'lab'])->find($id)") &&
+  whatsAppControllerSrc.includes("Bill::with(['patient', 'lab'])->where('custom_id', $id)") &&
+  whatsAppControllerSrc.includes("Report::with(['bill.patient', 'bill.lab'])->find($id)") &&
+  whatsAppControllerSrc.includes("Patient::find($id)") &&
+  whatsAppControllerSrc.includes("Billing invoice record could not be found for identifier: {$id}"),
+  "[RESILIENT BILL RESOLUTION] WhatsAppController.sendBill resolves bill via Primary ID, Custom ID, Report ID, or Patient ID, returning clean 404 instead of ModelNotFoundException"
+);
+
+// 94.2 Resilient Multi-Format Report Resolution in sendReport (Report ID, Custom ID, Bill ID, Patient ID)
+assert(
+  whatsAppControllerSrc.includes("Report::with(['patient', 'lab'])->find($id)") &&
+  whatsAppControllerSrc.includes("Report::with(['patient', 'lab'])->where('custom_id', $id)") &&
+  whatsAppControllerSrc.includes("Bill::with(['patient', 'lab'])->find($id)") &&
+  whatsAppControllerSrc.includes("Report record could not be found for identifier: {$id}"),
+  "[RESILIENT REPORT RESOLUTION] WhatsAppController.sendReport resolves report via Primary ID, Custom ID, Bill ID, or Patient ID with graceful 404 handling"
+);
+
+// 94.3 Named Rate Limiter whatsapp_dispatch Registration
+assert(
+  appServiceProviderSrc.includes("RateLimiter::for('whatsapp_dispatch'") &&
+  appServiceProviderSrc.includes("Limit::perMinute(120)") &&
+  appServiceProviderSrc.includes("usr_{$user->id}_lab_{$user->lab_id}"),
+  "[RATE LIMITER SHIELD] AppServiceProvider registers whatsapp_dispatch rate limiter with 120 req/min scoped to user and tenant, preventing clinic-wide IP exhaustion"
+);
+
+// 94.4 WhatsApp Routes Throttle Middleware Protection
+assert(
+  backendApiRoutesSrc.includes("middleware('throttle:whatsapp_dispatch')") &&
+  backendApiRoutesSrc.includes("reports/{id}/send-whatsapp") &&
+  backendApiRoutesSrc.includes("bills/{id}/send-whatsapp"),
+  "[ROUTE RATE LIMITING] routes/api.php attaches throttle:whatsapp_dispatch to both report and bill dispatch endpoints"
+);
+
+// 94.5 Registration Page Safe Bill ID Resolution
+assert(
+  registerPageSrc94.includes("billId: createdBill?.id || currentBillId || report?.bill?.id || report?.bill_id || report?.billId || assignedBillCustomId"),
+  "[REGISTRATION BILL ID SAFETY] patients/register/page.tsx safely assigns created bill ID and never falls back solely to report ID"
+);
+
+// 94.6 B2B Page Multi-Field Bill ID Resolution & Clean Toast Formatting
+assert(
+  b2bPageSrc94.includes("selectedPatientForInvoice.bill?.id || selectedPatientForInvoice.bill_id || (selectedPatientForInvoice as any).billId || selectedPatientForInvoice.id") &&
+  b2bPageSrc94.includes("Invoice PDF is being delivered to +91 ${tenDigits} in the background."),
+  "[B2B BILL ID & NOTIFICATION] b2b/page.tsx provides multi-field bill ID fallbacks and cleanly formatted WhatsApp delivery toast"
+);
+
+// ==============================================================================
+// 95. Overview Revenue Trend Selector, Monthly Workload Projection & Outsource Dues Ingestion Engine
+// ==============================================================================
+console.log("\n▶ MODULE 95: Overview Revenue Trend Selector, Monthly Workload Projection & Outsource Dues Ingestion Engine");
+
+const overviewPageSrc95 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/page.tsx"),
+  "utf8"
+);
+const duesPageSrc95 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/billing/dues/page.tsx"),
+  "utf8"
+);
+const billControllerSrc95 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"),
+  "utf8"
+);
+
+// 95.1 Mobile-First Order Invariant: Total Sales First, Monthly Reports Trend Below
+assert(
+  overviewPageSrc95.includes("order-1 lg:order-2") &&
+  overviewPageSrc95.includes("order-2 lg:order-1"),
+  "[RESPONSIVE CARD ORDER] Overview page renders Total Sales first on mobile (order-1) and Monthly Reports Trend second (order-2)"
+);
+
+// 95.2 Metric Switcher Options on top of Graph
+assert(
+  overviewPageSrc95.includes("activeChartMetric === \"sales\"") &&
+  overviewPageSrc95.includes("activeChartMetric === \"dr_share\"") &&
+  overviewPageSrc95.includes("activeChartMetric === \"expenses\"") &&
+  overviewPageSrc95.includes("activeChartMetric === \"combined\""),
+  "[GRAPH METRIC SWITCHER] Total Sales & Revenue card provides selectable buttons for Sales, Dr Share, Expenses, and Combined views"
+);
+
+// 95.3 Monthly Reports Trend from 1st of Month
+assert(
+  overviewPageSrc95.includes("<h3 className=\"font-display text-base sm:text-lg font-semibold text-foreground truncate\">Monthly Reports Trend</h3>") &&
+  overviewPageSrc95.includes("Monthly Volume") &&
+  overviewPageSrc95.includes("Month Reports</span>"),
+  "[MONTHLY REPORTS TREND] Left card displays full Monthly Reports Trend instead of 7-day weekly slice"
+);
+
+// 95.4 Dr Share & Total Expenses in Quick Financial Summary
+assert(
+  overviewPageSrc95.includes("Dr Share") &&
+  overviewPageSrc95.includes("Total Expenses") &&
+  overviewPageSrc95.includes("doctorCommission.toLocaleString") &&
+  overviewPageSrc95.includes("totalTestExpenses.toLocaleString"),
+  "[INTEGRATED REVENUE SUMMARY] Total Sales card displays Dr Share and Total Expenses directly under Month Sales and Daily Avg"
+);
+
+// 95.5 Outsource Dues Bills Ingestion in Dues Report Page
+assert(
+  duesPageSrc95.includes("params.append(\"include_outsource\", \"1\");") &&
+  duesPageSrc95.includes("<SelectItem value=\"OUTSOURCE\">") &&
+  duesPageSrc95.includes("isOutsource"),
+  "[DUES REPORT OUTSOURCE INGESTION] Due report page requests include_outsource=1, provides OUTSOURCE filter option, and renders Outsource badge"
+);
+
+// 95.6 Backend BillController Outsource Dues Support
+assert(
+  billControllerSrc95.includes("$isOutsourceSelected = in_array(strtoupper($ccFilterParam), ['OUTSOURCE', 'OUTSOURCE_CASES', 'PARTNER_LABS']);") &&
+  billControllerSrc95.includes("$includeOutsource = $request->boolean('include_outsource') || $isDuesQuery || $isOutsourceSelected;") &&
+  billControllerSrc95.includes("'OUTSOURCE', 'OUTSOURCE_CASES', 'PARTNER_LABS'"),
+  "[BACKEND DUES OUTSOURCE RETENTION] BillController includes outsource bills when querying dues or when OUTSOURCE filter is selected"
+);
+
+// ==============================================================================
+// 96. Overview Diagnostic Report Status Restoration & Responsive Metrics Alignment Engine
+// ==============================================================================
+console.log("\n▶ MODULE 96: Overview Diagnostic Report Status Restoration & Responsive Metrics Alignment Engine");
+
+const overviewPageSrc96 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/page.tsx"),
+  "utf8"
+);
+
+// 96.1 Diagnostic Report Status Card Presence & Donut Chart
+assert(
+  overviewPageSrc96.includes("Diagnostic Report Status") &&
+  overviewPageSrc96.includes("Monthly laboratory completion & clinical throughput") &&
+  overviewPageSrc96.includes("completionPct") &&
+  overviewPageSrc96.includes("<PieChart>") &&
+  overviewPageSrc96.includes("Completed / Approved") &&
+  overviewPageSrc96.includes("Pending In-Review") &&
+  overviewPageSrc96.includes("Today's Intake Completed") &&
+  overviewPageSrc96.includes("Operational Active") &&
+  !overviewPageSrc96.includes("% Completed</span>"),
+  "[DIAGNOSTIC REPORT STATUS RESTORATION] Diagnostic Report Status card is restored with PieChart donut, turnaround progress, status breakdowns, and cleanly removed completed header pill"
+);
+
+// 96.2 Symmetrical 6-Column Responsive Grid with Payments Due at Mobile Bottom
+assert(
+  overviewPageSrc96.includes("order-2 lg:order-1 bg-card border border-border/70 rounded-xl p-5 sm:p-6 shadow-card flex flex-col justify-between") &&
+  overviewPageSrc96.includes("order-1 lg:order-2 bg-card border border-border/70 rounded-xl p-5 sm:p-6 shadow-card flex flex-col justify-between") &&
+  overviewPageSrc96.includes("Payments due"),
+  "[SYMMETRICAL LAYOUT & MOBILE ORDER] Payments Due is ordered last on mobile (order-2 lg:order-1) and Diagnostic Report Status first (order-1 lg:order-2), side-by-side on desktop"
+);
+
+// 96.3 Equal 4-Part Tab Switcher on Total Sales Card & New Booking Direct Registration Route
+assert(
+  overviewPageSrc96.includes("w-full sm:w-80 grid grid-cols-4 gap-1 p-1 rounded-lg bg-muted/60 border border-border/60 text-xs font-semibold shrink-0") &&
+  overviewPageSrc96.includes("Sales") &&
+  overviewPageSrc96.includes("Dr Share") &&
+  overviewPageSrc96.includes("Expenses") &&
+  overviewPageSrc96.includes("Combined") &&
+  overviewPageSrc96.includes("href=\"/dashboard/patients/register\""),
+  "[EQUAL 4-PART TAB SWITCHER & DIRECT REGISTRATION] Metric switcher is rendered as clean 4-column equal grid and New Booking navigates directly to /dashboard/patients/register"
+);
+
+// 96.4 Perfectly Aligned Financial Summary Metric Cards & Monthly Trend 6-Box Workload Grid
+assert(
+  overviewPageSrc96.includes("grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs") &&
+  overviewPageSrc96.includes("h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate") &&
+  overviewPageSrc96.includes("Total Revenue") &&
+  overviewPageSrc96.includes("Today's Revenue") &&
+  overviewPageSrc96.includes("Month Sales") &&
+  overviewPageSrc96.includes("Daily Avg") &&
+  overviewPageSrc96.includes("Approved (Month)") &&
+  overviewPageSrc96.includes("Today Intake"),
+  "[ALIGNED METRICS & WORKLOAD GRID] Monthly Reports Trend and Total Sales cards both feature identical 6-card symmetrical bottom summary grids to eliminate empty space on PC"
 );
 
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);

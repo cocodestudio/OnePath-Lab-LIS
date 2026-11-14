@@ -923,7 +923,7 @@ function RegisterPatientPage() {
     const tenDigits = digitsOnly.slice(-10);
 
     // Instant Success Popup (Optimistic Instant Response)
-    toastSuccess("Sent on WhatsApp!", `Tax invoice is being delivered to +91  in the background.${tenDigits}`);
+    toastSuccess("Sent on WhatsApp!", `Tax invoice is being delivered to +91 ${tenDigits} in the background.`);
 
     // Run PDF generation & delivery in background without blocking user
     (async () => {
@@ -2960,6 +2960,7 @@ function RegisterPatientPage() {
       const effectiveCollectionDateTime = collectionDateTime || (isEditMode ? (newPatient?.meta?.collection_date_time || newPatient?.meta?.collectionDateTime || newPatient?.collection_date_time || newPatient?.collectionDateTime || newPatient?.created_at) : null) || new Date().toISOString();
 
       let report: any = null;
+      let createdBill: any = null;
       let assignedBillCustomId = "INV-CONFIRMED";
       const currentBillId = existingBill?.id || existingReport?.bill?.id || existingReport?.bill_id;
 
@@ -3203,7 +3204,7 @@ function RegisterPatientPage() {
         });
 
         report = bookingRes?.report || { id: "", bill: bookingRes?.bill };
-        const createdBill = bookingRes?.bill;
+        createdBill = bookingRes?.bill;
         assignedBillCustomId = createdBill?.custom_id || createdBill?.customId || report?.custom_id || report?.customId || `INV-${newPatient.customId}`;
         const freshPat = bookingRes?.patient || newPatient;
 
@@ -3282,7 +3283,7 @@ function RegisterPatientPage() {
         patientCustomId: assignedPatientCustomId,
         billCustomId: assignedBillCustomId,
         reportId: report?.id || "",
-        billId: report?.bill?.id || report?.id || assignedBillCustomId,
+        billId: createdBill?.id || currentBillId || report?.bill?.id || report?.bill_id || report?.billId || assignedBillCustomId,
         total: grandTotal,
         discount: computedDiscount,
         paidAmount: computedPaid,

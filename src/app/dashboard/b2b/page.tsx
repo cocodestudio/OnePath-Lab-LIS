@@ -328,7 +328,7 @@ export default function B2bSalesPage() {
       return;
     }
 
-    const billId = selectedPatientForInvoice.bill?.id || selectedPatientForInvoice.bill_id;
+    const billId = selectedPatientForInvoice.bill?.id || selectedPatientForInvoice.bill_id || (selectedPatientForInvoice as any).billId || selectedPatientForInvoice.id;
     if (!billId) {
       toast.error("Bill ID Missing", "This patient does not have an attached bill record.");
       return;
@@ -337,7 +337,7 @@ export default function B2bSalesPage() {
     const tenDigits = digitsOnly.slice(-10);
 
     // Instant Success Popup (Optimistic Instant Response)
-    toast.success("Sent on WhatsApp!", `Invoice PDF is being delivered to +91  in the background.${tenDigits}`);
+    toast.success("Sent on WhatsApp!", `Invoice PDF is being delivered to +91 ${tenDigits} in the background.`);
 
     // Run PDF generation & delivery in background without blocking user
     (async () => {

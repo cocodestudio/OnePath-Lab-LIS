@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Users, Clock, CheckCircle2, IndianRupee, RefreshCw, Download,
   UserPlus, FileSpreadsheet, Printer, ArrowUpRight, TrendingUp,
-  FileText
+  FileText, Activity
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, Cell, PieChart, Pie,
@@ -18,7 +18,6 @@ import { B2BOverview } from "@/components/b2b-overview";
 import { DashboardShimmer } from "@/components/dashboard-shimmer";
 import { LabSetupProgress } from "@/components/lab-setup-progress";
 import { AcceptDueModal } from "@/components/accept-due-modal";
-import { DoctorShareExpensesWidget } from "@/components/doctor-share-expenses-widget";
 
 interface Stats {
   patientsToday: number;
@@ -257,6 +256,9 @@ export default function DashboardOverviewPage() {
   const [dueBills, setDueBills] = useState<any[]>(getInitialStoredDues);
   const [selectedBillForDue, setSelectedBillForDue] = useState<any | null>(null);
   const [labInfo, setLabInfo] = useState<any>(getInitialStoredLab);
+  const [doctorCommission, setDoctorCommission] = useState<number>(0);
+  const [totalTestExpenses, setTotalTestExpenses] = useState<number>(0);
+  const [activeChartMetric, setActiveChartMetric] = useState<"sales" | "dr_share" | "expenses" | "combined">("sales");
   const [loading, setLoading] = useState<boolean>(() => {
     const s = getInitialStoredStats();
     const r = getInitialStoredReports();
@@ -270,6 +272,16 @@ export default function DashboardOverviewPage() {
     setUser(u);
     const currentLabId = u?.lab_id || u?.labId;
     syncMemoryLabTenant(currentLabId);
+
+    try {
+      const activeLabId = currentLabId || "default";
+      const cachedDocExp = localStorage.getItem(`lis_cached_doc_expenses_${activeLabId}`);
+      if (cachedDocExp) {
+        const parsed = JSON.parse(cachedDocExp);
+        if (typeof parsed.doctorCommission === "number") setDoctorCommission(parsed.doctorCommission);
+        if (typeof parsed.totalTestExpenses === "number") setTotalTestExpenses(parsed.totalTestExpenses);
+      }
+    } catch { }
 
     const refreshLabInfo = (force = false) => {
       const now = Date.now();
@@ -459,6 +471,49 @@ export default function DashboardOverviewPage() {
         localStorage.setItem("lis_cached_dashboard_due_bills", JSON.stringify({ labId: currentLabId, data: slicedDues }));
       } catch { }
 
+      // Fetch Doctor Share Commission & Test Expenses for current month
+      try {
+        const activeLabId = currentLabId || "default";
+        const [docRes, testRes] = await Promise.all([
+          fetchFromLaravel("/doctors?filter=this_month&case_type=main_lab").catch(() => null),
+          fetchFromLaravel("/tests/usage-counts?period=this_month&per_page=50").catch(() => null),
+        ]);
+
+        let docComm = 0;
+        if (docRes && docRes.success) {
+          docComm = Number(docRes.summary?.total_doctor_commission || 0);
+          setDoctorCommission(docComm);
+        }
+
+        let testExp = 0;
+        if (testRes && testRes.status === "success") {
+          let localCosts: Record<string, any> = {};
+          try {
+            const stored = localStorage.getItem(`lis_test_unit_costs_${activeLabId}`);
+            if (stored) localCosts = JSON.parse(stored);
+          } catch { }
+
+          if (Array.isArray(testRes.data)) {
+            testRes.data.forEach((t: any) => {
+              const count = Number(t.count || 0);
+              const unitCost = Number(localCosts[t.test_id] ?? t.cost_price ?? 0);
+              testExp += count * unitCost;
+            });
+          }
+          setTotalTestExpenses(testExp);
+        }
+
+        try {
+          localStorage.setItem(`lis_cached_doc_expenses_${activeLabId}`, JSON.stringify({
+            doctorCommission: docComm,
+            totalTestExpenses: testExp,
+            updatedAt: Date.now(),
+          }));
+        } catch { }
+      } catch (e) {
+        console.warn("Could not load doctor share & test expenses:", e);
+      }
+
       if (showToast) {
         toast.success("Overview Refreshed", "Dashboard Refreshed.");
       }
@@ -518,24 +573,37 @@ export default function DashboardOverviewPage() {
     ? Math.round((monthCompletedReports / monthTotalReports) * 100)
     : (stats.totalReports > 0 ? Math.round((stats.completedReports / stats.totalReports) * 100) : 0);
 
-  const weeklyChartSlice = chartData.length > 7 ? chartData.slice(-7) : chartData;
-  const formattedChartData = weeklyChartSlice.map((item) => ({
+  const formattedChartData = chartData.map((item) => ({
     name: item.date,
     value: item.reports,
     revenue: item.revenue,
     isToday: item.date === "Today" || item.date.toUpperCase() === new Date().toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
   }));
-  const total7DaysReports = formattedChartData.reduce((acc, curr) => acc + (curr.value || 0), 0);
+  const totalMonthReportsCalculated = formattedChartData.reduce((acc, curr) => acc + (curr.value || 0), 0);
 
-  const formattedSalesData = chartData.map((item) => ({
-    name: item.date,
-    fullDate: item.fullDate || item.date,
-    revenue: Number(item.revenue || 0),
-    isToday:
-      item.date === "Today" ||
-      item.date.toUpperCase() ===
-      new Date().toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
-  }));
+  const totalRevInChart = chartData.reduce((acc, curr) => acc + (Number(curr.revenue) || 0), 0) || 1;
+  const totalRepsInChart = chartData.reduce((acc, curr) => acc + (Number(curr.reports) || 0), 0) || 1;
+
+  const formattedSalesData = chartData.map((item) => {
+    const dayRev = Number(item.revenue || 0);
+    const dayReps = Number(item.reports || 0);
+    const revRatio = dayRev / totalRevInChart;
+    const repRatio = dayReps / totalRepsInChart;
+    const dayDrShare = Math.round(doctorCommission * revRatio);
+    const dayExpenses = Math.round(totalTestExpenses * repRatio);
+
+    return {
+      name: item.date,
+      fullDate: item.fullDate || item.date,
+      revenue: dayRev,
+      doctorShare: dayDrShare,
+      expenses: dayExpenses,
+      isToday:
+        item.date === "Today" ||
+        item.date.toUpperCase() ===
+        new Date().toLocaleDateString("en-US", { weekday: "short" }).toUpperCase(),
+    };
+  });
 
   const totalMonthSales = stats.monthRevenue !== undefined
     ? Number(stats.monthRevenue)
@@ -654,17 +722,24 @@ export default function DashboardOverviewPage() {
         />
       </div>
 
-      {/* Analytics & Financial Performance Row (Two 6-column symmetrical charts) */}
+      {/* Analytics & Financial Performance Row (Two 6-column symmetrical charts on desktop, Total Sales first on mobile) */}
       <div className="grid grid-cols-12 gap-4">
-        {/* Weekly Reports Trend Card (6 cols) */}
-        <div className="col-span-12 lg:col-span-6 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col justify-between">
+        {/* Monthly Reports Trend Card (Desktop: left 6 cols, Mobile: second) */}
+        <div className="col-span-12 lg:col-span-6 order-2 lg:order-1 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between gap-2 mb-4 sm:mb-6">
-              <div className="min-w-0">
-                <h3 className="font-display text-base sm:text-lg font-semibold text-foreground truncate">Weekly Reports Trend</h3>
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">Last 7 days volume & daily diagnostic workload</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                    <Activity className="h-4 w-4" />
+                  </div>
+                  <h3 className="font-display text-base sm:text-lg font-semibold text-foreground truncate">Monthly Reports Trend</h3>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">Current month volume & daily diagnostic workload (from 1st {new Date().toLocaleString("en-US", { month: "short" })})</p>
               </div>
-              <span className="text-[11px] sm:text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0">7-Day Volume</span>
+              <span className="text-[11px] sm:text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0 px-2.5 py-1 rounded-md bg-muted/60 border border-border/60">
+                Monthly Volume
+              </span>
             </div>
             <div className="h-56 min-w-0 w-full" style={{ minHeight: 224 }}>
               {isMounted && formattedChartData.length > 0 ? (
@@ -689,29 +764,62 @@ export default function DashboardOverviewPage() {
             </div>
           </div>
 
-          {/* 4 Diagnostic Metrics Footer Strip */}
-          <div className="mt-4 pt-3.5 border-t border-border/50 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">7-Day Reports</span>
-              <p className="font-bold text-foreground mt-0.5 tnum">{total7DaysReports}</p>
+          {/* Quick Workload Summary (6 balanced mini-cards matching Total Sales card) */}
+          <div className="mt-4 pt-3.5 border-t border-border/50 grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
+              <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
+                Month Reports</span>
+              <p className="font-bold text-xs sm:text-sm text-foreground mt-1.5 tnum truncate leading-none">
+                {monthTotalReports || totalMonthReportsCalculated}
+              </p>
             </div>
-            <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Today Total</span>
-              <p className="font-bold text-foreground mt-0.5 tnum">{stats.todayReports}</p>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
+              <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
+                Approved (Month)
+              </span>
+              <p className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 mt-1.5 tnum truncate leading-none">
+                {monthCompletedReports}
+              </p>
             </div>
-            <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Done Today</span>
-              <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 tnum">{stats.todayCompletedReports}</p>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
+              <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
+                In-Review
+              </span>
+              <p className="font-bold text-xs sm:text-sm text-amber-600 dark:text-amber-400 mt-1.5 tnum truncate leading-none">
+                {monthPendingReports}
+              </p>
             </div>
-            <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">In Review</span>
-              <p className="font-bold text-amber-600 dark:text-amber-400 mt-0.5 tnum">{stats.todayPendingReports}</p>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
+              <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
+                Today Intake
+              </span>
+              <p className="font-bold text-xs sm:text-sm text-foreground mt-1.5 tnum truncate leading-none">
+                {stats.todayReports}
+              </p>
+            </div>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
+              <span className="h-4 flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase font-semibold truncate">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span className="truncate">Done Today</span>
+              </span>
+              <p className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 mt-1.5 tnum truncate leading-none">
+                {stats.todayCompletedReports}
+              </p>
+            </div>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
+              <span className="h-4 flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase font-semibold truncate">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                <span className="truncate">Turnaround</span>
+              </span>
+              <p className="font-bold text-xs sm:text-sm text-primary mt-1.5 tnum truncate leading-none">
+                {completionPct}%
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Total Sales & Revenue Trend Card (6 cols) */}
-        <div className="col-span-12 lg:col-span-6 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col justify-between">
+        {/* Total Sales & Revenue Trend Card (Desktop: right 6 cols, Mobile: first) */}
+        <div className="col-span-12 lg:col-span-6 order-1 lg:order-2 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col justify-between">
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
               <div>
@@ -723,6 +831,54 @@ export default function DashboardOverviewPage() {
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">Current month revenue collection & daily trajectory (from 1st {new Date().toLocaleString("en-US", { month: "short" })})</p>
               </div>
+
+              {/* Metric Switcher Options on top of graph (Equal 4-part responsive alignment) */}
+              <div className="w-full sm:w-80 grid grid-cols-4 gap-1 p-1 rounded-lg bg-muted/60 border border-border/60 text-xs font-semibold shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveChartMetric("sales")}
+                  className={`w-full text-center px-1.5 sm:px-2 py-1.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                    activeChartMetric === "sales"
+                      ? "bg-background text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Sales
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveChartMetric("dr_share")}
+                  className={`w-full text-center px-1.5 sm:px-2 py-1.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                    activeChartMetric === "dr_share"
+                      ? "bg-background text-indigo-600 dark:text-indigo-400 shadow-2xs font-bold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Dr Share
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveChartMetric("expenses")}
+                  className={`w-full text-center px-1.5 sm:px-2 py-1.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                    activeChartMetric === "expenses"
+                      ? "bg-background text-amber-600 dark:text-amber-400 shadow-2xs font-bold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Expenses
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveChartMetric("combined")}
+                  className={`w-full text-center px-1.5 sm:px-2 py-1.5 rounded-md text-[11px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
+                    activeChartMetric === "combined"
+                      ? "bg-background text-foreground shadow-2xs font-bold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Combined
+                </button>
+              </div>
             </div>
 
             <div className="h-56 min-w-0 w-full" style={{ minHeight: 224 }}>
@@ -733,6 +889,14 @@ export default function DashboardOverviewPage() {
                       <linearGradient id="salesRevenueGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="hsl(160 58% 36%)" stopOpacity={0.35} />
                         <stop offset="95%" stopColor="hsl(160 58% 36%)" stopOpacity={0.0} />
+                      </linearGradient>
+                      <linearGradient id="drShareGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(238 84% 67%)" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="hsl(238 84% 67%)" stopOpacity={0.0} />
+                      </linearGradient>
+                      <linearGradient id="expensesGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(38 92% 50%)" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="hsl(38 92% 50%)" stopOpacity={0.0} />
                       </linearGradient>
                     </defs>
                     <XAxis
@@ -760,20 +924,51 @@ export default function DashboardOverviewPage() {
                         color: "hsl(var(--foreground))",
                         boxShadow: "var(--shadow-elevated)",
                       }}
-                      formatter={(value: any) => [`₹${Number(value || 0).toLocaleString("en-IN")}`, "Daily Sales"]}
+                      formatter={(value: any, name: any) => [
+                        `₹${Number(value || 0).toLocaleString("en-IN")}`,
+                        name || (activeChartMetric === "sales" ? "Daily Sales" : activeChartMetric === "dr_share" ? "Dr Share" : "Test Expenses"),
+                      ]}
                       labelFormatter={(label) => `Day: ${label}`}
                     />
-                    <Area
-                      type="monotone"
-                      dataKey="revenue"
-                      name="Daily Sales"
-                      stroke="hsl(160 58% 36%)"
-                      strokeWidth={2.5}
-                      fillOpacity={1}
-                      fill="url(#salesRevenueGradient)"
-                      dot={{ r: 3, fill: "hsl(160 58% 36%)", strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: "hsl(160 62% 40%)", stroke: "#ffffff", strokeWidth: 2 }}
-                    />
+                    {(activeChartMetric === "sales" || activeChartMetric === "combined") && (
+                      <Area
+                        type="monotone"
+                        dataKey="revenue"
+                        name="Daily Sales"
+                        stroke="hsl(160 58% 36%)"
+                        strokeWidth={2.5}
+                        fillOpacity={activeChartMetric === "combined" ? 0.2 : 1}
+                        fill="url(#salesRevenueGradient)"
+                        dot={activeChartMetric === "combined" ? false : { r: 3, fill: "hsl(160 58% 36%)", strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: "hsl(160 62% 40%)", stroke: "#ffffff", strokeWidth: 2 }}
+                      />
+                    )}
+                    {(activeChartMetric === "dr_share" || activeChartMetric === "combined") && (
+                      <Area
+                        type="monotone"
+                        dataKey="doctorShare"
+                        name="Dr Share"
+                        stroke="hsl(238 84% 67%)"
+                        strokeWidth={2.5}
+                        fillOpacity={activeChartMetric === "combined" ? 0.2 : 1}
+                        fill="url(#drShareGradient)"
+                        dot={activeChartMetric === "combined" ? false : { r: 3, fill: "hsl(238 84% 67%)", strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: "hsl(238 84% 67%)", stroke: "#ffffff", strokeWidth: 2 }}
+                      />
+                    )}
+                    {(activeChartMetric === "expenses" || activeChartMetric === "combined") && (
+                      <Area
+                        type="monotone"
+                        dataKey="expenses"
+                        name="Test Expenses"
+                        stroke="hsl(38 92% 50%)"
+                        strokeWidth={2.5}
+                        fillOpacity={activeChartMetric === "combined" ? 0.2 : 1}
+                        fill="url(#expensesGradient)"
+                        dot={activeChartMetric === "combined" ? false : { r: 3, fill: "hsl(38 92% 50%)", strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: "hsl(38 92% 50%)", stroke: "#ffffff", strokeWidth: 2 }}
+                      />
+                    )}
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
@@ -795,32 +990,66 @@ export default function DashboardOverviewPage() {
             </div>
           </div>
 
-          {/* Quick Financial Summary */}
-          <div className="mt-4 pt-3.5 border-t border-border/50 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Total Revenue</span>
-              <p className="font-bold text-foreground mt-0.5 tnum">₹{Number(stats.totalRevenue || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p>
+          {/* Quick Financial Summary: Total Revenue, Today's Revenue, Month Sales, Daily Avg, Dr Share, Total Expenses */}
+          <div className="mt-4 pt-3.5 border-t border-border/50 grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
+              <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
+                Total Revenue
+              </span>
+              <p className="font-bold text-xs sm:text-sm text-foreground mt-1.5 tnum truncate leading-none">
+                ₹{Number(stats.totalRevenue || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+              </p>
             </div>
-            <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Today's Revenue</span>
-              <p className="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 tnum">₹{Number(stats.revenue || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
+              <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
+                Today's Revenue
+              </span>
+              <p className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 mt-1.5 tnum truncate leading-none">
+                ₹{Number(stats.revenue || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+              </p>
             </div>
-            <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Month Sales</span>
-              <p className="font-bold text-foreground mt-0.5 tnum">₹{totalMonthSales.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</p>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
+              <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
+                Month Sales
+              </span>
+              <p className="font-bold text-xs sm:text-sm text-foreground mt-1.5 tnum truncate leading-none">
+                ₹{totalMonthSales.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+              </p>
             </div>
-            <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-semibold">Daily Avg</span>
-              <p className="font-bold text-foreground mt-0.5 tnum">₹{avgDailySales.toLocaleString("en-IN", { maximumFractionDigits: 0 })}/day</p>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
+              <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
+                Daily Avg
+              </span>
+              <p className="font-bold text-xs sm:text-sm text-foreground mt-1.5 tnum truncate leading-none">
+                ₹{avgDailySales.toLocaleString("en-IN", { maximumFractionDigits: 0 })}/day
+              </p>
+            </div>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
+              <span className="h-4 flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase font-semibold truncate">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                <span className="truncate">Dr Share</span>
+              </span>
+              <p className="font-bold text-xs sm:text-sm text-indigo-600 dark:text-indigo-400 mt-1.5 tnum truncate leading-none">
+                ₹{doctorCommission.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
+              <span className="h-4 flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase font-semibold truncate">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                <span className="truncate">Total Expenses</span>
+              </span>
+              <p className="font-bold text-xs sm:text-sm text-amber-600 dark:text-amber-400 mt-1.5 tnum truncate leading-none">
+                ₹{totalTestExpenses.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Operational Throughput & Financial Receivables Row (Two 6-column symmetrical cards) */}
+      {/* Operational Throughput & Financial Receivables Row (Two 6-column symmetrical cards, Diagnostic Report first on mobile, Payments due bottom) */}
       <div className="grid grid-cols-12 gap-4">
-        {/* Payments Due Card (6 cols) */}
-        <div className="col-span-12 lg:col-span-6 bg-card border border-border/70 rounded-xl p-5 sm:p-6 shadow-card flex flex-col justify-between">
+        {/* Payments Due Card (Desktop: left 6 cols, Mobile: bottom/last) */}
+        <div className="col-span-12 lg:col-span-6 order-2 lg:order-1 bg-card border border-border/70 rounded-xl p-5 sm:p-6 shadow-card flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between gap-2 mb-2">
               <div className="min-w-0">
@@ -919,13 +1148,132 @@ export default function DashboardOverviewPage() {
           </div>
         </div>
 
-        {/* Monthly Doctor Share, Operational Expenses & Referral Analytics Card (6 cols) */}
-        <DoctorShareExpensesWidget
-          monthRevenue={totalMonthSales}
-          chartData={chartData}
-          isMounted={isMounted}
-          labId={user?.lab_id || user?.labId}
-        />
+        {/* Report Status & Diagnostic Operations Card (Desktop: right 6 cols, Mobile: first / above payments due) */}
+        <div className="col-span-12 lg:col-span-6 order-1 lg:order-2 bg-card border border-border/70 rounded-xl p-5 sm:p-6 shadow-card flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="min-w-0">
+                <h3 className="font-display text-base sm:text-lg font-semibold text-foreground truncate">
+                  Diagnostic Report Status
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  Monthly laboratory completion & clinical throughput
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center mt-2">
+              {/* Donut Chart & Completion Bar */}
+              <div className="flex flex-col items-center justify-center">
+                <div className="relative flex items-center justify-center w-full min-h-[175px] min-w-0">
+                  {isMounted && (monthTotalReports > 0 || stats.totalReports > 0) ? (
+                    <>
+                      <ResponsiveContainer width="100%" height={175} minWidth={0} minHeight={0} debounce={50}>
+                        <PieChart>
+                          <Pie
+                            data={pieData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={52}
+                            outerRadius={72}
+                            paddingAngle={4}
+                            dataKey="value"
+                            strokeWidth={0}
+                          >
+                            {pieData.map((entry, i) => (
+                              <Cell key={i} fill={entry.color} />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="font-display text-2xl font-bold text-foreground leading-none tnum">
+                          {monthTotalReports}
+                        </span>
+                        <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-muted-foreground mt-1">
+                          This Month
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No reports recorded</p>
+                  )}
+                </div>
+
+                {/* Progress bar under donut */}
+                <div className="w-full max-w-[210px] mt-1 space-y-1">
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold">
+                    <span>Turnaround</span>
+                    <span className="text-foreground font-bold">{completionPct}%</span>
+                  </div>
+                  <div className="w-full bg-muted/60 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, Math.max(0, completionPct))}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Breakdown & Quick Action Links */}
+              <div className="space-y-2">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-muted/30 border border-border/40">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "hsl(160 58% 32%)" }} />
+                      <span className="text-muted-foreground font-medium">Completed / Approved</span>
+                    </div>
+                    <span className="font-bold tnum text-foreground">{monthCompletedReports}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-muted/30 border border-border/40">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: "hsl(36 72% 50%)" }} />
+                      <span className="text-muted-foreground font-medium">Pending In-Review</span>
+                    </div>
+                    <span className="font-bold tnum text-foreground">{monthPendingReports}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-muted/20 border border-border/30">
+                    <span className="text-muted-foreground font-medium">Today's Intake Completed</span>
+                    <span className="font-bold tnum text-foreground">{stats.todayCompletedReports} / {stats.todayReports}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-muted/20 border border-border/30">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground font-medium">Pending Workload</span>
+                    </div>
+                    <span className="font-bold tnum text-amber-600 dark:text-amber-400">{stats.todayPendingReports}</span>
+                  </div>
+                </div>
+
+                {/* 2 Quick Navigation Shortcuts */}
+                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                  <Link
+                    href="/dashboard/reports"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold transition-colors"
+                  >
+                    <FileText className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">All Reports</span>
+                  </Link>
+                  <Link
+                    href="/dashboard/patients/register"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-muted/60 hover:bg-muted text-foreground text-xs font-semibold border border-border/60 transition-colors"
+                  >
+                    <UserPlus className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">New Booking</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-border/50 mt-3 flex items-center justify-between text-xs text-muted-foreground">
+            <span>Overall Turnaround Health</span>
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Operational Active
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Accept Due Payment Modal */}
