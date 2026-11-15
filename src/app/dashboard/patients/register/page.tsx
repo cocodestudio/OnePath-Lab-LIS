@@ -484,6 +484,16 @@ function RegisterPatientPage() {
   const [district, setDistrict] = useState("");
   const [state, setState] = useState("");
 
+  // Existing Patient Auto-Detection & Suggestions State
+  const [nameSuggestions, setNameSuggestions] = useState<any[]>([]);
+  const [isSearchingName, setIsSearchingName] = useState(false);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const nameSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const nameSearchCacheRef = useRef<Record<string, any[]>>({});
+  const nameInputContainerRef = useRef<HTMLDivElement>(null);
+  const suppressNameSearchRef = useRef(false);
+
   const handleTitleChange = (newTitle: string) => {
     if (!newTitle || newTitle === "Blank" || newTitle === "Null") {
       setDesignation("Blank");
@@ -1605,7 +1615,7 @@ function RegisterPatientPage() {
     }
   }, [catalogMode, outsourcePartnerLabsList.length]);
 
-  const applyPatientDemographics = (patientData: any) => {
+  const applyPatientDemographics = (patientData: any, isNewIntake: boolean = false) => {
     if (!patientData) return;
     // Clean rawName from leading Untitled, Blank, Null prefixes so it never leaks into firstName
     const rawName = (patientData.name || "").trim();
@@ -1777,8 +1787,85 @@ function RegisterPatientPage() {
         vial_barcodes: loadedBarcodes,
       },
     };
-    setNewPatient(patObj);
+    if (!isNewIntake) {
+      setNewPatient(patObj);
+    }
   };
+
+  const handleSelectPatientSuggestion = (patient: any) => {
+    suppressNameSearchRef.current = true;
+    setShowNameSuggestions(false);
+    setNameSuggestions([]);
+    applyPatientDemographics(patient, true);
+  };
+
+  // Real-time debounced previous patient detection when entering name
+  useEffect(() => {
+    if (suppressNameSearchRef.current) {
+      suppressNameSearchRef.current = false;
+      return;
+    }
+    if (isEditMode || (!!newPatient && !isEditMode)) {
+      setShowNameSuggestions(false);
+      return;
+    }
+
+    const query = (firstName || "").trim();
+    if (query.length < 2) {
+      setNameSuggestions([]);
+      setShowNameSuggestions(false);
+      setIsSearchingName(false);
+      return;
+    }
+
+    const cacheKey = query.toLowerCase();
+    if (nameSearchCacheRef.current[cacheKey]) {
+      const cached = nameSearchCacheRef.current[cacheKey];
+      setNameSuggestions(cached);
+      setShowNameSuggestions(cached.length > 0);
+      setIsSearchingName(false);
+      return;
+    }
+
+    setIsSearchingName(true);
+    if (nameSearchTimeoutRef.current) {
+      clearTimeout(nameSearchTimeoutRef.current);
+    }
+
+    nameSearchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetchFromLaravel(`/patients?search=${encodeURIComponent(query)}&per_page=6`);
+        const list = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
+        nameSearchCacheRef.current[cacheKey] = list;
+        setNameSuggestions(list);
+        setShowNameSuggestions(list.length > 0);
+      } catch (err) {
+        console.warn("Patient name search error:", err);
+      } finally {
+        setIsSearchingName(false);
+      }
+    }, 280);
+
+    return () => {
+      if (nameSearchTimeoutRef.current) {
+        clearTimeout(nameSearchTimeoutRef.current);
+      }
+    };
+  }, [firstName, isEditMode, newPatient]);
+
+  // Click outside listener to dismiss patient name suggestion dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        nameInputContainerRef.current &&
+        !nameInputContainerRef.current.contains(e.target as Node)
+      ) {
+        setShowNameSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (!editId) {
@@ -3669,7 +3756,7 @@ function RegisterPatientPage() {
 
               {/* Flabs-Style Patient Search removed - top global navbar search is active */}
 
-              <form onSubmit={handleRegisterPatient} className="space-y-6 bg-card/80 p-6 sm:p-7 rounded-2xl border border-border/90 shadow-sm">
+              <form onSubmit={handleRegisterPatient} autoComplete="off" className="space-y-6 bg-card/80 p-6 sm:p-7 rounded-2xl border border-border/90 shadow-sm">
 
                 {/* Section 1: Demographics */}
                 <div className="space-y-4">
@@ -3770,15 +3857,22 @@ function RegisterPatientPage() {
                       </Select>
                     </div>
 
-                    <div className="sm:col-span-5 space-y-1.5">
+                    <div ref={nameInputContainerRef} className="sm:col-span-5 space-y-1.5 relative">
                       <label className="text-[11px] font-bold text-foreground/80 uppercase tracking-wider">
                         First Name <span className="text-rose-500 font-extrabold">*</span>
                       </label>
-                      <div className="relative">
-                        <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <div className="relative overflow-hidden rounded-xl">
+                        <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
                         <input
                           id="input-first-name"
+                          name="patient_fname"
                           type="text"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="words"
+                          spellCheck={false}
+                          data-form-type="other"
+                          data-lpignore="true"
                           className={`w-full pl-10 pr-4 h-11 bg-background rounded-xl text-sm placeholder:text-muted-foreground/50 outline-none text-foreground font-medium transition-all shadow-2xs ${fieldErrors.firstName
                             ? "border-2 border-rose-500 ring-2 ring-rose-500/20 focus:border-rose-500"
                             : "border border-zinc-400 dark:border-zinc-600 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white"
@@ -3789,10 +3883,113 @@ function RegisterPatientPage() {
                             setFirstName(e.target.value);
                             clearFieldError("firstName");
                           }}
+                          onKeyDown={(e) => {
+                            if (showNameSuggestions && nameSuggestions.length > 0) {
+                              if (e.key === "ArrowDown") {
+                                e.preventDefault();
+                                setSelectedSuggestionIndex((prev) => (prev + 1) % nameSuggestions.length);
+                              } else if (e.key === "ArrowUp") {
+                                e.preventDefault();
+                                setSelectedSuggestionIndex((prev) => (prev - 1 + nameSuggestions.length) % nameSuggestions.length);
+                              } else if (e.key === "Enter" && selectedSuggestionIndex >= 0) {
+                                e.preventDefault();
+                                handleSelectPatientSuggestion(nameSuggestions[selectedSuggestionIndex]);
+                              } else if (e.key === "Escape") {
+                                setShowNameSuggestions(false);
+                              }
+                            }
+                          }}
+                          onFocus={() => {
+                            if (nameSuggestions.length > 0 && !newPatient) {
+                              setShowNameSuggestions(true);
+                            }
+                          }}
                           disabled={registering || (!!newPatient && !isEditMode)}
                           required
                         />
+                        {/* Premium Smooth Shimmer Sweep across the input while searching */}
+                        {isSearchingName && (
+                          <div className="payment-card-shimmer rounded-xl pointer-events-none" />
+                        )}
                       </div>
+
+                      {/* While Searching Skeleton Shimmer Popover */}
+                      {isSearchingName && nameSuggestions.length === 0 && !newPatient && (
+                        <div
+                          className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-card border border-border/80 rounded-xl shadow-elevated overflow-hidden p-3 space-y-2 animate-fade-in"
+                          style={{ minWidth: "280px" }}
+                        >
+                          <div className="flex items-center justify-between text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                            <span className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
+                              <span>Checking previous records...</span>
+                            </span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {[1, 2].map((i) => (
+                              <div key={i} className="flex items-center justify-between py-2 px-2.5 rounded-lg bg-muted/20 border border-border/30 animate-pulse">
+                                <div className="space-y-1">
+                                  <div className="h-3 w-28 bg-muted/70 rounded" />
+                                  <div className="h-2 w-16 bg-muted/40 rounded" />
+                                </div>
+                                <div className="h-4.5 w-16 bg-muted/60 rounded-md" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Previous Patient Name Suggestions Popover */}
+                      {showNameSuggestions && nameSuggestions.length > 0 && !newPatient && (
+                        <div
+                          className="absolute z-50 left-0 right-0 top-full mt-1.5 bg-card border border-border/80 rounded-xl shadow-elevated overflow-hidden divide-y divide-border/40 animate-fade-in"
+                          style={{ minWidth: "280px" }}
+                        >
+                          <div className="px-3.5 py-1.5 bg-muted/40 flex items-center justify-between text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                            <span className="flex items-center gap-1">
+                              <Sparkles className="h-3 w-3 text-primary" />
+                              <span>Previous Patients</span>
+                            </span>
+                            <span>Click to autofill</span>
+                          </div>
+                          <div className="max-h-56 overflow-y-auto">
+                            {nameSuggestions.map((pat, idx) => {
+                              const isSelected = selectedSuggestionIndex === idx;
+                              const ageDisplay = pat.age ? `${pat.age} Y` : "Age N/A";
+                              const genderDisplay = pat.gender ? pat.gender : "";
+                              const phoneDisplay = pat.phone && pat.phone !== "N/A" ? pat.phone : "";
+                              const regNo = pat.custom_id || pat.customId || "";
+                              return (
+                                <button
+                                  key={pat.id || idx}
+                                  type="button"
+                                  onClick={() => handleSelectPatientSuggestion(pat)}
+                                  onMouseEnter={() => setSelectedSuggestionIndex(idx)}
+                                  className={`w-full text-left px-3.5 py-2.5 flex items-center justify-between gap-3 transition-colors cursor-pointer ${
+                                    isSelected ? "bg-primary/10 text-primary" : "hover:bg-muted/40"
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-xs text-foreground truncate">
+                                      {pat.name}
+                                    </p>
+                                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono mt-0.5">
+                                      {regNo && <span>{regNo}</span>}
+                                      {phoneDisplay && <span>• {phoneDisplay}</span>}
+                                    </div>
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-muted/60 text-[11px] font-bold text-foreground">
+                                      {ageDisplay} {genderDisplay ? `• ${genderDisplay}` : ""}
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
                       {fieldErrors.firstName && (
                         <p className="text-xs text-rose-500 font-semibold flex items-center gap-1 mt-1 animate-shake">
                           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
@@ -3807,6 +4004,13 @@ function RegisterPatientPage() {
                       </label>
                       <input
                         type="text"
+                        name="patient_lname"
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="words"
+                        spellCheck={false}
+                        data-form-type="other"
+                        data-lpignore="true"
                         className="w-full px-4 h-11 bg-background border border-zinc-400 dark:border-zinc-600 rounded-xl text-sm placeholder:text-muted-foreground/50 focus:border-zinc-900 dark:focus:border-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-white outline-none text-foreground font-medium transition-all shadow-2xs"
                         placeholder="Enter Last Name"
                         value={lastName}

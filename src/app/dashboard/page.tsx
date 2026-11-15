@@ -722,104 +722,10 @@ export default function DashboardOverviewPage() {
         />
       </div>
 
-      {/* Analytics & Financial Performance Row (Two 6-column symmetrical charts on desktop, Total Sales first on mobile) */}
+      {/* Total Sales & Revenue Performance Row (Full Width) */}
       <div className="grid grid-cols-12 gap-4">
-        {/* Monthly Reports Trend Card (Desktop: left 6 cols, Mobile: second) */}
-        <div className="col-span-12 lg:col-span-6 order-2 lg:order-1 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col justify-between">
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-              <div>
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                    <Activity className="h-4 w-4" />
-                  </div>
-                  <h3 className="font-display text-base sm:text-lg font-semibold text-foreground truncate">Monthly Reports Trend</h3>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">Current month volume & daily diagnostic workload (from 1st {new Date().toLocaleString("en-US", { month: "short" })})</p>
-              </div>
-              <span className="text-[11px] sm:text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0 px-2.5 py-1 rounded-md bg-muted/60 border border-border/60">
-                Monthly Volume
-              </span>
-            </div>
-            <div className="h-56 min-w-0 w-full" style={{ minHeight: 224 }}>
-              {isMounted && formattedChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={224} minWidth={0} minHeight={0} debounce={50}>
-                  <BarChart data={formattedChartData} margin={{ top: 4, right: 0, left: -24, bottom: 0 }}>
-                    <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" />
-                    <YAxis fontSize={11} tickLine={false} axisLine={false} className="text-muted-foreground" allowDecimals={false} />
-                    <Tooltip
-                      cursor={{ fill: "hsl(var(--muted) / 0.45)", radius: 6 }}
-                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "10px", fontSize: "11px", color: "hsl(var(--foreground))", boxShadow: "var(--shadow-elevated)" }}
-                    />
-                    <Bar dataKey="value" name="Reports" radius={[5, 5, 2, 2]} maxBarSize={38}>
-                      {formattedChartData.map((entry, i) => (
-                        <Cell key={i} fill={entry.isToday ? "hsl(160 58% 30%)" : "hsl(160 40% 30% / 0.25)"} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No data available</div>
-              )}
-            </div>
-          </div>
-
-          {/* Quick Workload Summary (6 balanced mini-cards matching Total Sales card) */}
-          <div className="mt-4 pt-3.5 border-t border-border/50 grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
-            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
-              <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
-                Month Reports</span>
-              <p className="font-bold text-xs sm:text-sm text-foreground mt-1.5 tnum truncate leading-none">
-                {monthTotalReports || totalMonthReportsCalculated}
-              </p>
-            </div>
-            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
-              <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
-                Approved (Month)
-              </span>
-              <p className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 mt-1.5 tnum truncate leading-none">
-                {monthCompletedReports}
-              </p>
-            </div>
-            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
-              <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
-                In-Review
-              </span>
-              <p className="font-bold text-xs sm:text-sm text-amber-600 dark:text-amber-400 mt-1.5 tnum truncate leading-none">
-                {monthPendingReports}
-              </p>
-            </div>
-            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
-              <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
-                Today Intake
-              </span>
-              <p className="font-bold text-xs sm:text-sm text-foreground mt-1.5 tnum truncate leading-none">
-                {stats.todayReports}
-              </p>
-            </div>
-            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
-              <span className="h-4 flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase font-semibold truncate">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                <span className="truncate">Done Today</span>
-              </span>
-              <p className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 mt-1.5 tnum truncate leading-none">
-                {stats.todayCompletedReports}
-              </p>
-            </div>
-            <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
-              <span className="h-4 flex items-center gap-1.5 text-[10px] text-muted-foreground uppercase font-semibold truncate">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-                <span className="truncate">Turnaround</span>
-              </span>
-              <p className="font-bold text-xs sm:text-sm text-primary mt-1.5 tnum truncate leading-none">
-                {completionPct}%
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Total Sales & Revenue Trend Card (Desktop: right 6 cols, Mobile: first) */}
-        <div className="col-span-12 lg:col-span-6 order-1 lg:order-2 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col justify-between">
+        {/* Total Sales & Revenue Trend Card (Full Width 12 cols) */}
+        <div className="col-span-12 bg-card border border-border/70 rounded-xl p-6 shadow-card flex flex-col justify-between">
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
               <div>
@@ -881,7 +787,7 @@ export default function DashboardOverviewPage() {
               </div>
             </div>
 
-            <div className="h-56 min-w-0 w-full" style={{ minHeight: 224 }}>
+            <div className="h-60 sm:h-64 min-w-0 w-full" style={{ minHeight: 240 }}>
               {isMounted && formattedSalesData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={224} minWidth={0} minHeight={0} debounce={50}>
                   <AreaChart data={formattedSalesData} margin={{ top: 8, right: 10, left: -18, bottom: 0 }}>
@@ -991,7 +897,7 @@ export default function DashboardOverviewPage() {
           </div>
 
           {/* Quick Financial Summary: Total Revenue, Today's Revenue, Month Sales, Daily Avg, Dr Share, Total Expenses */}
-          <div className="mt-4 pt-3.5 border-t border-border/50 grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+          <div className="mt-4 pt-3.5 border-t border-border/50 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
             <div className="p-2 sm:p-2.5 rounded-lg bg-muted/20 border border-border/40 flex flex-col justify-between min-w-0">
               <span className="h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate">
                 Total Revenue

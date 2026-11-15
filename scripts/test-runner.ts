@@ -4501,11 +4501,11 @@ assert(
   "[OVERVIEW TOTAL SALES CHART] Overview dashboard renders Total Sales & Revenue AreaChart with emerald gradient"
 );
 
-// 49.2 Balanced Symmetrical 6-Column Layout for Trend Charts
+// 49.2 Full Width or Symmetrical Layout for Trend Charts
 assert(
-  (overviewPageSrc49.includes("Monthly Reports Trend") || overviewPageSrc49.includes("Weekly Reports Trend")) &&
-  overviewPageSrc49.includes("col-span-12 lg:col-span-6"),
-  "[OVERVIEW CHART SYMMETRY] Weekly/Monthly Reports Trend and Total Sales Trend are balanced side-by-side in 6-column containers"
+  overviewPageSrc49.includes("col-span-12") &&
+  overviewPageSrc49.includes("Total Sales & Revenue Trend"),
+  "[OVERVIEW CHART LAYOUT] Total Sales Trend card is rendered in full-width col-span-12 container"
 );
 
 // 49.3 Data Consistency with Stats Revenue & Trend Calculation
@@ -4554,12 +4554,11 @@ assert(
   "[OVERVIEW REPORT STATUS ALIGNMENT] Doctor Share & Lab Expenses widget cleanly replaces legacy status block with monthly financial analytics"
 );
 
-// 49.8 Weekly Trend 7-Day Volume Responsive Single-Line Label
+// 49.8 Clean Overview Layout Without Redundant Weekly/Monthly Trend Card
 assert(
-  (overviewPageSrc49.includes("Monthly Volume") || overviewPageSrc49.includes("7-Day Volume")) &&
-  overviewPageSrc49.includes("text-[11px] sm:text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0") &&
+  overviewPageSrc49.includes("Total Sales & Revenue Trend") &&
   !overviewPageSrc49.includes('px-3 py-1.5 rounded-lg bg-muted/60 border border-border/60">7-Day Volume'),
-  "[OVERVIEW 7-DAY VOLUME RESPONSIVE] Weekly reports trend renders 7-Day Volume as responsive non-wrapping single line text"
+  "[OVERVIEW LAYOUT & CLEAN VOLUME] Weekly/Monthly reports trend is streamlined into full-width Total Sales & Revenue card"
 );
 
 // ==============================================================================
@@ -7829,11 +7828,11 @@ const billControllerSrc95 = fs.readFileSync(
   "utf8"
 );
 
-// 95.1 Mobile-First Order Invariant: Total Sales First, Monthly Reports Trend Below
+// 95.1 Full Width Total Sales & Symmetrical Receivables
 assert(
-  overviewPageSrc95.includes("order-1 lg:order-2") &&
-  overviewPageSrc95.includes("order-2 lg:order-1"),
-  "[RESPONSIVE CARD ORDER] Overview page renders Total Sales first on mobile (order-1) and Monthly Reports Trend second (order-2)"
+  overviewPageSrc95.includes("Total Sales & Revenue Trend") &&
+  overviewPageSrc95.includes("col-span-12"),
+  "[TOTAL SALES FULL WIDTH] Overview page renders Total Sales as full-width 12-column card"
 );
 
 // 95.2 Metric Switcher Options on top of Graph
@@ -7845,12 +7844,12 @@ assert(
   "[GRAPH METRIC SWITCHER] Total Sales & Revenue card provides selectable buttons for Sales, Dr Share, Expenses, and Combined views"
 );
 
-// 95.3 Monthly Reports Trend from 1st of Month
+// 95.3 Total Sales Trend Monthly Trajectory
 assert(
-  overviewPageSrc95.includes("<h3 className=\"font-display text-base sm:text-lg font-semibold text-foreground truncate\">Monthly Reports Trend</h3>") &&
-  overviewPageSrc95.includes("Monthly Volume") &&
-  overviewPageSrc95.includes("Month Reports</span>"),
-  "[MONTHLY REPORTS TREND] Left card displays full Monthly Reports Trend instead of 7-day weekly slice"
+  overviewPageSrc95.includes("Total Sales & Revenue Trend") &&
+  overviewPageSrc95.includes("from 1st") &&
+  overviewPageSrc95.includes("formattedSalesData"),
+  "[TOTAL SALES MONTHLY TRAJECTORY] Overview renders current month revenue collection and daily trajectory"
 );
 
 // 95.4 Dr Share & Total Expenses in Quick Financial Summary
@@ -7921,17 +7920,61 @@ assert(
   "[EQUAL 4-PART TAB SWITCHER & DIRECT REGISTRATION] Metric switcher is rendered as clean 4-column equal grid and New Booking navigates directly to /dashboard/patients/register"
 );
 
-// 96.4 Perfectly Aligned Financial Summary Metric Cards & Monthly Trend 6-Box Workload Grid
+// 96.4 Perfectly Aligned Financial Summary Metric Cards (6-Column Responsive Grid)
 assert(
-  overviewPageSrc96.includes("grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs") &&
+  overviewPageSrc96.includes("grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs") &&
   overviewPageSrc96.includes("h-4 flex items-center text-[10px] text-muted-foreground uppercase font-semibold truncate") &&
   overviewPageSrc96.includes("Total Revenue") &&
   overviewPageSrc96.includes("Today's Revenue") &&
   overviewPageSrc96.includes("Month Sales") &&
-  overviewPageSrc96.includes("Daily Avg") &&
-  overviewPageSrc96.includes("Approved (Month)") &&
-  overviewPageSrc96.includes("Today Intake"),
-  "[ALIGNED METRICS & WORKLOAD GRID] Monthly Reports Trend and Total Sales cards both feature identical 6-card symmetrical bottom summary grids to eliminate empty space on PC"
+  overviewPageSrc96.includes("Daily Avg"),
+  "[ALIGNED REVENUE METRICS] All 6 quick financial summary boxes have uniform fixed label baselines across full-width 6-column grid"
+);
+
+// ==============================================================================
+// 97. Patient Registration Real-time Name Auto-Detection & Demographics Autofill Engine
+// ==============================================================================
+console.log("\n▶ MODULE 97: Patient Registration Real-time Name Auto-Detection & Demographics Autofill Engine");
+
+const registerPageSrc97 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/patients/register/page.tsx"),
+  "utf8"
+);
+
+// 97.1 Debounced Name Detection & Cache State
+assert(
+  registerPageSrc97.includes("nameSuggestions") &&
+  registerPageSrc97.includes("isSearchingName") &&
+  registerPageSrc97.includes("showNameSuggestions") &&
+  registerPageSrc97.includes("nameSearchCacheRef") &&
+  registerPageSrc97.includes("nameSearchTimeoutRef"),
+  "[NAME AUTO-DETECTION STATE] register/page.tsx maintains debounced search state and in-memory cache for fast patient recognition"
+);
+
+// 97.2 Multi-Field Demographics Autofill Handler
+assert(
+  registerPageSrc97.includes("handleSelectPatientSuggestion") &&
+  registerPageSrc97.includes("applyPatientDemographics(patient, true)") &&
+  registerPageSrc97.includes("isNewIntake"),
+  "[DEMOGRAPHICS AUTOFILL] Selecting a suggestion autofills patient demographics without prematurely disabling intake form"
+);
+
+// 97.3 Clean Suggestion Popover Displaying Name & Age
+assert(
+  registerPageSrc97.includes("showNameSuggestions && nameSuggestions.length > 0") &&
+  registerPageSrc97.includes("Previous Patients") &&
+  registerPageSrc97.includes("ageDisplay") &&
+  registerPageSrc97.includes("pat.name"),
+  "[SUGGESTION POPOVER] Name field renders floating suggestion popover cleanly displaying previous patient name and age"
+);
+
+// 97.4 Keyboard Navigation & Click-Outside Dismissal
+assert(
+  registerPageSrc97.includes("handleClickOutside") &&
+  registerPageSrc97.includes("ArrowDown") &&
+  registerPageSrc97.includes("ArrowUp") &&
+  registerPageSrc97.includes("Escape"),
+  "[KEYBOARD & DISMISSAL] Suggestion dropdown supports ArrowUp/ArrowDown navigation and click-outside dismissal"
 );
 
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
