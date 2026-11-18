@@ -7977,6 +7977,85 @@ assert(
   "[KEYBOARD & DISMISSAL] Suggestion dropdown supports ArrowUp/ArrowDown navigation and click-outside dismissal"
 );
 
+// ==============================================================================
+// 98. Billing Operations Dues Clean Header & Actions Three-Dots Accept Due Engine
+// ==============================================================================
+console.log("\n▶ MODULE 98: Billing Operations Dues Clean Header & Actions Three-Dots Accept Due Engine");
+
+const billingPageSrc98 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/billing/page.tsx"),
+  "utf-8"
+);
+const duesDetailPageSrc98 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/billing/dues/[id]/page.tsx"),
+  "utf-8"
+);
+
+// 98.1 Clean Header Removal of Total Settled & Total Dues Pill Labels
+assert(
+  !billingPageSrc98.includes("Total Settled:") &&
+  !billingPageSrc98.includes("Total Dues:") &&
+  billingPageSrc98.includes("Daily Payment Split (Cash vs UPI & Dues)"),
+  "[CLEAN HEADER REMOVAL] billing/page.tsx cleanly removes redundant Total Settled & Total Dues pill labels from payment split header"
+);
+
+// 98.2 Actions Column Three-Dots Trigger Beside Print
+assert(
+  billingPageSrc98.includes("MoreVertical") &&
+  billingPageSrc98.includes("DropdownMenu") &&
+  billingPageSrc98.includes("DropdownMenuTrigger") &&
+  billingPageSrc98.includes('title="Preview / Print Invoice"'),
+  "[ACTIONS THREE-DOTS MENU] billing/page.tsx actions column features Three-Dots trigger beside Print icon"
+);
+
+// 98.3 Accept Due Option Routing Directly to Bill & Dues Ledger
+assert(
+  billingPageSrc98.includes("Accept Due") &&
+  billingPageSrc98.includes("`/dashboard/billing/dues/${bill.id}`") &&
+  billingPageSrc98.includes("DropdownMenuItem"),
+  "[ACCEPT DUE DIRECT ROUTING] Dropdown menu provides Accept Due option navigating to patient bill and dues ledger"
+);
+
+// 98.4 Due Bill Detail Page Supports Admin Dues Settlement & Clean Header (No Print Invoice Button)
+assert(
+  (duesDetailPageSrc98.includes("Bill & Dues Ledger") || duesDetailPageSrc98.includes("Bill &amp; Dues Ledger")) &&
+  !duesDetailPageSrc98.includes("<span>Print Invoice</span>"),
+  "[DUES LEDGER VIEW] Due detail page serves as comprehensive Bill & Dues Ledger without redundant Print Invoice button"
+);
+
+// ==============================================================================
+// 99. Patient Registration Intake Rules & ABHA Modal Responsive Mobile Architecture Engine
+// ==============================================================================
+console.log("\n▶ MODULE 99: Patient Registration Intake Rules & ABHA Modal Responsive Mobile Architecture Engine");
+
+const registerPageSrc99 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/patients/register/page.tsx"),
+  "utf-8"
+);
+const abhaModalSrc99 = fs.readFileSync(
+  path.join(__dirname, "../src/components/abha-link-modal.tsx"),
+  "utf-8"
+);
+
+// 99.1 Intake Rules Modal Fluid Width, Touch Tabs & Responsive Grid
+assert(
+  registerPageSrc99.includes("w-[calc(100vw-1rem)]") &&
+  registerPageSrc99.includes("overflow-x-auto no-scrollbar scroll-smooth whitespace-nowrap") &&
+  registerPageSrc99.includes("grid-cols-1 sm:grid-cols-2 lg:grid-cols-3") &&
+  registerPageSrc99.includes("flex-col-reverse sm:flex-row"),
+  "[INTAKE RULES MOBILE RESPONSIVE] Intake rules modal features full fluid mobile container, swipeable horizontal category tabs, and adaptive footer actions"
+);
+
+// 99.2 ABHA Link Modal Responsive Container, Aadhaar Triple Boxes & OTP Inputs
+assert(
+  abhaModalSrc99.includes("w-[calc(100vw-1.5rem)]") &&
+  abhaModalSrc99.includes("pr-14") &&
+  abhaModalSrc99.includes("flex items-center justify-center") &&
+  abhaModalSrc99.includes("w-20 sm:w-24") &&
+  abhaModalSrc99.includes("w-9 sm:w-11"),
+  "[ABHA MODAL MOBILE RESPONSIVE] ABHA link modal features dedicated centered stepper bar with close button clearance and responsive inputs"
+);
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 

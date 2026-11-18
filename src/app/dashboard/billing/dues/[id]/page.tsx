@@ -385,15 +385,6 @@ export default function DueBillDetailPage() {
               <span>Accept Due ({formatINR(dueAmount)})</span>
             </Button>
           )}
-
-          <Button
-            variant="outline"
-            onClick={handlePrint}
-            className="h-9 px-3.5 rounded-xl border-border bg-card hover:bg-muted text-xs font-semibold text-foreground shadow-2xs gap-1.5 cursor-pointer"
-          >
-            <Printer className="w-3.5 h-3.5 text-muted-foreground" />
-            <span>Print Invoice</span>
-          </Button>
         </div>
       </div>
 

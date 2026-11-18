@@ -363,70 +363,85 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone, de
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[490px] p-0 overflow-hidden rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-2xl">
+      <DialogContent className="w-[calc(100vw-1.5rem)] sm:max-w-[490px] max-h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-2xl">
         <DialogHeader className="sr-only">
           <DialogTitle>Link Patient ABHA</DialogTitle>
           <DialogDescription>Ayushman Bharat Health Account Registration</DialogDescription>
         </DialogHeader>
 
         {/* Top Header Bar with Government ABDM Emblem */}
-        <div className="p-4 px-5 border-b border-slate-100 dark:border-zinc-800/80 bg-slate-50/70 dark:bg-zinc-900/50 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+        <div className="p-3.5 px-4 sm:p-4 sm:px-5 pr-14 sm:pr-14 border-b border-slate-100 dark:border-zinc-800/80 bg-slate-50/70 dark:bg-zinc-900/50 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
             {/* Ayushman Bharat Circular Emblem */}
-            <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-xs shadow-2xs">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-xs shadow-2xs shrink-0">
               <ShieldCheck className="h-4 w-4" />
             </div>
-            <div>
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white leading-none">
+            <div className="min-w-0">
+              <h3 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white leading-none truncate">
                 Link Patient ABHA
               </h3>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-[9.5px] sm:text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
                 Ayushman Bharat Digital Mission (ABDM)
               </p>
             </div>
           </div>
+        </div>
 
-          {/* Stepper Dots (1 -> 2 / 2B -> 3) */}
-          {(() => {
-            const stepNum = step === 1 ? 1 : (step === 2 || step === "2B") ? 2 : 3;
-            return (
-              <div className="flex items-center gap-1.5">
+        {/* Stepper Progress Bar (Centered & Dedicated) */}
+        {(() => {
+          const stepNum = step === 1 ? 1 : (step === 2 || step === "2B") ? 2 : 3;
+          return (
+            <div className="px-4 py-2 sm:py-2.5 bg-slate-100/60 dark:bg-zinc-900/60 border-b border-slate-200/60 dark:border-zinc-800/60 flex items-center justify-center shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-xs select-none">
                 <div
-                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                  className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold transition-all ${
                     stepNum >= 1
-                      ? "bg-blue-600 text-white"
+                      ? "bg-blue-600 text-white shadow-2xs"
                       : "bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-slate-400"
                   }`}
                 >
                   1
                 </div>
-                <div className={`w-3 h-0.5 ${stepNum >= 2 ? "bg-blue-600" : "bg-slate-200 dark:bg-zinc-800"}`} />
+                <span className={`text-[10px] sm:text-[11px] font-semibold ${stepNum >= 1 ? "text-blue-700 dark:text-blue-300 font-bold" : "text-muted-foreground"}`}>
+                  Identity
+                </span>
+
+                <div className={`w-3.5 sm:w-8 h-0.5 transition-all ${stepNum >= 2 ? "bg-blue-600" : "bg-slate-200 dark:bg-zinc-800"}`} />
+
                 <div
-                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                  className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold transition-all ${
                     stepNum >= 2
-                      ? "bg-blue-600 text-white"
+                      ? "bg-blue-600 text-white shadow-2xs"
                       : "bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-slate-400"
                   }`}
                 >
                   {step === "2B" ? "2B" : "2"}
                 </div>
-                <div className={`w-3 h-0.5 ${stepNum >= 3 ? "bg-blue-600" : "bg-slate-200 dark:bg-zinc-800"}`} />
+                <span className={`text-[10px] sm:text-[11px] font-semibold ${stepNum >= 2 ? "text-blue-700 dark:text-blue-300 font-bold" : "text-muted-foreground"}`}>
+                  OTP
+                </span>
+
+                <div className={`w-3.5 sm:w-8 h-0.5 transition-all ${stepNum >= 3 ? "bg-blue-600" : "bg-slate-200 dark:bg-zinc-800"}`} />
+
                 <div
-                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                  className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold transition-all ${
                     step === 3
-                      ? "bg-emerald-600 text-white"
+                      ? "bg-emerald-600 text-white shadow-2xs"
                       : "bg-slate-200 text-slate-600 dark:bg-zinc-800 dark:text-slate-400"
                   }`}
                 >
                   ✓
                 </div>
+                <span className={`text-[10px] sm:text-[11px] font-semibold ${step === 3 ? "text-emerald-700 dark:text-emerald-300 font-bold" : "text-muted-foreground"}`}>
+                  Linked
+                </span>
               </div>
-            );
-          })()}
-        </div>
+            </div>
+          );
+        })()}
 
         {/* Modal Body */}
-        <div className="p-5 space-y-4">
+        <div className="p-4 sm:p-5 space-y-3.5 sm:space-y-4 overflow-y-auto flex-1">
           {/* =========================================================================
               STEP 1: AADHAAR INPUT & AUTH SELECTOR
           ========================================================================= */}
@@ -483,7 +498,7 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone, de
                     <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block text-center">
                       12-Digit Aadhaar Number
                     </label>
-                    <div className="flex items-center justify-center gap-2.5">
+                    <div className="flex items-center justify-center gap-1.5 sm:gap-2.5">
                       <input
                         ref={input1Ref}
                         type="text"
@@ -492,7 +507,7 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone, de
                         value={part1}
                         onChange={(e) => handlePartChange(e.target.value, setPart1, input2Ref)}
                         placeholder="XXXX"
-                        className="w-24 h-11 text-center font-mono font-bold text-base tracking-widest rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        className="w-20 sm:w-24 h-10 sm:h-11 text-center font-mono font-bold text-sm sm:text-base tracking-widest rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
                       />
                       <span className="text-slate-400 font-bold">-</span>
                       <input
@@ -503,7 +518,7 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone, de
                         value={part2}
                         onChange={(e) => handlePartChange(e.target.value, setPart2, input3Ref)}
                         placeholder="XXXX"
-                        className="w-24 h-11 text-center font-mono font-bold text-base tracking-widest rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        className="w-20 sm:w-24 h-10 sm:h-11 text-center font-mono font-bold text-sm sm:text-base tracking-widest rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
                       />
                       <span className="text-slate-400 font-bold">-</span>
                       <input
@@ -514,7 +529,7 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone, de
                         value={part3}
                         onChange={(e) => handlePartChange(e.target.value, setPart3)}
                         placeholder="XXXX"
-                        className="w-24 h-11 text-center font-mono font-bold text-base tracking-widest rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        className="w-20 sm:w-24 h-10 sm:h-11 text-center font-mono font-bold text-sm sm:text-base tracking-widest rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
                       />
                     </div>
                     <p className="text-[10.5px] text-slate-400 text-center">
@@ -665,7 +680,7 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone, de
               </div>
 
               {/* 6 Digit OTP Inputs */}
-              <div className="flex items-center justify-center gap-2 py-2">
+              <div className="flex items-center justify-center gap-1.5 sm:gap-2 py-1.5 sm:py-2">
                 {otp.map((digit, idx) => (
                   <input
                     key={idx}
@@ -678,7 +693,7 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone, de
                     value={digit}
                     onChange={(e) => handleOtpChange(idx, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                    className="w-11 h-12 text-center font-mono font-bold text-lg rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
+                    className="w-9 sm:w-11 h-11 sm:h-12 text-center font-mono font-bold text-base sm:text-lg rounded-lg sm:rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all shadow-2xs"
                   />
                 ))}
               </div>
@@ -778,7 +793,7 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone, de
               </div>
 
               {/* 6 Digit NHA OTP Inputs */}
-              <div className="flex items-center justify-center gap-2 py-2">
+              <div className="flex items-center justify-center gap-1.5 sm:gap-2 py-1.5 sm:py-2">
                 {nhaOtp.map((digit, idx) => (
                   <input
                     key={idx}
@@ -791,7 +806,7 @@ export function AbhaLinkModal({ open, onOpenChange, onVerified, defaultPhone, de
                     value={digit}
                     onChange={(e) => handleNhaOtpChange(idx, e.target.value)}
                     onKeyDown={(e) => handleNhaOtpKeyDown(idx, e)}
-                    className="w-11 h-12 text-center font-mono font-bold text-lg rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-zinc-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all shadow-2xs"
+                    className="w-9 sm:w-11 h-11 sm:h-12 text-center font-mono font-bold text-base sm:text-lg rounded-lg sm:rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-zinc-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all shadow-2xs"
                   />
                 ))}
               </div>
