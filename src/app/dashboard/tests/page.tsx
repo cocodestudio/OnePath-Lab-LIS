@@ -1658,9 +1658,9 @@ export default function TestMasterPage() {
                             </button>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 font-semibold text-foreground">
+                        <td className="notranslate py-3.5 px-4 font-semibold text-foreground" translate="no">
                           <div className="flex items-center gap-2">
-                            <span>{test.name}</span>
+                            <span className="notranslate" translate="no">{test.name}</span>
                             {hasInterp && (
                               <button
                                 type="button"
@@ -1677,7 +1677,7 @@ export default function TestMasterPage() {
                             )}
                           </div>
                         </td>
-                        <td className="py-3.5 px-4 font-mono font-bold text-primary">
+                        <td className="notranslate py-3.5 px-4 font-mono font-bold text-primary" translate="no">
                           {test.testCode || "—"}
                         </td>
                         <td className="py-3.5 px-4">
@@ -1732,8 +1732,8 @@ export default function TestMasterPage() {
                                     {test.subTests!.map((sub, sIdx) => (
                                       <div key={sIdx} className="p-2.5 rounded-md border border-border/60 bg-background text-xs space-y-1">
                                         <div className="flex items-center justify-between">
-                                          <span className="font-bold text-foreground">{sub.name}</span>
-                                          <span className="font-mono text-[10px] text-muted-foreground">{sub.unit || "No Unit"}</span>
+                                          <span className="notranslate font-bold text-foreground" translate="no">{sub.name}</span>
+                                          <span className="notranslate font-mono text-[10px] text-muted-foreground" translate="no">{sub.unit || "No Unit"}</span>
                                         </div>
                                         <div className="text-[11px] text-muted-foreground">
                                           {sub.rangeType === "text" ? (
@@ -1804,7 +1804,7 @@ export default function TestMasterPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-0.5 flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-sm text-foreground break-words">{test.name}</span>
+                        <span className="notranslate font-bold text-sm text-foreground break-words" translate="no">{test.name}</span>
                         {hasInterp && (
                           <button
                             type="button"
@@ -1820,7 +1820,7 @@ export default function TestMasterPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2 flex-wrap pt-0.5">
-                        <span className="font-mono text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">
+                        <span className="notranslate font-mono text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded" translate="no">
                           {test.testCode || "—"}
                         </span>
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-muted border border-border/80 text-foreground">
@@ -1890,8 +1890,8 @@ export default function TestMasterPage() {
                               {test.subTests!.map((sub, sIdx) => (
                                 <div key={sIdx} className="p-2 rounded border border-border/60 bg-background text-xs space-y-0.5">
                                   <div className="flex items-center justify-between">
-                                    <span className="font-semibold text-foreground">{sub.name}</span>
-                                    <span className="font-mono text-[10px] text-muted-foreground">{sub.unit || "No Unit"}</span>
+                                    <span className="notranslate font-semibold text-foreground" translate="no">{sub.name}</span>
+                                    <span className="notranslate font-mono text-[10px] text-muted-foreground" translate="no">{sub.unit || "No Unit"}</span>
                                   </div>
                                   <div className="text-[11px] text-muted-foreground">
                                     {sub.rangeType === "text" ? (
@@ -2049,7 +2049,7 @@ export default function TestMasterPage() {
 
               <div className="min-w-0">
                 <DialogTitle className="font-display text-sm sm:text-base font-bold text-foreground flex items-center gap-1.5 sm:gap-2 truncate">
-                  <span className="truncate">{editingTest ? `Edit Test: ${editingTest.name}` : "Create Diagnostic Test Panel"}</span>
+                  <span className="notranslate truncate" translate="no">{editingTest ? `Edit Test: ${editingTest.name}` : "Create Diagnostic Test Panel"}</span>
                   <span className="px-1.5 sm:px-2 py-0.5 rounded bg-primary/10 text-primary text-[10px] sm:text-[11px] font-mono font-bold shrink-0">
                     {testCode || "NEW"}
                   </span>

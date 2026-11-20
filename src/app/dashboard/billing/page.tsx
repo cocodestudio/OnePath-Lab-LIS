@@ -2069,7 +2069,7 @@ export default function BillingPage() {
                             return (
                               <div key={t.id} className="pt-2 first:pt-0 flex items-center justify-between text-xs py-1.5 px-2 hover:bg-card rounded-lg transition-colors">
                                 <div>
-                                  <span className="font-bold text-foreground">{t.name}</span>
+                                  <span className="notranslate font-bold text-foreground" translate="no">{t.name}</span>
                                   <span className="text-[10px] text-muted-foreground ml-2">({t.category || "General"})</span>
                                 </div>
                                 <div className="flex items-center gap-3">
@@ -2112,7 +2112,7 @@ export default function BillingPage() {
                               #{tIdx + 1}
                             </span>
                             <div>
-                              <p className="font-bold text-foreground text-[12.5px]">{test.name}</p>
+                              <p className="notranslate font-bold text-foreground text-[12.5px]" translate="no">{test.name}</p>
                               <p className="text-[10px] text-muted-foreground font-medium">{test.category || "Pathology"}</p>
                             </div>
                           </div>

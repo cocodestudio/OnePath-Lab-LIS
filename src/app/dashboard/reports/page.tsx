@@ -1586,8 +1586,9 @@ export default function ReportsListPage() {
                               onMouseLeave={handleScheduleClosePopover}
                             >
                               <span
-                                className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-muted/70 text-foreground border border-border/50 max-w-[130px] truncate hover:border-primary/50 transition-colors"
+                                className="notranslate inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium bg-muted/70 text-foreground border border-border/50 max-w-[130px] truncate hover:border-primary/50 transition-colors"
                                 title={resultsList[0].name}
+                                translate="no"
                               >
                                 {resultsList[0].name}
                               </span>
@@ -2009,7 +2010,7 @@ export default function ReportsListPage() {
                     }`}
                 >
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isAbn ? "bg-destructive animate-pulse" : "bg-emerald-500"}`} />
-                  <span className="truncate max-w-[240px]" title={name}>
+                  <span className="notranslate truncate max-w-[240px]" title={name} translate="no">
                     {name}
                   </span>
                   {t.category && (

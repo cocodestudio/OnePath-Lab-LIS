@@ -15,8 +15,9 @@ import {
   Clock, Check, ExternalLink, ShieldCheck, Search, ArrowLeft,
   ArrowRight, Users, FileText, Receipt, X, Loader2, Command, Trash2,
   Copy, Building2, FlaskConical, PlusCircle, Coins, IndianRupee, Mail as MailIcon,
-  Sparkles, Gift, User as UserIcon, Lock
+  Sparkles, Gift, User as UserIcon, Lock, Globe
 } from "lucide-react";
+import { changeLanguage } from "@/components/google-translator";
 import { getStoredUser, logout, fetchFromLaravel } from "@/lib/api-client";
 import { isSubscriptionExpired } from "@/lib/subscription";
 import { formatPatientListDisplayName } from "@/lib/patient-title-helper";
@@ -98,12 +99,27 @@ export default function Navbar() {
   const [copiedLabId, setCopiedLabId] = useState(false);
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [currentLanguage, setCurrentLanguage] = useState<string>("en");
+
+  useEffect(() => {
+    try {
+      const savedLang = localStorage.getItem("onepath_user_language");
+      if (savedLang) {
+        setCurrentLanguage(savedLang);
+      }
+    } catch { }
+  }, []);
+
+  const handleLanguageChange = (newLang: string) => {
+    setCurrentLanguage(newLang);
+    changeLanguage(newLang);
+  };
 
   // Warm-up prefetch for /login so that logout redirect is ultra-fast
   useEffect(() => {
     try {
       router.prefetch("/login");
-    } catch {}
+    } catch { }
   }, [router]);
 
   useEffect(() => {
@@ -267,13 +283,13 @@ export default function Navbar() {
       const list = Array.isArray(res?.notifications)
         ? res.notifications
         : Array.isArray(res)
-        ? res
-        : [];
+          ? res
+          : [];
       const unread = typeof res?.unreadCount === "number"
         ? res.unreadCount
         : typeof res?.unread_count === "number"
-        ? res.unread_count
-        : list.filter((n: any) => !(n.isRead ?? n.is_read)).length;
+          ? res.unread_count
+          : list.filter((n: any) => !(n.isRead ?? n.is_read)).length;
 
       setNotifications(list);
       setUnreadCount(unread);
@@ -308,7 +324,7 @@ export default function Navbar() {
       markNotificationAsRead(notif.id);
     }
     setIsNotifOpen(false);
-    
+
     // Redirect to notification's link or support history
     const targetLink = notif.link || "/dashboard/support?view=history";
     router.push(targetLink);
@@ -379,10 +395,10 @@ export default function Navbar() {
 
   return (
     <header className="flex h-[68px] items-center justify-between pl-16 pr-3 sm:px-6 lg:px-8 glass border-b border-border/60 shrink-0 sticky top-0 z-30 gap-2 sm:gap-6">
-      
+
       {/* Left Navigation Buttons + Full Width Global Search Bar */}
       <div className="flex items-center gap-2.5 flex-1 max-w-2xl min-w-0" ref={searchContainerRef}>
-        
+
         {/* Smart History Back & Forward Buttons */}
         <div className="hidden sm:flex items-center gap-1 bg-card/80 p-1 rounded-xl border border-border/80 shadow-xs shrink-0">
           <button
@@ -427,7 +443,7 @@ export default function Navbar() {
                     setSearchQuery("");
                     try {
                       sessionStorage.setItem(`patient_detail_cache_${topP.id}`, JSON.stringify(topP));
-                    } catch (_) {}
+                    } catch (_) { }
                     router.push(`/dashboard/patients/${topP.id}`);
                   } else if (searchQuery.trim()) {
                     setIsSearchOpen(false);
@@ -465,7 +481,7 @@ export default function Navbar() {
           {/* Search Dropdown Results Popover */}
           {isSearchOpen && searchQuery.trim().length > 0 && (
             <div className="fixed inset-x-2 sm:absolute sm:inset-x-0 sm:left-0 sm:right-0 top-[72px] sm:top-12 bg-card border border-border/90 rounded-2xl shadow-2xl overflow-hidden z-50 animate-scale-in max-h-[70vh] sm:max-h-[440px] overflow-y-auto">
-              
+
               {isSearching ? (
                 <div className="py-10 flex flex-col items-center justify-center text-muted-foreground gap-2">
                   <Loader2 className="h-5 w-5 animate-spin text-primary" />
@@ -479,7 +495,7 @@ export default function Navbar() {
                 </div>
               ) : (
                 <div className="p-2 space-y-3">
-                  
+
                   {/* Patients Only Section */}
                   {searchResults.patients.length > 0 && (
                     <div className="space-y-1">
@@ -515,7 +531,7 @@ export default function Navbar() {
                                 setSearchQuery("");
                                 try {
                                   sessionStorage.setItem(`patient_detail_cache_${p.id}`, JSON.stringify(p));
-                                } catch (_) {}
+                                } catch (_) { }
                               }}
                               className="block p-2.5 sm:p-3 hover:bg-muted/70 transition-colors cursor-pointer text-left group"
                             >
@@ -582,7 +598,7 @@ export default function Navbar() {
 
       {/* Right Controls: Help Dropdown, Notification Bell, Profile */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        
+
         {/* Subscription Expired Alert Pill */}
         {isLocked && (
           <Link
@@ -594,7 +610,7 @@ export default function Navbar() {
             <span className="sm:hidden">Activate</span>
           </Link>
         )}
-        
+
         {/* Help & Support Button with Direct Action Redirection */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -611,7 +627,7 @@ export default function Navbar() {
             <DropdownMenuLabel className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2.5 py-1">
               Helpdesk & Assistance
             </DropdownMenuLabel>
-            
+
             <DropdownMenuItem asChild>
               <Link href="/dashboard/support?view=hub" className="flex items-center gap-2 text-xs font-semibold py-2 px-2.5 rounded-xl cursor-pointer">
                 <LifeBuoy className="h-4 w-4 text-primary" />
@@ -708,9 +724,8 @@ export default function Navbar() {
                     <div
                       key={notif.id}
                       onClick={() => handleNotificationClick(notif)}
-                      className={`p-3.5 flex items-start gap-3 transition-colors cursor-pointer group ${
-                        isRead ? "opacity-75 hover:bg-muted/30" : "bg-primary/5 hover:bg-primary/10"
-                      }`}
+                      className={`p-3.5 flex items-start gap-3 transition-colors cursor-pointer group ${isRead ? "opacity-75 hover:bg-muted/30" : "bg-primary/5 hover:bg-primary/10"
+                        }`}
                     >
                       <div className="h-8 w-8 rounded-lg bg-background border border-border/80 flex items-center justify-center shrink-0 shadow-xs group-hover:border-primary/40 transition-colors">
                         {getNotifIcon(notif.type)}
@@ -791,7 +806,7 @@ export default function Navbar() {
           if (open) {
             try {
               router.prefetch("/login");
-            } catch {}
+            } catch { }
           }
         }}>
           <DropdownMenuTrigger className="flex items-center gap-2 rounded-xl pl-1 pr-2 py-1 outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50 cursor-pointer">
@@ -859,10 +874,10 @@ export default function Navbar() {
                   {isB2B
                     ? "Today's B2B Sale :"
                     : isCollectionCenter
-                    ? "Today's Collection :"
-                    : isReceptionist
-                    ? "Today's Counter :"
-                    : "My today's total :"}
+                      ? "Today's Collection :"
+                      : isReceptionist
+                        ? "Today's Counter :"
+                        : "My today's total :"}
                 </span>
               </div>
               <div>
@@ -894,6 +909,62 @@ export default function Navbar() {
                 </DropdownMenuItem>
               )}
 
+              {/* Language Selector */}
+              <div
+                className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-foreground hover:bg-muted/60 transition-colors"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-2.5 font-medium shrink-0">
+                  <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span>Language</span>
+                </div>
+                <select
+                  value={currentLanguage}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-xs bg-muted/50 hover:bg-muted font-medium text-foreground border border-border/70 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-primary cursor-pointer transition-colors max-w-[130px] truncate"
+                  title="Select display language"
+                  aria-label="Select display language"
+                >
+                  <option value="en">English (Default)</option>
+                  <optgroup label="Indian Languages">
+                    <option value="hi">हिन्दी (Hindi)</option>
+                    <option value="bn">বাংলা (Bengali)</option>
+                    <option value="ur">اردو (Urdu)</option>
+                    <option value="mr">मराठी (Marathi)</option>
+                    <option value="te">తెలుగు (Telugu)</option>
+                    <option value="ta">தமிழ் (Tamil)</option>
+                    <option value="gu">ગુજરાતી (Gujarati)</option>
+                    <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
+                    <option value="kn">ಕನ್ನಡ (Kannada)</option>
+                    <option value="ml">മലയാളം (Malayalam)</option>
+                    <option value="or">ଓଡ଼ିଆ (Odia)</option>
+                    <option value="as">অসমীয়া (Assamese)</option>
+                  </optgroup>
+                  <optgroup label="International">
+                    <option value="ar">العربية (Arabic)</option>
+                    <option value="fr">Français (French)</option>
+                    <option value="es">Español (Spanish)</option>
+                    <option value="ru">Русский (Russian)</option>
+                    <option value="de">Deutsch (German)</option>
+                    <option value="pt">Português (Portuguese)</option>
+                    <option value="zh-CN">中文 (Chinese)</option>
+                    <option value="ja">日本語 (Japanese)</option>
+                    <option value="ko">한국어 (Korean)</option>
+                    <option value="tr">Türkçe (Turkish)</option>
+                    <option value="it">Italiano (Italian)</option>
+                    <option value="fa">فارسی (Persian)</option>
+                    <option value="id">Bahasa Indonesia</option>
+                    <option value="vi">Tiếng Việt</option>
+                    <option value="th">ไทย (Thai)</option>
+                    <option value="nl">Nederlands (Dutch)</option>
+                    <option value="pl">Polski (Polish)</option>
+                  </optgroup>
+                </select>
+              </div>
+
               <DropdownMenuItem asChild>
                 <Link
                   href="/dashboard/support"
@@ -915,11 +986,10 @@ export default function Navbar() {
                   setIsLoggingOut(true);
                   logout();
                 }}
-                className={`relative overflow-hidden flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer select-none ${
-                  isLoggingOut
+                className={`relative overflow-hidden flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer select-none ${isLoggingOut
                     ? "logout-btn-shimmer text-destructive pointer-events-none shadow-xs"
                     : "text-destructive hover:bg-destructive/10"
-                }`}
+                  }`}
               >
                 {isLoggingOut ? (
                   <>

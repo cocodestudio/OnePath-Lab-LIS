@@ -521,9 +521,9 @@ export default function PackagesPage() {
                             className="mt-0.5 rounded border-border text-primary focus:ring-primary h-4 w-4 shrink-0 cursor-pointer"
                           />
                           <div className="min-w-0">
-                            <p className="font-bold text-foreground truncate">{t.name}</p>
+                            <p className="notranslate font-bold text-foreground truncate" translate="no">{t.name}</p>
                             <p className="text-[10px] text-muted-foreground truncate">{t.category || "Pathology"}</p>
-                            <span className="font-mono text-[9.5px] text-primary/80 font-semibold">{code}</span>
+                            <span className="notranslate font-mono text-[9.5px] text-primary/80 font-semibold" translate="no">{code}</span>
                           </div>
                         </div>
                         <span className="font-mono font-bold text-foreground text-xs shrink-0">
@@ -655,7 +655,7 @@ export default function PackagesPage() {
                       </div>
 
                       {/* Package Name & Description */}
-                      <h3 className="font-bold text-foreground text-sm leading-snug">{pkg.name}</h3>
+                      <h3 className="notranslate font-bold text-foreground text-sm leading-snug" translate="no">{pkg.name}</h3>
                       {pkg.description && (
                         <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                           {pkg.description}
@@ -696,7 +696,8 @@ export default function PackagesPage() {
                         {(pkg.tests || []).slice(0, 3).map((t, idx) => (
                           <span
                             key={idx}
-                            className="text-[9.5px] font-medium bg-muted text-foreground/85 px-2 py-0.5 rounded truncate max-w-[130px]"
+                            className="notranslate text-[9.5px] font-medium bg-muted text-foreground/85 px-2 py-0.5 rounded truncate max-w-[130px]"
+                            translate="no"
                           >
                             {t.name}
                           </span>
@@ -765,7 +766,7 @@ export default function PackagesPage() {
 
                       {/* Name & Desc */}
                       <td className="py-4 px-4">
-                        <p className="font-bold text-foreground text-sm">{pkg.name}</p>
+                        <p className="notranslate font-bold text-foreground text-sm" translate="no">{pkg.name}</p>
                         {pkg.description && (
                           <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{pkg.description}</p>
                         )}
@@ -775,7 +776,7 @@ export default function PackagesPage() {
                       <td className="py-4 px-4 max-w-xs">
                         <div className="flex flex-wrap gap-1">
                           {(pkg.tests || []).slice(0, 3).map((t, idx) => (
-                            <span key={idx} className="text-[10px] font-semibold bg-muted px-2 py-0.5 rounded text-foreground truncate max-w-[140px]">
+                            <span key={idx} className="notranslate text-[10px] font-semibold bg-muted px-2 py-0.5 rounded text-foreground truncate max-w-[140px]" translate="no">
                               {t.name}
                             </span>
                           ))}

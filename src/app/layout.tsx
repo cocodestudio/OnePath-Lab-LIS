@@ -15,6 +15,7 @@ import { ToastProvider } from "@/components/ui/toast";
 import { TopProgressBar } from "@/components/top-progress-bar";
 import { SmoothScrolling } from "@/components/smooth-scrolling";
 import { NetworkStatusBanner } from "@/components/network-status-banner";
+import { GoogleTranslator } from "@/components/google-translator";
 
 const geist = localFont({
   src: "./fonts/GeistVF.woff",
@@ -167,6 +168,23 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              // Prevent Google Translate DOM reconciliation crashes in React (removeChild / insertBefore)
+              if (typeof Node !== 'undefined' && Node.prototype) {
+                var origRemoveChild = Node.prototype.removeChild;
+                Node.prototype.removeChild = function(child) {
+                  if (child.parentNode !== this) {
+                    return child;
+                  }
+                  return origRemoveChild.apply(this, arguments);
+                };
+                var origInsertBefore = Node.prototype.insertBefore;
+                Node.prototype.insertBefore = function(newNode, referenceNode) {
+                  if (referenceNode && referenceNode.parentNode !== this) {
+                    return newNode;
+                  }
+                  return origInsertBefore.apply(this, arguments);
+                };
+              }
               window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__pwaInstallPrompt=e;});
               if(typeof window!=='undefined'&&(location.hostname==='localhost'||location.hostname==='127.0.0.1')&&'serviceWorker' in navigator){
                 navigator.serviceWorker.getRegistrations().then(function(regs){for(var i=0;i<regs.length;i++){regs[i].unregister();}}).catch(function(){});
@@ -185,6 +203,7 @@ export default function RootLayout({
       >
         <NetworkStatusBanner />
         <TopProgressBar />
+        <GoogleTranslator />
         <ThemeProvider defaultTheme="light" storageKey="onepath-theme">
           <ToastProvider>
             <SmoothScrolling>

@@ -715,8 +715,9 @@ export default function WorksheetPage() {
                           {displayedTests.map((tn, tIdx) => (
                             <span
                               key={tIdx}
-                              className="text-[10px] sm:text-[10.5px] font-semibold bg-muted/90 text-foreground px-1.5 sm:px-2 py-0.5 rounded border border-border/70 whitespace-nowrap max-w-[90px] sm:max-w-none truncate"
+                              className="notranslate text-[10px] sm:text-[10.5px] font-semibold bg-muted/90 text-foreground px-1.5 sm:px-2 py-0.5 rounded border border-border/70 whitespace-nowrap max-w-[90px] sm:max-w-none truncate"
                               title={tn}
+                              translate="no"
                             >
                               {getShortTestName(tn)}
                             </span>

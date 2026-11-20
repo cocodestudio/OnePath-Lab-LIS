@@ -342,7 +342,8 @@ export function ClinicalResultDropdown({
               setIsOpen(!isOpen);
             }
           }}
-          className={`w-full h-9 text-xs font-semibold rounded-xl border transition-all outline-none ${
+          translate="no"
+          className={`notranslate w-full h-9 text-xs font-semibold rounded-xl border transition-all outline-none ${
             activeColorSwatch ? "pl-8 pr-14" : "pl-3 pr-14"
           } ${
             isOpen
@@ -409,14 +410,15 @@ export function ClinicalResultDropdown({
               transform: coords.openUp ? "translateY(-100%)" : "none",
               zIndex: 99999,
             }}
-            className="rounded-2xl bg-card/98 backdrop-blur-xl border border-border/90 shadow-2xl overflow-hidden animate-scale-in"
+            translate="no"
+            className="notranslate rounded-2xl bg-card/98 backdrop-blur-xl border border-border/90 shadow-2xl overflow-hidden animate-scale-in"
           >
             {/* Popover Header: Parameter Name & Options Count */}
             <div className="p-2.5 border-b border-border/60 bg-muted/40 space-y-1.5">
               <div className="flex items-center justify-between text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-1">
                 <span className="truncate flex items-center gap-1.5">
                   {isColorParam && <Pipette className="h-3 w-3 text-amber-500 shrink-0" />}
-                  <span className="truncate">{paramName}</span>
+                  <span className="notranslate truncate" translate="no">{paramName}</span>
                 </span>
                 <span className="text-[10px] text-muted-foreground font-mono shrink-0 ml-2">
                   {filteredOptions.length} items
@@ -488,7 +490,7 @@ export function ClinicalResultDropdown({
                             style={{ backgroundColor: swatch }}
                           />
                         )}
-                        <span className="truncate">{opt}</span>
+                        <span className="notranslate truncate" translate="no">{opt}</span>
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0 ml-2">

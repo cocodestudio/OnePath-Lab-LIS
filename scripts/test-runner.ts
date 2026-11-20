@@ -8056,6 +8056,94 @@ assert(
   "[ABHA MODAL MOBILE RESPONSIVE] ABHA link modal features dedicated centered stepper bar with close button clearance and responsive inputs"
 );
 
+// ==============================================================================
+// 100. Multi-Language Engine, Silent Google Translate & Profile Native Picker
+// ==============================================================================
+console.log("\n▶ MODULE 100: Multi-Language Engine, Silent Google Translate & Profile Native Picker");
+
+const googleTranslatorSrc100 = fs.readFileSync(
+  path.join(__dirname, "../src/components/google-translator.tsx"),
+  "utf-8"
+);
+const rootLayoutSrc100 = fs.readFileSync(
+  path.join(__dirname, "../src/app/layout.tsx"),
+  "utf-8"
+);
+const globalsCssSrc100 = fs.readFileSync(
+  path.join(__dirname, "../src/app/globals.css"),
+  "utf-8"
+);
+const navbarSrc100 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/navbar.tsx"),
+  "utf-8"
+);
+
+// 100.1 GoogleTranslator component defines changeLanguage and mounts hidden element
+assert(
+  googleTranslatorSrc100.includes("function changeLanguage(newLang: string)") &&
+  googleTranslatorSrc100.includes("localStorage.setItem(\"onepath_user_language\", lang)") &&
+  googleTranslatorSrc100.includes("googtrans=") &&
+  googleTranslatorSrc100.includes("id=\"google_translate_element\""),
+  "[GOOGLE TRANSLATOR ENGINE] GoogleTranslator component exports changeLanguage helper, manages googtrans cookie and mounts hidden element"
+);
+
+// 100.2 Root layout renders GoogleTranslator globally
+assert(
+  rootLayoutSrc100.includes("<GoogleTranslator />") &&
+  rootLayoutSrc100.includes("import { GoogleTranslator } from \"@/components/google-translator\""),
+  "[ROOT LAYOUT TRANSLATOR INTEGRATION] RootLayout mounts GoogleTranslator globally across the entire application"
+);
+
+// 100.3 Silent CSS styling suppresses Google Translate top banner, iframe, and body offset
+assert(
+  globalsCssSrc100.includes(".goog-te-banner-frame") &&
+  globalsCssSrc100.includes("body > .skiptranslate") &&
+  globalsCssSrc100.includes("top: 0px !important") &&
+  globalsCssSrc100.includes("#google_translate_element"),
+  "[SILENT TRANSLATE CSS] Global CSS eliminates Google banners, frames, and body push down, preserving pixel-perfect UX"
+);
+
+// 100.4 Profile dropdown in navbar contains native select with all languages and Globe icon
+assert(
+  navbarSrc100.includes("Globe className=\"h-4 w-4 text-muted-foreground shrink-0\"") &&
+  navbarSrc100.includes("<select") &&
+  navbarSrc100.includes("handleLanguageChange(e.target.value)") &&
+  navbarSrc100.includes("English (Default)") &&
+  navbarSrc100.includes("हिन्दी (Hindi)") &&
+  navbarSrc100.includes("اردو (Urdu)"),
+  "[NAVBAR PROFILE LANGUAGE PICKER] Profile dropdown incorporates native browser select menu supporting comprehensive Indian and international languages"
+);
+
+const testsPageSrc100 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/tests/page.tsx"),
+  "utf-8"
+);
+const editReportSrc100 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/reports/[id]/edit/page.tsx"),
+  "utf-8"
+);
+const registerSrc100 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/patients/register/page.tsx"),
+  "utf-8"
+);
+
+// 100.5 React DOM Reconciliation Safety Guard
+assert(
+  rootLayoutSrc100.includes("Node.prototype.removeChild") &&
+  rootLayoutSrc100.includes("Node.prototype.insertBefore") &&
+  googleTranslatorSrc100.includes("Node.prototype.removeChild"),
+  "[REACT TRANSLATE HYDRATION SAFETY] Root layout and translator implement Node removeChild and insertBefore safety guards against unhandled DOM reconciliation errors"
+);
+
+// 100.6 Medical Test Names & Parameters Preserved in Pristine English (notranslate & translate=\"no\")
+assert(
+  testsPageSrc100.includes('className="notranslate" translate="no">{test.name}</span>') &&
+  editReportSrc100.includes('translate="no">{group.mainTestName}</h3>') &&
+  editReportSrc100.includes('{item.test.name}') &&
+  registerSrc100.includes('className="notranslate text-xs font-bold text-foreground truncate" translate="no">{test.name}</p>'),
+  "[CLINICAL NOMENCLATURE PRESERVATION] Test catalog, enter results, and investigation register strictly enforce notranslate and translate=no on medical test and parameter names"
+);
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 

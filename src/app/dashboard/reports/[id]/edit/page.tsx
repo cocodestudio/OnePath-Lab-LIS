@@ -2168,7 +2168,7 @@ function ResultEntryContent() {
                     <div className="bg-muted/30 px-6 py-3.5 border-b border-border/60 flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
                         <FlaskConical className="h-[18px] w-[18px] text-primary shrink-0" />
-                        <h3 className="text-sm font-bold tracking-wider uppercase text-foreground">{group.mainTestName}</h3>
+                        <h3 className="notranslate text-sm font-bold tracking-wider uppercase text-foreground" translate="no">{group.mainTestName}</h3>
                       </div>
                       <div className="flex items-center space-x-4">
                         {group.hasInterpretation && (
@@ -2248,7 +2248,7 @@ function ResultEntryContent() {
                                 {/* Subgroup Header Banner (e.g. Differential Leukocyte Count) */}
                                 {section.sectionName !== "_default" && section.sectionName !== "Report Template" && (
                                   <tr className="bg-muted/20 border-b border-border/40">
-                                    <td colSpan={hasAnyNumeric ? 5 : 2} className="px-6 py-2 text-xs font-bold text-primary uppercase tracking-wider bg-primary/5">
+                                    <td colSpan={hasAnyNumeric ? 5 : 2} className="notranslate px-6 py-2 text-xs font-bold text-primary uppercase tracking-wider bg-primary/5" translate="no">
                                       {section.sectionName}
                                     </td>
                                   </tr>
@@ -2359,10 +2359,10 @@ function ResultEntryContent() {
                                       <tr className="border-b border-border/30 last:border-0 hover:bg-muted/15 transition-colors">
 
                                         {/* Parameter Name */}
-                                        <td className="px-6 py-3.5">
+                                        <td className="notranslate px-6 py-3.5" translate="no">
                                           <div className="flex items-center gap-2">
-                                            <span className={`text-sm ${section.sectionName !== "_default" ? "pl-3" : ""} ${abnormal || isForcedAbnormal ? "font-bold text-foreground" : "font-medium text-foreground"
-                                              }`}>
+                                            <span className={`notranslate text-sm ${section.sectionName !== "_default" ? "pl-3" : ""} ${abnormal || isForcedAbnormal ? "font-bold text-foreground" : "font-medium text-foreground"
+                                              }`} translate="no">
                                               {item.test.name}
                                             </span>
                                             {isCalculated && (
@@ -2477,12 +2477,12 @@ function ResultEntryContent() {
                                             </td>
 
                                             {/* Unit */}
-                                            <td className="px-6 py-3.5 text-xs font-mono text-muted-foreground">{paramUnit}</td>
+                                            <td className="notranslate px-6 py-3.5 text-xs font-mono text-muted-foreground" translate="no">{paramUnit}</td>
 
                                             {/* Reference Range with Edit ✏️ Icon */}
-                                            <td className="px-6 py-3.5 text-xs font-mono text-muted-foreground">
+                                            <td className="notranslate px-6 py-3.5 text-xs font-mono text-muted-foreground" translate="no">
                                               <div className="flex items-center gap-2">
-                                                <span className="font-semibold text-foreground/80">{refRangeText}</span>
+                                                <span className="notranslate font-semibold text-foreground/80" translate="no">{refRangeText}</span>
                                                 <button
                                                   type="button"
                                                   onClick={() => handleOpenEditRange(item.test)}
@@ -2495,7 +2495,7 @@ function ResultEntryContent() {
                                             </td>
 
                                             {/* Flag Badge */}
-                                            <td className="px-6 py-3.5 text-right">
+                                            <td className="notranslate px-6 py-3.5 text-right" translate="no">
                                               {isRapidCard ? (
                                                 <span className="text-xs text-muted-foreground/40 font-mono">—</span>
                                               ) : abnormal ? (
@@ -3283,7 +3283,7 @@ function ResultEntryContent() {
                                 onClick={(e) => e.stopPropagation()}
                               />
                               <div className="min-w-0">
-                                <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
+                                <p className="notranslate text-xs font-bold text-foreground truncate" translate="no">{test.name}</p>
                                 <p className="text-[10px] text-muted-foreground mt-0.5">
                                   {paramCount > 0 ? `${paramCount} Parameters Included` : `Ref ${test.refRangeMin ?? "N/A"}–${test.refRangeMax ?? "N/A"}`}
                                 </p>
@@ -3323,7 +3323,7 @@ function ResultEntryContent() {
                                         onCheckedChange={() => { if (!selected) handleToggleTest(sub.id); }}
                                         onClick={(e) => e.stopPropagation()}
                                       />
-                                      <span className="font-medium text-foreground">{sub.name}</span>
+                                      <span className="notranslate font-medium text-foreground" translate="no">{sub.name}</span>
                                     </div>
                                   </div>
                                 );

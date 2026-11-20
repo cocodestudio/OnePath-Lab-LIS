@@ -5071,8 +5071,9 @@ function RegisterPatientPage() {
                             {tube.tests.map(test => (
                               <span
                                 key={test.id}
-                                className="px-2 py-0.5 rounded-md bg-muted/80 text-foreground text-[11px] font-medium border border-border/50 truncate max-w-[200px]"
+                                className="notranslate px-2 py-0.5 rounded-md bg-muted/80 text-foreground text-[11px] font-medium border border-border/50 truncate max-w-[200px]"
                                 title={test.name}
+                                translate="no"
                               >
                                 {test.name}
                               </span>
@@ -5190,7 +5191,7 @@ function RegisterPatientPage() {
                         return (
                           <li key={`inhouse-${test.id}`} className="py-2.5 flex justify-between items-center gap-2 group">
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
+                              <p className="notranslate text-xs font-bold text-foreground truncate" translate="no">{test.name}</p>
                               <p className="text-[10px] text-muted-foreground">{test.category || "Pathology"}</p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
@@ -5222,7 +5223,7 @@ function RegisterPatientPage() {
                         <li key={`outsource-${test.id || idx}`} className="py-2.5 flex justify-between items-center gap-2 bg-purple-500/5 px-2 -mx-2 rounded-lg">
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
+                              <p className="notranslate text-xs font-bold text-foreground truncate" translate="no">{test.name}</p>
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 shrink-0">
                                 Outsource
                               </span>
@@ -6032,7 +6033,7 @@ function RegisterPatientPage() {
                               );
                             })()}
                           </div>
-                          <h4 className="font-bold text-foreground text-sm">{pkg.name}</h4>
+                          <h4 className="notranslate font-bold text-foreground text-sm" translate="no">{pkg.name}</h4>
                           {pkg.description && (
                             <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
                               {pkg.description}
@@ -6052,7 +6053,7 @@ function RegisterPatientPage() {
                           </div>
                           <div className="flex flex-wrap gap-1 mt-2">
                             {(pkg.tests || []).slice(0, 3).map((t: any, idx: number) => (
-                              <span key={idx} className="text-[9.5px] font-medium bg-muted/60 px-1.5 py-0.5 rounded text-foreground/80 truncate max-w-[110px]">
+                              <span key={idx} className="notranslate text-[9.5px] font-medium bg-muted/60 px-1.5 py-0.5 rounded text-foreground/80 truncate max-w-[110px]" translate="no">
                                 {t.name}
                               </span>
                             ))}
@@ -6209,7 +6210,7 @@ function RegisterPatientPage() {
                                 />
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5">
-                                    <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
+                                    <p className="notranslate text-xs font-bold text-foreground truncate" translate="no">{test.name}</p>
                                     {isOutsourced && (
                                       <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 shrink-0">
                                         Outsource
@@ -6318,7 +6319,7 @@ function RegisterPatientPage() {
                               />
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
-                                  <p className="text-xs font-bold text-foreground truncate">{test.name}</p>
+                                  <p className="notranslate text-xs font-bold text-foreground truncate" translate="no">{test.name}</p>
                                   {selected && (
                                     <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">
                                       Selected
@@ -6374,7 +6375,7 @@ function RegisterPatientPage() {
                                   >
                                     <div className="flex items-center gap-2">
                                       <Checkbox checked={subSelected} disabled={selected} onCheckedChange={() => { if (!selected) handleToggleTest(sub.id) }} onClick={(e) => e.stopPropagation()} />
-                                      <span className="font-medium">{sub.name}</span>
+                                      <span className="notranslate font-medium" translate="no">{sub.name}</span>
                                     </div>
                                   </div>
                                 );
