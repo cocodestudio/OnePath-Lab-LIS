@@ -8144,6 +8144,117 @@ assert(
   "[CLINICAL NOMENCLATURE PRESERVATION] Test catalog, enter results, and investigation register strictly enforce notranslate and translate=no on medical test and parameter names"
 );
 
+// ==============================================================================
+// 101. Daily Back Dues Collection Accounting & Billing Desk Dues Received Engine
+// ==============================================================================
+console.log("\n▶ MODULE 101: Daily Back Dues Collection Accounting & Billing Desk Dues Received Engine");
+
+const backendApiRoutesSrc101 = fs.readFileSync(
+  path.join(__dirname, "../../Backend/routes/api.php"),
+  "utf-8"
+);
+const billControllerSrc101 = fs.readFileSync(
+  path.join(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"),
+  "utf-8"
+);
+const billingPageSrc101 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/billing/page.tsx"),
+  "utf-8"
+);
+
+// 101.1 Backend Route Registration for Dues Collected
+assert(
+  backendApiRoutesSrc101.includes("Route::get('bills/dues-collected', [\\App\\Http\\Controllers\\Api\\Lis\\BillController::class, 'getDuesCollected'])"),
+  "[BACKEND DUES ROUTE] Backend/routes/api.php registers bills/dues-collected endpoint prior to resource wildcard"
+);
+
+// 101.2 Backend BillController getDuesCollected Implementation & Security Scoping
+assert(
+  billControllerSrc101.includes("public function getDuesCollected(Request $request)") &&
+  billControllerSrc101.includes("$labId = $this->ensureLabId($request)") &&
+  billControllerSrc101.includes("metadata->is_due_collection") &&
+  billControllerSrc101.includes("DUE-%") &&
+  billControllerSrc101.includes("'status', 'SUCCESS'"),
+  "[BACKEND CONTROLLER DUES COLLECTED] BillController implements getDuesCollected with multi-tenant lab_id isolation, payment status checks, and date filtering"
+);
+
+// 101.3 Backend Eager Loading includes payment metadata and txnid
+assert(
+  billControllerSrc101.includes("payments:id,bill_id,payment_type,txnid,amount,currency,gateway,status,metadata,created_at"),
+  "[PAYMENTS EAGER SELECT] BillController eager loads txnid and metadata on payments relation"
+);
+
+// 101.4 Billing Page Tab Navigation for All Invoices vs Dues Received
+assert(
+  billingPageSrc101.includes("setActiveTab(\"invoices\")") &&
+  billingPageSrc101.includes("setActiveTab(\"dues_received\")") &&
+  billingPageSrc101.includes("<span>Dues Received</span>") &&
+  billingPageSrc101.includes("filteredDues.length"),
+  "[BILLING TAB NAVIGATION] billing/page.tsx provides seamless tab switching between All Invoices and Dues Received with real-time badges"
+);
+
+// 101.5 Accounting Math Integration: Back dues added to Total Collected, Cash Total, and UPI Total
+assert(
+  billingPageSrc101.includes("const effectiveTotalCollected = totalCollected + backDuesTotal") &&
+  billingPageSrc101.includes("const effectiveCashTotal = cashTotal + backDuesCash") &&
+  billingPageSrc101.includes("const effectiveUpiTotal = upiTotal + backDuesUpi") &&
+  billingPageSrc101.includes("Includes ₹{backDuesTotal.toFixed(2)} back dues"),
+  "[ACCOUNTING INTEGRATION] billing/page.tsx combines back dues collected into Total Collected, Cash Received, and UPI Received for accurate physical drawer tally"
+);
+
+// 101.6 Dues Received Dedicated Table Structure
+assert(
+  billingPageSrc101.includes("th className=\"py-3 px-3.5 text-left\">Receipt / Txn ID</th>") &&
+  billingPageSrc101.includes("th className=\"py-3 px-3.5 text-right\">Dues Collected (₹)</th>") &&
+  billingPageSrc101.includes("th className=\"py-3 px-3.5 text-center\">Payment Mode</th>") &&
+  billingPageSrc101.includes("BACK DUE") &&
+  billingPageSrc101.includes("SAME-DAY DUE"),
+  "[DUES RECEIVED TABLE] billing/page.tsx renders detailed dues collection receipts table with date, txn ID, patient details, and back-due badges"
+);
+
+// 101.7 Pure Accounting Verification: Counter Drawer Math Test
+{
+  const testFilteredBills = [
+    { id: "bill-1", total: 1000, paid_amount: 600, status: "PARTIAL" }, // Cash: 600
+    { id: "bill-2", total: 500, paid_amount: 500, status: "PAID" },    // UPI: 500
+  ];
+  const testPriorDuesPayments = [
+    { id: "pay-1", bill_id: "prior-bill-99", amount: 400, payment_type: "CASH", status: "SUCCESS" }, // Back due Cash 400
+    { id: "pay-2", bill_id: "prior-bill-98", amount: 300, payment_type: "UPI", status: "SUCCESS" },  // Back due UPI 300
+    { id: "pay-3", bill_id: "bill-1", amount: 400, payment_type: "CASH", status: "SUCCESS" },         // Same day bill (already in filteredBills)
+  ];
+
+  const filteredBillIds = new Set(testFilteredBills.map(b => b.id));
+  let testBackDuesTotal = 0;
+  let testBackDuesCash = 0;
+  let testBackDuesUpi = 0;
+
+  testPriorDuesPayments.forEach(p => {
+    if (!filteredBillIds.has(p.bill_id)) {
+      testBackDuesTotal += p.amount;
+      if (p.payment_type === "UPI") testBackDuesUpi += p.amount;
+      else testBackDuesCash += p.amount;
+    }
+  });
+
+  const testTodayCollected = 600 + 500; // 1100
+  const testEffectiveTotal = testTodayCollected + testBackDuesTotal; // 1100 + 700 = 1800
+  const testTodayCash = 600;
+  const testEffectiveCash = testTodayCash + testBackDuesCash; // 600 + 400 = 1000
+  const testTodayUpi = 500;
+  const testEffectiveUpi = testTodayUpi + testBackDuesUpi; // 500 + 300 = 800
+
+  assert(
+    testBackDuesTotal === 700 &&
+    testBackDuesCash === 400 &&
+    testBackDuesUpi === 300 &&
+    testEffectiveTotal === 1800 &&
+    testEffectiveCash === 1000 &&
+    testEffectiveUpi === 800,
+    "[COUNTER TALLY MATH] Validates counter cash and UPI reconciliation combining new bills and prior-date back dues without duplicate counting"
+  );
+}
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 

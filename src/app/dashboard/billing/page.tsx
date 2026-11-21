@@ -8,7 +8,7 @@ import {
   Wallet, X, FileText, Printer, CheckCircle, Clock, AlertCircle, RefreshCw,
   Phone, Eye, Download, Sparkles, Plus, Trash2, PlusCircle, Check, Stethoscope,
   Building2, BadgeCheck, Boxes, MessageSquare, Banknote, QrCode,
-  ZoomIn, ZoomOut, RotateCcw, MoreVertical
+  ZoomIn, ZoomOut, RotateCcw, MoreVertical, IndianRupee
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -249,6 +249,26 @@ function formatBillDate(dStr: string | null | undefined): string {
   }
 }
 
+function formatDateTime(dStr: string | null | undefined): string {
+  try {
+    if (!dStr) return "—";
+    const d = new Date(dStr);
+    if (isNaN(d.getTime())) return dStr;
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const day = String(d.getDate()).padStart(2, "0");
+    const mon = months[d.getMonth()];
+    const yr = d.getFullYear();
+    let hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12 || 12;
+    const strHours = String(hours).padStart(2, "0");
+    return `${day} ${mon} ${yr}, ${strHours}:${minutes} ${ampm}`;
+  } catch {
+    return dStr || "—";
+  }
+}
+
 // Helper: Resolve Bill Invoice Number safely across custom_id, customId, or id
 function getBillInvoiceNo(bill: Bill | any | null | undefined): string {
   if (!bill) return "—";
@@ -395,6 +415,26 @@ export default function BillingPage() {
   const isB2B = currentUserRole === "B2B";
   const isCollectionCenter = currentUserRole === "COLLECTION_CENTER" || currentUserRole === "COLLECTION_CENTRE" || currentUser?.role === "COLLECTION_CENTER" || currentUser?.role === "COLLECTION_CENTRE";
 
+  // Dues Received / Back Dues Collection State
+  const [activeTab, setActiveTab] = useState<"invoices" | "dues_received">("invoices");
+  const [duesCollectedList, setDuesCollectedList] = useState<any[]>([]);
+  const [duesSummary, setDuesSummary] = useState<{
+    total_dues_collected: number;
+    cash_dues: number;
+    upi_dues: number;
+    other_dues: number;
+    count: number;
+  }>({
+    total_dues_collected: 0,
+    cash_dues: 0,
+    upi_dues: 0,
+    other_dues: 0,
+    count: 0,
+  });
+  const [isDuesLoading, setIsDuesLoading] = useState(false);
+  const [duesCurrentPage, setDuesCurrentPage] = useState<number>(1);
+  const duesRowsPerPage = 20;
+
   useEffect(() => {
     setIsMounted(true);
     const user = getStoredUser();
@@ -501,6 +541,56 @@ export default function BillingPage() {
       }
 
       const data = await fetchFromLaravel(`/bills?${params.toString()}`, { skipCache: isForce });
+
+      // In parallel, fetch dues collected for the active date / range
+      const duesParams = new URLSearchParams();
+      if (currentMode === "range") {
+        if (currentStart) duesParams.append("start_date", currentStart);
+        if (currentEnd) duesParams.append("end_date", currentEnd);
+      } else {
+        if (effectiveDate) duesParams.append("date", effectiveDate);
+      }
+      duesParams.append("limit", "250");
+
+      setIsDuesLoading(true);
+      fetchFromLaravel(`/bills/dues-collected?${duesParams.toString()}`, { skipCache: isForce })
+        .then((duesRes: any) => {
+          if (duesRes && (duesRes.status === "success" || Array.isArray(duesRes.data))) {
+            const list = Array.isArray(duesRes.data) ? duesRes.data : [];
+            setDuesCollectedList(list);
+            if (duesRes.summary) {
+              setDuesSummary({
+                total_dues_collected: Number(duesRes.summary.total_dues_collected || 0),
+                cash_dues: Number(duesRes.summary.cash_dues || 0),
+                upi_dues: Number(duesRes.summary.upi_dues || 0),
+                other_dues: Number(duesRes.summary.other_dues || 0),
+                count: Number(duesRes.summary.count || list.length),
+              });
+            } else {
+              let tot = 0, cSum = 0, uSum = 0;
+              list.forEach((p: any) => {
+                const amt = Number(p.amount || 0);
+                tot += amt;
+                const pMode = String(p.payment_type || p.paymentType || p.gateway || "").toUpperCase();
+                if (pMode === "UPI") uSum += amt;
+                else cSum += amt;
+              });
+              setDuesSummary({
+                total_dues_collected: tot,
+                cash_dues: cSum,
+                upi_dues: uSum,
+                other_dues: 0,
+                count: list.length,
+              });
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn("Dues collected fetch warning:", err);
+        })
+        .finally(() => {
+          setIsDuesLoading(false);
+        });
 
       if (currentMode === "single" && effectiveDate !== activeBillDateRef.current.filterDate) {
         return;
@@ -1146,8 +1236,101 @@ export default function BillingPage() {
     };
   }, [filteredBills, isB2B]);
 
-  const totalSplitSum = cashTotal + upiTotal;
-  const cashPct = totalSplitSum > 0 ? Math.round((cashTotal / totalSplitSum) * 100) : 50;
+  // Filter dues collected by search & source filters
+  const filteredDues = useMemo(() => {
+    return duesCollectedList.filter((p: any) => {
+      if (!p) return false;
+      const q = search.toLowerCase().trim();
+      const cleanQ = q.replace(/\D/g, "");
+
+      const txnid = String(p.txnid || "").toLowerCase();
+      const pat = p.bill?.patient || {};
+      const patName = formatPatientListDisplayName(pat.name, pat.designation);
+      const rawPatName = pat.name || "";
+      const patId = String(pat.custom_id || pat.customId || "");
+      const phone = String(pat.phone || "");
+      const cleanPhone = phone.replace(/\D/g, "");
+      const billId = String(p.bill?.custom_id || p.bill?.customId || "");
+
+      const matchesSearch = !q ||
+        txnid.includes(q) ||
+        patName.toLowerCase().includes(q) ||
+        rawPatName.toLowerCase().includes(q) ||
+        patId.toLowerCase().includes(q) ||
+        billId.toLowerCase().includes(q) ||
+        phone.includes(q) ||
+        (cleanQ.length >= 3 && cleanPhone.includes(cleanQ));
+
+      const matchesSource = (() => {
+        if (sourceFilter === "ALL") return true;
+        const pMeta = (pat.meta && typeof pat.meta === "object") ? pat.meta : {};
+        const creatorId = String(pat.created_by_id || pat.createdById || pMeta.created_by_id || pMeta.createdById || "");
+        const ccId = String(pMeta.collection_center_id || pMeta.collectionCenterId || "");
+        const b2bId = String(pMeta.b2b_user_id || pMeta.b2bUserId || "");
+        const role = String(pMeta.created_by_role || pMeta.createdByRole || "").toUpperCase();
+        const isCC = role === "COLLECTION_CENTER" || role === "COLLECTION_CENTRE" || Boolean(ccId);
+        const isReceptionist = role === "RECEPTIONIST";
+        const isMainLab = !isCC && !Boolean(b2bId) && !isReceptionist;
+
+        if (sourceFilter === "MAIN_LAB") return isMainLab;
+        if (sourceFilter === "ROLE_CC") return isCC;
+        if (sourceFilter === "ROLE_RECEPTIONIST") return isReceptionist;
+        if (sourceFilter.startsWith("USER_")) {
+          const targetUserId = sourceFilter.replace("USER_", "");
+          return creatorId === targetUserId || ccId === targetUserId || b2bId === targetUserId;
+        }
+        return true;
+      })();
+
+      return matchesSearch && matchesSource;
+    });
+  }, [duesCollectedList, search, sourceFilter]);
+
+  // Back Dues Calculation:
+  // Payments collected on the active date for bills generated on PRIOR dates (not part of today's filteredBills)
+  const { backDuesTotal, backDuesCash, backDuesUpi, backDuesCashCount, backDuesUpiCount } = useMemo(() => {
+    const filteredBillIds = new Set(filteredBills.map(b => String(b.id)));
+    let bTotal = 0;
+    let bCash = 0;
+    let bUpi = 0;
+    let bCashCount = 0;
+    let bUpiCount = 0;
+
+    filteredDues.forEach((p: any) => {
+      const billId = String(p.bill_id || p.billId || p.bill?.id || "");
+      // Only include back dues from bills not already counted in filteredBills
+      if (!filteredBillIds.has(billId)) {
+        const amt = Number(p.amount || 0);
+        bTotal += amt;
+        const mode = String(p.payment_type || p.paymentType || p.gateway || "").toUpperCase();
+        if (mode === "UPI") {
+          bUpi += amt;
+          bUpiCount++;
+        } else {
+          bCash += amt;
+          bCashCount++;
+        }
+      }
+    });
+
+    return {
+      backDuesTotal: bTotal,
+      backDuesCash: bCash,
+      backDuesUpi: bUpi,
+      backDuesCashCount: bCashCount,
+      backDuesUpiCount: bUpiCount,
+    };
+  }, [filteredDues, filteredBills]);
+
+  // Effective Daily Metrics (Combining today's invoices + today's collected back dues for exact counter cash tally)
+  const effectiveTotalCollected = totalCollected + backDuesTotal;
+  const effectiveCashTotal = cashTotal + backDuesCash;
+  const effectiveUpiTotal = upiTotal + backDuesUpi;
+  const effectiveCashCount = cashCount + backDuesCashCount;
+  const effectiveUpiCount = upiCount + backDuesUpiCount;
+
+  const totalSplitSum = effectiveCashTotal + effectiveUpiTotal;
+  const cashPct = totalSplitSum > 0 ? Math.round((effectiveCashTotal / totalSplitSum) * 100) : 50;
   const upiPct = totalSplitSum > 0 ? (100 - cashPct) : 50;
 
   const totalRows = filteredBills.length;
@@ -1156,8 +1339,16 @@ export default function BillingPage() {
   const indexOfFirstRow = indexOfLastRow - rowsPerPage;
   const currentRows = filteredBills.slice(indexOfFirstRow, indexOfLastRow);
 
+  // Pagination for Dues Received Table
+  const duesTotalRows = filteredDues.length;
+  const duesTotalPages = Math.max(1, Math.ceil(duesTotalRows / duesRowsPerPage));
+  const duesIndexOfLastRow = duesCurrentPage * duesRowsPerPage;
+  const duesIndexOfFirstRow = duesIndexOfLastRow - duesRowsPerPage;
+  const currentDuesRows = filteredDues.slice(duesIndexOfFirstRow, duesIndexOfLastRow);
+
   useEffect(() => {
     setCurrentPage(1);
+    setDuesCurrentPage(1);
   }, [search, statusFilter, filterDate]);
 
   const filteredAvailableTests = availableMainTests.filter(t => {
@@ -1255,8 +1446,16 @@ export default function BillingPage() {
               </div>
             ) : (
               <>
-                <p className="font-display text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{totalCollected.toFixed(2)}</p>
-                <p className="text-[11px] text-muted-foreground mt-1">{paidCount} fully paid accounts</p>
+                <p className="font-display text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">₹{effectiveTotalCollected.toFixed(2)}</p>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  {backDuesTotal > 0 ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                      Includes ₹{backDuesTotal.toFixed(2)} back dues
+                    </span>
+                  ) : (
+                    `${paidCount} fully paid accounts`
+                  )}
+                </p>
               </>
             )}
           </div>
@@ -1302,7 +1501,7 @@ export default function BillingPage() {
             ) : (
               <>
                 <p className="font-display text-2xl font-bold text-foreground font-mono">
-                  {totalInvoiced > 0 ? ((totalCollected / totalInvoiced) * 100).toFixed(1) : "100"}%
+                  {totalInvoiced > 0 ? ((effectiveTotalCollected / totalInvoiced) * 100).toFixed(1) : "100"}%
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-1">Settlement efficiency</p>
               </>
@@ -1329,6 +1528,18 @@ export default function BillingPage() {
               </p>
             </div>
           </div>
+          {duesSummary.total_dues_collected > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("dues_received")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/20 transition-all cursor-pointer w-fit"
+              title="Click to view all back dues collected on this date"
+            >
+              <IndianRupee className="h-3.5 w-3.5" />
+              <span>₹{duesSummary.total_dues_collected.toFixed(2)} Dues Received</span>
+              <span className="text-[10px] opacity-80">({duesSummary.count})</span>
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1340,9 +1551,14 @@ export default function BillingPage() {
               </div>
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Cash Received</span>
-                <p className="font-mono text-2xl font-black text-foreground">₹{cashTotal.toFixed(2)}</p>
+                <p className="font-mono text-2xl font-black text-foreground">₹{effectiveCashTotal.toFixed(2)}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  {cashCount} cash payments · {totalSplitSum > 0 ? cashPct : 0}% of settled total
+                  {effectiveCashCount} cash payments · {totalSplitSum > 0 ? cashPct : 0}% of settled total
+                  {backDuesCash > 0 && (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold block mt-0.5">
+                      (Includes ₹{backDuesCash.toFixed(2)} from back dues)
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -1359,9 +1575,14 @@ export default function BillingPage() {
               </div>
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">UPI Received</span>
-                <p className="font-mono text-2xl font-black text-foreground">₹{upiTotal.toFixed(2)}</p>
+                <p className="font-mono text-2xl font-black text-foreground">₹{effectiveUpiTotal.toFixed(2)}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  {upiCount} UPI / QR payments · {totalSplitSum > 0 ? upiPct : 0}% of settled total
+                  {effectiveUpiCount} UPI / QR payments · {totalSplitSum > 0 ? upiPct : 0}% of settled total
+                  {backDuesUpi > 0 && (
+                    <span className="text-blue-600 dark:text-blue-400 font-semibold block mt-0.5">
+                      (Includes ₹{backDuesUpi.toFixed(2)} from back dues)
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -1501,22 +1722,86 @@ export default function BillingPage() {
         </div>
       </div>
 
-      {/* Invoices List Table */}
+      {/* Table Section Tabs: All Invoices vs Dues Received */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border/80 w-fit">
+          <button
+            type="button"
+            onClick={() => setActiveTab("invoices")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "invoices"
+                ? "bg-card text-foreground shadow-xs border border-border/90"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+            }`}
+          >
+            <Receipt className="h-3.5 w-3.5 text-primary" />
+            <span>All Invoices</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary font-mono font-bold">
+              {filteredBills.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("dues_received")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeTab === "dues_received"
+                ? "bg-card text-foreground shadow-xs border border-border/90"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+            }`}
+          >
+            <IndianRupee className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>Dues Received</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+              filteredDues.length > 0
+                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                : "bg-muted text-muted-foreground"
+            }`}>
+              {filteredDues.length}{duesSummary.total_dues_collected > 0 ? ` · ₹${duesSummary.total_dues_collected.toFixed(0)}` : ""}
+            </span>
+          </button>
+        </div>
+
+        {activeTab === "dues_received" && (
+          <div className="flex flex-wrap items-center gap-3 text-xs bg-card/60 px-3.5 py-1.5 rounded-xl border border-border/70">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+              Dues Total:
+            </span>
+            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+              ₹{duesSummary.total_dues_collected.toFixed(2)}
+            </span>
+            <span className="text-muted-foreground/40">|</span>
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Banknote className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+              Cash: <strong className="text-foreground font-mono">₹{duesSummary.cash_dues.toFixed(2)}</strong>
+            </span>
+            <span className="text-muted-foreground/40">|</span>
+            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <QrCode className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+              UPI: <strong className="text-foreground font-mono">₹{duesSummary.upi_dues.toFixed(2)}</strong>
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Main Table Container */}
       <div className="w-full max-w-full bg-card border border-border/80 rounded-xl overflow-hidden shadow-sm relative">
         {/* Top Micro-Progress Bar for Date Switch / SWR Revalidation */}
-        {isFetching && (
+        {(isFetching || isDuesLoading) && (
           <div className="w-full h-1 bg-muted/60 overflow-hidden relative shrink-0">
             <div className="h-full bg-primary animate-pulse w-full origin-left" />
           </div>
         )}
-        {isFetching && bills.length > 0 && (
+        {((isFetching && bills.length > 0) || (isDuesLoading && duesCollectedList.length > 0)) && (
           <div className="absolute top-3 right-4 z-20 flex items-center gap-1.5 px-3 py-1 rounded-full bg-background/95 border border-primary/30 shadow-md backdrop-blur-md text-[11px] font-semibold text-primary animate-pulse pointer-events-none">
             <Loader2 className="h-3 w-3 animate-spin" />
-            <span>Updating bills…</span>
+            <span>Updating {activeTab === "dues_received" ? "dues receipts" : "bills"}…</span>
           </div>
         )}
 
-        <div className={`w-full max-w-full overflow-x-auto table-responsive-container transition-opacity duration-200 ${isFetching && bills.length > 0 ? "opacity-60 pointer-events-none" : ""}`}>
+        {/* Tab 1: Invoices List Table */}
+        {activeTab === "invoices" && (
+          <div className={`w-full max-w-full overflow-x-auto table-responsive-container transition-opacity duration-200 ${isFetching && bills.length > 0 ? "opacity-60 pointer-events-none" : ""}`}>
           <table className="w-full min-w-[890px] text-xs text-left border-collapse">
             <thead>
               <tr className="border-b border-border/80 bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
@@ -1760,9 +2045,203 @@ export default function BillingPage() {
             </tbody>
           </table>
         </div>
+        )}
+
+        {/* Tab 2: Dues Received Table */}
+        {activeTab === "dues_received" && (
+          <div className={`w-full max-w-full overflow-x-auto table-responsive-container transition-opacity duration-200 ${isDuesLoading ? "opacity-60 pointer-events-none" : ""}`}>
+            <table className="w-full min-w-[890px] text-xs text-left border-collapse">
+              <thead>
+                <tr className="border-b border-border/80 bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
+                  <th className="py-3 px-3.5 text-left">Date & Time</th>
+                  <th className="py-3 px-3.5 text-left">Receipt / Txn ID</th>
+                  <th className="py-3 px-3.5 text-left">Patient Details</th>
+                  <th className="py-3 px-3.5 text-left">Invoice Reference</th>
+                  <th className="py-3 px-3.5 text-right">Dues Collected (₹)</th>
+                  <th className="py-3 px-3.5 text-center">Payment Mode</th>
+                  <th className="py-3 px-3.5 text-left">Collected By</th>
+                  <th className="py-3 px-3.5 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {isDuesLoading && duesCollectedList.length === 0 ? (
+                  Array.from({ length: 5 }).map((_, idx) => (
+                    <tr key={idx} className="animate-fade-in">
+                      <td className="py-3 px-3.5 text-left align-middle"><div className="h-4 w-28 rounded shimmer-gradient" /></td>
+                      <td className="py-3 px-3.5 text-left align-middle"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
+                      <td className="py-3 px-3.5 text-left align-middle"><div className="h-4 w-32 rounded shimmer-gradient" /></td>
+                      <td className="py-3 px-3.5 text-left align-middle"><div className="h-4 w-24 rounded shimmer-gradient" /></td>
+                      <td className="py-3 px-3.5 text-right align-middle"><div className="h-4 w-16 rounded shimmer-gradient ml-auto" /></td>
+                      <td className="py-3 px-3.5 text-center align-middle"><div className="h-4 w-14 rounded shimmer-gradient mx-auto" /></td>
+                      <td className="py-3 px-3.5 text-left align-middle"><div className="h-4 w-20 rounded shimmer-gradient" /></td>
+                      <td className="py-3 px-3.5 text-center align-middle"><div className="h-4 w-16 rounded shimmer-gradient mx-auto" /></td>
+                    </tr>
+                  ))
+                ) : filteredDues.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-muted-foreground">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <div className="h-10 w-10 rounded-full bg-muted/60 flex items-center justify-center">
+                          <IndianRupee className="h-5 w-5 text-muted-foreground/60" />
+                        </div>
+                        <p className="text-xs font-semibold text-foreground">No dues received on this date</p>
+                        <p className="text-[11px] text-muted-foreground max-w-sm">
+                          Any outstanding due payments collected on this date will appear here and automatically tally into your daily Cash and UPI sales.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  currentDuesRows.map((payment: any) => {
+                    const payDate = formatDateTime(payment.created_at);
+                    const bill = payment.bill || {};
+                    const pat = bill.patient || {};
+                    const patientName = formatPatientListDisplayName(pat.name, pat.designation);
+                    const pid = pat.custom_id || pat.customId || "—";
+                    const billInvNo = bill.custom_id || bill.customId || (bill.id ? `OPL-INV-${String(bill.id).slice(0, 6).toUpperCase()}` : "—");
+                    const billDate = formatBillDate(bill.created_at);
+                    const billTotal = Number(bill.total || 0);
+                    const payAmount = Number(payment.amount || 0);
+                    const payMode = String(payment.payment_type || payment.paymentType || payment.gateway || "CASH").toUpperCase();
+                    const txnid = payment.txnid || `DUE-${String(payment.id || "").slice(-8).toUpperCase()}`;
+                    const staffName = payment.metadata?.collected_by || "Staff";
+                    const note = payment.metadata?.note;
+
+                    // Check if back due (bill created before payment date)
+                    const isBackDue = (() => {
+                      try {
+                        if (!bill.created_at || !payment.created_at) return true;
+                        const bD = new Date(bill.created_at).toDateString();
+                        const pD = new Date(payment.created_at).toDateString();
+                        return bD !== pD;
+                      } catch {
+                        return true;
+                      }
+                    })();
+
+                    return (
+                      <tr key={payment.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-3 px-3.5 text-left align-middle whitespace-nowrap">
+                          <div className="flex items-center gap-1.5 text-foreground font-medium">
+                            <Clock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span>{payDate}</span>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-3.5 text-left align-middle whitespace-nowrap">
+                          <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-muted/60 text-foreground border border-border/60">
+                            {txnid}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-3.5 text-left align-middle">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-foreground hover:text-primary transition-colors">
+                              {patientName}
+                            </span>
+                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                              {pat.age && pat.gender && <span>{pat.age}Y/{pat.gender.charAt(0).toUpperCase()}</span>}
+                              {pid !== "—" && <span className="font-mono">PID: {pid}</span>}
+                              {pat.phone && (
+                                <span className="flex items-center gap-0.5">
+                                  <Phone className="h-2.5 w-2.5" />
+                                  <span>{pat.phone}</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-3.5 text-left align-middle whitespace-nowrap">
+                          <div className="flex flex-col">
+                            <span className="font-mono font-bold text-primary">
+                              {billInvNo}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              Billed: {billDate} · ₹{billTotal.toFixed(2)}
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-3.5 text-right align-middle whitespace-nowrap">
+                          <div className="flex flex-col items-end">
+                            <span className="font-mono text-sm font-black text-emerald-600 dark:text-emerald-400">
+                              +₹{payAmount.toFixed(2)}
+                            </span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded mt-0.5 ${
+                              isBackDue
+                                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                                : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                            }`}>
+                              {isBackDue ? "BACK DUE" : "SAME-DAY DUE"}
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-3.5 text-center align-middle whitespace-nowrap">
+                          {payMode === "UPI" ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                              <QrCode className="h-3 w-3 shrink-0" />
+                              <span>UPI</span>
+                            </span>
+                          ) : payMode === "ONLINE" ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                              <span>Online</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              <Banknote className="h-3 w-3 shrink-0" />
+                              <span>Cash</span>
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-3.5 text-left align-middle">
+                          <div className="flex flex-col">
+                            <span className="font-medium text-foreground text-[11px]">{staffName}</span>
+                            {note && (
+                              <span className="text-[10px] text-muted-foreground truncate max-w-[140px]" title={note}>
+                                {note}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-3.5 text-center align-middle whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {bill && bill.id && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenInvoiceModal(bill)}
+                                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                                title="View / Print Invoice"
+                              >
+                                <Printer className="h-4 w-4" />
+                              </button>
+                            )}
+
+                            {payment.bill_id && (
+                              <Link
+                                href={`/dashboard/billing/dues/${payment.bill_id}`}
+                                className="p-1.5 rounded-lg hover:bg-muted text-emerald-600 dark:text-emerald-400 hover:text-foreground cursor-pointer transition-colors"
+                                title="Open Bill & Dues Ledger"
+                              >
+                                <Wallet className="h-4 w-4" />
+                              </Link>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Pagination Footer */}
-        {totalRows > rowsPerPage && (
+        {activeTab === "invoices" && totalRows > rowsPerPage && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-border/80 text-xs text-muted-foreground text-center sm:text-left">
             <span>
               Showing <strong>{indexOfFirstRow + 1}</strong> to <strong>{Math.min(indexOfLastRow, totalRows)}</strong> of <strong>{totalRows}</strong> invoices
@@ -1771,7 +2250,7 @@ export default function BillingPage() {
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="p-1.5 rounded-md border border-border/90 bg-card hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                className="p-1.5 rounded-md border border-border/90 bg-card hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -1781,7 +2260,34 @@ export default function BillingPage() {
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="p-1.5 rounded-md border border-border/90 bg-card hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                className="p-1.5 rounded-md border border-border/90 bg-card hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "dues_received" && duesTotalRows > duesRowsPerPage && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-border/80 text-xs text-muted-foreground text-center sm:text-left">
+            <span>
+              Showing <strong>{duesIndexOfFirstRow + 1}</strong> to <strong>{Math.min(duesIndexOfLastRow, duesTotalRows)}</strong> of <strong>{duesTotalRows}</strong> dues receipts
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setDuesCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={duesCurrentPage === 1}
+                className="p-1.5 rounded-md border border-border/90 bg-card hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="font-bold text-foreground px-2">
+                Page {duesCurrentPage} of {duesTotalPages}
+              </span>
+              <button
+                onClick={() => setDuesCurrentPage((p) => Math.min(duesTotalPages, p + 1))}
+                disabled={duesCurrentPage === duesTotalPages}
+                className="p-1.5 rounded-md border border-border/90 bg-card hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
