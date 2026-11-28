@@ -32,9 +32,7 @@ export function AcceptDueModal({ isOpen, onClose, bill, onSuccess }: AcceptDueMo
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const total = Number(bill?.total || 0);
-  const discount = Number(bill?.discount || 0);
-  const netTotal = Math.max(0, total - discount);
+  const netTotal = Number(bill?.total || 0);
   const paidAmount = Number(bill?.paid_amount ?? bill?.paidAmount ?? 0);
   const dueAmount = Math.max(0, netTotal - paidAmount);
 

@@ -1685,23 +1685,29 @@ function RegisterPatientPage() {
     setCollectedAtSelect(point);
     setCollectedBySelect(phlebo);
 
-    // Collection Date & Time: strictly preserve the original patient collection timestamp
-    const rawColl =
-      patientData.collection_date_time ||
-      patientData.collectionDateTime ||
-      patMeta?.collection_date_time ||
-      patMeta?.collectionDateTime ||
-      patientData.collection_date ||
-      patientData.collectionDate ||
-      patientData.collected_at_time ||
-      patientData.created_at ||
-      patientData.createdAt ||
-      patientData.date ||
-      (Array.isArray(patientData.reports) && (patientData.reports[0]?.meta?.collection_date_time || patientData.reports[0]?.meta?.collectionDateTime || patientData.reports[0]?.created_at || patientData.reports[0]?.createdAt)) ||
-      (Array.isArray(patientData.bills) && (patientData.bills[0]?.created_at || patientData.bills[0]?.createdAt)) ||
-      "";
+    // Collection Date & Time: strictly preserve original timestamp ONLY when editing an existing record.
+    // On new registration autofill from previous patient suggestions, always keep current today date & time.
+    const rawColl = isNewIntake
+      ? ""
+      : (
+          patientData.collection_date_time ||
+          patientData.collectionDateTime ||
+          patMeta?.collection_date_time ||
+          patMeta?.collectionDateTime ||
+          patientData.collection_date ||
+          patientData.collectionDate ||
+          patientData.collected_at_time ||
+          patientData.created_at ||
+          patientData.createdAt ||
+          patientData.date ||
+          (Array.isArray(patientData.reports) && (patientData.reports[0]?.meta?.collection_date_time || patientData.reports[0]?.meta?.collectionDateTime || patientData.reports[0]?.created_at || patientData.reports[0]?.createdAt)) ||
+          (Array.isArray(patientData.bills) && (patientData.bills[0]?.created_at || patientData.bills[0]?.createdAt)) ||
+          ""
+        );
 
-    if (rawColl) {
+    if (isNewIntake) {
+      setCollectionDateTime(formatToDateTimeLocal(new Date()));
+    } else if (rawColl) {
       setCollectionDateTime(formatToDateTimeLocal(rawColl));
     }
 
@@ -3312,7 +3318,12 @@ function RegisterPatientPage() {
           prependToApiCache("/reports", bookingRes.report, "lis_cached_reports");
         }
         if (bookingRes?.bill) {
-          prependToApiCache("/bills", bookingRes.bill, "lis_cached_bills");
+          const hydratedBill = {
+            ...bookingRes.bill,
+            patient: bookingRes.bill.patient || freshPat,
+            reports: bookingRes.bill.reports || (bookingRes?.report ? [bookingRes.report] : []),
+          };
+          prependToApiCache("/bills", hydratedBill, "lis_cached_bills");
         }
         markApiCacheStale("/patients");
         markApiCacheStale("/reports");

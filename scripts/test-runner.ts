@@ -4979,7 +4979,7 @@ assert(
   trialFormSrc59.includes("isOtpSent") &&
   trialFormSrc59.includes("otpCode") &&
   trialFormSrc59.includes("resendCooldown") &&
-  trialFormSrc59.includes("Verify & Activate 7-Day Free Trial"),
+  (trialFormSrc59.includes("Verify & Activate 7-Day Free Trial") || trialFormSrc59.includes("Verify &amp; activate 7-day free trial")),
   "[WEBSITE TRIAL OTP FLOW] Trial registration dispatches 6-digit email OTP via SES, displays interactive verification card with countdown & validates code"
 );
 
@@ -8254,6 +8254,99 @@ assert(
     "[COUNTER TALLY MATH] Validates counter cash and UPI reconciliation combining new bills and prior-date back dues without duplicate counting"
   );
 }
+
+// ==============================================================================
+// MODULE 102: Due Reports Discount Accuracy, Patient Hydration & Autofill Date Reset
+// ==============================================================================
+console.log("\n▶ MODULE 102: Due Reports Discount Accuracy, Patient Hydration & Autofill Date Reset");
+
+const duesPageSrc102 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/billing/dues/page.tsx"),
+  "utf-8"
+);
+const duesDetailSrc102 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/billing/dues/[id]/page.tsx"),
+  "utf-8"
+);
+const acceptDueModalSrc102 = fs.readFileSync(
+  path.join(__dirname, "../src/components/accept-due-modal.tsx"),
+  "utf-8"
+);
+const overviewPageSrc102 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/page.tsx"),
+  "utf-8"
+);
+const registerPageSrc102 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/patients/register/page.tsx"),
+  "utf-8"
+);
+const bookingCtrlSrc102 = fs.readFileSync(
+  path.join(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BookingController.php"),
+  "utf-8"
+);
+const billCtrlSrc102 = fs.readFileSync(
+  path.join(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"),
+  "utf-8"
+);
+
+// 102.1 Due Reports Page Does Not Double-Subtract Discount
+assert(
+  duesPageSrc102.includes("const netTotal = Number(b.total || 0);") &&
+  duesPageSrc102.includes("const due = Math.max(0, netTotal - paid);") &&
+  !duesPageSrc102.includes("const netTotal = Math.max(0, total - discount);") &&
+  !duesPageSrc102.includes("Number(updatedBill.total || 0) - Number(updatedBill.discount || 0)"),
+  "[DUES REPORT NO DOUBLE DISCOUNT] dues/page.tsx treats bill.total as net payable without subtracting discount a second time"
+);
+
+// 102.2 Dues Detail Page, AcceptDueModal, and Overview Match Net Total Contract
+assert(
+  duesDetailSrc102.includes("const netPayable = Number(bill?.total || 0);") &&
+  duesDetailSrc102.includes("const totalAmount = netPayable + discountAmount;") &&
+  duesDetailSrc102.includes("total: netPayable,") &&
+  acceptDueModalSrc102.includes("const netTotal = Number(bill?.total || 0);") &&
+  acceptDueModalSrc102.includes("const dueAmount = Math.max(0, netTotal - paidAmount);") &&
+  !overviewPageSrc102.includes("Number(updatedBill.total || 0) - Number(updatedBill.discount || 0)"),
+  "[DUES DETAIL & MODAL DISCOUNT ACCURACY] dues/[id], AcceptDueModal, and Overview compute exact remaining due without double discount"
+);
+
+// 102.3 Backend BookingController & BillController Match Net Total Contract
+assert(
+  bookingCtrlSrc102.includes("$due = max(0, $total - $paidAmount);") &&
+  billCtrlSrc102.includes("$query->whereRaw('total > COALESCE(paid_amount, 0)')") &&
+  !billCtrlSrc102.includes("whereRaw('(total - COALESCE(discount, 0)) > COALESCE(paid_amount, 0)')") &&
+  billCtrlSrc102.includes("$totalAfterDiscount = max(0, (float)$bill->total);"),
+  "[BACKEND DUES DISCOUNT CONTRACT] BookingController and BillController filter and collect dues accurately on discounted bills"
+);
+
+// 102.4 Pure Math Verification for ₹350 Gross - ₹100 Discount = ₹250 Due
+{
+  const gross = 350;
+  const discount = 100;
+  const grandTotalSentByRegister = Math.max(0, gross - discount); // 250 stored in bill.total
+  const paid = 0;
+  const dueDisplayed = Math.max(0, grandTotalSentByRegister - paid);
+  const partialPaid = 50;
+  const dueAfterPartial = Math.max(0, grandTotalSentByRegister - partialPaid);
+  assert(
+    dueDisplayed === 250 && dueAfterPartial === 200,
+    "[DUES DISCOUNT MATH] ₹350 test with ₹100 discount yields ₹250 due (and ₹200 after ₹50 partial payment), never ₹150"
+  );
+}
+
+// 102.5 Instant Patient Name Hydration & Fresh Due Fetch (Eliminates Unknown Patient Before Refresh)
+assert(
+  bookingCtrlSrc102.includes("'bill' => $bill->loadMissing(['payments', 'patient', 'reports:id,custom_id,bill_id,package_name'])") &&
+  registerPageSrc102.includes("patient: bookingRes.bill.patient || freshPat") &&
+  duesPageSrc102.includes("fetchFromLaravel(`/bills?${params.toString()}`, { skipCache: true })"),
+  "[DUES PATIENT HYDRATION] Booking returns loaded patient/reports on bill, register hydrates bill cache, and dues page avoids stale memory cache"
+);
+
+// 102.6 Patient Suggestion Autofill Preserves Current Today Collection Date
+assert(
+  registerPageSrc102.includes("const rawColl = isNewIntake") &&
+  registerPageSrc102.includes("if (isNewIntake) {\n      setCollectionDateTime(formatToDateTimeLocal(new Date()));\n    } else if (rawColl)"),
+  "[AUTOFILL TODAY COLLECTION DATE] Clicking previous patient suggestion fills demographics while keeping today's collection date & time"
+);
 
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");

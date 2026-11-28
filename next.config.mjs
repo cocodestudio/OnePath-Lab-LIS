@@ -1,7 +1,22 @@
+import { BlaWebpackPlugin } from "bla-agents/bundler";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+  },
+  webpack(config, { dev, isServer }) {
+    if (!dev && !isServer) {
+      config.plugins.push(
+        new BlaWebpackPlugin({
+          intensity: "balanced",
+          honeySourceMap: true,
+          seed: "onepath-lab-lis-shield",
+          exclude: /(?:^|\/)(?:webpack|framework|polyfills)-[^/]+\.js$/i,
+        })
+      );
+    }
+    return config;
   },
   async redirects() {
     return [

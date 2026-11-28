@@ -530,7 +530,7 @@ export default function DashboardOverviewPage() {
 
   const handleDueCollectedSuccess = (updatedBill: any) => {
     setDueBills((prev) => {
-      const net = Math.max(0, Number(updatedBill.total || 0) - Number(updatedBill.discount || 0));
+      const net = Math.max(0, Number(updatedBill.total || 0));
       const paid = Number(updatedBill.paid_amount ?? updatedBill.paidAmount ?? 0);
       const remainingDue = Math.max(0, net - paid);
       let nextList: any[];
@@ -983,9 +983,7 @@ export default function DashboardOverviewPage() {
                 <tbody className="divide-y divide-border/40">
                   {dueBills.length > 0 ? (
                     dueBills.map((b) => {
-                      const total = Number(b.total || 0);
-                      const discount = Number(b.discount || 0);
-                      const net = Math.max(0, total - discount);
+                      const net = Number(b.total || 0);
                       const paid = Number(b.paid_amount ?? b.paidAmount ?? 0);
                       const due = Math.max(0, net - paid);
                       const regNo =

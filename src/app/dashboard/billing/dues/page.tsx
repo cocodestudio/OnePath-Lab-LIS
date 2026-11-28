@@ -168,7 +168,7 @@ export default function DueReportsPage() {
       if (activeEnd) params.append("end_date", activeEnd);
       if (searchQuery.trim()) params.append("search", searchQuery.trim());
 
-      const res = await fetchFromLaravel(`/bills?${params.toString()}`, { skipCache: force });
+      const res = await fetchFromLaravel(`/bills?${params.toString()}`, { skipCache: true });
       const rawList = Array.isArray(res) ? res : (res?.data || []);
       setBills(rawList);
 
@@ -332,27 +332,30 @@ export default function DueReportsPage() {
   }, []);
 
   // Compute Dues Data
+  // Note: bill.total in the OnePath LIS data model is ALREADY the net billed total after discount (Gross - Discount).
   const processedBills = useMemo(() => {
     return bills.map((b) => {
-      const total = Number(b.total || 0);
+      const netTotal = Number(b.total || 0);
       const discount = Number(b.discount || 0);
-      const netTotal = Math.max(0, total - discount);
+      const grossTotal = netTotal + discount;
       const paid = Number(b.paid_amount ?? b.paidAmount ?? 0);
       const due = Math.max(0, netTotal - paid);
       const regNo =
         b.patient?.custom_id ||
         b.patient?.customId ||
+        b.patient_custom_id ||
         b.custom_id ||
         b.customId ||
         (b.id ? String(b.id).slice(0, 8) : "—");
-      const patientName = b.patient?.name || b.patientName || "Unknown Patient";
-      const refDoctor = b.patient?.ref_doctor || b.patient?.refDoctor || "Dr. Self";
+      const patientName = b.patient?.name || b.patientName || b.patient_name || "Unknown Patient";
+      const refDoctor = b.patient?.ref_doctor || b.patient?.refDoctor || b.refDoctor || "Dr. Self";
       const isOutsource = Boolean(b.patient?.meta?.is_outsource || b.patient?.meta?.has_outsource);
       const partnerLab = b.patient?.meta?.outsource_partner_lab || b.patient?.meta?.partner_lab || "";
 
       return {
         ...b,
-        calcTotal: total,
+        calcTotal: netTotal,
+        calcGrossTotal: grossTotal,
         calcDiscount: discount,
         calcNetTotal: netTotal,
         calcPaid: paid,
@@ -398,7 +401,7 @@ export default function DueReportsPage() {
   };
 
   const handleDueCollectedSuccess = (updatedBill: any) => {
-    const net = Math.max(0, Number(updatedBill.total || 0) - Number(updatedBill.discount || 0));
+    const net = Math.max(0, Number(updatedBill.total || 0));
     const paid = Number(updatedBill.paid_amount ?? updatedBill.paidAmount ?? 0);
     const remainingDue = Math.max(0, net - paid);
 

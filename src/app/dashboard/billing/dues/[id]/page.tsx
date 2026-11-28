@@ -145,10 +145,10 @@ export default function DueBillDetailPage() {
     }
   };
 
-  // Calculations
-  const totalAmount = Number(bill?.total || 0);
+  // Calculations (bill.total in LIS is already net payable after discount)
+  const netPayable = Number(bill?.total || 0);
   const discountAmount = Number(bill?.discount || 0);
-  const netPayable = Math.max(0, totalAmount - discountAmount);
+  const totalAmount = netPayable + discountAmount;
   const paidAmount = Number(bill?.paid_amount ?? bill?.paidAmount ?? 0);
   const dueAmount = Math.max(0, netPayable - paidAmount);
 
@@ -217,7 +217,7 @@ export default function DueBillDetailPage() {
       id: bill.id,
       customId: invoiceNo,
       createdAt: bill.created_at || bill.createdAt,
-      total: totalAmount,
+      total: netPayable,
       discount: discountAmount,
       paidAmount: paidAmount,
       status: status,
