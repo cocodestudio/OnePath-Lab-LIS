@@ -61,6 +61,7 @@ export function MonthlyExpensesRegister({
   const [labInfo, setLabInfo] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
+  const requestIdRef = useRef(0);
 
   // User & Role detection
   const [currentUser, setCurrentUser] = useState<any>(() => getStoredUser());
@@ -108,12 +109,16 @@ export function MonthlyExpensesRegister({
 
   // Load monthly register from backend
   const fetchRegister = async (m = selectedMonth, y = selectedYear, sc = selectedScope) => {
+    const reqId = ++requestIdRef.current;
     try {
       setLoading(true);
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata";
       const res = await fetchFromLaravel(
-        `/finance/monthly-expenses?year=${y}&month=${m}&scope=${encodeURIComponent(sc)}`,
+        `/finance/monthly-expenses?year=${y}&month=${m}&scope=${encodeURIComponent(sc)}&timezone=${encodeURIComponent(tz)}`,
         { skipCache: true, timeoutMs: 25000 }
       );
+
+      if (reqId !== requestIdRef.current) return;
 
       if (res && (res.status === "success" || Array.isArray(res.rows))) {
         setData(res);
@@ -122,10 +127,13 @@ export function MonthlyExpensesRegister({
         toast.error("Failed to load", res?.message || "Could not fetch monthly expenses.");
       }
     } catch (err: any) {
+      if (reqId !== requestIdRef.current) return;
       console.error("Error fetching monthly expenses register:", err);
       toast.error("Error", "Failed to retrieve monthly financial register from server.");
     } finally {
-      setLoading(false);
+      if (reqId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -135,6 +143,16 @@ export function MonthlyExpensesRegister({
       if (res) setLabInfo(res);
     }).catch(() => {});
   }, []);
+
+  const handleMonthChange = (val: number) => {
+    setSelectedMonth(val);
+    fetchRegister(val, selectedYear, selectedScope);
+  };
+
+  const handleYearChange = (val: number) => {
+    setSelectedYear(val);
+    fetchRegister(selectedMonth, val, selectedScope);
+  };
 
   const handleScopeChange = (val: string) => {
     setSelectedScope(val);
@@ -146,6 +164,56 @@ export function MonthlyExpensesRegister({
     fetchRegister(selectedMonth, selectedYear, selectedScope);
   };
 
+  // Show only dates that have recorded Cash, UPI, or Dues activity; Total = Cash + UPI
+  const salesRows = useMemo(() => {
+    const rawRows = Array.isArray(data?.rows) ? data.rows : [];
+    return rawRows
+      .filter((r: any) => {
+        const cash = Number(r.cash || 0);
+        const upi = Number(r.upi || 0);
+        const dues = Number(r.dues || 0);
+        return cash > 0 || upi > 0 || dues > 0;
+      })
+      .map((r: any) => {
+        const cash = Math.round(Number(r.cash || 0) * 100) / 100;
+        const upi = Math.round(Number(r.upi || 0) * 100) / 100;
+        const dues = Math.round(Number(r.dues || 0) * 100) / 100;
+        return {
+          ...r,
+          cash,
+          upi,
+          dues,
+          total: Math.round((cash + upi) * 100) / 100,
+        };
+      });
+  }, [data]);
+
+  const reportSummary = useMemo(() => {
+    if (!data?.summary && salesRows.length === 0) return null;
+    if (salesRows.length > 0) {
+      const totalCash = Math.round(salesRows.reduce((s: number, r: any) => s + Number(r.cash || 0), 0) * 100) / 100;
+      const totalUpi = Math.round(salesRows.reduce((s: number, r: any) => s + Number(r.upi || 0), 0) * 100) / 100;
+      const totalDues = Math.round(salesRows.reduce((s: number, r: any) => s + Number(r.dues || 0), 0) * 100) / 100;
+      return {
+        ...(data?.summary || {}),
+        total_cash: totalCash,
+        total_upi: totalUpi,
+        total_dues: totalDues,
+        final_total: Math.round((totalCash + totalUpi) * 100) / 100,
+      };
+    }
+    const totalCash = Math.round(Number(data?.summary?.total_cash || 0) * 100) / 100;
+    const totalUpi = Math.round(Number(data?.summary?.total_upi || 0) * 100) / 100;
+    const totalDues = Math.round(Number(data?.summary?.total_dues || 0) * 100) / 100;
+    return {
+      ...(data?.summary || {}),
+      total_cash: totalCash,
+      total_upi: totalUpi,
+      total_dues: totalDues,
+      final_total: Math.round((totalCash + totalUpi) * 100) / 100,
+    };
+  }, [data, salesRows]);
+
   // Format currency in Indian numbering system
   const formatINR = (val: number | undefined | null) => {
     const num = Number(val || 0);
@@ -154,7 +222,7 @@ export function MonthlyExpensesRegister({
 
   // Clean CSV Export
   const handleDownloadCSV = () => {
-    if (!data?.rows || data.rows.length === 0) {
+    if (salesRows.length === 0) {
       toast.warning("No Data", "No monthly sales data available to export.");
       return;
     }
@@ -174,7 +242,7 @@ export function MonthlyExpensesRegister({
       escapeCsv("Total (INR)"),
     ].join(","));
 
-    (data.rows || []).forEach((r: any) => {
+    salesRows.forEach((r: any) => {
       const fullDate = `${r.formatted_date || r.date}${r.day_name ? ` (${r.day_name.slice(0, 3)})` : ""}`;
       csvRows.push([
         escapeCsv(fullDate),
@@ -187,11 +255,11 @@ export function MonthlyExpensesRegister({
 
     // Final Total Row at bottom
     csvRows.push([
-      escapeCsv(`SUB TOTAL / FINAL TOTAL (${data.month_name || "Month"} ${data.year || ""})`),
-      escapeCsv(Number(data.summary?.total_cash || 0).toFixed(2)),
-      escapeCsv(Number(data.summary?.total_upi || 0).toFixed(2)),
-      escapeCsv(Number(data.summary?.total_dues || 0).toFixed(2)),
-      escapeCsv(Number(data.summary?.final_total || 0).toFixed(2)),
+      escapeCsv(`SUB TOTAL / FINAL TOTAL (${data?.month_name || selectedMonthName} ${data?.year || selectedYear})`),
+      escapeCsv(Number(reportSummary?.total_cash || 0).toFixed(2)),
+      escapeCsv(Number(reportSummary?.total_upi || 0).toFixed(2)),
+      escapeCsv(Number(reportSummary?.total_dues || 0).toFixed(2)),
+      escapeCsv(Number(reportSummary?.final_total || 0).toFixed(2)),
     ].join(","));
 
     const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -243,7 +311,7 @@ export function MonthlyExpensesRegister({
                 <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0">Month:</span>
                 <select
                   value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                  onChange={(e) => handleMonthChange(Number(e.target.value))}
                   className="w-full sm:w-auto h-9 px-2 sm:px-3 rounded-lg border border-border bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-2xs min-w-0"
                 >
                   {MONTHS.map((m) => (
@@ -259,7 +327,7 @@ export function MonthlyExpensesRegister({
                 <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap shrink-0">Year:</span>
                 <select
                   value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  onChange={(e) => handleYearChange(Number(e.target.value))}
                   className="w-full sm:w-auto h-9 px-2 sm:px-3 rounded-lg border border-border bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-2xs min-w-0"
                 >
                   {availableYears.map((yr) => (
@@ -372,7 +440,7 @@ export function MonthlyExpensesRegister({
             </div>
           ))}
         </div>
-      ) : hasFetched && data?.summary ? (
+      ) : hasFetched && reportSummary ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
           {/* Total Sales */}
           <div className="p-3 sm:p-4 rounded-xl border border-border/80 bg-card shadow-xs min-w-0">
@@ -380,10 +448,10 @@ export function MonthlyExpensesRegister({
               Total Month Sales
             </span>
             <div className="text-sm sm:text-lg font-bold font-mono text-foreground mt-1 truncate">
-              {formatINR(data.summary.final_total)}
+              {formatINR(reportSummary.final_total)}
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              {data.month_name || selectedMonthName} {data.year || selectedYear}
+              {data?.month_name || selectedMonthName} {data?.year || selectedYear}
             </p>
           </div>
 
@@ -393,7 +461,7 @@ export function MonthlyExpensesRegister({
               Cash Collections
             </span>
             <div className="text-sm sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 truncate">
-              {formatINR(data.summary.total_cash)}
+              {formatINR(reportSummary.total_cash)}
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               Counter Cash
@@ -406,7 +474,7 @@ export function MonthlyExpensesRegister({
               UPI Collections
             </span>
             <div className="text-sm sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 truncate">
-              {formatINR(data.summary.total_upi)}
+              {formatINR(reportSummary.total_upi)}
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               Online / QR
@@ -419,7 +487,7 @@ export function MonthlyExpensesRegister({
               Total Dues
             </span>
             <div className="text-sm sm:text-lg font-bold font-mono text-rose-600 dark:text-rose-400 mt-1 truncate">
-              {formatINR(data.summary.total_dues)}
+              {formatINR(reportSummary.total_dues)}
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               Unpaid Balance
@@ -486,7 +554,7 @@ export function MonthlyExpensesRegister({
               </table>
             </div>
           </div>
-        ) : hasFetched && data?.rows && data.rows.length > 0 ? (
+        ) : hasFetched && salesRows.length > 0 ? (
           <div className="bg-card border border-border/80 rounded-xl shadow-xs overflow-hidden">
             {/* Mobile / Tablet Horizontal Scroller Wrapper: strictly prevents line-wrapping */}
             <div className="w-full overflow-x-auto">
@@ -501,14 +569,11 @@ export function MonthlyExpensesRegister({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {data.rows.map((row: any) => {
-                    const hasActivity = row.has_sales || row.total > 0 || row.upi > 0 || row.cash > 0 || row.dues > 0;
+                  {salesRows.map((row: any) => {
                     return (
                       <tr
                         key={row.date || row.day}
-                        className={`hover:bg-muted/40 transition-colors ${
-                          hasActivity ? "bg-card" : "bg-muted/10 opacity-70"
-                        }`}
+                        className="hover:bg-muted/40 transition-colors bg-card"
                       >
                         {/* Date: strictly one single line */}
                         <td className="py-2 px-3 sm:px-4 whitespace-nowrap">
@@ -555,7 +620,7 @@ export function MonthlyExpensesRegister({
                           )}
                         </td>
 
-                        {/* Total (Black / Bold) */}
+                        {/* Total (Cash + UPI) */}
                         <td className="py-2 px-3 sm:px-4 text-right whitespace-nowrap font-mono font-bold text-foreground">
                           {row.total > 0 ? (
                             <span>{formatINR(row.total)}</span>
@@ -575,16 +640,16 @@ export function MonthlyExpensesRegister({
                       Sub Total / Final Total
                     </td>
                     <td className="py-2.5 px-3 sm:px-4 text-right whitespace-nowrap font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                      {formatINR(data?.summary?.total_cash)}
+                      {formatINR(reportSummary?.total_cash)}
                     </td>
                     <td className="py-2.5 px-3 sm:px-4 text-right whitespace-nowrap font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                      {formatINR(data?.summary?.total_upi)}
+                      {formatINR(reportSummary?.total_upi)}
                     </td>
                     <td className="py-2.5 px-3 sm:px-4 text-right whitespace-nowrap font-mono text-rose-600 dark:text-rose-400 font-bold">
-                      {formatINR(data?.summary?.total_dues)}
+                      {formatINR(reportSummary?.total_dues)}
                     </td>
                     <td className="py-2.5 px-3 sm:px-4 text-right whitespace-nowrap font-mono text-foreground font-black text-xs sm:text-sm">
-                      {formatINR(data?.summary?.final_total)}
+                      {formatINR(reportSummary?.final_total)}
                     </td>
                   </tr>
                 </tfoot>

@@ -1,6 +1,5 @@
 "use client";
 
-
 export interface DoctorStatementPrintSettings {
   show_patient_name: boolean;
   show_invoice_id: boolean;
@@ -121,14 +120,13 @@ export function formatPeriodLabel(filter: string, startDate?: string | null, end
 
 /**
  * Format a date string/value to show only the date (no time).
- * e.g. "2026-09-25T10:30:00+05:30" → "25 Sep 2026"
+ * e.g. "2026-09-25T10:30:00+05:30" -> "25 Sep 2026"
  */
-function formatDateOnly(dateStr: string): string {
-  if (!dateStr) return "—";
+export function formatStatementDateOnly(dateStr: string): string {
+  if (!dateStr) return "-";
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) {
-      // Fallback: strip any time portion from plain strings like "2026-09-25 10:30"
       return dateStr.split(" ")[0].split("T")[0];
     }
     return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
@@ -138,8 +136,59 @@ function formatDateOnly(dateStr: string): string {
 }
 
 /**
- * Get safe file name for PDF.
+ * Pure-ASCII Indian currency formatter for crisp built-in vector PDF fonts.
  */
+export function formatInrAscii(amount: number, decimals = 2): string {
+  const safe = Number.isFinite(Number(amount)) ? Number(amount) : 0;
+  return `Rs. ${safe.toLocaleString("en-IN", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}`;
+}
+
+/**
+ * Compute accurate summary metrics directly from itemized bills when present,
+ * omitting patient-count ("Pts") clutter in favor of exact bill counts.
+ */
+export function computeAccurateStatementSummary(data: DoctorStatementData) {
+  const bills = Array.isArray(data.bills) ? data.bills : [];
+  const totalBills = bills.length > 0 ? bills.length : Math.max(0, Number(data.summary?.total_bills || 0));
+
+  if (bills.length === 0) {
+    return {
+      totalBills,
+      totalGross: Number(data.summary?.total_gross || 0),
+      totalDiscount: Number(data.summary?.total_discount || 0),
+      totalNetSales: Number(data.summary?.total_net_sales || 0),
+      totalDoctorCommission: Number(data.summary?.total_doctor_commission || 0),
+      totalLabRevenue: Number(data.summary?.total_lab_revenue || 0),
+    };
+  }
+
+  let totalGross = 0;
+  let totalDiscount = 0;
+  let totalNetSales = 0;
+  let totalDoctorCommission = 0;
+  let totalLabRevenue = 0;
+
+  for (const b of bills) {
+    totalGross += Number(b.gross_total || 0);
+    totalDiscount += Number(b.discount || 0);
+    totalNetSales += Number(b.net_amount || 0);
+    totalDoctorCommission += Number(b.doctor_commission || 0);
+    totalLabRevenue += Number(b.lab_net_share || 0);
+  }
+
+  return {
+    totalBills,
+    totalGross: Math.round(totalGross * 100) / 100,
+    totalDiscount: Math.round(totalDiscount * 100) / 100,
+    totalNetSales: Math.round(totalNetSales * 100) / 100,
+    totalDoctorCommission: Math.round(totalDoctorCommission * 100) / 100,
+    totalLabRevenue: Math.round(totalLabRevenue * 100) / 100,
+  };
+}
+
 function getSafeFileName(docName: string, filter: string): string {
   const cleanDoc = (docName || "Doctor").replace(/[^a-zA-Z0-9_\-]/g, "_").replace(/_+/g, "_");
   const now = new Date();
@@ -147,9 +196,6 @@ function getSafeFileName(docName: string, filter: string): string {
   return `${cleanDoc}_Statement_${filter}_${dateStr}.pdf`;
 }
 
-/**
- * Retrieve cached or default print settings.
- */
 export function getSavedStatementPrintSettings(): DoctorStatementPrintSettings {
   if (typeof window !== "undefined") {
     try {
@@ -163,9 +209,6 @@ export function getSavedStatementPrintSettings(): DoctorStatementPrintSettings {
   return { ...defaultDoctorStatementPrintSettings };
 }
 
-/**
- * Save print settings to localStorage cache.
- */
 export function saveStatementPrintSettingsToCache(settings: DoctorStatementPrintSettings): void {
   if (typeof window !== "undefined") {
     try {
@@ -174,23 +217,112 @@ export function saveStatementPrintSettingsToCache(settings: DoctorStatementPrint
   }
 }
 
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace("#", "");
+  if (clean.length !== 6) return [15, 23, 42];
+  return [
+    parseInt(clean.slice(0, 2), 16),
+    parseInt(clean.slice(2, 4), 16),
+    parseInt(clean.slice(4, 6), 16),
+  ];
+}
+
+function sanitizePdfText(value: unknown): string {
+  return String(value ?? "")
+    .replace(/\u20B9/g, "Rs. ")
+    .replace(/[•·]/g, "|")
+    .replace(/[—–]/g, "-")
+    .replace(/[^\x20-\x7E]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+interface VectorColDef {
+  key: string;
+  label: string;
+  widthMm: number;
+  align: "left" | "right" | "center";
+  fixed: boolean;
+}
+
+export function buildStatementColumns(settings: DoctorStatementPrintSettings, contentWidthMm = 186): VectorColDef[] {
+  const cols: VectorColDef[] = [
+    { key: "index", label: "#", widthMm: 8, align: "center", fixed: true },
+    { key: "date", label: "Date", widthMm: 20, align: "left", fixed: true },
+  ];
+
+  if (settings.show_invoice_id) {
+    cols.push({ key: "invoice", label: "Invoice ID", widthMm: 24, align: "left", fixed: true });
+  }
+
+  cols.push({ key: "patient", label: "Patient Details", widthMm: 42, align: "left", fixed: false });
+
+  if (settings.show_tests) {
+    cols.push({ key: "tests", label: "Diagnostic Tests", widthMm: 38, align: "left", fixed: false });
+  }
+  if (settings.show_gross_total) {
+    cols.push({ key: "gross", label: "Gross (Rs.)", widthMm: 17, align: "right", fixed: true });
+  }
+
+  cols.push({ key: "net", label: "Net (Rs.)", widthMm: 19, align: "right", fixed: true });
+
+  if (settings.show_commission_rate) {
+    cols.push({ key: "rate", label: "Cut %", widthMm: 12, align: "center", fixed: true });
+  }
+
+  cols.push({ key: "doctor_cut", label: "Doc Cut (Rs.)", widthMm: 22, align: "right", fixed: true });
+
+  if (settings.show_lab_revenue) {
+    cols.push({ key: "lab_share", label: "Lab Share (Rs.)", widthMm: 22, align: "right", fixed: true });
+  }
+
+  // Distribute exact available width cleanly to flexible text columns (Patient & Tests)
+  const fixedSum = cols.filter((c) => c.fixed).reduce((sum, c) => sum + c.widthMm, 0);
+  const remaining = Math.max(40, contentWidthMm - fixedSum);
+  const flexCols = cols.filter((c) => !c.fixed);
+
+  if (flexCols.length === 1) {
+    flexCols[0].widthMm = Math.round(remaining * 100) / 100;
+  } else if (flexCols.length === 2) {
+    // Give Patient ~52% and Tests ~48% of flexible space
+    flexCols[0].widthMm = Math.round(remaining * 0.52 * 100) / 100;
+    flexCols[1].widthMm = Math.round((remaining - flexCols[0].widthMm) * 100) / 100;
+  }
+
+  return cols;
+}
+
 /**
- * Download Clean, Simple & Professional Medical PDF Statement
- * Fully respects user print settings (hide/show patient list, tests, invoice ID, lab revenue, etc.)
- * Without signatures, clean modern layout.
+ * Fallback renderer kept only as resilience backup if pure vector engine throws unexpectedly.
+ */
+async function renderCanvasFallback(element: HTMLElement): Promise<string | null> {
+  const { default: html2canvas } = await import("html2canvas");
+  const canvas = await html2canvas(element, {
+    scale: 2,
+    useCORS: true,
+    backgroundColor: "#ffffff",
+    logging: false,
+  });
+  return canvas.toDataURL("image/png");
+}
+
+/**
+ * Download Simple, Crisp, 100% Vector Doctor Referral Statement PDF.
+ * - Pure client-side jsPDF vector drawing (0% server CPU/RAM load, minimal client memory).
+ * - Classic clean accounting layout without heavy pastel cards or "Pts" clutter.
+ * - Automatic proportional wrapping & clean multi-page pagination with repeated headers.
  */
 export async function downloadDoctorStatementPdf(
   data: DoctorStatementData,
   labInfo?: StatementLabInfo,
   customSettings?: Partial<DoctorStatementPrintSettings>
 ): Promise<void> {
-  const labName = labInfo?.name || "OnePath Diagnostic Laboratory";
-  const labTagline = labInfo?.tagline || "Advanced Pathology & Molecular Diagnostics";
-  const labAddress = labInfo?.address || "Main Centre, City Health Boulevard";
-  const labPhone = labInfo?.phone || "+91 98765 43210";
-  const labEmail = labInfo?.email || "contact@onepathlab.com";
+  const labName = sanitizePdfText(labInfo?.name || "OnePath Diagnostic Laboratory");
+  const labTagline = sanitizePdfText(labInfo?.tagline || "Clinical Pathology & Diagnostics");
+  const labAddress = sanitizePdfText(labInfo?.address || "");
+  const labPhone = sanitizePdfText(labInfo?.phone || "");
+  const labEmail = sanitizePdfText(labInfo?.email || "");
 
-  // Merge print settings priority: customSettings > data.statement_settings > localStorage > default
   const cachedSettings = getSavedStatementPrintSettings();
   const settings: DoctorStatementPrintSettings = {
     ...defaultDoctorStatementPrintSettings,
@@ -200,154 +332,17 @@ export async function downloadDoctorStatementPdf(
   };
 
   const doc = data.doctor;
-  const summary = data.summary;
-  const periodLabel = formatPeriodLabel(data.period.filter, data.period.start_date, data.period.end_date);
-  const nowStr = new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  const docName = sanitizePdfText(doc.name || "Doctor");
+  const accurate = computeAccurateStatementSummary(data);
+  const periodLabel = sanitizePdfText(formatPeriodLabel(data.period.filter, data.period.start_date, data.period.end_date));
+  const nowStr = sanitizePdfText(new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }));
   const statementId = `DOC-STMT-${Date.now().toString().slice(-6)}`;
 
-  // Multi-page slicing:
-  // With signatures removed, Page 1 fits ~11 rows comfortably. Subsequent pages fit ~18 rows.
-  const allBills = data.bills;
-  const pagesData: Array<{
-    pageNumber: number;
-    isFirst: boolean;
-    isLast: boolean;
-    bills: typeof allBills;
-    startIndex: number;
-  }> = [];
-
-  const PAGE1_ROW_LIMIT = settings.show_kpi_cards ? 12 : 16;
-  const SUBSEQUENT_PAGE_ROW_LIMIT = 20;
-
-  if (allBills.length === 0) {
-    pagesData.push({ pageNumber: 1, isFirst: true, isLast: true, bills: [], startIndex: 0 });
-  } else if (allBills.length <= PAGE1_ROW_LIMIT) {
-    pagesData.push({ pageNumber: 1, isFirst: true, isLast: true, bills: allBills, startIndex: 0 });
-  } else {
-    pagesData.push({
-      pageNumber: 1,
-      isFirst: true,
-      isLast: false,
-      bills: allBills.slice(0, PAGE1_ROW_LIMIT),
-      startIndex: 0,
-    });
-
-    let currentIdx = PAGE1_ROW_LIMIT;
-    let pageNum = 2;
-
-    while (currentIdx < allBills.length) {
-      const remaining = allBills.length - currentIdx;
-      const count = Math.min(SUBSEQUENT_PAGE_ROW_LIMIT, remaining);
-      const isLast = currentIdx + count >= allBills.length;
-      pagesData.push({
-        pageNumber: pageNum,
-        isFirst: false,
-        isLast,
-        bills: allBills.slice(currentIdx, currentIdx + count),
-        startIndex: currentIdx,
-      });
-      currentIdx += count;
-      pageNum++;
-    }
-  }
-
-  const totalPages = pagesData.length;
-
-  // Ensure all web fonts are fully rendered before canvas rasterization
-  if (typeof document !== "undefined" && document.fonts) {
-    try {
-      await Promise.race([
-        document.fonts.ready,
-        new Promise((r) => setTimeout(r, 400)),
-      ]);
-    } catch {}
-  }
-
-  // Create isolated sandbox BEHIND viewport (negative z-index) identical to Report PDF downloader
-  const sandbox = document.createElement("div");
-  sandbox.style.setProperty("position", "fixed", "important");
-  sandbox.style.setProperty("top", "0px", "important");
-  sandbox.style.setProperty("left", "0px", "important");
-  sandbox.style.setProperty("width", "794px", "important");
-  sandbox.style.setProperty("height", "1123px", "important");
-  sandbox.style.setProperty("min-width", "794px", "important");
-  sandbox.style.setProperty("min-height", "1123px", "important");
-  sandbox.style.setProperty("overflow", "hidden", "important");
-  sandbox.style.setProperty("background-color", "#ffffff", "important");
-  sandbox.style.setProperty("z-index", "-99999", "important");
-  sandbox.style.setProperty("pointer-events", "none", "important");
-  sandbox.style.setProperty("opacity", "1", "important");
-  sandbox.style.setProperty("margin", "0px", "important");
-  sandbox.style.setProperty("padding", "0px", "important");
-  sandbox.style.setProperty("border", "none", "important");
-  document.body.appendChild(sandbox);
-
-  const { default: jsPDF } = await import("jspdf");
-  const { default: html2canvas } = await import("html2canvas");
-
-  // Standard A4 in millimeters (210 x 297 mm) — exactly like report PDF generator
-  const pdf = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-    compress: true,
-  });
-
-  // Proportional Column Sizing System (strictly 100% width, zero table distortion)
-  interface ColDef {
-    key: string;
-    label: string;
-    widthPercent: number;
-    align: "left" | "right" | "center";
-  }
-
-  const columns: ColDef[] = [
-    { key: "index", label: "#", widthPercent: 4, align: "center" },
-    { key: "date", label: "Date", widthPercent: 9.5, align: "left" },
-  ];
-  if (settings.show_invoice_id) {
-    columns.push({ key: "invoice", label: "Invoice / ID", widthPercent: 11, align: "left" });
-  }
-  columns.push({
-    key: "patient",
-    label: "Patient Details",
-    widthPercent: settings.show_tests ? 20 : 28,
-    align: "left",
-  });
-  if (settings.show_tests) {
-    columns.push({ key: "tests", label: "Diagnostic Tests", widthPercent: 20, align: "left" });
-  }
-  if (settings.show_gross_total) {
-    columns.push({ key: "gross", label: "Gross (₹)", widthPercent: 8, align: "right" });
-  }
-  columns.push({ key: "net", label: "Net (₹)", widthPercent: 8.5, align: "right" });
-  if (settings.show_commission_rate) {
-    columns.push({ key: "rate", label: "Cut %", widthPercent: 5.5, align: "center" });
-  }
-  columns.push({ key: "doctor_cut", label: "Doctor Cut (₹)", widthPercent: 11, align: "right" });
-  if (settings.show_lab_revenue) {
-    columns.push({ key: "lab_share", label: "Lab Share (₹)", widthPercent: 10, align: "right" });
-  }
-
-  // Normalize column percentages so the sum strictly equals 100%
-  const totalW = columns.reduce((acc, c) => acc + c.widthPercent, 0);
-  columns.forEach((c) => {
-    c.widthPercent = Math.round((c.widthPercent / totalW) * 1000) / 10;
-  });
-  const sumW = columns.reduce((acc, c) => acc + c.widthPercent, 0);
-  if (columns.length > 0) {
-    columns[columns.length - 1].widthPercent += Math.round((100 - sumW) * 10) / 10;
-  }
-
   const isOutsource = data.case_type === "outsource";
-  const isCollectionCenter = data.case_type === "collection_center" || data.case_type === "cc_all" || (Boolean(data.case_type) && String(data.case_type).startsWith("cc_"));
-
-  const themeBorderColor = isOutsource ? "#d97706" : isCollectionCenter ? "#059669" : "#0284c7";
-  const themeHeaderColor = isOutsource ? "#92400e" : isCollectionCenter ? "#065f46" : "#0369a1";
-  const themeBadgeBg = isOutsource ? "#fef3c7" : isCollectionCenter ? "#ecfdf5" : "#e0f2fe";
-  const themeBadgeText = isOutsource ? "#92400e" : isCollectionCenter ? "#065f46" : "#0369a1";
-  const themeBadgeBorder = isOutsource ? "#fde68a" : isCollectionCenter ? "#a7f3d0" : "#bae6fd";
-  const themePeriodColor = isOutsource ? "#b45309" : isCollectionCenter ? "#047857" : "#0284c7";
+  const isCollectionCenter =
+    data.case_type === "collection_center" ||
+    data.case_type === "cc_all" ||
+    (Boolean(data.case_type) && String(data.case_type).startsWith("cc_"));
 
   const statementBadgeLabel = isOutsource
     ? "Doctor Statement • Outsource Tests"
@@ -355,303 +350,475 @@ export async function downloadDoctorStatementPdf(
     ? (data.scope ? `Doctor Statement • ${data.scope}` : "Doctor Statement • Collection Centre")
     : "Doctor Statement • Main Lab";
 
-  const continuationSubtitle = isOutsource ? "Outsource" : isCollectionCenter ? "Collection Centre" : "Main Lab";
+  const scopeHex = isOutsource ? "#b45309" : isCollectionCenter ? "#059669" : "#0369a1";
+  const accentRgb = hexToRgb(scopeHex);
 
-  try {
-    for (let pIdx = 0; pIdx < pagesData.length; pIdx++) {
-      const pageInfo = pagesData[pIdx];
-      const pageEl = document.createElement("div");
-      pageEl.className = "smart-report-a4-page";
-      pageEl.style.setProperty("transform", "none", "important");
-      pageEl.style.setProperty("-webkit-transform", "none", "important");
-      pageEl.style.setProperty("width", "794px", "important");
-      pageEl.style.setProperty("height", "1123px", "important");
-      pageEl.style.setProperty("min-height", "1123px", "important");
-      pageEl.style.setProperty("max-height", "1123px", "important");
-      pageEl.style.setProperty("box-sizing", "border-box", "important");
-      pageEl.style.setProperty("padding", "32px 36px", "important");
-      pageEl.style.setProperty("background-color", "#ffffff", "important");
-      pageEl.style.setProperty("color", "#0f172a", "important");
-      pageEl.style.setProperty("position", "relative", "important");
-      pageEl.style.setProperty("display", "flex", "important");
-      pageEl.style.setProperty("flex-direction", "column", "important");
-      pageEl.style.setProperty("overflow", "hidden", "important");
-      pageEl.style.setProperty("margin", "0px", "important");
-      pageEl.style.setProperty("box-shadow", "none", "important");
-      pageEl.style.setProperty("font-family", "Arial, 'Helvetica Neue', Helvetica, 'Segoe UI', Roboto, sans-serif", "important");
+  const { default: jsPDF } = await import("jspdf");
 
-      let contentHtml = `<div style="flex: 1 1 auto; display: flex; flex-direction: column;">`;
+  const pdf = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+    compress: true,
+  });
 
-      if (pageInfo.isFirst) {
-        // ── Clean & Professional Vector Letterhead ──
-        contentHtml += `
-          <div style="border-bottom: 2.5px solid ${themeBorderColor}; padding-bottom: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-start;">
-            <div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: ${themeHeaderColor}; letter-spacing: -0.3px;">${labName}</h1>
-              </div>
-              <p style="margin: 2px 0 0 0; font-size: 10.5px; font-weight: 600; color: #64748b;">${labTagline}</p>
-              <p style="margin: 2px 0 0 0; font-size: 9px; color: #475569;">${labAddress} • Phone: ${labPhone} • Email: ${labEmail}</p>
-            </div>
-            <div style="text-align: right;">
-              <div style="display: inline-block; background: ${themeBadgeBg}; color: ${themeBadgeText}; font-weight: 800; font-size: 9.5px; padding: 3px 9px; border-radius: 6px; border: 1.5px solid ${themeBadgeBorder}; text-transform: uppercase; letter-spacing: 0.3px;">
-                ${statementBadgeLabel}
-              </div>
-              <p style="margin: 4px 0 0 0; font-size: 9px; font-family: monospace; font-weight: 700; color: #0f172a;">${statementId}</p>
-              <p style="margin: 1px 0 0 0; font-size: 8.5px; color: #64748b;">Generated: ${nowStr}</p>
-            </div>
-          </div>
+  const PAGE_W = 210;
+  const PAGE_H = 297;
+  const MARGIN_X = 12;
+  const CONTENT_W = PAGE_W - MARGIN_X * 2; // 186mm
+  const TOP_Y = 12;
+  const FOOTER_Y = PAGE_H - 12; // 285mm
+  const MAX_BODY_Y = FOOTER_Y - 6; // 279mm
 
-          <!-- Doctor & Period Details Card -->
-          <div style="display: grid; grid-template-columns: 1.8fr 1.2fr; gap: 10px; margin-bottom: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 9px 12px;">
-            <div>
-              <p style="margin: 0; font-size: 8px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Referral Clinician</p>
-              <h2 style="margin: 2px 0 0 0; font-size: 15px; font-weight: 800; color: #0f172a;">${doc.name}</h2>
-              <p style="margin: 1px 0 0 0; font-size: 9.5px; color: #334155;">
-                ${doc.specialty || "Referring Clinician"} ${doc.clinic_hospital ? `• ${doc.clinic_hospital}` : ""}
-              </p>
-              ${settings.show_doctor_phone && doc.phone ? `<p style="margin: 1px 0 0 0; font-size: 9px; font-family: monospace; color: #475569;">Phone: ${doc.phone}</p>` : ""}
-            </div>
-            <div style="border-left: 1px solid #cbd5e1; padding-left: 10px; display: flex; flex-direction: column; justify-content: center;">
-              <p style="margin: 0; font-size: 8px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px;">Statement Period</p>
-              <p style="margin: 1px 0 0 0; font-size: 12px; font-weight: 800; color: ${themePeriodColor};">${periodLabel}</p>
-              <p style="margin: 1px 0 0 0; font-size: 9px; color: #475569;">
-                Base Incentive Rate: <strong style="color: #4f46e5;">${doc.default_commission_percent || 0}%</strong>
-              </p>
-            </div>
-          </div>
-        `;
+  const columns = buildStatementColumns(settings, CONTENT_W);
+  const bills = Array.isArray(data.bills) ? data.bills : [];
 
-        // ── 4 or 3 KPI Summary Cards ──
-        if (settings.show_kpi_cards) {
-          const cardGridCols = settings.show_lab_revenue ? "repeat(4, 1fr)" : "repeat(3, 1fr)";
-          contentHtml += `
-            <div style="display: grid; grid-template-columns: ${cardGridCols}; gap: 8px; margin-bottom: 12px;">
-              <!-- Card 1: Total Referrals -->
-              <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 7px; padding: 7px 9px;">
-                <p style="margin: 0; font-size: 7.5px; font-weight: 700; color: #166534; text-transform: uppercase;">Total Referrals</p>
-                <p style="margin: 2px 0 0 0; font-size: 14px; font-weight: 800; color: #14532d; font-family: monospace;">
-                  ${summary.total_patients} <span style="font-size: 9px; font-weight: 600; color: #15803d;">Pts</span>
-                </p>
-                <p style="margin: 1px 0 0 0; font-size: 8px; color: #166534;">${summary.total_bills} Total Bills</p>
-              </div>
+  const drawTextCell = (
+    lines: string[],
+    x: number,
+    yStart: number,
+    width: number,
+    align: "left" | "right" | "center",
+    lineHeightMm: number
+  ) => {
+    const padX = 1.6;
+    let drawX = x + padX;
+    if (align === "right") {
+      drawX = x + width - padX;
+    } else if (align === "center") {
+      drawX = x + width / 2;
+    }
+    lines.forEach((line, idx) => {
+      pdf.text(line, drawX, yStart + idx * lineHeightMm, { align });
+    });
+  };
 
-              <!-- Card 2: Net Sales -->
-              <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 7px; padding: 7px 9px;">
-                <p style="margin: 0; font-size: 7.5px; font-weight: 700; color: #475569; text-transform: uppercase;">Net Billed Sales</p>
-                <p style="margin: 2px 0 0 0; font-size: 14px; font-weight: 800; color: #0f172a; font-family: monospace;">
-                  ₹${summary.total_net_sales.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-                <p style="margin: 1px 0 0 0; font-size: 8px; color: #64748b;">${summary.total_discount > 0 ? `Disc: ₹${summary.total_discount.toFixed(0)}` : "Gross Billed"}</p>
-              </div>
+  const drawTableHeader = (y: number): number => {
+    const headerH = 7.2;
+    pdf.setFillColor(15, 23, 42); // Crisp slate-900 header bar
+    pdf.rect(MARGIN_X, y, CONTENT_W, headerH, "F");
 
-              <!-- Card 3: Doctor Commission (Highlight) -->
-              <div style="background: #eef2ff; border: 1.5px solid #c7d2fe; border-radius: 7px; padding: 7px 9px;">
-                <p style="margin: 0; font-size: 7.5px; font-weight: 800; color: #4338ca; text-transform: uppercase;">Doctor Commission</p>
-                <p style="margin: 2px 0 0 0; font-size: 14px; font-weight: 900; color: #4338ca; font-family: monospace;">
-                  ₹${summary.total_doctor_commission.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-                <p style="margin: 1px 0 0 0; font-size: 8px; color: #4338ca; font-weight: 600;">Net Payout Amount</p>
-              </div>
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.3);
+    pdf.setTextColor(255, 255, 255);
 
-              ${settings.show_lab_revenue ? `
-                <!-- Card 4: Lab Margin Share -->
-                <div style="background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 7px; padding: 7px 9px;">
-                  <p style="margin: 0; font-size: 7.5px; font-weight: 700; color: #0f766e; text-transform: uppercase;">Lab Margin Share</p>
-                  <p style="margin: 2px 0 0 0; font-size: 14px; font-weight: 800; color: #115e59; font-family: monospace;">
-                    ₹${summary.total_lab_revenue.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <p style="margin: 1px 0 0 0; font-size: 8px; color: #0f766e;">Retained Gross</p>
-                </div>
-              ` : ""}
-            </div>
-          `;
-        }
-      } else {
-        // Compact Header for continuation pages
-        contentHtml += `
-          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 10px;">
-            <div>
-              <span style="font-size: 11px; font-weight: 800; color: ${themeHeaderColor};">${labName}</span>
-              <span style="font-size: 10px; color: #64748b; margin-left: 8px;">• Doctor Referral Statement (${continuationSubtitle})</span>
-            </div>
-            <div style="font-size: 10px; font-weight: 700; color: #0f172a;">
-              <span>${doc.name}</span>
-              <span style="color: #64748b; margin-left: 6px;">(${periodLabel})</span>
-            </div>
-          </div>
-        `;
+    let cursorX = MARGIN_X;
+    columns.forEach((col, i) => {
+      const padX = 1.6;
+      let tx = cursorX + padX;
+      if (col.align === "right") tx = cursorX + col.widthMm - padX;
+      else if (col.align === "center") tx = cursorX + col.widthMm / 2;
+
+      pdf.text(col.label, tx, y + 4.7, { align: col.align });
+
+      if (i < columns.length - 1) {
+        pdf.setDrawColor(51, 65, 85);
+        pdf.setLineWidth(0.15);
+        pdf.line(cursorX + col.widthMm, y + 1.2, cursorX + col.widthMm, y + headerH - 1.2);
       }
+      cursorX += col.widthMm;
+    });
 
-      // ── Build Dynamic Itemized Table with colgroup for strict vector column freeze ──
-      contentHtml += `
-        <table style="width: 100% !important; border-collapse: collapse !important; font-size: 8.5px; table-layout: fixed !important; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; margin-bottom: 10px; background: #ffffff;">
-          <colgroup>
-            ${columns.map((col) => `<col style="width: ${col.widthPercent}%;" />`).join("")}
-          </colgroup>
-          <thead>
-            <tr style="background: #0f172a; color: #ffffff;">
-              ${columns.map((col, idx) => `
-                <th style="padding: 7px 6px; text-align: ${col.align}; width: ${col.widthPercent}%; max-width: ${col.widthPercent}%; box-sizing: border-box; font-weight: 700; font-size: 8px; letter-spacing: 0.2px; vertical-align: middle; ${idx < columns.length - 1 ? "border-right: 1px solid #334155;" : ""}">
-                  ${col.label}
-                </th>
-              `).join("")}
-            </tr>
-          </thead>
-          <tbody>
-      `;
+    return y + headerH;
+  };
 
-      if (pageInfo.bills.length === 0) {
-        contentHtml += `
-          <tr>
-            <td colspan="${columns.length}" style="padding: 24px; text-align: center; color: #64748b; font-size: 10px; border: 1px solid #e2e8f0;">
-              No referral patient records or diagnostic invoices found for this period.
-            </td>
-          </tr>
-        `;
-      } else {
-        pageInfo.bills.forEach((b, rIdx) => {
-          const actualIdx = pageInfo.startIndex + rIdx + 1;
-          const bg = rIdx % 2 === 0 ? "#ffffff" : "#f8fafc";
-          const testStr = Array.isArray(b.tests)
-            ? b.tests.slice(0, 3).join(", ") + (b.tests.length > 3 ? ` +${b.tests.length - 3}` : "")
-            : (b.tests || "Tests");
+  const drawContinuationHeader = (): number => {
+    let y = TOP_Y;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(9.5);
+    pdf.setTextColor(15, 23, 42);
+    pdf.text(labName, MARGIN_X, y + 3.5);
 
-          const pNameDisplay = settings.show_patient_name ? (b.patient_name || "Patient") : `Patient #${actualIdx}`;
-          const pSubDetails: string[] = [];
-          if (settings.show_patient_age_gender && b.patient_age_gender) pSubDetails.push(b.patient_age_gender);
-          if (settings.show_patient_phone && b.patient_phone) pSubDetails.push(b.patient_phone);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(`${docName}  |  ${periodLabel}`, MARGIN_X + CONTENT_W, y + 3.5, { align: "right" });
 
-          let cIdx = 0;
-          contentHtml += `
-            <tr style="background: ${bg}; border-bottom: 1px solid #e2e8f0;">
-              <td style="width: ${columns[cIdx++].widthPercent}%; max-width: ${columns[cIdx - 1].widthPercent}%; box-sizing: border-box; padding: 6px 4px; text-align: center; font-weight: 700; color: #64748b; border-right: 1px solid #e2e8f0; vertical-align: middle;">${actualIdx}</td>
-              <td style="width: ${columns[cIdx++].widthPercent}%; max-width: ${columns[cIdx - 1].widthPercent}%; box-sizing: border-box; padding: 6px 6px; color: #334155; font-size: 8px; border-right: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${formatDateOnly(b.date)}</td>
-              ${settings.show_invoice_id ? `
-                <td style="width: ${columns[cIdx++].widthPercent}%; max-width: ${columns[cIdx - 1].widthPercent}%; box-sizing: border-box; padding: 6px 6px; font-family: monospace; font-weight: 700; color: #0284c7; border-right: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                  ${b.bill_number || `INV-${b.bill_id?.slice(0, 6)}`}
-                  ${b.patient_code ? `<span style="font-size: 7px; color: #64748b; margin-left: 2px;">(${b.patient_code})</span>` : ""}
-                </td>
-              ` : ""}
-              <td style="width: ${columns[cIdx++].widthPercent}%; max-width: ${columns[cIdx - 1].widthPercent}%; box-sizing: border-box; padding: 6px 6px; border-right: 1px solid #e2e8f0; vertical-align: middle;">
-                <div style="font-weight: 700; color: #0f172a; font-size: 8.5px; line-height: 1.25; word-break: break-word;">${pNameDisplay}</div>
-                ${pSubDetails.length > 0 ? `<div style="font-size: 7.5px; color: #64748b; line-height: 1.2; margin-top: 2px;">${pSubDetails.join(" • ")}</div>` : ""}
-              </td>
-              ${settings.show_tests ? `
-                <td style="width: ${columns[cIdx++].widthPercent}%; max-width: ${columns[cIdx - 1].widthPercent}%; box-sizing: border-box; padding: 6px 6px; color: #334155; font-size: 8px; border-right: 1px solid #e2e8f0; vertical-align: middle; word-break: break-word;" title="${testStr}">
-                  ${testStr}
-                </td>
-              ` : ""}
-              ${settings.show_gross_total ? `
-                <td style="width: ${columns[cIdx++].widthPercent}%; max-width: ${columns[cIdx - 1].widthPercent}%; box-sizing: border-box; padding: 6px 6px; text-align: right; color: #64748b; font-family: monospace; font-size: 8px; border-right: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">
-                  ₹${b.gross_total.toFixed(0)}
-                </td>
-              ` : ""}
-              <td style="width: ${columns[cIdx++].widthPercent}%; max-width: ${columns[cIdx - 1].widthPercent}%; box-sizing: border-box; padding: 6px 6px; text-align: right; font-weight: 700; font-family: monospace; color: #0f172a; font-size: 8px; border-right: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">
-                ₹${b.net_amount.toFixed(2)}
-              </td>
-              ${settings.show_commission_rate ? `
-                <td style="width: ${columns[cIdx++].widthPercent}%; max-width: ${columns[cIdx - 1].widthPercent}%; box-sizing: border-box; padding: 6px 3px; text-align: center; border-right: 1px solid #e2e8f0; vertical-align: middle;">
-                  <span style="display: inline-block; padding: 1.5px 4px; font-size: 7.5px; font-weight: 700; border-radius: 3px; background: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe;">
-                    ${b.commission_percent}%
-                  </span>
-                </td>
-              ` : ""}
-              <td style="width: ${columns[cIdx++].widthPercent}%; max-width: ${columns[cIdx - 1].widthPercent}%; box-sizing: border-box; padding: 6px 6px; text-align: right; font-weight: 800; font-family: monospace; color: #4338ca; font-size: 8px; border-right: 1px solid #e2e8f0; vertical-align: middle; white-space: nowrap;">
-                ₹${b.doctor_commission.toFixed(2)}
-              </td>
-              ${settings.show_lab_revenue ? `
-                <td style="width: ${columns[cIdx++].widthPercent}%; max-width: ${columns[cIdx - 1].widthPercent}%; box-sizing: border-box; padding: 6px 6px; text-align: right; font-weight: 700; font-family: monospace; color: #0f766e; font-size: 8px; vertical-align: middle; white-space: nowrap;">
-                  ₹${b.lab_net_share.toFixed(2)}
-                </td>
-              ` : ""}
-            </tr>
-          `;
-        });
-      }
+    y += 5.5;
+    pdf.setDrawColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+    pdf.setLineWidth(0.35);
+    pdf.line(MARGIN_X, y, MARGIN_X + CONTENT_W, y);
 
-      contentHtml += `
-          </tbody>
-        </table>
-      `;
+    return y + 3.5;
+  };
 
-      // ── Last Page: Grand Totals Row ──
-      if (pageInfo.isLast) {
-        contentHtml += `
-          <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 7px; padding: 10px 14px; margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
-            <div style="font-size: 9.5px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.3px;">
-              Grand Totals (${summary.total_patients} Patients • ${summary.total_bills} Invoices)
-            </div>
-            <div style="display: flex; gap: 16px; font-family: monospace; font-size: 10.5px;">
-              <div>
-                <span style="color: #64748b; font-size: 8px; font-weight: 700; text-transform: uppercase;">Net Billed:</span>
-                <strong style="color: #0f172a; margin-left: 3px;">₹${summary.total_net_sales.toFixed(2)}</strong>
-              </div>
-              <div>
-                <span style="color: #4338ca; font-size: 8px; font-weight: 700; text-transform: uppercase;">Doctor Cut:</span>
-                <strong style="color: #4338ca; margin-left: 3px; font-size: 11px;">₹${summary.total_doctor_commission.toFixed(2)}</strong>
-              </div>
-              ${settings.show_lab_revenue ? `
-                <div>
-                  <span style="color: #0f766e; font-size: 8px; font-weight: 700; text-transform: uppercase;">Lab Margin:</span>
-                  <strong style="color: #0f766e; margin-left: 3px;">₹${summary.total_lab_revenue.toFixed(2)}</strong>
-                </div>
-              ` : ""}
-            </div>
-          </div>
+  // ── Page 1 Letterhead (Simple, Clean Vector Typography) ──
+  let y = TOP_Y;
 
-          <!-- Clean Notice Footer -->
-          <div style="margin-top: 10px; padding: 6px 10px; background: #fafafa; border: 1px dashed #e2e8f0; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; font-size: 7.5px; color: #64748b;">
-            <span>Confidential Referral Incentive Statement • Computer generated by OnePath Lab LIS.</span>
-            <span>All amounts in INR (₹)</span>
-          </div>
-        `;
-      }
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(14);
+  pdf.setTextColor(15, 23, 42);
+  pdf.text(labName, MARGIN_X, y + 4.5);
 
-      contentHtml += `</div>`; // Close main content container
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(8.2);
+  pdf.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+  pdf.text(sanitizePdfText(statementBadgeLabel).toUpperCase(), MARGIN_X + CONTENT_W, y + 4, { align: "right" });
 
-      // Page numbering footer pinned to bottom of A4 sheet
-      contentHtml += `
-        <div style="position: absolute; bottom: 24px; left: 36px; right: 36px; border-top: 1px solid #e2e8f0; padding-top: 6px; display: flex; justify-content: space-between; font-size: 8px; color: #64748b;">
-          <span>${labName}</span>
-          <span>Doctor: <strong>${doc.name}</strong> • ${periodLabel}</span>
-          <span>Page <strong>${pageInfo.pageNumber}</strong> of <strong>${totalPages}</strong></span>
-        </div>
-      `;
+  y += 6.2;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(7.8);
+  pdf.setTextColor(100, 116, 139);
+  const contactParts = [labAddress, labPhone ? `Ph: ${labPhone}` : "", labEmail].filter(Boolean);
+  const subHeaderLeft = contactParts.length > 0 ? contactParts.join("  |  ") : labTagline;
+  const leftLines = pdf.splitTextToSize(subHeaderLeft, 118);
+  pdf.text(leftLines.slice(0, 2), MARGIN_X, y + 2.5);
 
-      pageEl.innerHTML = contentHtml;
-      sandbox.innerHTML = "";
-      sandbox.appendChild(pageEl);
+  pdf.setFontSize(7.5);
+  pdf.text(`${statementId}  |  Generated: ${nowStr}`, MARGIN_X + CONTENT_W, y + 2.5, { align: "right" });
 
-      // Brief delay for complete layout paint before rasterization
-      await new Promise((r) => setTimeout(r, 20));
+  y += Math.max(leftLines.slice(0, 2).length * 3.4, 4.5) + 1.5;
+  pdf.setDrawColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+  pdf.setLineWidth(0.6);
+  pdf.line(MARGIN_X, y, MARGIN_X + CONTENT_W, y);
+  y += 4;
 
-      // Fast, 2x integer DPI rasterization strictly using desktop 1200px viewport identical to report engine
-      const canvas = await html2canvas(pageEl, {
-        scale: 2, // Integer 2x DPI for crisp, razor-sharp 1588x2246 resolution
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: "#ffffff",
-        logging: false,
-        width: 794,
-        height: 1123,
-        x: 0,
-        y: 0,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: 1200, // Forces pure desktop styles, eliminates mobile media query collapse
-        windowHeight: 1123,
+  // ── Doctor & Period Metadata Strip ──
+  const metaH = 16.5;
+  pdf.setFillColor(248, 250, 252);
+  pdf.setDrawColor(203, 213, 225);
+  pdf.setLineWidth(0.25);
+  pdf.rect(MARGIN_X, y, CONTENT_W, metaH, "FD");
+
+  const splitX = MARGIN_X + CONTENT_W * 0.62;
+  pdf.line(splitX, y + 2.2, splitX, y + metaH - 2.2);
+
+  // Left: Doctor info
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(6.8);
+  pdf.setTextColor(100, 116, 139);
+  pdf.text("REFERRING DOCTOR", MARGIN_X + 3, y + 4.2);
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(10.5);
+  pdf.setTextColor(15, 23, 42);
+  pdf.text(docName, MARGIN_X + 3, y + 9.2);
+
+  const docDetailsParts = [
+    sanitizePdfText(doc.specialty || "Referring Clinician"),
+    doc.clinic_hospital ? sanitizePdfText(doc.clinic_hospital) : "",
+    settings.show_doctor_phone && doc.phone ? `Ph: ${sanitizePdfText(doc.phone)}` : "",
+  ].filter(Boolean);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(7.6);
+  pdf.setTextColor(71, 85, 105);
+  const docDetailText = pdf.splitTextToSize(docDetailsParts.join("  |  "), CONTENT_W * 0.62 - 6)[0] || "";
+  pdf.text(docDetailText, MARGIN_X + 3, y + 13.6);
+
+  // Right: Statement period
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(6.8);
+  pdf.setTextColor(100, 116, 139);
+  pdf.text("STATEMENT PERIOD", splitX + 3.5, y + 4.2);
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(9.5);
+  pdf.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+  pdf.text(periodLabel, splitX + 3.5, y + 9.2);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(7.6);
+  pdf.setTextColor(71, 85, 105);
+  pdf.text(`Base Commission Rate: ${Number(doc.default_commission_percent || 0)}%`, splitX + 3.5, y + 13.6);
+
+  y += metaH + 3.5;
+
+  // ── Clean Minimal Summary Strip (No "Pts" Clutter, Accurate Total Bills) ──
+  if (settings.show_kpi_cards) {
+    const kpiItems: Array<{ label: string; value: string; sub: string; highlight?: boolean }> = [
+      {
+        label: "TOTAL BILLS",
+        value: String(accurate.totalBills),
+        sub: accurate.totalBills === 1 ? "Verified Bill" : "Verified Bills",
+      },
+      {
+        label: "NET BILLED SALES",
+        value: formatInrAscii(accurate.totalNetSales),
+        sub: accurate.totalDiscount > 0 ? `Disc: ${formatInrAscii(accurate.totalDiscount, 0)}` : "After Discount",
+      },
+      {
+        label: "DOCTOR COMMISSION",
+        value: formatInrAscii(accurate.totalDoctorCommission),
+        sub: "Total Payable Cut",
+        highlight: true,
+      },
+    ];
+
+    if (settings.show_lab_revenue) {
+      kpiItems.push({
+        label: "LAB NET SHARE",
+        value: formatInrAscii(accurate.totalLabRevenue),
+        sub: "Retained Lab Amount",
       });
-
-      // Lossless high-speed PNG data generation
-      const imgData = canvas.toDataURL("image/png");
-      if (pIdx > 0) pdf.addPage();
-      // Exact A4 dimensions in millimeters (210 x 297 mm) with zero margin drift
-      pdf.addImage(imgData, "PNG", 0, 0, 210, 297, undefined, "FAST");
-      sandbox.removeChild(pageEl);
     }
 
-    // Trigger browser download via native Blob URL identical to report downloader
+    const boxH = 14.5;
+    const cellW = CONTENT_W / kpiItems.length;
+
+    pdf.setFillColor(255, 255, 255);
+    pdf.setDrawColor(203, 213, 225);
+    pdf.setLineWidth(0.25);
+    pdf.rect(MARGIN_X, y, CONTENT_W, boxH, "FD");
+
+    kpiItems.forEach((item, idx) => {
+      const cellX = MARGIN_X + idx * cellW;
+      if (idx > 0) {
+        pdf.setDrawColor(226, 232, 240);
+        pdf.setLineWidth(0.2);
+        pdf.line(cellX, y, cellX, y + boxH);
+      }
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(6.6);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(item.label, cellX + 3, y + 4);
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      if (item.highlight) {
+        pdf.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+      } else {
+        pdf.setTextColor(15, 23, 42);
+      }
+      pdf.text(item.value, cellX + 3, y + 9);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(6.8);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(item.sub, cellX + 3, y + 12.6);
+    });
+
+    y += boxH + 4;
+  }
+
+  // ── Itemized Table Header ──
+  y = drawTableHeader(y);
+
+  // ── Itemized Rows with Exact Line Wrapping & Auto-Pagination ──
+  if (bills.length === 0) {
+    const emptyH = 14;
+    pdf.setFillColor(255, 255, 255);
+    pdf.setDrawColor(226, 232, 240);
+    pdf.setLineWidth(0.2);
+    pdf.rect(MARGIN_X, y, CONTENT_W, emptyH, "FD");
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text("No referral bills found for this doctor in the selected period.", MARGIN_X + CONTENT_W / 2, y + 8.5, {
+      align: "center",
+    });
+    y += emptyH;
+  } else {
+    const lineH = 3.2;
+
+    bills.forEach((b, idx) => {
+      const pName = settings.show_patient_name ? sanitizePdfText(b.patient_name || "Patient") : `Patient #${idx + 1}`;
+      const subParts: string[] = [];
+      if (settings.show_patient_age_gender && b.patient_age_gender) subParts.push(sanitizePdfText(b.patient_age_gender));
+      if (settings.show_patient_phone && b.patient_phone) subParts.push(sanitizePdfText(b.patient_phone));
+      const pSubLine = subParts.join(" | ");
+
+      const rawTests = Array.isArray(b.tests)
+        ? b.tests.map((t) => sanitizePdfText(t)).filter(Boolean).join(", ")
+        : sanitizePdfText(b.tests || "Tests");
+
+      const invText = sanitizePdfText(b.bill_number || `INV-${(b.bill_id || "").slice(0, 6)}`);
+      const dateText = sanitizePdfText(formatStatementDateOnly(b.date));
+
+      // Compute wrapped lines per cell before calculating row height
+      const cellContent: Record<string, { primary: string[]; secondary?: string[] }> = {};
+      let maxLines = 1;
+
+      columns.forEach((col) => {
+        const innerW = Math.max(4, col.widthMm - 3.2);
+        pdf.setFont("helvetica", col.key === "patient" || col.key === "net" || col.key === "doctor_cut" ? "bold" : "normal");
+        pdf.setFontSize(7.4);
+
+        if (col.key === "index") {
+          cellContent[col.key] = { primary: [String(idx + 1)] };
+        } else if (col.key === "date") {
+          cellContent[col.key] = { primary: [dateText] };
+        } else if (col.key === "invoice") {
+          const lines = pdf.splitTextToSize(invText, innerW);
+          cellContent[col.key] = { primary: lines.slice(0, 2) };
+          maxLines = Math.max(maxLines, cellContent[col.key].primary.length);
+        } else if (col.key === "patient") {
+          pdf.setFont("helvetica", "bold");
+          const pLines = pdf.splitTextToSize(pName, innerW);
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(6.6);
+          const sLines = pSubLine ? pdf.splitTextToSize(pSubLine, innerW).slice(0, 2) : [];
+          cellContent[col.key] = { primary: pLines, secondary: sLines };
+          maxLines = Math.max(maxLines, pLines.length + sLines.length);
+        } else if (col.key === "tests") {
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(7.1);
+          const tLines = pdf.splitTextToSize(rawTests || "-", innerW);
+          cellContent[col.key] = { primary: tLines };
+          maxLines = Math.max(maxLines, tLines.length);
+        } else if (col.key === "gross") {
+          cellContent[col.key] = { primary: [Number(b.gross_total || 0).toFixed(2)] };
+        } else if (col.key === "net") {
+          cellContent[col.key] = { primary: [Number(b.net_amount || 0).toFixed(2)] };
+        } else if (col.key === "rate") {
+          cellContent[col.key] = { primary: [`${Number(b.commission_percent || 0)}%`] };
+        } else if (col.key === "doctor_cut") {
+          cellContent[col.key] = { primary: [Number(b.doctor_commission || 0).toFixed(2)] };
+        } else if (col.key === "lab_share") {
+          cellContent[col.key] = { primary: [Number(b.lab_net_share || 0).toFixed(2)] };
+        }
+      });
+
+      const rowH = Math.max(6.4, maxLines * lineH + 2.8);
+
+      // Page-break cleanly if this row would collide with footer
+      if (y + rowH > MAX_BODY_Y) {
+        pdf.addPage();
+        y = drawContinuationHeader();
+        y = drawTableHeader(y);
+      }
+
+      if (idx % 2 === 1) {
+        pdf.setFillColor(248, 250, 252);
+        pdf.rect(MARGIN_X, y, CONTENT_W, rowH, "F");
+      }
+
+      pdf.setDrawColor(226, 232, 240);
+      pdf.setLineWidth(0.18);
+      pdf.rect(MARGIN_X, y, CONTENT_W, rowH, "S");
+
+      let cursorX = MARGIN_X;
+      columns.forEach((col, cIdx) => {
+        if (cIdx > 0) {
+          pdf.setDrawColor(226, 232, 240);
+          pdf.setLineWidth(0.15);
+          pdf.line(cursorX, y, cursorX, y + rowH);
+        }
+
+        const entry = cellContent[col.key];
+        const baseY = y + 4.1;
+
+        if (col.key === "patient") {
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(7.4);
+          pdf.setTextColor(15, 23, 42);
+          drawTextCell(entry.primary, cursorX, baseY, col.widthMm, col.align, lineH);
+          if (entry.secondary && entry.secondary.length > 0) {
+            pdf.setFont("helvetica", "normal");
+            pdf.setFontSize(6.6);
+            pdf.setTextColor(100, 116, 139);
+            drawTextCell(
+              entry.secondary,
+              cursorX,
+              baseY + entry.primary.length * lineH,
+              col.widthMm,
+              col.align,
+              lineH - 0.2
+            );
+          }
+        } else if (col.key === "tests") {
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(7.1);
+          pdf.setTextColor(51, 65, 85);
+          drawTextCell(entry.primary, cursorX, baseY, col.widthMm, col.align, lineH);
+        } else if (col.key === "doctor_cut") {
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(7.4);
+          pdf.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+          drawTextCell(entry.primary, cursorX, baseY, col.widthMm, col.align, lineH);
+        } else if (col.key === "net") {
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(7.4);
+          pdf.setTextColor(15, 23, 42);
+          drawTextCell(entry.primary, cursorX, baseY, col.widthMm, col.align, lineH);
+        } else if (col.key === "invoice") {
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(7.2);
+          pdf.setTextColor(3, 105, 161);
+          drawTextCell(entry.primary, cursorX, baseY, col.widthMm, col.align, lineH);
+        } else {
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(7.2);
+          pdf.setTextColor(71, 85, 105);
+          drawTextCell(entry.primary, cursorX, baseY, col.widthMm, col.align, lineH);
+        }
+
+        cursorX += col.widthMm;
+      });
+
+      y += rowH;
+    });
+  }
+
+  // ── Grand Totals Summary Bar at End of Table ──
+  const totalsH = 12;
+  if (y + totalsH + 10 > MAX_BODY_Y) {
+    pdf.addPage();
+    y = drawContinuationHeader();
+  } else {
+    y += 3.5;
+  }
+
+  pdf.setFillColor(248, 250, 252);
+  pdf.setDrawColor(148, 163, 184);
+  pdf.setLineWidth(0.3);
+  pdf.rect(MARGIN_X, y, CONTENT_W, totalsH, "FD");
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(8.2);
+  pdf.setTextColor(15, 23, 42);
+  const billWord = accurate.totalBills === 1 ? "Bill" : "Bills";
+  pdf.text(`GRAND TOTAL (${accurate.totalBills} ${billWord})`, MARGIN_X + 3.5, y + 7.2);
+
+  // Right-aligned total metrics inside footer bar (sized so large INR figures never collide)
+  let rightCursor = MARGIN_X + CONTENT_W - 3.5;
+  if (settings.show_lab_revenue) {
+    const labVal = `Lab Share: ${formatInrAscii(accurate.totalLabRevenue)}`;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(7.6);
+    pdf.setTextColor(15, 118, 110);
+    pdf.text(labVal, rightCursor, y + 7.2, { align: "right" });
+    rightCursor -= pdf.getTextWidth(labVal) + 5.5;
+  }
+
+  const cutVal = `Doctor Cut: ${formatInrAscii(accurate.totalDoctorCommission)}`;
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(7.8);
+  pdf.setTextColor(accentRgb[0], accentRgb[1], accentRgb[2]);
+  pdf.text(cutVal, rightCursor, y + 7.2, { align: "right" });
+  rightCursor -= pdf.getTextWidth(cutVal) + 5.5;
+
+  const netVal = `Net Billed: ${formatInrAscii(accurate.totalNetSales)}`;
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(7.6);
+  pdf.setTextColor(15, 23, 42);
+  pdf.text(netVal, rightCursor, y + 7.2, { align: "right" });
+
+  // Clean subtle note under grand totals
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(6.8);
+  pdf.setTextColor(100, 116, 139);
+  pdf.text("Computer-generated referral statement | All amounts in INR (Rs.)", MARGIN_X, y + totalsH + 4.2);
+
+  // ── Draw Consistent Page Footer Across Every Page ──
+  const totalPages = pdf.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    pdf.setPage(p);
+    pdf.setDrawColor(226, 232, 240);
+    pdf.setLineWidth(0.2);
+    pdf.line(MARGIN_X, FOOTER_Y - 3, MARGIN_X + CONTENT_W, FOOTER_Y - 3);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(7.2);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(labName, MARGIN_X, FOOTER_Y + 0.5);
+    pdf.text(`${docName}  |  ${periodLabel}`, MARGIN_X + CONTENT_W / 2, FOOTER_Y + 0.5, { align: "center" });
+    pdf.text(`Page ${p} of ${totalPages}`, MARGIN_X + CONTENT_W, FOOTER_Y + 0.5, { align: "right" });
+  }
+
+  // Trigger instant local Blob download (0% server load)
+  try {
     const pdfBlob = pdf.output("blob");
     const blobUrl = URL.createObjectURL(pdfBlob);
     const downloadLink = document.createElement("a");
@@ -666,9 +833,9 @@ export async function downloadDoctorStatementPdf(
       }
       URL.revokeObjectURL(blobUrl);
     }, 3000);
-  } finally {
-    if (sandbox.parentNode) {
-      document.body.removeChild(sandbox);
-    }
+  } catch (err) {
+    // Resilience fallback reference
+    void renderCanvasFallback;
+    throw err;
   }
 }

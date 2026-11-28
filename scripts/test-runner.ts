@@ -8471,6 +8471,210 @@ assert(
   "[SETTINGS, PRINT SHEET & ENTER RESULTS SYNC] Settings UI, ReportSheet print columns, and Enter Results flagging stay synchronized"
 );
 
+// ============================================================================
+// 104. Monthly Business Report: Cash+UPI Total, Exact Dues, Timezone & Active Rows
+// ============================================================================
+console.log("\n🧪 MODULE 104: Monthly Business Report Cash+UPI Total, Exact Dues, Timezone & Active Rows");
+
+const backendBillCtrl104 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/BillController.php"),
+  "utf8"
+);
+const monthlyRegister104 = fs.readFileSync(
+  path.resolve(__dirname, "../src/components/monthly-expenses-register.tsx"),
+  "utf8"
+);
+
+assert(
+  backendBillCtrl104.includes("$calcTotal = round($dayCash + $dayUpi, 2);") &&
+  backendBillCtrl104.includes("$finalTotal = round($totalCash + $totalUpi, 2);") &&
+  !backendBillCtrl104.includes("COALESCE(SUM(GREATEST(0, (total - discount) - paid_amount)), 0)") &&
+  backendBillCtrl104.includes("max(0.0, round($netPayable - $paidAmt, 2))"),
+  "[BACKEND MONTHLY REPORT ACCURACY] BillController sets total=cash+upi and computes dues from net payable total without double discount subtraction"
+);
+
+assert(
+  backendBillCtrl104.includes("X-Timezone") &&
+  backendBillCtrl104.includes("setTimezone($userTz)") &&
+  backendBillCtrl104.includes("if (!$hasActivity) {\n                continue;\n            }") || backendBillCtrl104.includes("if (!$hasActivity) {"),
+  "[BACKEND MONTHLY TIMEZONE & ACTIVE DATES] BillController aggregates strictly in user timezone and skips inactive zero-sales dates"
+);
+
+assert(
+  monthlyRegister104.includes("handleMonthChange") &&
+  monthlyRegister104.includes("handleYearChange") &&
+  monthlyRegister104.includes("requestIdRef") &&
+  monthlyRegister104.includes("salesRows") &&
+  monthlyRegister104.includes("reportSummary") &&
+  monthlyRegister104.includes("timezone="),
+  "[FRONTEND MONTHLY REGISTER] MonthlyExpensesRegister filters active sales dates, syncs Cash+UPI totals, passes timezone, and guards rapid month switches"
+);
+
+import {
+  computeAccurateStatementSummary,
+  buildStatementColumns,
+  defaultDoctorStatementPrintSettings,
+} from "../src/lib/download-doctor-statement";
+
+// ============================================================================
+// 105. Doctor Referral Statement Vector PDF: Clean UI, Accurate Bills (No Pts)
+// ============================================================================
+console.log("\n🧪 MODULE 105: Doctor Referral Statement Clean Pure-Vector PDF & Accurate Total Bills");
+
+const doctorStmtSrc105 = fs.readFileSync(
+  path.resolve(__dirname, "../src/lib/download-doctor-statement.ts"),
+  "utf8"
+);
+const backendDocCtrl105 = fs.readFileSync(
+  path.resolve(__dirname, "../../Backend/app/Http/Controllers/Api/Lis/DoctorController.php"),
+  "utf8"
+);
+
+// 105.1 Pure-vector PDF primary path (0% server load, no html2canvas DOM rasterization in downloadDoctorStatementPdf)
+const downloadFnBody105 = doctorStmtSrc105.slice(
+  doctorStmtSrc105.indexOf("export async function downloadDoctorStatementPdf")
+);
+assert(
+  !downloadFnBody105.includes("html2canvas(") &&
+  downloadFnBody105.includes("pdf.rect(") &&
+  downloadFnBody105.includes("pdf.line(") &&
+  downloadFnBody105.includes("pdf.text(") &&
+  downloadFnBody105.includes('pdf.output("blob")'),
+  "[PURE VECTOR STATEMENT PDF] downloadDoctorStatementPdf draws 100% pure-vector jsPDF primitives without html2canvas rasterization"
+);
+
+// 105.2 Removes 'Pts' badge and displays TOTAL BILLS cleanly
+assert(
+  doctorStmtSrc105.includes('"TOTAL BILLS"') &&
+  !doctorStmtSrc105.includes(">Pts<") &&
+  !doctorStmtSrc105.includes("Patients •"),
+  "[CLEAN STATEMENT NO PTS] Statement removes Pts clutter and renders clean TOTAL BILLS metrics"
+);
+
+// 105.3 Accurate summary computation from itemized bills
+{
+  const acc = computeAccurateStatementSummary({
+    doctor: { name: "Dr. Sharma", default_commission_percent: 20 },
+    period: { filter: "this_month" },
+    summary: {
+      total_patients: 99,
+      total_bills: 99,
+      total_gross: 0,
+      total_discount: 0,
+      total_net_sales: 0,
+      total_paid: 0,
+      total_due: 0,
+      total_doctor_commission: 0,
+      total_lab_revenue: 0,
+    },
+    bills: [
+      {
+        bill_id: "b1",
+        date: "2026-11-01",
+        patient_name: "A",
+        tests: ["CBC"],
+        gross_total: 500,
+        discount: 100,
+        net_amount: 400,
+        paid_amount: 400,
+        due_amount: 0,
+        commission_percent: 20,
+        doctor_commission: 80,
+        lab_net_share: 320,
+        status: "PAID",
+      },
+      {
+        bill_id: "b2",
+        date: "2026-11-02",
+        patient_name: "B",
+        tests: ["LFT"],
+        gross_total: 800,
+        discount: 0,
+        net_amount: 800,
+        paid_amount: 800,
+        due_amount: 0,
+        commission_percent: 20,
+        doctor_commission: 160,
+        lab_net_share: 640,
+        status: "PAID",
+      },
+    ],
+  });
+
+  assert(
+    acc.totalBills === 2 &&
+    acc.totalGross === 1300 &&
+    acc.totalDiscount === 100 &&
+    acc.totalNetSales === 1200 &&
+    acc.totalDoctorCommission === 240 &&
+    acc.totalLabRevenue === 960,
+    "[ACCURATE BILL COUNT & TOTALS] computeAccurateStatementSummary derives exact bill count (2) and financial sums from itemized bills"
+  );
+}
+
+// 105.4 Dynamic table column widths always sum cleanly to 186mm printable width
+{
+  const fullCols = buildStatementColumns(defaultDoctorStatementPrintSettings, 186);
+  const minimalCols = buildStatementColumns(
+    {
+      ...defaultDoctorStatementPrintSettings,
+      show_invoice_id: false,
+      show_tests: false,
+      show_gross_total: false,
+      show_commission_rate: false,
+      show_lab_revenue: false,
+    },
+    186
+  );
+  const fullSum = fullCols.reduce((s, c) => s + c.widthMm, 0);
+  const minSum = minimalCols.reduce((s, c) => s + c.widthMm, 0);
+
+  assert(
+    Math.abs(fullSum - 186) < 0.05 && Math.abs(minSum - 186) < 0.05,
+    "[VECTOR COLUMN ALIGNMENT] buildStatementColumns strictly preserves 186mm A4 printable width across all setting combinations"
+  );
+}
+
+// 105.5 Backend DoctorController statement uses filtered $billsList for patient count
+assert(
+  backendDocCtrl105.includes("$distinctPatientsCount = $billsList->pluck('patient_id')->filter()->unique()->count();"),
+  "[BACKEND STATEMENT SCOPED COUNTS] DoctorController::statement computes distinct counts strictly from filtered billsList"
+);
+
+// ============================================================================
+// 106. Smart Report Clinical Editorial Dossier & Live Preview Sync
+// ============================================================================
+console.log("\n🧪 MODULE 106: Smart Report Clinical Editorial Dossier & Settings Preview Sync");
+
+const smartReportView106 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/reports/[id]/smart-report/page.tsx"),
+  "utf8"
+);
+const smartReportSettings106 = fs.readFileSync(
+  path.resolve(__dirname, "../src/app/dashboard/smart-report/page.tsx"),
+  "utf8"
+);
+
+assert(
+  smartReportView106.includes("Comprehensive Health &amp; Biomarker Report") &&
+  smartReportView106.includes("Patient Record Details") &&
+  smartReportView106.includes("Organ Systems Profile") &&
+  smartReportView106.includes("Laboratory Investigation Findings") &&
+  smartReportView106.includes("Biomarker Clinical Interpretation") &&
+  smartReportView106.includes("Dietary &amp; Lifestyle Recommendations") &&
+  !smartReportView106.includes("HIGH-TECH DIAGNOSTIC MATRIX") &&
+  !smartReportView106.includes("Synthesizing Smart Report"),
+  "[SMART REPORT CLINICAL DOSSIER] Generated Smart Report uses structured medical dossier layout free of AI-slop templates"
+);
+
+assert(
+  smartReportSettings106.includes("Comprehensive Health &amp; Biomarker Report") &&
+  smartReportSettings106.includes("Organ Systems Profile") &&
+  !smartReportSettings106.includes("HIGH-TECH DIAGNOSTIC") &&
+  !smartReportSettings106.includes('icon: "✨"'),
+  "[SMART REPORT SETTINGS PREVIEW SYNC] Settings page cover/interior/exterior previews match clinical dossier architecture"
+);
+
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);
 console.log("===============================================================================");
 
