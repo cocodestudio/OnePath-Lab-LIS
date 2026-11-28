@@ -40,6 +40,7 @@ import {
   peekNextBarcode,
   resetBarcodeSequence,
 } from "@/lib/report-settings";
+import { REPORT_COLUMN_PRESETS, resolveReportColumnOrder, type ReportColumnKey } from "@/lib/reference-range";
 import {
   ALL_BILL_ORDERING_FIELDS,
   type BillLayoutSettings,
@@ -2934,36 +2935,124 @@ function SettingsContent() {
               </div>
             </div>
 
-            <div className="pt-3 border-t border-border/80 space-y-2">
-              <label className="text-xs font-bold text-foreground block">Interchange Columns</label>
-              <button
-                type="button"
-                onClick={() => {
-                  setLayoutSettings(prev => ({
+            <div className="pt-4 border-t border-border/80 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-foreground block">
+                  Investigation Table Column Arrangement
+                </label>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Choose a layout preset (e.g., Unit right next to Result Value) or arrange columns in any custom order.
+                </p>
+              </div>
+
+              {(() => {
+                const currentOrder = resolveReportColumnOrder(
+                  layoutSettings.columnOrder,
+                  layoutSettings.spacing.interchangeColumns
+                );
+                const applyOrder = (nextOrder: ReportColumnKey[]) => {
+                  const unitIdx = nextOrder.indexOf("unit");
+                  const refIdx = nextOrder.indexOf("refRange");
+                  setLayoutSettings((prev) => ({
                     ...prev,
+                    columnOrder: nextOrder,
                     spacing: {
                       ...prev.spacing,
-                      interchangeColumns: !prev.spacing.interchangeColumns,
+                      interchangeColumns: unitIdx !== -1 && refIdx !== -1 ? unitIdx < refIdx : prev.spacing.interchangeColumns,
                     },
                   }));
-                }}
-                className={`px-4 py-2.5 rounded-xl border text-xs font-bold transition-all inline-flex items-center gap-2.5 cursor-pointer shadow-xs ${
-                  layoutSettings.spacing.interchangeColumns
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background border-border text-foreground hover:bg-muted"
-                }`}
-              >
-                <span>Ref. Range</span>
-                <div className="h-6 w-6 rounded-lg bg-primary/20 flex items-center justify-center text-primary-foreground">
-                  <ArrowLeftRight className="h-3.5 w-3.5 text-current" />
-                </div>
-                <span>Unit</span>
-                {layoutSettings.spacing.interchangeColumns && (
-                  <span className="ml-1 text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-mono shrink-0 whitespace-nowrap">
-                    (Swapped)
-                  </span>
-                )}
-              </button>
+                };
+                const movableCols = currentOrder.filter((k) => k !== "testDescription");
+                const colDisplayNames: Record<ReportColumnKey, string> = {
+                  testDescription: "Test",
+                  result: "Value",
+                  unit: "Unit",
+                  flag: "Flag",
+                  refRange: "Normal Range",
+                };
+                const moveCol = (idx: number, dir: -1 | 1) => {
+                  const target = idx + dir;
+                  if (target < 0 || target >= movableCols.length) return;
+                  const nextMovable = [...movableCols];
+                  [nextMovable[idx], nextMovable[target]] = [nextMovable[target], nextMovable[idx]];
+                  applyOrder(["testDescription", ...nextMovable]);
+                };
+
+                return (
+                  <div className="space-y-3">
+                    {/* Quick Presets */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {REPORT_COLUMN_PRESETS.map((preset) => {
+                        const isActive = preset.order.join(",") === currentOrder.join(",");
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => applyOrder(preset.order)}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer shadow-xs ${
+                              isActive
+                                ? "bg-primary/10 border-primary ring-1 ring-primary/30"
+                                : "bg-background border-border hover:bg-muted/60"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`text-xs font-bold ${isActive ? "text-primary" : "text-foreground"}`}>
+                                {preset.label}
+                              </span>
+                              {isActive && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground shrink-0">
+                                  Active
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground mt-1">{preset.description}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Interactive Custom Order Bar */}
+                    <div className="p-3 rounded-xl border border-border/80 bg-muted/20 space-y-2">
+                      <span className="text-[11px] font-semibold text-muted-foreground block">
+                        Fine-tune column sequence (click arrows to shift left/right):
+                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-3 py-1.5 rounded-lg bg-muted border border-border text-xs font-bold text-muted-foreground">
+                          1. Test (Fixed)
+                        </span>
+                        {movableCols.map((colKey, idx) => (
+                          <div
+                            key={colKey}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-card border border-border shadow-2xs text-xs font-bold text-foreground"
+                          >
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => moveCol(idx, -1)}
+                              className="px-1 rounded hover:bg-muted disabled:opacity-30 cursor-pointer"
+                              title="Move left"
+                            >
+                              ←
+                            </button>
+                            <span>
+                              {idx + 2}. {colDisplayNames[colKey]}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={idx === movableCols.length - 1}
+                              onClick={() => moveCol(idx, 1)}
+                              className="px-1 rounded hover:bg-muted disabled:opacity-30 cursor-pointer"
+                              title="Move right"
+                            >
+                              →
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

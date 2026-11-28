@@ -8,6 +8,7 @@ import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 import { getReportPackage } from "@/lib/packages";
 import { compareClinicalTests, compareClinicalParameters, getClinicalTestPriority } from "@/lib/clinical-order";
 import { isGenuineCustomEditorTest, getDefaultUnitForTest, getDefaultRangeForTest, getCustomEditorInitialTemplate } from "@/lib/clinical-test-helper";
+import { resolveTestReferenceRange, extractPatientAgeContext, resolveReportColumnOrder, type ReportColumnKey } from "@/lib/reference-range";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { cleanPatientNameForReport } from "@/lib/patient-title-helper";
 
@@ -591,68 +592,12 @@ export function buildReportBlocks(
     groupedTests[cat][mainTestName].push(item);
   });
 
-  const patientAge = report.patient.age || 25;
-  const patientGender = report.patient.gender || "male";
+  const patientAgeCtx = extractPatientAgeContext(report.patient);
 
   const getRefRange = (item: ReportTest): string => {
     const t = item.test;
-    if (t.rangeType === "TEXT" || t.range_type === "TEXT" || (!t.refRangeMin && !t.ref_range_min && (t.textRefRange || t.text_ref_range))) {
-      const txt = (t.textRefRange || t.text_ref_range || "").trim();
-      if (txt) return txt;
-    }
-
-    if (t.rangeType === "AGE_BASED" || t.range_type === "AGE_BASED") {
-      const ageRanges = t.ageRanges || t.age_ranges;
-      if (Array.isArray(ageRanges) && ageRanges.length > 0 && !isNaN(patientAge)) {
-        const match = ageRanges.find((r: any) => {
-          const minA = r.minAge ?? r.min_age ?? 0;
-          const maxA = r.maxAge ?? r.max_age ?? 999;
-          return patientAge >= minA && patientAge <= maxA;
-        });
-        if (match) {
-          const minVal = match.minVal ?? match.min_val;
-          const maxVal = match.maxVal ?? match.max_val;
-          if (minVal !== undefined && maxVal !== undefined) {
-            return `${minVal} - ${maxVal}`;
-          }
-        }
-      }
-    }
-
-    const genderRefType = t.genderRefType || t.gender_ref_type;
-    if (genderRefType === "CHILD_SPECIFIC" && patientAge < 12) {
-      const minChild = t.refRangeMinChild ?? t.ref_range_min_child;
-      const maxChild = t.refRangeMaxChild ?? t.ref_range_max_child;
-      if (minChild !== undefined && maxChild !== undefined) {
-        return `${minChild} - ${maxChild}`;
-      }
-    }
-
-    if (genderRefType === "GENDER_SPECIFIC" || genderRefType === "BY_GENDER") {
-      const gender = patientGender.toLowerCase();
-      const minF = t.refRangeMinFemale ?? t.ref_range_min_female;
-      const maxF = t.refRangeMaxFemale ?? t.ref_range_max_female;
-      if (gender === "female" && minF !== undefined && maxF !== undefined) {
-        return `${minF} - ${maxF}`;
-      }
-      const minM = t.refRangeMinMale ?? t.ref_range_min_male;
-      const maxM = t.refRangeMaxMale ?? t.ref_range_max_male;
-      if (gender === "male" && minM !== undefined && maxM !== undefined) {
-        return `${minM} - ${maxM}`;
-      }
-    }
-
-    const rMin = t.refRangeMin ?? t.ref_range_min;
-    const rMax = t.refRangeMax ?? t.ref_range_max;
-    if (rMin !== undefined && rMax !== undefined && rMin !== null && rMax !== null && (rMin !== 0 || rMax !== 0)) {
-      return `${rMin} - ${rMax}`;
-    }
-
-    if (t.textRefRange || t.text_ref_range) {
-      return (t.textRefRange || t.text_ref_range || "—").trim();
-    }
-
-    return getDefaultRangeForTest(t.name) || "—";
+    const resolved = resolveTestReferenceRange(t, patientAgeCtx, getDefaultRangeForTest(t.name) || "—");
+    return resolved.text || "—";
   };
 
   const getFlag = (valStr: string | null, item: ReportTest): { flag: "H" | "L" | null; label: string; color: string } => {
@@ -660,23 +605,9 @@ export function buildReportBlocks(
     const val = parseFloat(valStr);
     if (isNaN(val)) return { flag: null, label: "", color: "#000000" };
 
-    let minRange: number | undefined = item.test.refRangeMin ?? item.test.ref_range_min;
-    let maxRange: number | undefined = item.test.refRangeMax ?? item.test.ref_range_max;
-
-    const gRef = item.test.genderRefType || item.test.gender_ref_type;
-    if (gRef === "CHILD_SPECIFIC" && patientAge < 12) {
-      minRange = item.test.refRangeMinChild ?? item.test.ref_range_min_child ?? minRange;
-      maxRange = item.test.refRangeMaxChild ?? item.test.ref_range_max_child ?? maxRange;
-    } else if (gRef === "GENDER_SPECIFIC" || gRef === "BY_GENDER") {
-      const gender = patientGender.toLowerCase();
-      if (gender === "female") {
-        minRange = item.test.refRangeMinFemale ?? item.test.ref_range_min_female ?? minRange;
-        maxRange = item.test.refRangeMaxFemale ?? item.test.ref_range_max_female ?? maxRange;
-      } else {
-        minRange = item.test.refRangeMinMale ?? item.test.ref_range_min_male ?? minRange;
-        maxRange = item.test.refRangeMaxMale ?? item.test.ref_range_max_male ?? maxRange;
-      }
-    }
+    const resolved = resolveTestReferenceRange(item.test, patientAgeCtx);
+    const minRange = resolved.min !== null ? resolved.min : undefined;
+    const maxRange = resolved.max !== null ? resolved.max : undefined;
 
     if (minRange !== undefined && val < minRange) {
       const label = flagsConf.showArrows ? "▼ L" : "L";
@@ -1074,11 +1005,17 @@ export function buildReportBlocks(
           }
         });
       } else {
-        // Table Header
-        const col4Width = sp.interchangeColumns ? `${cw.unit}%` : `${cw.refRange}%`;
-        const col5Width = sp.interchangeColumns ? `${cw.refRange}%` : `${cw.unit}%`;
-        const col4Label = sp.interchangeColumns ? cl.unit : cl.refRange;
-        const col5Label = sp.interchangeColumns ? cl.refRange : cl.unit;
+        // Table Header (Supports custom column order, e.g. Test -> Result -> Unit -> Flag -> Ref. Range)
+        const activeColOrder = resolveReportColumnOrder(reportSettings.columnOrder, sp.interchangeColumns);
+        const getColWidth = (col: ReportColumnKey) => `${cw[col]}%`;
+        const getColLabel = (col: ReportColumnKey) => cl[col];
+        const getHeaderPadding = (col: ReportColumnKey, idx: number) => {
+          if (col === "testDescription") return "2.5px 6px 2.5px 4px";
+          if (col === "flag") return "2.5px 2px";
+          if (idx === 3) return "2.5px 4px 2.5px 16px";
+          if (idx === 4) return "2.5px 4px 2.5px 12px";
+          return "2.5px 4px";
+        };
 
         pushBlock({
           key: `tblhead-${category}-${mainTestName}`,
@@ -1099,19 +1036,28 @@ export function buildReportBlocks(
               }}
             >
               <colgroup>
-                <col style={{ width: `${cw.testDescription}%` }} />
-                <col style={{ width: `${cw.result}%` }} />
-                <col style={{ width: `${cw.flag}%` }} />
-                <col style={{ width: col4Width }} />
-                <col style={{ width: col5Width }} />
+                {activeColOrder.map((col) => (
+                  <col key={col} style={{ width: getColWidth(col) }} />
+                ))}
               </colgroup>
               <thead>
                 <tr>
-                  <th style={{ width: `${cw.testDescription}%`, padding: "2.5px 6px 2.5px 4px", textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{cl.testDescription}</th>
-                  <th style={{ width: `${cw.result}%`, padding: "2.5px 4px", textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{cl.result}</th>
-                  <th style={{ width: `${cw.flag}%`, padding: "2.5px 2px", textAlign: "center", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{cl.flag}</th>
-                  <th style={{ width: col4Width, padding: "2.5px 4px 2.5px 16px", textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{col4Label}</th>
-                  <th style={{ width: col5Width, padding: "2.5px 4px 2.5px 12px", textAlign: "left", color: "#18181b", textTransform: "uppercase", letterSpacing: "0.05em", boxSizing: "border-box" }}>{col5Label}</th>
+                  {activeColOrder.map((col, idx) => (
+                    <th
+                      key={col}
+                      style={{
+                        width: getColWidth(col),
+                        padding: getHeaderPadding(col, idx),
+                        textAlign: col === "flag" ? "center" : "left",
+                        color: "#18181b",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.05em",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      {getColLabel(col)}
+                    </th>
+                  ))}
                 </tr>
               </thead>
             </table>
@@ -1197,8 +1143,130 @@ export function buildReportBlocks(
             : item.test.name;
 
           const itemUnit = item.test.unit || getDefaultUnitForTest(item.test.name) || "";
-          const col4Content = sp.interchangeColumns ? itemUnit : refRange;
-          const col5Content = sp.interchangeColumns ? refRange : itemUnit;
+
+          const renderCellByColKey = (col: ReportColumnKey, idx: number) => {
+            const width = getColWidth(col);
+            const hPadLeft = idx === 3 ? "16px" : idx === 4 ? "12px" : "4px";
+            switch (col) {
+              case "testDescription":
+                return (
+                  <td
+                    key={col}
+                    style={{
+                      width,
+                      padding: `${paramPad} 6px ${paramPad} 4px`,
+                      fontSize: `${paramFontSize}px`,
+                      lineHeight: paramLineHeight,
+                      fontWeight: flagsConf.boldOnlyResultAndFlag ? (typo.boldMultiTypeParameter ? "700" : "500") : (isAbnormal ? "700" : "500"),
+                      color: "#000",
+                      boxSizing: "border-box",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {isIndented && !typo.leftAlignSubParameters ? (
+                      <span style={{ paddingLeft: "10px", display: "block", fontSize: `${paramFontSize - 0.5}px` }}>
+                        {paramName}
+                      </span>
+                    ) : (
+                      paramName
+                    )}
+                    {reportSettings.fieldsToShow.testMethod && item.test.method && item.test.method !== mainTestObj.method && (
+                      <div
+                        style={{
+                          fontSize: `${typo.testMethodFontSize || 8}px`,
+                          color: typo.testMethodColor || "#71717a",
+                          fontStyle: "italic",
+                          fontWeight: "400",
+                          marginTop: `${sp.testMethod || -2}px`,
+                        }}
+                      >
+                        Method: {item.test.method}
+                      </div>
+                    )}
+                  </td>
+                );
+              case "result":
+                return (
+                  <td
+                    key={col}
+                    style={{
+                      width,
+                      padding: `${paramPad} 4px`,
+                      fontSize: `${paramFontSize + 0.5}px`,
+                      lineHeight: paramLineHeight,
+                      fontFamily: "monospace",
+                      fontWeight: isAbnormal ? "700" : "400",
+                      color: isHighOrLow ? flagInfo.color : "#000",
+                      textAlign: "left",
+                      verticalAlign: vAlign,
+                      boxSizing: "border-box",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {item.resultValue || "—"}
+                  </td>
+                );
+              case "flag":
+                return (
+                  <td
+                    key={col}
+                    style={{
+                      width,
+                      padding: `${paramPad} 2px`,
+                      fontSize: `${paramFontSize}px`,
+                      lineHeight: paramLineHeight,
+                      fontWeight: "800",
+                      color: flagInfo.color,
+                      textAlign: "center",
+                      verticalAlign: vAlign,
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    {flagInfo.label}
+                  </td>
+                );
+              case "refRange":
+                return (
+                  <td
+                    key={col}
+                    style={{
+                      width,
+                      padding: `${paramPad} 4px ${paramPad} ${hPadLeft}`,
+                      fontSize: `${paramFontSize}px`,
+                      lineHeight: paramLineHeight,
+                      fontFamily: "monospace",
+                      color: "#3f3f46",
+                      textAlign: "left",
+                      verticalAlign: vAlign,
+                      boxSizing: "border-box",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {refRange}
+                  </td>
+                );
+              case "unit":
+                return (
+                  <td
+                    key={col}
+                    style={{
+                      width,
+                      padding: `${paramPad} 4px ${paramPad} ${idx >= 3 ? hPadLeft : "4px"}`,
+                      fontSize: `${paramFontSize - 0.5}px`,
+                      lineHeight: paramLineHeight,
+                      fontFamily: "inherit",
+                      color: "#52525b",
+                      textAlign: "left",
+                      verticalAlign: vAlign,
+                      boxSizing: "border-box",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {itemUnit}
+                  </td>
+                );
+            }
+          };
 
           return (
             <table
@@ -1214,115 +1282,13 @@ export function buildReportBlocks(
               }}
             >
               <colgroup>
-                <col style={{ width: `${cw.testDescription}%` }} />
-                <col style={{ width: `${cw.result}%` }} />
-                <col style={{ width: `${cw.flag}%` }} />
-                <col style={{ width: col4Width }} />
-                <col style={{ width: col5Width }} />
+                {activeColOrder.map((col) => (
+                  <col key={col} style={{ width: getColWidth(col) }} />
+                ))}
               </colgroup>
               <tbody>
                 <tr style={{ verticalAlign: vAlign }}>
-                  <td 
-                    style={{ 
-                      width: `${cw.testDescription}%`,
-                      padding: `${paramPad} 6px ${paramPad} 4px`, 
-                      fontSize: `${paramFontSize}px`, 
-                      lineHeight: paramLineHeight, 
-                      fontWeight: flagsConf.boldOnlyResultAndFlag ? (typo.boldMultiTypeParameter ? "700" : "500") : (isAbnormal ? "700" : "500"), 
-                      color: "#000",
-                      boxSizing: "border-box",
-                      wordBreak: "break-word"
-                    }}
-                  >
-                    {isIndented && !typo.leftAlignSubParameters ? (
-                      <span style={{ paddingLeft: "10px", display: "block", fontSize: `${paramFontSize - 0.5}px` }}>
-                        {paramName}
-                      </span>
-                    ) : (
-                      paramName
-                    )}
-                    {reportSettings.fieldsToShow.testMethod && item.test.method && item.test.method !== mainTestObj.method && (
-                      <div 
-                        style={{ 
-                          fontSize: `${typo.testMethodFontSize || 8}px`, 
-                          color: typo.testMethodColor || "#71717a", 
-                          fontStyle: "italic", 
-                          fontWeight: "400", 
-                          marginTop: `${sp.testMethod || -2}px`, 
-                        }}
-                      >
-                        Method: {item.test.method}
-                      </div>
-                    )}
-                  </td>
-                  {/* VALUE */}
-                  <td 
-                    style={{ 
-                      width: `${cw.result}%`,
-                      padding: `${paramPad} 4px`, 
-                      fontSize: `${paramFontSize + 0.5}px`, 
-                      lineHeight: paramLineHeight, 
-                      fontFamily: "monospace", 
-                      fontWeight: isAbnormal ? "700" : "400", 
-                      color: isHighOrLow ? flagInfo.color : "#000", 
-                      textAlign: "left", 
-                      verticalAlign: vAlign,
-                      boxSizing: "border-box",
-                      wordBreak: "break-word"
-                    }}
-                  >
-                    {item.resultValue || "—"}
-                  </td>
-                  {/* FLAG */}
-                  <td 
-                    style={{ 
-                      width: `${cw.flag}%`,
-                      padding: `${paramPad} 2px`, 
-                      fontSize: `${paramFontSize}px`, 
-                      lineHeight: paramLineHeight, 
-                      fontWeight: "800", 
-                      color: flagInfo.color, 
-                      textAlign: "center", 
-                      verticalAlign: vAlign,
-                      boxSizing: "border-box"
-                    }}
-                  >
-                    {flagInfo.label}
-                  </td>
-                  {/* COL 4 (REF RANGE OR UNIT) */}
-                  <td 
-                    style={{ 
-                      width: col4Width,
-                      padding: `${paramPad} 4px ${paramPad} 16px`, 
-                      fontSize: `${paramFontSize}px`, 
-                      lineHeight: paramLineHeight, 
-                      fontFamily: sp.interchangeColumns ? "inherit" : "monospace", 
-                      color: sp.interchangeColumns ? "#52525b" : "#3f3f46", 
-                      textAlign: "left", 
-                      verticalAlign: vAlign,
-                      boxSizing: "border-box",
-                      wordBreak: "break-word"
-                    }}
-                  >
-                    {col4Content}
-                  </td>
-                  {/* COL 5 (UNIT OR REF RANGE) */}
-                  <td 
-                    style={{ 
-                      width: col5Width,
-                      padding: `${paramPad} 4px ${paramPad} 12px`, 
-                      fontSize: `${paramFontSize - (sp.interchangeColumns ? 0 : 0.5)}px`, 
-                      lineHeight: paramLineHeight, 
-                      fontFamily: sp.interchangeColumns ? "monospace" : "inherit", 
-                      color: sp.interchangeColumns ? "#3f3f46" : "#52525b", 
-                      textAlign: "left", 
-                      verticalAlign: vAlign,
-                      boxSizing: "border-box",
-                      wordBreak: "break-word"
-                    }}
-                  >
-                    {col5Content}
-                  </td>
+                  {activeColOrder.map((col, idx) => renderCellByColKey(col, idx))}
                 </tr>
                 {item.remarks && item.remarks.trim() !== "" && (
                   <tr>

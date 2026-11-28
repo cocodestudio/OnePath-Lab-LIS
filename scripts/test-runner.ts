@@ -33,6 +33,12 @@ import {
   getRoleWelcomeMessage,
   normalizeAiRole,
 } from "../src/lib/ai-guide-knowledge";
+import {
+  resolveTestReferenceRange,
+  extractPatientAgeContext,
+  resolveReportColumnOrder,
+} from "../src/lib/reference-range";
+import { normalizeReportSettings } from "../src/lib/report-settings";
 
 let totalTests = 0;
 let passedTests = 0;
@@ -2689,7 +2695,8 @@ assert(
 
 // 28.6 Backend Report Controller Consistency & Active Catalog Synchronization
 assert(
-  backendReportControllerSrc.includes("'results.test:id,name,category,field_type,unit,ref_range_min,ref_range_max,text_ref_range,range_type,gender_ref_type,parent_id,sort_order,is_hidden'") &&
+  backendReportControllerSrc.includes("'results.test:id,name,category,field_type,unit,ref_range_min,ref_range_max,text_ref_range,range_type,gender_ref_type,parent_id,sort_order,is_hidden") &&
+  backendReportControllerSrc.includes("age_ranges") &&
   backendReportControllerSrc.includes("// Consistency & Catalog Sync: Synchronize report tests with the lab's active catalog definitions") &&
   backendReportControllerSrc.includes("// Sort results according to the active catalog sort_order sequence") &&
   backendReportControllerSrc.includes("if (!empty($test->is_hidden))") &&
@@ -8346,6 +8353,122 @@ assert(
   registerPageSrc102.includes("const rawColl = isNewIntake") &&
   registerPageSrc102.includes("if (isNewIntake) {\n      setCollectionDateTime(formatToDateTimeLocal(new Date()));\n    } else if (rawColl)"),
   "[AUTOFILL TODAY COLLECTION DATE] Clicking previous patient suggestion fills demographics while keeping today's collection date & time"
+);
+
+// ==============================================================================
+// MODULE 103: Preloaded Parameter Picker, Unlimited Age Ranges (Days/Months/Years + M/F), & Custom Report Column Order
+// ==============================================================================
+console.log("\n▶ MODULE 103: Preloaded Parameter Picker, Unlimited Age Ranges & Custom Report Column Order");
+
+const testCatalogSrc103 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/tests/page.tsx"),
+  "utf-8"
+);
+const pickerModalSrc103 = fs.readFileSync(
+  path.join(__dirname, "../src/components/existing-parameter-picker-modal.tsx"),
+  "utf-8"
+);
+const settingsPageSrc103 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/settings/page.tsx"),
+  "utf-8"
+);
+const reportSheetSrc103 = fs.readFileSync(
+  path.join(__dirname, "../src/components/report-sheet.tsx"),
+  "utf-8"
+);
+const editResultsSrc103 = fs.readFileSync(
+  path.join(__dirname, "../src/app/dashboard/reports/[id]/edit/page.tsx"),
+  "utf-8"
+);
+
+// 103.1 Reusable Preloaded / Existing Parameter Picker Integration
+assert(
+  pickerModalSrc103.includes("export function buildExistingParametersCatalog") &&
+  pickerModalSrc103.includes("export function ExistingParameterPickerModal") &&
+  testCatalogSrc103.includes("+ Pick Preloaded Parameter") &&
+  testCatalogSrc103.includes("handleImportExistingParameters") &&
+  testCatalogSrc103.includes("<ExistingParameterPickerModal"),
+  "[PRELOADED PARAMETER PICKER] Test Catalog provides searchable 1-click picker for importing existing parameters with units, methods, and ranges"
+);
+
+// 103.2 Unlimited Custom Age Stages + Male/Female Pair Builder in Test Catalog
+assert(
+  testCatalogSrc103.includes("handleAddAgeRangeStage") &&
+  testCatalogSrc103.includes("handleAddAgeRangeGenderPair") &&
+  testCatalogSrc103.includes("+ Add Age Stage") &&
+  testCatalogSrc103.includes("+ Add Male &amp; Female Pair") &&
+  testCatalogSrc103.includes("+ Add Another Custom Age Stage"),
+  "[UNLIMITED AGE INTERVALS BUILDER] Age-Graded Reference Ranges modal supports adding unlimited custom stages and Male/Female pairs"
+);
+
+// 103.3 Pure Age-Wise & Gender-Wise Resolution (ALP 9-Stage Schedule with Days, Months, Years & M/F)
+{
+  const alpTest = {
+    name: "Alkaline Phosphatase (ALP)",
+    unit: "U/L",
+    rangeType: "numeric",
+    ageRanges: [
+      { stageName: "Newborn (0-14d)", minAge: 0, maxAge: 14, ageUnit: "days", gender: "BOTH", refMin: "83", refMax: "248" },
+      { stageName: "Infants (15d-<1y)", minAge: 15, maxAge: 364, ageUnit: "days", gender: "BOTH", refMin: "122", refMax: "469" },
+      { stageName: "Children (1-<10y)", minAge: 1, maxAge: 9, ageUnit: "years", gender: "BOTH", refMin: "142", refMax: "335" },
+      { stageName: "Pre-teens (10-<13y)", minAge: 10, maxAge: 12, ageUnit: "years", gender: "BOTH", refMin: "129", refMax: "417" },
+      { stageName: "Early Teens Male", minAge: 13, maxAge: 14, ageUnit: "years", gender: "MALE", refMin: "116", refMax: "468" },
+      { stageName: "Early Teens Female", minAge: 13, maxAge: 14, ageUnit: "years", gender: "FEMALE", refMin: "57", refMax: "254" },
+      { stageName: "Adults Male", minAge: 19, maxAge: 60, ageUnit: "years", gender: "MALE", refMin: "40", refMax: "129" },
+      { stageName: "Adults Female", minAge: 19, maxAge: 60, ageUnit: "years", gender: "FEMALE", refMin: "35", refMax: "104" },
+      { stageName: "Elders (60+)", minAge: 61, maxAge: 120, ageUnit: "years", gender: "MALE", refMin: "40", refMax: "130" },
+    ],
+  };
+
+  const newbornRes = resolveTestReferenceRange(alpTest, extractPatientAgeContext({ age: 0, age_days: 10, gender: "Female" }));
+  const infantRes = resolveTestReferenceRange(alpTest, extractPatientAgeContext({ age: 0, age_months: 6, gender: "Male" }));
+  const childRes = resolveTestReferenceRange(alpTest, extractPatientAgeContext({ age: 5, gender: "Male" }));
+  const earlyTeenMale = resolveTestReferenceRange(alpTest, extractPatientAgeContext({ age: 14, gender: "Male" }));
+  const earlyTeenFemale = resolveTestReferenceRange(alpTest, extractPatientAgeContext({ age: 14, gender: "Female" }));
+  const adultMale = resolveTestReferenceRange(alpTest, extractPatientAgeContext({ age: 35, gender: "Male" }));
+  const adultFemale = resolveTestReferenceRange(alpTest, extractPatientAgeContext({ age: 35, gender: "Female" }));
+
+  assert(
+    newbornRes.text === "83 - 248" && newbornRes.min === 83 && newbornRes.max === 248 &&
+    infantRes.text === "122 - 469" &&
+    childRes.text === "142 - 335" &&
+    earlyTeenMale.text === "116 - 468" &&
+    earlyTeenFemale.text === "57 - 254" &&
+    adultMale.text === "40 - 129" &&
+    adultFemale.text === "35 - 104",
+    "[ALP 9-STAGE AGE & GENDER RESOLUTION] Accurately resolves days, months, years, and Male/Female splits across 9+ age slabs"
+  );
+}
+
+// 103.4 Report Column Order Resolution (Value -> Unit -> Flag -> Normal Range) & Backwards Compatibility
+{
+  const customOrder = resolveReportColumnOrder(["testDescription", "result", "unit", "flag", "refRange"], false);
+  const swappedLegacy = resolveReportColumnOrder(undefined, true);
+  const defaultOrder = resolveReportColumnOrder(undefined, false);
+  const invalidFallback = resolveReportColumnOrder(["invalid", "result"], false);
+  const normalizedCustom = normalizeReportSettings({
+    columnOrder: ["testDescription", "result", "unit", "flag", "refRange"],
+  });
+
+  assert(
+    customOrder.join(",") === "testDescription,result,unit,flag,refRange" &&
+    swappedLegacy.join(",") === "testDescription,result,flag,unit,refRange" &&
+    defaultOrder.join(",") === "testDescription,result,flag,refRange,unit" &&
+    invalidFallback.join(",") === "testDescription,result,flag,refRange,unit" &&
+    normalizedCustom.columnOrder?.join(",") === "testDescription,result,unit,flag,refRange" &&
+    normalizedCustom.spacing.interchangeColumns === true,
+    "[REPORT COLUMN ORDER RESOLUTION] Supports Test -> Value -> Unit -> Flag -> Range preset while preserving legacy interchangeColumns compatibility"
+  );
+}
+
+// 103.5 Settings UI & Report Sheet + Enter Results Integration
+assert(
+  settingsPageSrc103.includes("Investigation Table Column Arrangement") &&
+  settingsPageSrc103.includes("REPORT_COLUMN_PRESETS") &&
+  reportSheetSrc103.includes("resolveReportColumnOrder(reportSettings.columnOrder, sp.interchangeColumns)") &&
+  reportSheetSrc103.includes("renderCellByColKey(col, idx)") &&
+  editResultsSrc103.includes("resolveTestReferenceRange(test, patientCtx)"),
+  "[SETTINGS, PRINT SHEET & ENTER RESULTS SYNC] Settings UI, ReportSheet print columns, and Enter Results flagging stay synchronized"
 );
 
 console.log(`RESULTS: ${passedTests}/${totalTests} tests passed (${failedTests} failed)`);

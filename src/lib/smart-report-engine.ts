@@ -1,4 +1,5 @@
 import { isGenuineCustomEditorTest } from "@/lib/clinical-test-helper";
+import { resolveTestReferenceRange } from "@/lib/reference-range";
 export interface OrganHealthScore {
   id: string;
   name: string;
@@ -291,51 +292,24 @@ export function evaluateParamReference(
   let max: number | undefined = undefined;
   const isTextRange = t.rangeType === "TEXT" || t.range_type === "TEXT";
 
-  if (isTextRange) {
+  const resolvedRange = resolveTestReferenceRange(t, {
+    ageYears: Number.isFinite(patientAge) ? patientAge : 25,
+    ageMonths: 0,
+    ageDays: 0,
+    gender: patientGender || "male",
+  });
+  if (resolvedRange.min !== null || resolvedRange.max !== null || (resolvedRange.text && resolvedRange.text !== "—")) {
+    min = resolvedRange.min !== null ? resolvedRange.min : undefined;
+    max = resolvedRange.max !== null ? resolvedRange.max : undefined;
+    refRange = resolvedRange.text;
+  }
+
+  if (isTextRange && refRange === "—") {
     refRange = (t.textRefRange || t.text_ref_range || "—").trim();
-  } else if (t.rangeType === "AGE_BASED" || t.range_type === "AGE_BASED") {
-    const ageRanges = t.ageRanges || t.age_ranges;
-    if (Array.isArray(ageRanges) && ageRanges.length > 0 && !isNaN(patientAge)) {
-      const match = ageRanges.find((r: any) => {
-        const minA = r.minAge ?? r.min_age ?? 0;
-        const maxA = r.maxAge ?? r.max_age ?? 999;
-        return patientAge >= minA && patientAge <= maxA;
-      });
-      if (match) {
-        min = match.minVal !== undefined && match.minVal !== null ? Number(match.minVal) : match.min_val !== undefined && match.min_val !== null ? Number(match.min_val) : undefined;
-        max = match.maxVal !== undefined && match.maxVal !== null ? Number(match.maxVal) : match.max_val !== undefined && match.max_val !== null ? Number(match.max_val) : undefined;
-        if (min !== undefined && max !== undefined) {
-          refRange = `${min} - ${max}`;
-        }
-      }
-    }
-  } else if (t.genderRefType === "CHILD_SPECIFIC" && patientAge < 12) {
-    min = t.refRangeMinChild !== undefined && t.refRangeMinChild !== null ? Number(t.refRangeMinChild) : t.ref_range_min_child !== undefined && t.ref_range_min_child !== null ? Number(t.ref_range_min_child) : undefined;
-    max = t.refRangeMaxChild !== undefined && t.refRangeMaxChild !== null ? Number(t.refRangeMaxChild) : t.ref_range_max_child !== undefined && t.ref_range_max_child !== null ? Number(t.ref_range_max_child) : undefined;
-    if (min !== undefined && max !== undefined) {
-      refRange = `${min} - ${max}`;
-    }
-  } else if (
-    t.genderRefType === "GENDER_SPECIFIC" ||
-    t.genderRefType === "BY_GENDER" ||
-    t.gender_ref_type === "GENDER_SPECIFIC" ||
-    t.gender_ref_type === "BY_GENDER"
-  ) {
-    const gender = (patientGender || "male").toLowerCase();
-    if (gender === "female") {
-      min = t.refRangeMinFemale !== undefined && t.refRangeMinFemale !== null ? Number(t.refRangeMinFemale) : t.ref_range_min_female !== undefined && t.ref_range_min_female !== null ? Number(t.ref_range_min_female) : undefined;
-      max = t.refRangeMaxFemale !== undefined && t.refRangeMaxFemale !== null ? Number(t.refRangeMaxFemale) : t.ref_range_max_female !== undefined && t.ref_range_max_female !== null ? Number(t.ref_range_max_female) : undefined;
-    } else {
-      min = t.refRangeMinMale !== undefined && t.refRangeMinMale !== null ? Number(t.refRangeMinMale) : t.ref_range_min_male !== undefined && t.ref_range_min_male !== null ? Number(t.ref_range_min_male) : undefined;
-      max = t.refRangeMaxMale !== undefined && t.refRangeMaxMale !== null ? Number(t.refRangeMaxMale) : t.ref_range_max_male !== undefined && t.ref_range_max_male !== null ? Number(t.ref_range_max_male) : undefined;
-    }
-    if (min !== undefined && max !== undefined) {
-      refRange = `${min} - ${max}`;
-    }
   }
 
   // Default fallback to standard min/max
-  if (min === undefined && max === undefined) {
+  if (!isTextRange && min === undefined && max === undefined && refRange === "—") {
     const rawMin = t.refRangeMin ?? t.ref_range_min ?? item?.refRangeMin ?? item?.ref_range_min;
     const rawMax = t.refRangeMax ?? t.ref_range_max ?? item?.refRangeMax ?? item?.ref_range_max;
     if (rawMin !== undefined && rawMin !== null && rawMin !== "") min = Number(rawMin);

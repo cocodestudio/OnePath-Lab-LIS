@@ -22,6 +22,7 @@ import { useToast } from "@/components/ui/toast";
 import { fetchFromLaravel, getCleanLetterheadUrl, clearApiCache } from "@/lib/api-client";
 import { TipTapEditor } from "@/components/tiptap-editor";
 import { PrintPreviewDialog } from "@/components/print-preview-dialog";
+import { ExistingParameterPickerModal } from "@/components/existing-parameter-picker-modal";
 import type { ReportSheetData, ReportTest } from "@/components/report-sheet";
 import { normalizeReportSettings } from "@/lib/report-settings";
 import { sanitizeHtml } from "@/lib/sanitize";
@@ -291,6 +292,10 @@ export default function TestMasterPage() {
   const [ageRangeModalOpen, setAgeRangeModalOpen] = useState(false);
   const [activeAgeRangeLocation, setActiveAgeRangeLocation] = useState<{ parentIdx: number; subIdx?: number } | null>(null);
   const [tempAgeRanges, setTempAgeRanges] = useState<AgeRangeBand[]>([]);
+
+  // Existing / Preloaded Parameter Picker State
+  const [existingParamPickerOpen, setExistingParamPickerOpen] = useState(false);
+  const [existingParamTargetParentIdx, setExistingParamTargetParentIdx] = useState<number | null>(null);
 
   // Unit Search Popover / Dropdown State
   const [activeUnitDropdownId, setActiveUnitDropdownId] = useState<string | null>(null);
@@ -819,7 +824,7 @@ export default function TestMasterPage() {
         refRangeMaxChild: sub.refRangeMaxChild?.toString() || "",
         refRangeMinNewborn: sub.refRangeMinNewborn?.toString() || "",
         refRangeMaxNewborn: sub.refRangeMaxNewborn?.toString() || "",
-        ageRanges: Array.isArray(sub.ageRanges) ? sub.ageRanges : [],
+        ageRanges: Array.isArray(sub.ageRanges ?? (sub as any).age_ranges) ? (sub.ageRanges ?? (sub as any).age_ranges) : [],
         fieldType: sub.fieldType || "Single Field",
         valueType: sub.valueType || "Numeric",
         customOptions: sub.customOptions ? (typeof sub.customOptions === "string" ? JSON.parse(sub.customOptions) : sub.customOptions) : [],
@@ -841,7 +846,7 @@ export default function TestMasterPage() {
           refRangeMaxChild: ss.refRangeMaxChild?.toString() || "",
           refRangeMinNewborn: ss.refRangeMinNewborn?.toString() || "",
           refRangeMaxNewborn: ss.refRangeMaxNewborn?.toString() || "",
-          ageRanges: Array.isArray(ss.ageRanges) ? ss.ageRanges : [],
+          ageRanges: Array.isArray(ss.ageRanges ?? (ss as any).age_ranges) ? (ss.ageRanges ?? (ss as any).age_ranges) : [],
           fieldType: "Single Field",
           valueType: ss.valueType || "Numeric",
           customOptions: ss.customOptions ? (typeof ss.customOptions === "string" ? JSON.parse(ss.customOptions) : ss.customOptions) : [],
@@ -865,7 +870,7 @@ export default function TestMasterPage() {
         refRangeMaxChild: test.refRangeMaxChild?.toString() || "",
         refRangeMinNewborn: test.refRangeMinNewborn?.toString() || "",
         refRangeMaxNewborn: test.refRangeMaxNewborn?.toString() || "",
-        ageRanges: Array.isArray(test.ageRanges) ? test.ageRanges : [],
+        ageRanges: Array.isArray(test.ageRanges ?? (test as any).age_ranges) ? (test.ageRanges ?? (test as any).age_ranges) : [],
         fieldType: "Single Field",
         valueType: test.valueType || "Numeric",
         customOptions: test.customOptions ? (typeof test.customOptions === "string" ? JSON.parse(test.customOptions) : test.customOptions) : [],
@@ -1179,6 +1184,89 @@ export default function TestMasterPage() {
       { id: "stage_senior", stageName: "Senior Citizen", minAge: 61, maxAge: 120, ageUnit: "years", gender: "BOTH", rangeType: "numeric", refMin: "12.0", refMax: "16.0", textRange: "" },
     ];
     setTempAgeRanges(standardStages);
+  };
+
+  const handleAddAgeRangeStage = () => {
+    const uid = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    setTempAgeRanges((prev) => [
+      ...prev,
+      {
+        id: `stage_${uid}`,
+        stageName: "",
+        minAge: 0,
+        maxAge: 1,
+        ageUnit: "years",
+        gender: "BOTH",
+        rangeType: "numeric",
+        refMin: "",
+        refMax: "",
+        textRange: "",
+      },
+    ]);
+  };
+
+  const handleAddAgeRangeGenderPair = () => {
+    const uid = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    setTempAgeRanges((prev) => [
+      ...prev,
+      {
+        id: `stage_${uid}_m`,
+        stageName: "",
+        minAge: 0,
+        maxAge: 1,
+        ageUnit: "years",
+        gender: "MALE",
+        rangeType: "numeric",
+        refMin: "",
+        refMax: "",
+        textRange: "",
+      },
+      {
+        id: `stage_${uid}_f`,
+        stageName: "",
+        minAge: 0,
+        maxAge: 1,
+        ageUnit: "years",
+        gender: "FEMALE",
+        rangeType: "numeric",
+        refMin: "",
+        refMax: "",
+        textRange: "",
+      },
+    ]);
+  };
+
+  const handleImportExistingParameters = (imported: SubTestState[]) => {
+    if (!Array.isArray(imported) || imported.length === 0) return;
+    if (existingParamTargetParentIdx !== null) {
+      const targetIdx = existingParamTargetParentIdx;
+      setSubTests((prev) => {
+        const updated = [...prev];
+        if (!updated[targetIdx]) return prev;
+        const currentNested = updated[targetIdx].subTests || [];
+        updated[targetIdx] = {
+          ...updated[targetIdx],
+          fieldType: "Multiple Field",
+          subTests: [...currentNested, ...imported],
+        };
+        return updated;
+      });
+      toast.success("Sub-Parameters Added", `${imported.length} existing parameter(s) added.`);
+    } else {
+      setSubTests((prev) => {
+        const isOnlyBlankPlaceholder =
+          prev.length === 1 &&
+          !prev[0].name.trim() &&
+          !prev[0].unit.trim() &&
+          !prev[0].refRangeMin &&
+          !prev[0].refRangeMax;
+        return isOnlyBlankPlaceholder ? imported : [...prev, ...imported];
+      });
+      if (type === "Single" || (subTests.length + imported.length) > 1) {
+        setType("Multiple");
+      }
+      toast.success("Parameters Imported", `${imported.length} preloaded parameter(s) added to panel.`);
+    }
   };
 
   const handleSaveAgeRanges = () => {
@@ -2340,14 +2428,29 @@ export default function TestMasterPage() {
                   </p>
                 </div>
 
-                <Button
-                  type="button"
-                  onClick={handleAddSubTest}
-                  className="rounded-lg px-4 py-2.5 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>+ Add Parameter</span>
-                </Button>
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setExistingParamTargetParentIdx(null);
+                      setExistingParamPickerOpen(true);
+                    }}
+                    className="rounded-lg px-3.5 py-2.5 border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Search className="h-3.5 w-3.5" />
+                    <span>+ Pick Preloaded Parameter</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    onClick={handleAddSubTest}
+                    className="rounded-lg px-4 py-2.5 bg-primary text-xs font-bold text-primary-foreground hover:bg-primary/90 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>+ Add Parameter</span>
+                  </Button>
+                </div>
               </div>
 
               {/* Parameter Cards with Drag & Drop & Sub-Parameters */}
@@ -2778,14 +2881,27 @@ export default function TestMasterPage() {
                               <CornerDownRight className="h-4 w-4 text-primary" />
                               <span>Sub-Parameters of {sub.name || `Parameter #${sIdx + 1}`} ({sub.subTests!.length})</span>
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => handleAddNestedSubTest(sIdx)}
-                              className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 flex items-center gap-1 cursor-pointer shadow-xs"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              <span>+ Add Sub-parameter</span>
-                            </button>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setExistingParamTargetParentIdx(sIdx);
+                                  setExistingParamPickerOpen(true);
+                                }}
+                                className="px-3 py-1.5 rounded-lg border border-primary/40 bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 flex items-center gap-1 cursor-pointer shadow-xs"
+                              >
+                                <Search className="h-3.5 w-3.5" />
+                                <span>+ Pick Existing</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAddNestedSubTest(sIdx)}
+                                className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 flex items-center gap-1 cursor-pointer shadow-xs"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                                <span>+ Add Sub-parameter</span>
+                              </button>
+                            </div>
                           </div>
 
                           <div className="space-y-3">
@@ -3234,16 +3350,38 @@ export default function TestMasterPage() {
           </div>
 
           <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
-            <div className="flex items-center justify-between">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleLoadStandardAgeStages}
-                className="rounded-lg px-3.5 py-2 text-xs font-bold border-primary/30 text-primary hover:bg-primary/10 cursor-pointer flex items-center gap-1.5"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Reset to Standard Stages (0-120 Yrs)</span>
-              </Button>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={handleAddAgeRangeStage}
+                  className="rounded-lg px-3.5 py-2 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer flex items-center gap-1.5 shadow-xs"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>+ Add Age Stage</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleAddAgeRangeGenderPair}
+                  className="rounded-lg px-3.5 py-2 text-xs font-bold border-primary/40 bg-primary/5 text-primary hover:bg-primary/15 cursor-pointer flex items-center gap-1.5"
+                  title="Adds both Male and Female rows for an age group"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>+ Add Male &amp; Female Pair</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleLoadStandardAgeStages}
+                  className="rounded-lg px-3.5 py-2 text-xs font-bold border-border text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer flex items-center gap-1.5"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>Reset Standard (6)</span>
+                </Button>
+              </div>
 
               <span className="text-xs text-muted-foreground font-medium">
                 {tempAgeRanges.length} Age Stages Active
@@ -3375,6 +3513,17 @@ export default function TestMasterPage() {
                 </div>
               ))}
             </div>
+
+            <div className="pt-2 flex justify-center">
+              <button
+                type="button"
+                onClick={handleAddAgeRangeStage}
+                className="w-full py-2.5 rounded-xl border border-dashed border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>+ Add Another Custom Age Stage (Days / Months / Years)</span>
+              </button>
+            </div>
           </div>
 
           <div className="p-4 px-6 border-t border-border bg-muted/30 flex items-center justify-end gap-3">
@@ -3396,6 +3545,19 @@ export default function TestMasterPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Preloaded / Existing Parameter Picker Modal */}
+      <ExistingParameterPickerModal
+        isOpen={existingParamPickerOpen}
+        onClose={() => setExistingParamPickerOpen(false)}
+        tests={tests}
+        onImport={handleImportExistingParameters}
+        title={
+          existingParamTargetParentIdx !== null
+            ? "Pick Existing Sub-Parameters"
+            : "Pick Preloaded / Existing Parameters"
+        }
+      />
 
       {/* =========================================================================
           FULLSCREEN CUSTOM TABLE & REPORT LAYOUT MODAL

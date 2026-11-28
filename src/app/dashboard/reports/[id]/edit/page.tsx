@@ -27,6 +27,7 @@ import { getClinicalInterpretation } from "@/lib/clinical-interpretations";
 import { getReportPackage } from "@/lib/packages";
 import { compareClinicalTests, compareClinicalParameters, getClinicalTestPriority } from "@/lib/clinical-order";
 import { isGenuineCustomEditorTest, isStandardAnalyteTest, getDefaultUnitForTest, getDefaultRangeForTest, getCustomEditorInitialTemplate } from "@/lib/clinical-test-helper";
+import { resolveTestReferenceRange, extractPatientAgeContext } from "@/lib/reference-range";
 
 // Clinical Categorized Predefined Units
 const CATEGORIZED_UNITS: Record<string, string[]> = {
@@ -1044,55 +1045,16 @@ function ResultEntryContent() {
   };
 
   const getRefRange = (test: Test, patientGender: string, patientAge: number) => {
-    const genderType = (test.genderRefType || test.gender_ref_type || "").toUpperCase();
-    const gender = (patientGender || "Male").toLowerCase();
+    const patientCtx = report?.patient
+      ? extractPatientAgeContext({
+          ...report.patient,
+          age: report.patient.age ?? patientAge,
+          gender: patientGender || report.patient.gender || "Male",
+        })
+      : { ageYears: patientAge ?? 30, ageMonths: 0, ageDays: 0, gender: patientGender || "Male" };
 
-    const parseNum = (val: any): number | null => {
-      if (val === null || val === undefined || val === "") return null;
-      const n = Number(val);
-      return isNaN(n) ? null : n;
-    };
-
-    const minDefault = parseNum(test.ref_range_min ?? test.refRangeMin);
-    const maxDefault = parseNum(test.ref_range_max ?? test.refRangeMax);
-
-    const minMale = parseNum(test.ref_range_min_male ?? test.refRangeMinMale) ?? minDefault;
-    const maxMale = parseNum(test.ref_range_max_male ?? test.refRangeMaxMale) ?? maxDefault;
-
-    const minFemale = parseNum(test.ref_range_min_female ?? test.refRangeMinFemale) ?? minDefault;
-    const maxFemale = parseNum(test.ref_range_max_female ?? test.refRangeMaxFemale) ?? maxDefault;
-
-    const minChild = parseNum(test.ref_range_min_child ?? test.refRangeMinChild) ?? minDefault;
-    const maxChild = parseNum(test.ref_range_max_child ?? test.refRangeMaxChild) ?? maxDefault;
-
-    const minNewborn = parseNum(test.ref_range_min_newborn ?? test.refRangeMinNewborn) ?? minDefault;
-    const maxNewborn = parseNum(test.ref_range_max_newborn ?? test.refRangeMaxNewborn) ?? maxDefault;
-
-    if (genderType === "NEWBORN" || (patientAge !== undefined && patientAge < 1)) {
-      if (minNewborn !== null || maxNewborn !== null) return { min: minNewborn, max: maxNewborn };
-    }
-
-    if (genderType === "CHILDREN" || (patientAge !== undefined && patientAge < 12)) {
-      if (minChild !== null || maxChild !== null) return { min: minChild, max: maxChild };
-    }
-
-    if (genderType === "GENDER_SPECIFIC" || genderType === "BY_GENDER" || genderType === "GENDER") {
-      if (gender === "female") {
-        return { min: minFemale, max: maxFemale };
-      } else {
-        return { min: minMale, max: maxMale };
-      }
-    }
-
-    if (gender === "female" && (minFemale !== null || maxFemale !== null)) {
-      return { min: minFemale, max: maxFemale };
-    }
-
-    if (minMale !== null || maxMale !== null) {
-      return { min: minMale, max: maxMale };
-    }
-
-    return { min: minDefault, max: maxDefault };
+    const resolved = resolveTestReferenceRange(test, patientCtx);
+    return { min: resolved.min, max: resolved.max };
   };
 
   const formatRefRangeText = (range: { min: number | null; max: number | null }) => {

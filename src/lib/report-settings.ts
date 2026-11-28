@@ -380,6 +380,7 @@ export interface ReportLayoutSettings {
     refRange: string;
     unit: string;
   };
+  columnOrder?: ("testDescription" | "result" | "flag" | "refRange" | "unit")[];
   endingLine: {
     text: string;
     fontSize: number;
@@ -502,6 +503,7 @@ export const defaultReportLayoutSettings: ReportLayoutSettings = {
     refRange: "REFERENCE",
     unit: "UNIT",
   },
+  columnOrder: ["testDescription", "result", "flag", "refRange", "unit"],
   endingLine: {
     text: "*** END OF REPORT ***",
     fontSize: 9,
@@ -680,6 +682,27 @@ export function normalizeReportSettings(raw: any): ReportLayoutSettings {
       ...res.columnLabels,
       ...(raw.columnLabels || raw.column_labels),
     };
+  }
+
+  const rawColOrder = raw.columnOrder || raw.column_order || raw.spacing?.columnOrder;
+  const validCols = new Set(["testDescription", "result", "flag", "refRange", "unit"]);
+  if (Array.isArray(rawColOrder) && rawColOrder.length === 5) {
+    const cleaned = Array.from(new Set(rawColOrder.filter((k: any) => validCols.has(k))));
+    if (cleaned.length === 5) {
+      res.columnOrder = cleaned as any;
+    }
+  }
+  if (!Array.isArray(res.columnOrder) || res.columnOrder.length !== 5) {
+    res.columnOrder = res.spacing.interchangeColumns
+      ? ["testDescription", "result", "flag", "unit", "refRange"]
+      : ["testDescription", "result", "flag", "refRange", "unit"];
+  } else {
+    // Sync legacy interchangeColumns when columnOrder follows swapped Unit/RefRange tail
+    const unitIdx = res.columnOrder.indexOf("unit");
+    const refIdx = res.columnOrder.indexOf("refRange");
+    if (unitIdx !== -1 && refIdx !== -1) {
+      res.spacing.interchangeColumns = unitIdx < refIdx;
+    }
   }
 
   if (raw.endingLine || raw.ending_line) {
